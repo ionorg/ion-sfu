@@ -1,17 +1,15 @@
 #!/bin/bash
 
 APP_DIR=$(cd `dirname $0`/../; pwd)
-ETCD_DIR=$APP_DIR/bin/etcd
-EXE=etcd
 cd $APP_DIR
 
-PID_FILE=$ETCD_DIR/$EXE.pid  #pid file
+PID_FILE=$APP_DIR/conf/islb.pid  #pid file, default: worker.pid
 
 help()
 {
     echo ""
-    echo "stop script version: 0.1"
-    echo "Usage: sh stop.sh [-h]"
+    echo "stop script"
+    echo "Usage:./islbStop.sh [-h]"
     echo ""
 }
 
@@ -23,7 +21,7 @@ do
             exit 0
             ;;
         ?)
-            echo "No argument needed. Will ignore them all!"
+            echo "No argument needed. Ignore them all!"
             ;;
     esac
 done
@@ -40,9 +38,7 @@ if [ -n "$SUB_PIDS" ]; then
 fi
 
 echo "kill $PID $SUB_PIDS $GRANDSON_PIDS"
-kill -9 $PID $SUB_PIDS $GRANDSON_PIDS
-if [[ $? -eq 0 ]];then
-    rm -f $PID_FILE
-fi
+kill $PID $SUB_PIDS $GRANDSON_PIDS
+rm -rf $PID_FILE
 echo "finish stop process..."
 

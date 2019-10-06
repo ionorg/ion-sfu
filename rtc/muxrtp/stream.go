@@ -1,4 +1,4 @@
-package rtc
+package muxrtp
 
 type readStream interface {
 	init(child streamSession, ssrc uint32) error

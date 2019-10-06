@@ -1,4 +1,4 @@
-package rtc
+package muxrtp
 
 import (
 	"fmt"
@@ -34,19 +34,29 @@ func newReadStreamRTCP() readStream {
 }
 
 // ReadRTCP reads and decrypts full RTCP packet and its header from the nextConn
-func (r *ReadStreamRTCP) ReadRTCP(buf []byte) (int, *rtcp.Header, error) {
+// func (r *ReadStreamRTCP) ReadRTCP(buf []byte) (int, *rtcp.Header, error) {
+// n, err := r.Read(buf)
+// if err != nil {
+// return 0, nil, err
+// }
+
+// header := &rtcp.Header{}
+// err = header.Unmarshal(buf[:n])
+// if err != nil {
+// return 0, nil, err
+// }
+
+// return n, header, nil
+// }
+
+// ReadRTCP reads full RTCP packet
+func (r *ReadStreamRTCP) ReadRTCP(buf []byte) ([]rtcp.Packet, error) {
 	n, err := r.Read(buf)
 	if err != nil {
-		return 0, nil, err
+		return nil, err
 	}
 
-	header := &rtcp.Header{}
-	err = header.Unmarshal(buf[:n])
-	if err != nil {
-		return 0, nil, err
-	}
-
-	return n, header, nil
+	return rtcp.Unmarshal(buf[:n])
 }
 
 // Read reads and decrypts full RTCP packet from the nextConn

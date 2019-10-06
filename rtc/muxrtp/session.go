@@ -1,4 +1,4 @@
-package rtc
+package muxrtp
 
 import (
 	"io"
@@ -6,6 +6,10 @@ import (
 	"sync"
 
 	"github.com/pion/ion/log"
+)
+
+const (
+	receiveMTU = 8192
 )
 
 type streamSession interface {
@@ -99,7 +103,7 @@ func (s *session) start(child streamSession) error {
 				continue
 			}
 			if err = child.handle(b[:i]); err != nil {
-				log.Infof("%v", err)
+				log.Warnf("session.start %v", err)
 			}
 		}
 	}()

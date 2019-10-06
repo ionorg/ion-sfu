@@ -1,4 +1,4 @@
-package gslb
+package discovery
 
 import (
 	"context"
@@ -25,14 +25,13 @@ type Etcd struct {
 }
 
 func newEtcd(endpoints []string) (*Etcd, error) {
-	log.Infof("NewEtcd")
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   endpoints,
 		DialTimeout: defaultDialTimeout,
 	})
 
 	if err != nil {
-		log.Errorf("NewEtcd err=%v", err)
+		log.Errorf("newEtcd err=%v", err)
 		return nil, err
 	}
 
