@@ -5,11 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pion/ion/pkg/log"
-	"github.com/pion/ion/pkg/proto"
-	"github.com/pion/ion/pkg/rtc/plugins"
-	"github.com/pion/ion/pkg/rtc/rtpengine"
-	"github.com/pion/ion/pkg/rtc/transport"
+	"github.com/pion/ion-sfu/pkg/log"
+	"github.com/pion/ion-sfu/pkg/rtc/plugins"
+	"github.com/pion/ion-sfu/pkg/rtc/rtpengine"
+	"github.com/pion/ion-sfu/pkg/rtc/transport"
 	"github.com/pion/webrtc/v2"
 )
 
@@ -19,11 +18,9 @@ const (
 )
 
 var (
-	routers    = make(map[proto.MID]*Router)
+	routers    = make(map[string]*Router)
 	routerLock sync.RWMutex
 
-	//CleanChannel return the dead pub's mid
-	CleanChannel  = make(chan proto.MID, maxCleanSize)
 	pluginsConfig plugins.Config
 	routerConfig  RouterConfig
 	stop          bool
@@ -82,8 +79,8 @@ func InitRTP(port int, kcpKey, kcpSalt string) error {
 					}
 
 					log.Infof("accept new rtp id=%s conn=%s", id, rtpTransport.RemoteAddr().String())
-					if router := AddRouter(proto.MID(id)); router != nil {
-						router.AddPub(proto.UID(id), rtpTransport)
+					if router := AddRouter(id); router != nil {
+						router.AddPub(id, rtpTransport)
 					}
 				}(rtpTransport)
 			}
@@ -92,7 +89,7 @@ func InitRTP(port int, kcpKey, kcpSalt string) error {
 	return nil
 }
 
-func GetOrNewRouter(id proto.MID) *Router {
+func GetOrNewRouter(id string) *Router {
 	log.Infof("rtc.GetOrNewRouter id=%s", id)
 	router := GetRouter(id)
 	if router == nil {
@@ -102,7 +99,7 @@ func GetOrNewRouter(id proto.MID) *Router {
 }
 
 // GetRouter get router from map
-func GetRouter(id proto.MID) *Router {
+func GetRouter(id string) *Router {
 	log.Infof("rtc.GetRouter id=%s", id)
 	routerLock.RLock()
 	defer routerLock.RUnlock()
@@ -110,7 +107,7 @@ func GetRouter(id proto.MID) *Router {
 }
 
 // AddRouter add a new router
-func AddRouter(id proto.MID) *Router {
+func AddRouter(id string) *Router {
 	log.Infof("rtc.AddRouter id=%s", id)
 	routerLock.Lock()
 	defer routerLock.Unlock()
@@ -124,7 +121,7 @@ func AddRouter(id proto.MID) *Router {
 }
 
 // DelRouter delete pub
-func DelRouter(id proto.MID) {
+func DelRouter(id string) {
 	log.Infof("DelRouter id=%s", id)
 	router := GetRouter(id)
 	if router == nil {
@@ -167,7 +164,6 @@ func check() {
 			if !router.Alive() {
 				router.Close()
 				delete(routers, id)
-				CleanChannel <- id
 				log.Infof("Stat delete %v", id)
 			}
 			info += "pub: " + string(id) + "\n"

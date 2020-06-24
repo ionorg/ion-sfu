@@ -1,70 +1,72 @@
+<h1 align="center">
+  <br>
+  Ion SFU
+  <br>
+</h1>
+<h4 align="center">Go implementation of a WebRTC SFU</h4>
+<p align="center">
+  <a href="http://gophers.slack.com/messages/pion"><img src="https://img.shields.io/badge/join-us%20on%20slack-gray.svg?longCache=true&logo=slack&colorB=brightgreen" alt="Slack Widget"></a>
+  <a href="https://travis-ci.org/pion/ion-sfu"><img src="https://travis-ci.org/pion/ion-sfu.svg?branch=master" alt="Build Status"></a>
+  <a href="https://pkg.go.dev/github.com/pion/ion-sfu"><img src="https://godoc.org/github.com/pion/ion-sfu?status.svg" alt="GoDoc"></a>
+  <a href="https://codecov.io/gh/pion/ion-sfu"><img src="https://codecov.io/gh/pion/ion-sfu/branch/master/graph/badge.svg" alt="Coverage Status"></a>
+  <a href="https://goreportcard.com/report/github.com/pion/ion-sfu"><img src="https://goreportcard.com/badge/github.com/pion/ion-sfu" alt="Go Report Card"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+</p>
+<br>
 
+Ion sfu is a high performance WebRTC SFU microservice implemented in Go. It exposes a gRPC interface and can be easily integrated into existing systems.
 
-<div align=left><a href="https://github.com/pion/ion/wiki">
-    <img src="docs/imgs/ion.png" width = 15% align = "left">
-</a>
+## Getting Started
 
+The fastest way to get started is to use the included Docker environment.
 
-
-#### *ION is a distributed real-time communication system, the goal is to chat anydevice, anytime, anywhere!*
-
-![MIT](https://img.shields.io/badge/License-MIT-yellow.svg)[![Build Status](https://travis-ci.com/pion/ion.svg?branch=master)](https://travis-ci.com/pion/ion)[![Go Report Card](https://goreportcard.com/badge/github.com/pion/ion)![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/pion/ion)![GitHub tag (latest SemVer pre-release)](https://img.shields.io/github/v/tag/pion/ion?include_prereleases)](https://goreportcard.com/report/github.com/pion/ion)![Docker Pulls](https://img.shields.io/docker/pulls/pionwebrtc/ion-biz?style=plastic)[![Financial Contributors on Open Collective](https://opencollective.com/pion-ion/all/badge.svg?label=financial+contributors)](https://opencollective.com/pion-ion) ![GitHub contributors](https://img.shields.io/github/contributors-anon/pion/ion)![Twitter Follow](https://img.shields.io/twitter/follow/_PION?style=social)[![slack](https://img.shields.io/badge/join-us%20on%20slack-gray.svg?longCache=true&logo=slack&colorB=brightgreen)](https://pion.ly/slack)
-
-## Architecture
-
-<img src="https://github.com/pion/ion/raw/master/docs/imgs/arch.png" width = 100%>
-
-## Modules
-
-
-| **Name**                                                     | **Information**                                              |
-| ------------------------------------------------------------ | ------------------------------------------------------------ |
-| <a href="https://github.com/pion/ion"><img src="docs/imgs/go.png" height = 12% width = 10%> </a>[**ION-BIZ**](https://github.com/pion/ion)                   | *Business signal server*                                  |
-| <a href="https://github.com/pion/ion"><img src="docs/imgs/go.png" height = 12% width = 10%> </a>[**ION-ISLB**](https://github.com/pion/ion)                  | *Intelligent-Server-Load-Balancing server*                 |
-| <a href="https://github.com/pion/ion"> <img src="docs/imgs/go.png" height = 12% width = 10%> </a>[**ION-SFU**](https://github.com/pion/ion)                   | *Selective-Forwarding-Unit server*                         |
-| <a href="https://github.com/pion/ion-sdk-js"> <img src="docs/imgs/ts.png" height = 12% width = 10%> </a> [**ION-SDK-JS**](https://github.com/pion/ion-sdk-js)         | *Ion js sdk written by typescript*                         |
-| <a href="https://github.com/pion/ion-sdk-flutter"> <img src="docs/imgs/flutter.png" height = 12% width = 10%> </a>  [**ION-SDK-FLUTTER**](https://github.com/pion/ion-sdk-flutter) | *Ion flutter sdk powered by [flutter-webrtc](https://github.com/cloudwebrtc/flutter-webrtc)* |
-| <a href="https://github.com/pion/ion-app-web"> <img src="docs/imgs/chrome.png" height = 12% width = 10%> </a> [**ION-APP-WEB**](https://github.com/pion/ion-app-web)       | *Ion web app*                                              |
-| <a href="https://github.com/pion/ion-app-flutter"> <img src="docs/imgs/flutter.png" height = 12% width = 10%> </a> [**ION-APP-FLUTTER**](https://github.com/pion/ion-app-flutter) | *Ion flutter app*                                          |
-
-## Documentation
-
-### Deps
-
-This project uses docker
-
-https://docs.docker.com/get-docker/
-
-### Setup
 ```
-docker network create ionnet
+docker build -t pion/ion-sfu .
+docker run -p 50051:50051 -p 5000-5020:5000-5020/udp pion/ion-sfu:latest
 ```
 
-### Run
+Publishing a stream to the sfu:
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+	"os"
+	"time"
+
+	"google.golang.org/grpc"
+	"github.com/pion/ion-sfu/pkg/proto/sfu"
+)
+
+const (
+	address = "localhost:50051"
+)
+
+func main() {
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(address, grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Fatalf("did not connect: %v", err)
+	}
+	defer conn.Close()
+	c := sfu.NewSFUClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	r, err := c.Publish(ctx, &sfu.PublishRequest{
+        Uid: "xxxx",
+        rid: "",
+        Options: &sfu.PublishOptions{...},
+        Description: &sfu.SessionDescription{...}
+    })
 ```
-docker-compose -f docker-compose.stable.yml up
-```
-
-For dev and more options see the wiki
-
-* [Development](https://github.com/pion/ion/wiki/DockerDev)
-
-
-## Roadmap
-
-[Projects](https://github.com/pion/ion/projects/1)
-
-## Maintainers
-
-<a href="https://github.com/adwpc"><img width="60" height="60" src="https://github.com/adwpc.png?size=500"/></a><a href="https://github.com/cloudwebrtc"><img width="60" height="60" src="https://github.com/cloudwebrtc.png?size=500"/></a><a href="https://github.com/kangshaojun"><img width="60" height="60" src="https://github.com/kangshaojun.png?size=500"/></a><a href="https://github.com/tarrencev"><img width="60" height="60" src="https://github.com/tarrencev.png?size=500"/></a><a href="https://github.com/jbrady42"><img width="60" height="60" src="https://github.com/jbrady42.png?size=500"/></a>
 
 ## Contributors
 
-<a href="https://github.com/pion/ion/graphs/contributors"><img src="https://opencollective.com/pion-ion/contributors.svg?width=890&button=false" /></a>
+<a href="https://github.com/pion/ion-sfu/graphs/contributors"><img src="https://opencollective.com/pion-ion-sfu/contributors.svg?width=890&button=false" /></a>
 
-*Original Author: [adwpc](https://github.com/adwpc) [cloudwebrtc](https://github.com/cloudwebrtc)*
+### License
 
-*Community Hero: [Sean-Der](https://github.com/Sean-Der)*
-
-
-
+MIT License - see [LICENSE](LICENSE) for full text
