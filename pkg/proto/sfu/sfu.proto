@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+option go_package = "github.com/pion/ion-sfu/pkg/proto/sfu";
+
+package sfu;
+
+import "pkg/proto/media/media.proto";
+
+service SFU {
+    rpc Publish(PublishRequest) returns (stream PublishReply) {}
+    rpc Unpublish(UnpublishRequest) returns (UnpublishReply) {}
+    rpc Subscribe(SubscribeRequest) returns (SubscribeReply) {}
+    rpc Unsubscribe(UnsubscribeRequest) returns (UnsubscribeReply) {}
+}
+
+message PublishRequest {
+    string uid = 1;
+    string rid = 2;
+    PublishOptions options = 3;
+    SessionDescription description = 4;
+}
+
+message PublishReply {
+    media.Info mediainfo = 1;
+    SessionDescription description = 2;
+    media.Stream stream = 3;
+}
+
+message UnpublishRequest {
+    string mid = 1;
+}
+
+message UnpublishReply {}
+
+message SubscribeRequest {
+    string mid = 1;
+    SessionDescription description = 2;
+    media.Stream stream = 3;
+    SubscribeOptions options = 4;
+}
+
+message SubscribeReply {
+    string mid = 1;
+    SessionDescription description = 2;
+}
+
+message UnsubscribeRequest {
+    string mid = 1;
+}
+
+message UnsubscribeReply {}
+
+message SessionDescription {
+    string type = 1; // "answer" | "offer" | "pranswer" | "rollback"
+    string sdp = 2;
+}
+
+message PublishOptions {
+    string codec = 1;
+    string resolution = 2;
+    uint32 bandwidth = 3;
+    bool audio = 4;
+    bool video = 5;
+    bool screen = 6;
+    bool transportcc = 7;
+}
+
+message SubscribeOptions {
+    uint32 bandwidth = 1;
+    bool transportcc = 2;
+}

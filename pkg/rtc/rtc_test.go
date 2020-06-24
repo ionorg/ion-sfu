@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pion/ion/pkg/rtc/rtpengine"
-	"github.com/pion/ion/pkg/rtc/transport"
+	"github.com/pion/ion-sfu/pkg/rtc/rtpengine"
+	"github.com/pion/ion-sfu/pkg/rtc/transport"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v2"
 )

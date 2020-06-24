@@ -4,8 +4,8 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/pion/ion/pkg/log"
-	"github.com/pion/ion/pkg/rtc/transport"
+	"github.com/pion/ion-sfu/pkg/log"
+	"github.com/pion/ion-sfu/pkg/rtc/transport"
 	"github.com/pion/rtp"
 )
 

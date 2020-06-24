@@ -5,7 +5,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/pion/ion/pkg/log"
+	"github.com/pion/ion-sfu/pkg/log"
 )
 
 const (
