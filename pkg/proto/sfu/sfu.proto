@@ -14,10 +14,9 @@ service SFU {
 }
 
 message PublishRequest {
-    string uid = 1;
-    string rid = 2;
-    PublishOptions options = 3;
-    SessionDescription description = 4;
+    string rid = 1;
+    PublishOptions options = 2;
+    SessionDescription description = 3;
 }
 
 message PublishReply {

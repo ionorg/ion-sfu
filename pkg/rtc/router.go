@@ -117,8 +117,8 @@ func (r *Router) start() {
 }
 
 // AddPub add a pub transport
-func (r *Router) AddPub(id string, t transport.Transport) transport.Transport {
-	log.Infof("AddPub id=%s", id)
+func (r *Router) AddPub(t transport.Transport) transport.Transport {
+	log.Infof("AddPub")
 	r.pub = t
 	r.pluginChain.AttachPub(t)
 	r.start()
