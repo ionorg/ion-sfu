@@ -14,7 +14,8 @@ const (
 )
 
 var (
-	cfg     = config{}
+	cfg     = Config{}
+	CfgFile = &cfg.CfgFile
 	Global  = &cfg.Global
 	Plugins = &cfg.Plugins
 	WebRTC  = &cfg.WebRTC
@@ -78,7 +79,8 @@ type rtp struct {
 	KcpSalt string `mapstructure:"kcpsalt"`
 }
 
-type config struct {
+// Config for base SFU
+type Config struct {
 	Global  global           `mapstructure:"global"`
 	Router  rtc.RouterConfig `mapstructure:"router"`
 	Plugins plugins          `mapstructure:"plugins"`
@@ -94,7 +96,7 @@ func showHelp() {
 	fmt.Println("      -h (show help info)")
 }
 
-func (c *config) load() bool {
+func (c *Config) load() bool {
 	_, err := os.Stat(c.CfgFile)
 	if err != nil {
 		return false
@@ -128,7 +130,7 @@ func (c *config) load() bool {
 	return true
 }
 
-func (c *config) parse() bool {
+func (c *Config) parse() bool {
 	flag.StringVar(&c.CfgFile, "c", "conf/conf.toml", "config file")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
