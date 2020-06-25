@@ -63,10 +63,6 @@ func main() {
     })
 ```
 
-## Contributors
-
-<a href="https://github.com/pion/ion-sfu/graphs/contributors"><img src="https://opencollective.com/pion-ion-sfu/contributors.svg?width=890&button=false" /></a>
-
 ### License
 
 MIT License - see [LICENSE](LICENSE) for full text
