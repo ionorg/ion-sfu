@@ -16,7 +16,7 @@ const (
 var (
 	cfg     = Config{}
 	CfgFile = &cfg.CfgFile
-	Global  = &cfg.Global
+	GRPC    = &cfg.GRPC
 	Plugins = &cfg.Plugins
 	WebRTC  = &cfg.WebRTC
 	Rtp     = &cfg.Rtp
@@ -31,8 +31,7 @@ func init() {
 	}
 }
 
-type global struct {
-	Addr string `mapstructure:"addr"`
+type grpc struct {
 	Port string `mapstructure:"port"`
 }
 
@@ -81,7 +80,7 @@ type rtp struct {
 
 // Config for base SFU
 type Config struct {
-	Global  global           `mapstructure:"global"`
+	GRPC    grpc             `mapstructure:"grpc"`
 	Router  rtc.RouterConfig `mapstructure:"router"`
 	Plugins plugins          `mapstructure:"plugins"`
 	WebRTC  webrtc           `mapstructure:"webrtc"`
