@@ -40,35 +40,53 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"log"
-	"os"
-	"time"
 
-	"google.golang.org/grpc"
+	"github.com/pion/ion-sfu/examples/internal/signal"
 	"github.com/pion/ion-sfu/pkg/proto/sfu"
-)
-
-const (
-	address = "localhost:50051"
+	"google.golang.org/grpc"
 )
 
 func main() {
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(address, grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
 	c := sfu.NewSFUClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	r, err := c.Publish(&sfu.PublishRequest{
-        Uid: "xxxx",
-        rid: "",
-        Options: &sfu.PublishOptions{...},
-        Description: &sfu.SessionDescription{...}
-    })
+	stream, err := c.Publish(context.Background(), &sfu.PublishRequest{
+		Uid: "userid",
+		Rid: "default",
+		Options: &sfu.PublishOptions{
+			Codec: "VP8",
+		},
+		Description: &sfu.SessionDescription{ ... },
+	})
+
+	if err != nil {
+		log.Fatalf("Error publishing stream: %v", err)
+	}
+
+	for {
+		answer, err := stream.Recv()
+		if err == io.EOF {
+			// WebRTC Transport closed
+			fmt.Println("WebRTC Transport Closed")
+			break
+		}
+
+		if err != nil {
+			log.Fatalf("Error receving publish response: %v", err)
+		}
+
+		// Output the answer in base64 so we can paste it in browser
+		fmt.Println(signal.Encode(answer.Description))
+	}
+}
 ```
 
 ### License
