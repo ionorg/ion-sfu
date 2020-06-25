@@ -83,8 +83,7 @@ func main() {
 			log.Fatalf("Error receving publish response: %v", err)
 		}
 
-		// Output the answer in base64 so we can paste it in browser
-		fmt.Println(signal.Encode(answer.Description))
+		// Use the answer to complete the negotiation!
 	}
 }
 ```
