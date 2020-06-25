@@ -64,6 +64,6 @@ func init() {
 
 func main() {
 	log.Infof("--- Starting SFU Node ---")
-	sfu.Init(conf.Global.Port)
+	sfu.Init(conf.GRPC.Port)
 	select {}
 }
