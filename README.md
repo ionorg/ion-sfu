@@ -18,7 +18,15 @@ Ion sfu is a high performance WebRTC SFU microservice implemented in Go. It expo
 
 ## Getting Started
 
-The fastest way to get started is to use the included Docker environment.
+### Running the server
+
+If you have a local golang environment already setup, simply do
+
+```
+go build cmd/main.go && ./main -c config.toml
+```
+
+If you prefer a containerized environment, you can use the included Docker image
 
 ```
 docker build -t pion/ion-sfu .
@@ -55,7 +63,7 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	r, err := c.Publish(ctx, &sfu.PublishRequest{
+	r, err := c.Publish(&sfu.PublishRequest{
         Uid: "xxxx",
         rid: "",
         Options: &sfu.PublishOptions{...},
