@@ -74,17 +74,17 @@ func (s *server) Publish(in *pb.PublishRequest, out pb.SFU_PublishServer) error 
 	if pub == nil {
 		return errors.New("publish: transport.NewWebRTCTransport failed")
 	}
-
+	log.Infof("publish1")
 	router := rtc.GetOrNewRouter(mid)
-
+	log.Infof("publish2")
 	go handleTrickle(router, pub)
-
+	log.Infof("publish3")
 	answer, err := pub.Answer(offer, rtcOptions)
 	if err != nil {
 		log.Errorf("err=%v answer=%v", err, answer)
 		return errors.New("publish: pub.Answer failed")
 	}
-
+	log.Infof("publish4")
 	router.AddPub(uid, pub)
 
 	log.Infof("publish stream %v, answer = %v", stream, answer)
