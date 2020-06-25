@@ -57,12 +57,8 @@ message SessionDescription {
 
 message PublishOptions {
     string codec = 1;
-    string resolution = 2;
-    uint32 bandwidth = 3;
-    bool audio = 4;
-    bool video = 5;
-    bool screen = 6;
-    bool transportcc = 7;
+    uint32 bandwidth = 2;
+    bool transportcc = 3;
 }
 
 message SubscribeOptions {

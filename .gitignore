@@ -16,3 +16,4 @@ cmd/avp/avp
 .idea
 node_modules/
 cover.out
+main
