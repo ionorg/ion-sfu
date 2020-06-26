@@ -24,6 +24,6 @@ require (
 	github.com/xtaci/kcp-go v5.4.20+incompatible
 	github.com/xtaci/lossyconn v0.0.0-20200209145036-adba10fffc37 // indirect
 	golang.org/x/crypto v0.0.0-20200602180216-279210d13fed
-	google.golang.org/grpc v1.21.1
+	google.golang.org/grpc v1.30.0
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 )
