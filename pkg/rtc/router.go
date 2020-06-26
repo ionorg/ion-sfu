@@ -31,6 +31,7 @@ type RouterConfig struct {
 //                                      +--->sub
 // Router is rtp router
 type Router struct {
+	id            string
 	pub           transport.Transport
 	subs          map[string]transport.Transport
 	subLock       sync.RWMutex
@@ -38,6 +39,7 @@ type Router struct {
 	liveTime      time.Time
 	pluginChain   *plugins.PluginChain
 	subChans      map[string]chan *rtp.Packet
+	pubShutdownCh chan string
 	subShutdownCh chan string
 	rembChan      chan *rtcp.ReceiverEstimatedMaximumBitrate
 	CloseChan     chan bool
@@ -47,10 +49,12 @@ type Router struct {
 func NewRouter(id string) *Router {
 	log.Infof("NewRouter id=%s", id)
 	return &Router{
+		id:            id,
 		subs:          make(map[string]transport.Transport),
 		liveTime:      time.Now().Add(liveCycle),
-		pluginChain:   plugins.NewPluginChain(string(id)),
+		pluginChain:   plugins.NewPluginChain(id),
 		subChans:      make(map[string]chan *rtp.Packet),
+		pubShutdownCh: make(chan string, 1),
 		subShutdownCh: make(chan string, 1),
 		rembChan:      make(chan *rtcp.ReceiverEstimatedMaximumBitrate),
 		CloseChan:     make(chan bool),
@@ -79,7 +83,7 @@ func (r *Router) start() {
 			// Check sub cleanup
 			select {
 			case subID := <-r.subShutdownCh:
-				log.Infof("Got transport shutdown %v", subID)
+				log.Infof("Got sub transport shutdown %v", subID)
 				r.DelSub(subID)
 			default:
 			}
@@ -119,9 +123,18 @@ func (r *Router) start() {
 // AddPub add a pub transport
 func (r *Router) AddPub(t transport.Transport) transport.Transport {
 	log.Infof("AddPub")
+	t.SetShutdownChan(r.pubShutdownCh)
 	r.pub = t
 	r.pluginChain.AttachPub(t)
 	r.start()
+
+	go func() {
+		pubID := <-r.pubShutdownCh
+		log.Infof("Got pub transport shutdown %v", pubID)
+		r.Close()
+		DelRouter(r.id)
+	}()
+
 	return t
 }
 

@@ -5,12 +5,11 @@ import (
 
 	"github.com/notedit/sdp"
 	"github.com/pion/ion-sfu/pkg/log"
-	media "github.com/pion/ion-sfu/pkg/proto/media"
 	transport "github.com/pion/ion-sfu/pkg/rtc/transport"
 	"github.com/pion/webrtc/v2"
 )
 
-func getSubPTForTrack(track *media.Track, sdpObj *sdp.SDPInfo) uint8 {
+func getSubPTForTrack(track *webrtc.Track, sdpObj *sdp.SDPInfo) uint8 {
 	medias := sdpObj.GetMedias()
 	log.Infof("Medias are %v", medias)
 
@@ -21,12 +20,13 @@ func getSubPTForTrack(track *media.Track, sdpObj *sdp.SDPInfo) uint8 {
 			log.Infof("Codes are %v", codec)
 			pt := codec.GetType()
 			// 	If offer contains pub PT, use that
-			if int(track.Payload) == pt {
-				return uint8(track.Payload)
+			if int(track.PayloadType()) == pt {
+				return uint8(track.PayloadType())
 			}
 			// Otherwise look for first supported pt that can be transformed from pub
-			if strings.EqualFold(codec.GetCodec(), track.Codec) {
-				for _, k := range transform[uint8(track.Payload)] {
+			log.Infof("%s %s", codec.GetCodec(), track.Codec().Name)
+			if strings.EqualFold(codec.GetCodec(), track.Codec().Name) {
+				for _, k := range transform[uint8(track.PayloadType())] {
 					if uint8(pt) == k {
 						return k
 					}
@@ -43,7 +43,6 @@ func getPubPTForTrack(videoCodec string, track *sdp.TrackInfo, sdpObj *sdp.SDPIn
 	codecs := media.GetCodecs()
 
 	for payload, codec := range codecs {
-		log.Infof("Codec type %v", codec.GetType())
 		if track.GetMedia() == "audio" {
 			codecName = strings.ToUpper(codec.GetCodec())
 			if strings.EqualFold(codec.GetCodec(), webrtc.Opus) {
