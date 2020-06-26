@@ -118,9 +118,12 @@ func (s *server) Unpublish(ctx context.Context, in *pb.UnpublishRequest) (*pb.Un
 func (s *server) Subscribe(ctx context.Context, in *pb.SubscribeRequest) (*pb.SubscribeReply, error) {
 	log.Infof("subscribe msg=%v", in)
 	router := rtc.GetOrNewRouter(in.Mid)
+
 	if router == nil {
 		return nil, errors.New("subscribe: router not found")
 	}
+
+	pub := router.GetPub().(*transport.WebRTCTransport)
 
 	if in.Description.Sdp == "" {
 		return nil, errors.New("subscribe: unsupported media type")
@@ -142,11 +145,11 @@ func (s *server) Subscribe(ctx context.Context, in *pb.SubscribeRequest) (*pb.Su
 
 	subID := uuid.New().String()
 
-	log.Infof("subscribe tracks=%v", in.Stream.Tracks)
+	tracks := pub.GetInTracks()
 	rtcOptions.Ssrcpt = make(map[uint32]uint8)
 
-	for _, track := range in.Stream.Tracks {
-		rtcOptions.Ssrcpt[uint32(track.Ssrc)] = uint8(track.Payload)
+	for ssrc, track := range tracks {
+		rtcOptions.Ssrcpt[ssrc] = uint8(track.PayloadType())
 	}
 
 	sdpObj, err := sdptransform.Parse(sdp)
@@ -156,12 +159,12 @@ func (s *server) Subscribe(ctx context.Context, in *pb.SubscribeRequest) (*pb.Su
 	}
 
 	ssrcPTMap := make(map[uint32]uint8)
-	allowedCodecs := make([]uint8, 0, len(in.Stream.Tracks))
+	allowedCodecs := make([]uint8, 0, len(tracks))
 
-	for _, track := range in.Stream.Tracks {
+	for ssrc, track := range tracks {
 		// Find pt for track given track.Payload and sdp
-		ssrcPTMap[track.Ssrc] = getSubPTForTrack(track, sdpObj)
-		allowedCodecs = append(allowedCodecs, ssrcPTMap[track.Ssrc])
+		ssrcPTMap[ssrc] = getSubPTForTrack(track, sdpObj)
+		allowedCodecs = append(allowedCodecs, ssrcPTMap[ssrc])
 	}
 
 	// Set media engine codecs based on found pts
@@ -177,19 +180,18 @@ func (s *server) Subscribe(ctx context.Context, in *pb.SubscribeRequest) (*pb.Su
 
 	go handleTrickle(router, sub)
 
-	for _, track := range in.Stream.Tracks {
-		ssrc := uint32(track.Ssrc)
+	for ssrc, track := range tracks {
 		// Get payload type from request track
-		pt := uint8(track.Payload)
-		if newPt, ok := ssrcPTMap[track.Ssrc]; ok {
+		pt := track.PayloadType()
+		if newPt, ok := ssrcPTMap[ssrc]; ok {
 			// Override with "negotiated" PT
 			pt = newPt
 		}
 
 		// I2AacsRLsZZriGapnvPKiKBcLi8rTrO1jOpq c84ded42-d2b0-4351-88d2-b7d240c33435
 		//                streamID                        trackID
-		log.Infof("AddTrack: codec:%s, ssrc:%d, pt:%d, streamID %s, trackID %s", track.Codec, ssrc, pt, in.Stream.Id, track.Id)
-		_, err := sub.AddSendTrack(ssrc, pt, in.Stream.Id, track.Id)
+		log.Infof("AddTrack: codec:%s, ssrc:%d, pt:%d, streamID %s, trackID %s", track.Codec, ssrc, pt, pub.ID(), track.ID())
+		_, err := sub.AddSendTrack(ssrc, pt, pub.ID(), track.ID())
 		if err != nil {
 			log.Errorf("err=%v", err)
 		}

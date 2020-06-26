@@ -17,3 +17,4 @@ cmd/avp/avp
 node_modules/
 cover.out
 main
+.DS_Store
