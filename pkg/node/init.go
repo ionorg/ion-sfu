@@ -13,6 +13,11 @@ type server struct {
 	pb.UnimplementedSFUServer
 }
 
+// InitLogLevel for sfu
+func InitLogLevel(level string) {
+	log.Init(level)
+}
+
 // Init func
 func Init(port string) {
 	lis, err := net.Listen("tcp", port)
