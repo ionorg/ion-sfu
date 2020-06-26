@@ -34,8 +34,7 @@ message UnpublishReply {}
 message SubscribeRequest {
     string mid = 1;
     SessionDescription description = 2;
-    media.Stream stream = 3;
-    SubscribeOptions options = 4;
+    SubscribeOptions options = 3;
 }
 
 message SubscribeReply {
