@@ -29,12 +29,12 @@ _lint_job: &lint_job
 _build_job: &build_job
   env: CACHE_NAME=build
   script:
-    - go build ./cmd/sfu
+    - go build ./cmd/main.go
 
 _build_sfu_docker_job: &build_sfu_docker_job
   env: CACHE_NAME=build_sfu_docker
   script:
-    - docker build --tag pionwebrtc/ion-sfu:latest -f ./docker/sfu.Dockerfile .
+    - docker build --tag pionwebrtc/ion-sfu:latest .
   before_deploy:
     - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
     - docker tag pionwebrtc/ion-sfu:latest pionwebrtc/ion-sfu:"$TRAVIS_TAG"

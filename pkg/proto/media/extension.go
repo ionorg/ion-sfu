@@ -1,7 +1,6 @@
 package media
 
 import (
-	"encoding/json"
 	fmt "fmt"
 	"strings"
 )
@@ -41,29 +40,4 @@ func ParseInfoKey(key string) (*Info, error) {
 	info.Uid = arr[3]
 	info.Mid = arr[6]
 	return &info, nil
-}
-
-// MarshalTracks of a stream into a string
-func (s Stream) MarshalTracks() (string, string, error) {
-	str, err := json.Marshal(s.Tracks)
-	if err != nil {
-		return "track/" + s.Id, "", fmt.Errorf("Marshal: %v", err)
-	}
-	return "track/" + s.Id, string(str), nil
-}
-
-// UnmarshalTracks from string
-func UnmarshalTracks(key string, value string) (*Stream, error) {
-	var tracks []*Track
-	if err := json.Unmarshal([]byte(value), &tracks); err != nil {
-		return nil, fmt.Errorf("Unmarshal: %v", err)
-	}
-	if !strings.Contains(key, "track/") {
-		return nil, fmt.Errorf("Invalid track failed => %s", key)
-	}
-	id := strings.Split(key, "/")[1]
-	return &Stream{
-		Id:     id,
-		Tracks: tracks,
-	}, nil
 }
