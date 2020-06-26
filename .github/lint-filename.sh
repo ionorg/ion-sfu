@@ -3,7 +3,7 @@
 set -e
 
 SCRIPT_PATH=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
-GO_REGEX="^[a-zA-Z][a-zA-Z0-9_]*\.go$"
+GO_REGEX="^[a-zA-Z][a-zA-Z0-9_]*\.(go|pb.go)$"
 
 find  "$SCRIPT_PATH/.." -name "*.go" | while read fullpath; do
   filename=$(basename -- "$fullpath")

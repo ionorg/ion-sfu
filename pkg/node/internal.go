@@ -88,7 +88,7 @@ func (s *server) Publish(in *pb.PublishRequest, out pb.SFU_PublishServer) error 
 
 	log.Infof("publish stream %v, answer = %v", stream, answer)
 
-	out.Send(&pb.PublishReply{
+	err = out.Send(&pb.PublishReply{
 		Mediainfo: &media.Info{Mid: mid},
 		Description: &pb.SessionDescription{
 			Type: answer.Type.String(),
@@ -96,6 +96,11 @@ func (s *server) Publish(in *pb.PublishRequest, out pb.SFU_PublishServer) error 
 		},
 		Stream: &stream,
 	})
+
+	if err != nil {
+		log.Errorf("Error publishing stream")
+		return err
+	}
 
 	<-router.CloseChan
 	return nil
@@ -190,7 +195,7 @@ func (s *server) Subscribe(ctx context.Context, in *pb.SubscribeRequest) (*pb.Su
 
 		// I2AacsRLsZZriGapnvPKiKBcLi8rTrO1jOpq c84ded42-d2b0-4351-88d2-b7d240c33435
 		//                streamID                        trackID
-		log.Infof("AddTrack: codec:%s, ssrc:%d, pt:%d, streamID %s, trackID %s", track.Codec, ssrc, pt, pub.ID(), track.ID())
+		log.Infof("AddTrack: codec:%s, ssrc:%d, pt:%d, streamID %s, trackID %s", track.Codec().MimeType, ssrc, pt, pub.ID(), track.ID())
 		_, err := sub.AddSendTrack(ssrc, pt, pub.ID(), track.ID())
 		if err != nil {
 			log.Errorf("err=%v", err)

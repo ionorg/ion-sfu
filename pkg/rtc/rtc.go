@@ -13,8 +13,7 @@ import (
 )
 
 const (
-	statCycle    = 3 * time.Second
-	maxCleanSize = 100
+	statCycle = 3 * time.Second
 )
 
 var (

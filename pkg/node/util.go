@@ -17,7 +17,6 @@ func getSubPTForTrack(track *webrtc.Track, sdpObj *sdp.SDPInfo) uint8 {
 
 	for _, m := range medias {
 		for _, codec := range m.GetCodecs() {
-			log.Infof("Codes are %v", codec)
 			pt := codec.GetType()
 			// 	If offer contains pub PT, use that
 			if int(track.PayloadType()) == pt {

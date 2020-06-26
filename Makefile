@@ -24,13 +24,9 @@ example:
 	go build -o bin/service-watch $(GO_LDFLAGS) examples/watch/service-watch.go
 
 nodes: go_deps
-	go build -o bin/sfu $(GO_LDFLAGS) cmd/sfu/main.go
+	go build -o bin/sfu $(GO_LDFLAGS) cmd/main.go
 
-start_test_services:
-	docker network create ionnet || true
-	docker-compose -f docker-compose.stable.yml up -d redis nats etcd
-
-test: nodes start_test_services
+test: nodes
 	go test \
 		-coverpkg=${GO_COVERPKGS} -coverprofile=cover.out -covermode=atomic \
 		-v -race ${GO_TESTPKGS}
