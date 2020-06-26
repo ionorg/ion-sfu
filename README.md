@@ -33,60 +33,9 @@ docker build -t pion/ion-sfu .
 docker run -p 50051:50051 -p 5000-5020:5000-5020/udp pion/ion-sfu:latest
 ```
 
-Publishing a stream to the sfu:
+### Interacting with the server
 
-```go
-package main
-
-import (
-	"context"
-	"fmt"
-	"io"
-	"log"
-
-	"github.com/pion/ion-sfu/examples/internal/signal"
-	"github.com/pion/ion-sfu/pkg/proto/sfu"
-	"google.golang.org/grpc"
-)
-
-func main() {
-	// Set up a connection to the server.
-	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure(), grpc.WithBlock())
-	if err != nil {
-		log.Fatalf("did not connect: %v", err)
-	}
-	defer conn.Close()
-	c := sfu.NewSFUClient(conn)
-
-	stream, err := c.Publish(context.Background(), &sfu.PublishRequest{
-		Uid: "userid",
-		Rid: "default",
-		Options: &sfu.PublishOptions{
-			Codec: "VP8",
-		},
-		Description: &sfu.SessionDescription{ ... },
-	})
-
-	if err != nil {
-		log.Fatalf("Error publishing stream: %v", err)
-	}
-
-	for {
-		answer, err := stream.Recv()
-		if err == io.EOF {
-			// WebRTC Transport closed
-			fmt.Println("WebRTC Transport Closed")
-			break
-		}
-
-		if err != nil {
-			log.Fatalf("Error receving publish response: %v", err)
-		}
-
-		// Use the answer to complete the negotiation!
-	}
-}
-```
+To get an idea of how to interact with the ion-sfu instance, check out our [examples](examples).
 
 ### License
 

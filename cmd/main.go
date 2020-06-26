@@ -1,8 +1,6 @@
 package main
 
 import (
-	_ "net/http/pprof"
-
 	conf "github.com/pion/ion-sfu/pkg/conf"
 	"github.com/pion/ion-sfu/pkg/log"
 	sfu "github.com/pion/ion-sfu/pkg/node"

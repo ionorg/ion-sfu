@@ -234,6 +234,7 @@ func NewWebRTCTransport(id string, options RTCOptions) *WebRTCTransport {
 	})
 
 	w.pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
+		log.Infof("ICEConnectionState change: %s", connectionState)
 		switch connectionState {
 		case webrtc.ICEConnectionStateDisconnected:
 			log.Infof("webrtc ice disconnected for mid: %s", id)
