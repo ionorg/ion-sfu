@@ -1,6 +1,6 @@
 GO_LDFLAGS = -ldflags "-s -w"
 GO_VERSION = 1.14
-GO_TESTPKGS:=$(shell go list ./... | grep -v cmd | grep -v conf | grep -v node)
+GO_TESTPKGS:=$(shell go list ./... | grep -v cmd | grep -v conf | grep -v node | grep -v examples | grep -v proto)
 GO_COVERPKGS:=$(shell echo $(GO_TESTPKGS) | paste -s -d ',')
 TEST_UID:=$(shell id -u)
 TEST_GID:=$(shell id -g)
