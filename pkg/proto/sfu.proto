@@ -5,9 +5,9 @@ option go_package = "github.com/pion/ion-sfu/pkg/proto";
 package sfu;
 
 service SFU {
-    rpc Publish(PublishRequest) returns (stream PublishReply) {}
+    rpc Publish(stream PublishRequest) returns (stream PublishReply) {}
     rpc Unpublish(UnpublishRequest) returns (UnpublishReply) {}
-    rpc Subscribe(SubscribeRequest) returns (SubscribeReply) {}
+    rpc Subscribe(stream SubscribeRequest) returns (stream SubscribeReply) {}
     rpc Unsubscribe(UnsubscribeRequest) returns (UnsubscribeReply) {}
     rpc Trickle(TrickleRequest) returns (TrickleReply) {}
 }
