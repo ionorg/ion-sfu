@@ -16,17 +16,6 @@ import (
 	pb "github.com/pion/ion-sfu/pkg/proto"
 )
 
-func handleTrickle(r *rtc.Router, t *transport.WebRTCTransport) {
-	// for {
-	// 	trickle := <-t.GetCandidateChan()
-	// 	if trickle != nil {
-	// 		broadcaster.Say(proto.SFUTrickleICE, util.Map("mid", t.ID(), "trickle", trickle.ToJSON()))
-	// 	} else {
-	// 		return
-	// 	}
-	// }
-}
-
 // Publish a stream to the sfu
 func (s *server) Publish(in *pb.PublishRequest, out pb.SFU_PublishServer) error {
 	log.Infof("publish msg=%v", in)
@@ -70,8 +59,6 @@ func (s *server) Publish(in *pb.PublishRequest, out pb.SFU_PublishServer) error 
 	}
 
 	router := rtc.GetOrNewRouter(mid)
-
-	go handleTrickle(router, pub)
 
 	answer, err := pub.Answer(offer, rtcOptions)
 	if err != nil {
@@ -177,8 +164,6 @@ func (s *server) Subscribe(ctx context.Context, in *pb.SubscribeRequest) (*pb.Su
 		return nil, errors.New("subscribe: transport.NewWebRTCTransport failed")
 	}
 
-	go handleTrickle(router, sub)
-
 	for ssrc, track := range tracks {
 		// Get payload type from request track
 		pt := track.PayloadType()
@@ -237,16 +222,23 @@ func (s *server) Unsubscribe(ctx context.Context, in *pb.UnsubscribeRequest) (*p
 	return nil, fmt.Errorf("unsubscribe: sub [%s] not found", mid)
 }
 
-// func trickle(msg map[string]interface{}) (map[string]interface{}, *nprotoo.Error) {
-// 	log.Infof("trickle msg=%v", msg)
-// 	router := util.Val(msg, "router")
-// 	mid := util.Val(msg, "mid")
-// 	//cand := msg["trickle"]
-// 	r := rtc.GetOrNewRouter(router)
-// 	t := r.GetSub(mid)
-// 	if t != nil {
-// 		//t.(*transport.WebRTCTransport).AddCandidate(cand)
-// 	}
+func (s *server) Trickle(ctx context.Context, in *pb.TrickleRequest) (*pb.TrickleReply, error) {
+	r := rtc.GetOrNewRouter(in.Pub)
 
-// 	return nil, util.NewNpError(404, "trickle: WebRTCTransport not found!")
-// }
+	var t *transport.WebRTCTransport
+	if in.Mid == in.Pub {
+		t = r.GetPub().(*transport.WebRTCTransport)
+	} else {
+		t = r.GetSub(in.Mid).(*transport.WebRTCTransport)
+	}
+
+	if t == nil {
+		return nil, fmt.Errorf("trickle: pc not found")
+	}
+
+	if err := t.AddCandidate(in.Candidate); err != nil {
+		return nil, fmt.Errorf("trickle: error adding candidate")
+	}
+
+	return &pb.TrickleReply{}, nil
+}

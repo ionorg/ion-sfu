@@ -317,7 +317,7 @@ func (w *WebRTCTransport) AddCandidate(candidate string) error {
 		return errInvalidPC
 	}
 
-	err := w.pc.AddICECandidate(webrtc.ICECandidateInit{Candidate: string(candidate)})
+	err := w.pc.AddICECandidate(webrtc.ICECandidateInit{Candidate: candidate})
 	if err != nil {
 		return err
 	}

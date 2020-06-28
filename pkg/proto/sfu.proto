@@ -9,6 +9,7 @@ service SFU {
     rpc Unpublish(UnpublishRequest) returns (UnpublishReply) {}
     rpc Subscribe(SubscribeRequest) returns (SubscribeReply) {}
     rpc Unsubscribe(UnsubscribeRequest) returns (UnsubscribeReply) {}
+    rpc Trickle(TrickleRequest) returns (TrickleReply) {}
 }
 
 message PublishRequest {
@@ -55,3 +56,11 @@ message Options {
     bool transportcc = 2;
     string codec = 3;
 }
+
+message TrickleRequest {
+    string mid = 1;
+    string candidate = 2;
+    string pub = 3;
+}
+
+message TrickleReply {}
