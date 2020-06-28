@@ -3,6 +3,7 @@ module github.com/pion/ion-sfu
 go 1.13
 
 require (
+	github.com/envoyproxy/go-control-plane v0.9.4 // indirect
 	github.com/golang/protobuf v1.4.2
 	github.com/google/uuid v1.1.1
 	github.com/klauspost/cpuid v1.2.3 // indirect
@@ -24,6 +25,6 @@ require (
 	github.com/xtaci/kcp-go v5.4.20+incompatible
 	github.com/xtaci/lossyconn v0.0.0-20200209145036-adba10fffc37 // indirect
 	golang.org/x/crypto v0.0.0-20200602180216-279210d13fed
-	google.golang.org/grpc v1.30.0
+	google.golang.org/grpc v1.26.0
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 )
