@@ -26,14 +26,15 @@ import (
 // message is *always* returned first.
 // 2. `Trickle` containg candidate information for Trickle ICE.
 //
+// If the webrtc connection is closed, the server will close this stream.
+//
 // The client should publish a message containg the room id
 // and one of two different payload types:
 // 1. `Connect` containing the session offer description. This
 // message must *always* be sent first.
 // 2. `Trickle` containing candidate information for Trickle ICE.
 //
-// When either side closes this stream, the webrtc stream is/will be
-// closed.
+// If the client closes this stream, the webrtc stream will be closed.
 func (s *server) Publish(stream pb.SFU_PublishServer) error {
 	var pub *transport.WebRTCTransport
 	mid := cuid.New()
@@ -154,19 +155,6 @@ func (s *server) Publish(stream pb.SFU_PublishServer) error {
 			}
 		}
 	}
-}
-
-// Unpublish a stream
-func (s *server) Unpublish(ctx context.Context, in *pb.UnpublishRequest) (*pb.UnpublishReply, error) {
-	log.Infof("unpublish msg=%v", in)
-
-	mid := in.Mid
-	router := rtc.GetOrNewRouter(mid)
-	if router != nil {
-		rtc.DelRouter(mid)
-		return &pb.UnpublishReply{}, nil
-	}
-	return nil, errors.New("unpublish: Router not found")
 }
 
 // Subscribe to a stream

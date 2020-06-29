@@ -6,7 +6,6 @@ package sfu;
 
 service SFU {
     rpc Publish(stream PublishRequest) returns (stream PublishReply) {}
-    rpc Unpublish(UnpublishRequest) returns (UnpublishReply) {}
     rpc Subscribe(SubscribeRequest) returns (SubscribeReply) {}
     rpc Unsubscribe(UnsubscribeRequest) returns (UnsubscribeReply) {}
 }
@@ -26,12 +25,6 @@ message PublishReply {
         Trickle trickle = 3;
     }
 }
-
-message UnpublishRequest {
-    string mid = 1;
-}
-
-message UnpublishReply {}
 
 message SubscribeRequest {
     string mid = 1;
