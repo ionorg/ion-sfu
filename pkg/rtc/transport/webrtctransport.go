@@ -104,13 +104,13 @@ type WebRTCTransport struct {
 	alive             bool
 	bandwidth         uint32
 	isPub             bool
-	shutdownChan      chan string
+	ShutdownChan      chan string
 	ssrcPtMap         map[uint32]uint8
 }
 
 // SetShutdownChan sets notify channel on transport shutdown
 func (w *WebRTCTransport) SetShutdownChan(ch chan string) {
-	w.shutdownChan = ch
+	w.ShutdownChan = ch
 }
 
 func (w *WebRTCTransport) init(options RTCOptions) error {
@@ -242,7 +242,7 @@ func NewWebRTCTransport(id string, options RTCOptions) *WebRTCTransport {
 		case webrtc.ICEConnectionStateClosed:
 			log.Infof("webrtc ice %s for mid: %s", connectionState, id)
 			w.alive = false
-			w.shutdownChan <- id
+			w.ShutdownChan <- id
 		}
 	})
 
