@@ -41,7 +41,7 @@ type RTPTransport struct {
 	idLock       sync.RWMutex
 	writeErrCnt  int
 	rtcpCh       chan rtcp.Packet
-	bandwidth    int
+	bandwidth    uint32
 	shutdownChan chan string
 	IDChan       chan string
 }
@@ -365,6 +365,6 @@ func (r *RTPTransport) RemoteAddr() net.Addr {
 }
 
 // GetBandwidth get bindwitdh setting
-func (r *RTPTransport) GetBandwidth() int {
+func (r *RTPTransport) GetBandwidth() uint32 {
 	return r.bandwidth
 }

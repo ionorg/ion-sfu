@@ -13,8 +13,7 @@ import (
 	transport "github.com/pion/ion-sfu/pkg/rtc/transport"
 	"github.com/pion/webrtc/v2"
 
-	media "github.com/pion/ion-sfu/pkg/proto/media"
-	pb "github.com/pion/ion-sfu/pkg/proto/sfu"
+	pb "github.com/pion/ion-sfu/pkg/proto"
 )
 
 func handleTrickle(r *rtc.Router, t *transport.WebRTCTransport) {
@@ -34,16 +33,16 @@ func (s *server) Publish(in *pb.PublishRequest, out pb.SFU_PublishServer) error 
 	if in.Description.Sdp == "" {
 		return errors.New("publish: jsep invaild")
 	}
+
 	mid := uuid.New().String()
 	offer := webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: in.Description.Sdp}
 
 	rtcOptions := transport.RTCOptions{
-		Publish: true,
+		Publish:     true,
+		Codec:       in.Options.Codec,
+		Bandwidth:   in.Options.Bandwidth,
+		TransportCC: in.Options.Transportcc,
 	}
-
-	rtcOptions.Codec = in.Options.Codec
-	rtcOptions.Bandwidth = int(in.Options.Bandwidth)
-	rtcOptions.TransportCC = in.Options.Transportcc
 
 	videoCodec := strings.ToUpper(rtcOptions.Codec)
 
@@ -54,17 +53,14 @@ func (s *server) Publish(in *pb.PublishRequest, out pb.SFU_PublishServer) error 
 	}
 
 	allowedCodecs := make([]uint8, 0)
-	stream := media.Stream{}
 	for _, s := range sdpObj.GetStreams() {
-		stream.Id = s.GetID()
-		for id, track := range s.GetTracks() {
-			pt, codecType := getPubPTForTrack(videoCodec, track, sdpObj)
+		for _, track := range s.GetTracks() {
+			pt, _ := getPubPTForTrack(videoCodec, track, sdpObj)
 
 			if len(track.GetSSRCS()) == 0 {
 				return errors.New("publish: ssrc not found")
 			}
 			allowedCodecs = append(allowedCodecs, pt)
-			stream.Tracks = append(stream.Tracks, &media.Track{Id: id, Ssrc: uint32(track.GetSSRCS()[0]), Payload: uint32(pt), Type: track.GetMedia(), Codec: codecType})
 		}
 	}
 
@@ -86,15 +82,14 @@ func (s *server) Publish(in *pb.PublishRequest, out pb.SFU_PublishServer) error 
 
 	router.AddPub(pub)
 
-	log.Infof("publish stream %v, answer = %v", stream, answer)
+	log.Infof("publish answer = %v", answer)
 
 	err = out.Send(&pb.PublishReply{
-		Mediainfo: &media.Info{Mid: mid},
+		Mid: mid,
 		Description: &pb.SessionDescription{
 			Type: answer.Type.String(),
 			Sdp:  answer.SDP,
 		},
-		Stream: &stream,
 	})
 
 	if err != nil {
@@ -142,7 +137,7 @@ func (s *server) Subscribe(ctx context.Context, in *pb.SubscribeRequest) (*pb.Su
 
 	if in.Options != nil {
 		if in.Options.Bandwidth != 0 {
-			rtcOptions.Bandwidth = int(in.Options.Bandwidth)
+			rtcOptions.Bandwidth = in.Options.Bandwidth
 		}
 
 		rtcOptions.TransportCC = in.Options.Transportcc

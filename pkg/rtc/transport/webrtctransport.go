@@ -102,7 +102,7 @@ type WebRTCTransport struct {
 	candidateLock     sync.RWMutex
 	candidateCh       chan *webrtc.ICECandidate
 	alive             bool
-	bandwidth         int
+	bandwidth         uint32
 	isPub             bool
 	shutdownChan      chan string
 	ssrcPtMap         map[uint32]uint8
@@ -176,7 +176,7 @@ type RTCOptions struct {
 	TransportCC bool
 	Codec       string
 	Codecs      []uint8
-	Bandwidth   int
+	Bandwidth   uint32
 	Ssrcpt      map[uint32]uint8
 }
 
@@ -546,6 +546,6 @@ func (w *WebRTCTransport) GetCandidateChan() chan *webrtc.ICECandidate {
 }
 
 // GetBandwidth return bandwidth
-func (w *WebRTCTransport) GetBandwidth() int {
+func (w *WebRTCTransport) GetBandwidth() uint32 {
 	return w.bandwidth
 }

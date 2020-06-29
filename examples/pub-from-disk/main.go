@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/pion/ion-sfu/pkg/proto/sfu"
+	sfu "github.com/pion/ion-sfu/pkg/proto"
 	"github.com/pion/webrtc/v3"
 	"github.com/pion/webrtc/v3/pkg/media"
 	"github.com/pion/webrtc/v3/pkg/media/ivfreader"
