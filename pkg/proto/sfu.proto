@@ -7,20 +7,24 @@ package sfu;
 service SFU {
     rpc Publish(stream PublishRequest) returns (stream PublishReply) {}
     rpc Unpublish(UnpublishRequest) returns (UnpublishReply) {}
-    rpc Subscribe(stream SubscribeRequest) returns (stream SubscribeReply) {}
+    rpc Subscribe(SubscribeRequest) returns (SubscribeReply) {}
     rpc Unsubscribe(UnsubscribeRequest) returns (UnsubscribeReply) {}
-    rpc Trickle(TrickleRequest) returns (TrickleReply) {}
 }
 
 message PublishRequest {
     string rid = 1;
-    SessionDescription description = 2;
-    Options options = 3;
+    oneof payload {
+        Connect connect = 2;
+        Trickle trickle = 3;
+    }
 }
 
 message PublishReply {
     string mid = 1;
-    SessionDescription description = 2;
+    oneof payload {
+        Connect connect = 2;
+        Trickle trickle = 3;
+    }
 }
 
 message UnpublishRequest {
@@ -51,16 +55,17 @@ message SessionDescription {
     string sdp = 2;
 }
 
+message Connect {
+    SessionDescription description = 1;
+    Options options = 2;
+}
+
+message Trickle {
+    string candidate = 1;
+}
+
 message Options {
     uint32 bandwidth = 1;
     bool transportcc = 2;
     string codec = 3;
 }
-
-message TrickleRequest {
-    string mid = 1;
-    string candidate = 2;
-    string pub = 3;
-}
-
-message TrickleReply {}
