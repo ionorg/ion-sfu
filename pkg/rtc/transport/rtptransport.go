@@ -26,27 +26,23 @@ var (
 
 // RTPTransport ..
 type RTPTransport struct {
-	rtpSession   *muxrtp.SessionRTP
-	rtcpSession  *muxrtp.SessionRTCP
-	rtpEndpoint  *mux.Endpoint
-	rtcpEndpoint *mux.Endpoint
-	conn         net.Conn
-	mux          *mux.Mux
-	rtpCh        chan *rtp.Packet
-	ssrcPT       map[uint32]uint8
-	ssrcPTLock   sync.RWMutex
-	stop         bool
-	id           string
-	idLock       sync.RWMutex
-	writeErrCnt  int
-	rtcpCh       chan rtcp.Packet
-	bandwidth    uint32
-	shutdownChan chan string
-	IDChan       chan string
-}
-
-func (r *RTPTransport) SetShutdownChan(ch chan string) {
-	r.shutdownChan = ch
+	rtpSession     *muxrtp.SessionRTP
+	rtcpSession    *muxrtp.SessionRTCP
+	rtpEndpoint    *mux.Endpoint
+	rtcpEndpoint   *mux.Endpoint
+	conn           net.Conn
+	mux            *mux.Mux
+	rtpCh          chan *rtp.Packet
+	ssrcPT         map[uint32]uint8
+	ssrcPTLock     sync.RWMutex
+	stop           bool
+	id             string
+	idLock         sync.RWMutex
+	writeErrCnt    int
+	rtcpCh         chan rtcp.Packet
+	bandwidth      uint32
+	IDChan         chan string
+	onCloseHandler func()
 }
 
 // NewRTPTransport create a RTPTransport by net.Conn
@@ -150,6 +146,11 @@ func (r *RTPTransport) Close() {
 	r.rtcpEndpoint.Close()
 	r.mux.Close()
 	r.conn.Close()
+}
+
+// OnClose calls passed handler when closing pc
+func (r *RTPTransport) OnClose(f func()) {
+	r.onCloseHandler = f
 }
 
 // newEndpoint registers a new endpoint on the underlying mux.

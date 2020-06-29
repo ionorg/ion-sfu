@@ -160,11 +160,6 @@ func check() {
 		}
 
 		for id, router := range routers {
-			if !router.Alive() {
-				router.Close()
-				delete(routers, id)
-				log.Infof("Stat delete %v", id)
-			}
 			info += "pub: " + string(id) + "\n"
 			subs := router.GetSubs()
 			if len(subs) < 6 {
