@@ -7,7 +7,7 @@ import (
 	"github.com/pion/ion-sfu/pkg/rtc/transport"
 )
 
-// RTPForwarderConfig .
+// RTPForwarderConfig describes configuration parameters for the rtp forwarder.
 type RTPForwarderConfig struct {
 	ID      string
 	MID     string
@@ -17,7 +17,10 @@ type RTPForwarderConfig struct {
 	KcpSalt string
 }
 
-// RTPForwarder core
+// RTPForwarder represents an RTPForwarder plugin.
+// The RTPForwarder plugin forwards rtp packets using an RTPTransport
+// to the configured endpoint. It can be used for sending raw stream rtp
+// to another service for processing.
 type RTPForwarder struct {
 	id         string
 	stop       bool
@@ -25,7 +28,8 @@ type RTPForwarder struct {
 	outRTPChan chan *rtp.Packet
 }
 
-// NewRTPForwarder Create new RTP Forwarder
+// NewRTPForwarder create new RTPForwarder. The RTPForwarder connects to
+// the configured RTP endpoint.
 func NewRTPForwarder(config RTPForwarderConfig) *RTPForwarder {
 	log.Infof("New RTPForwarder Plugin with id %s address %s for mid %s", config.ID, config.Addr, config.MID)
 	var rtpTransport *transport.RTPTransport
@@ -43,12 +47,12 @@ func NewRTPForwarder(config RTPForwarderConfig) *RTPForwarder {
 	}
 }
 
-// ID Return RTPForwarder ID
+// ID returns the configured RTPForwarder ID.
 func (r *RTPForwarder) ID() string {
 	return r.id
 }
 
-// WriteRTP Forward rtp packet which from pub
+// WriteRTP forwards rtp packet written to the RTPForwader.
 func (r *RTPForwarder) WriteRTP(pkt *rtp.Packet) error {
 	if r.stop {
 		return nil
@@ -64,12 +68,13 @@ func (r *RTPForwarder) WriteRTP(pkt *rtp.Packet) error {
 	return nil
 }
 
-// ReadRTP Forward rtp packet which from pub
+// ReadRTP can be used to read RTP packets written to the
+// RTPForwader plugin after processing.
 func (r *RTPForwarder) ReadRTP() <-chan *rtp.Packet {
 	return r.outRTPChan
 }
 
-// Stop Stop plugin
+// Stop closes the rtp transport and halts forwarding.
 func (r *RTPForwarder) Stop() {
 	r.stop = true
 	r.Transport.Close()

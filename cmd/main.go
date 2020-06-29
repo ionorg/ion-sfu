@@ -1,3 +1,4 @@
+// Package cmd contains an entrypoint for running an ion-sfu instance.
 package main
 
 import (

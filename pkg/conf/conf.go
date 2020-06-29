@@ -14,14 +14,21 @@ const (
 )
 
 var (
-	cfg     = Config{}
+	cfg = Config{}
+	// CfgFile contains the path to the current config.
 	CfgFile = &cfg.CfgFile
-	GRPC    = &cfg.GRPC
+	// GRPC contains gRPC configuration parameters.
+	GRPC = &cfg.GRPC
+	// Plugins contains sfu plugin configuration parameters.
 	Plugins = &cfg.Plugins
-	WebRTC  = &cfg.WebRTC
-	Rtp     = &cfg.Rtp
-	Log     = &cfg.Log
-	Router  = &cfg.Router
+	// WebRTC contains webrtc configuration parameters.
+	WebRTC = &cfg.WebRTC
+	// Rtp contains rtpc configuration parameters.
+	Rtp = &cfg.Rtp
+	// Log contains logging configuration parameters.
+	Log = &cfg.Log
+	// Router contains sfu router configuration paramters.
+	Router = &cfg.Router
 )
 
 func init() {
@@ -35,7 +42,7 @@ type grpc struct {
 	Port string `mapstructure:"port"`
 }
 
-type JitterBuffer struct {
+type jitterbuffer struct {
 	On            bool `mapstructure:"on"`
 	TCCOn         bool `mapstructure:"tccon"`
 	REMBCycle     int  `mapstructure:"rembcycle"`
@@ -44,7 +51,7 @@ type JitterBuffer struct {
 	MaxBufferTime int  `mapstructure:"maxbuffertime"`
 }
 
-type RTPForwarder struct {
+type rtpforwarder struct {
 	On      bool   `mapstructure:"on"`
 	Addr    string `mapstructure:"addr"`
 	KcpKey  string `mapstructure:"kcpkey"`
@@ -53,8 +60,8 @@ type RTPForwarder struct {
 
 type plugins struct {
 	On           bool         `mapstructure:"on"`
-	JitterBuffer JitterBuffer `mapstructure:"jitterbuffer"`
-	RTPForwarder RTPForwarder `mapstructure:"rtpforwarder"`
+	JitterBuffer jitterbuffer `mapstructure:"jitterbuffer"`
+	RTPForwarder rtpforwarder `mapstructure:"rtpforwarder"`
 }
 
 type log struct {

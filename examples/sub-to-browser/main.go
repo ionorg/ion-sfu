@@ -1,3 +1,5 @@
+// Package sub-to-browser contains an example of subscribing to a stream from
+// an ion-sfu instance in the browser.
 package main
 
 import (

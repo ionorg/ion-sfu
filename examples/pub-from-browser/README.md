@@ -19,7 +19,7 @@ Run `echo $BROWSER_SDP | publish-from-browser`
 1. Run `publish-from-browser < my_file`
 
 ### Input publish-from-browser's SessionDescription into your browser
-Copy the text that `publish-from-browser` just emitted and copy into second text area
+Copy the text that `publish-from-browser` just emitted and copy into second text area. This needs to be done quickly to avoid an ICE timeout.
 
 ### Hit 'Start Session' in jsfiddle, your video is now being published to the sfu!
 Your browser should send video to ion-sfu, you can verify it by looking at ion-sfu logs.

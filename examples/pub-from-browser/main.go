@@ -1,3 +1,5 @@
+// Package pub-from-browser contains an example of publishing a stream to
+// an ion-sfu instance from the browser.
 package main
 
 import (
