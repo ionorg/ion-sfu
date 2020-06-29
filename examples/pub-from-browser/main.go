@@ -34,7 +34,7 @@ func main() {
 	ctx := context.Background()
 	stream, err := c.Publish(ctx, &sfu.PublishRequest{
 		Rid: "default",
-		Options: &sfu.PublishOptions{
+		Options: &sfu.Options{
 			Codec: "VP8",
 		},
 		Description: &pubOffer,
@@ -50,7 +50,7 @@ func main() {
 	}
 
 	// Output the mid and answer in base64 so we can paste it in browser
-	fmt.Printf("\npub mid: %s", answer.Mediainfo.Mid)
+	fmt.Printf("\npub mid: %s", answer.Mid)
 	fmt.Printf("\npub answer: %s", signal.Encode(answer.Description))
 
 	answer, err = stream.Recv()
