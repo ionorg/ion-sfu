@@ -6,7 +6,6 @@ import (
 	"net"
 	"sync"
 
-	"github.com/google/uuid"
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/ion-sfu/pkg/rtc/rtpengine/muxrtp"
 	"github.com/pion/ion-sfu/pkg/rtc/rtpengine/muxrtp/mux"
@@ -196,13 +195,8 @@ func (r *RTPTransport) receiveRTP() {
 					if r.id == "" {
 						ext := pkt.GetExtension(1)
 						if ext != nil {
-							uuid, err := uuid.FromBytes(ext)
-							if err != nil {
-								log.Errorf("RTPTransport.receiveRTP error parsing header extension: %+v", err)
-							} else {
-								r.id = uuid.String()
-								r.IDChan <- r.id
-							}
+							r.id = string(ext)
+							r.IDChan <- r.id
 						}
 					}
 					r.idLock.Unlock()
@@ -266,15 +260,7 @@ func (r *RTPTransport) receiveRTCP() {
 }
 
 func (r *RTPTransport) setIDHeaderExtension(rtp *rtp.Packet) error {
-	uuid, err := uuid.Parse(r.id)
-	if err != nil {
-		return err
-	}
-	bin, err := uuid.MarshalBinary()
-	if err != nil {
-		return err
-	}
-	err = rtp.SetExtension(1, bin)
+	err := rtp.SetExtension(1, []byte(r.id))
 	if err != nil {
 		return err
 	}
