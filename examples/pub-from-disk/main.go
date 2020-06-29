@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/pion/ion-sfu/pkg/proto/sfu"
+	sfu "github.com/pion/ion-sfu/pkg/proto"
 	"github.com/pion/webrtc/v3"
 	"github.com/pion/webrtc/v3/pkg/media"
 	"github.com/pion/webrtc/v3/pkg/media/ivfreader"
@@ -180,7 +180,7 @@ func main() {
 	ctx := context.Background()
 	stream, err := c.Publish(ctx, &sfu.PublishRequest{
 		Rid: "default",
-		Options: &sfu.PublishOptions{
+		Options: &sfu.Options{
 			Codec: "VP8",
 		},
 		Description: &sfu.SessionDescription{
@@ -198,7 +198,7 @@ func main() {
 		log.Fatalf("Error receving publish response: %v", err)
 	}
 
-	fmt.Printf("Got answer from sfu. Starting streaming for mid %s!\n", answer.Mediainfo.Mid)
+	fmt.Printf("Got answer from sfu. Starting streaming for mid %s!\n", answer.Mid)
 
 	// Set the remote SessionDescription
 	if err = peerConnection.SetRemoteDescription(webrtc.SessionDescription{
