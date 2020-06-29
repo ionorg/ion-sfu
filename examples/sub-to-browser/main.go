@@ -39,11 +39,15 @@ func main() {
 		log.Panicf("Error subscribing: %v", err)
 	}
 
-	stream.Send(&sfu.SubscribeRequest{Mid: mid, Payload: &sfu.SubscribeRequest_Connect{
+	err = stream.Send(&sfu.SubscribeRequest{Mid: mid, Payload: &sfu.SubscribeRequest_Connect{
 		Connect: &sfu.Connect{
 			Description: &subOffer,
 		},
 	}})
+
+	if err != nil {
+		log.Fatalf("Error sending subscribe request: %v", err)
+	}
 
 	for {
 		res, err := stream.Recv()

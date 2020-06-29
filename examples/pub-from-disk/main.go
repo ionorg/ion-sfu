@@ -186,7 +186,7 @@ func main() {
 		log.Fatalf("Error publishing stream: %v", err)
 	}
 
-	stream.Send(&sfu.PublishRequest{
+	err = stream.Send(&sfu.PublishRequest{
 		Rid: "default",
 		Payload: &sfu.PublishRequest_Connect{
 			Connect: &sfu.Connect{
@@ -200,6 +200,10 @@ func main() {
 			},
 		},
 	})
+
+	if err != nil {
+		log.Fatalf("Error sending publish request: %v", err)
+	}
 
 	for {
 		res, err := stream.Recv()

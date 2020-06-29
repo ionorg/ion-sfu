@@ -40,7 +40,7 @@ func main() {
 		log.Fatalf("Error publishing response: %v", err)
 	}
 
-	stream.Send(&sfu.PublishRequest{
+	err = stream.Send(&sfu.PublishRequest{
 		Rid: "default",
 		Payload: &sfu.PublishRequest_Connect{
 			Connect: &sfu.Connect{
@@ -52,6 +52,10 @@ func main() {
 		},
 	})
 
+	if err != nil {
+		log.Fatalf("Error sending connect request: %v", err)
+	}
+
 	for {
 		res, err := stream.Recv()
 		if err == io.EOF {
@@ -61,7 +65,7 @@ func main() {
 		}
 
 		if err != nil {
-			log.Fatalf("Error receving publish response: %v", err)
+			log.Fatalf("Error receiving publish response: %v", err)
 		}
 
 		switch payload := res.Payload.(type) {
