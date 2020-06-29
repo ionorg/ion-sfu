@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/uuid"
+	"github.com/lucsky/cuid"
 	sdptransform "github.com/notedit/sdp"
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/ion-sfu/pkg/rtc"
@@ -33,8 +33,7 @@ func (s *server) Publish(in *pb.PublishRequest, out pb.SFU_PublishServer) error 
 	if in.Description.Sdp == "" {
 		return errors.New("publish: jsep invaild")
 	}
-
-	mid := uuid.New().String()
+	mid := cuid.New()
 	offer := webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: in.Description.Sdp}
 
 	rtcOptions := transport.RTCOptions{
@@ -143,7 +142,7 @@ func (s *server) Subscribe(ctx context.Context, in *pb.SubscribeRequest) (*pb.Su
 		rtcOptions.TransportCC = in.Options.Transportcc
 	}
 
-	subID := uuid.New().String()
+	subID := cuid.New()
 
 	tracks := pub.GetInTracks()
 	rtcOptions.Ssrcpt = make(map[uint32]uint8)
