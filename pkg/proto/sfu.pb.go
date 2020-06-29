@@ -25,12 +25,14 @@ var _ = math.Inf
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type PublishRequest struct {
-	Rid                  string              `protobuf:"bytes,1,opt,name=rid,proto3" json:"rid,omitempty"`
-	Description          *SessionDescription `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
-	Options              *Options            `protobuf:"bytes,3,opt,name=options,proto3" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}            `json:"-"`
-	XXX_unrecognized     []byte              `json:"-"`
-	XXX_sizecache        int32               `json:"-"`
+	Rid string `protobuf:"bytes,1,opt,name=rid,proto3" json:"rid,omitempty"`
+	// Types that are valid to be assigned to Payload:
+	//	*PublishRequest_Connect
+	//	*PublishRequest_Trickle
+	Payload              isPublishRequest_Payload `protobuf_oneof:"payload"`
+	XXX_NoUnkeyedLiteral struct{}                 `json:"-"`
+	XXX_unrecognized     []byte                   `json:"-"`
+	XXX_sizecache        int32                    `json:"-"`
 }
 
 func (m *PublishRequest) Reset()         { *m = PublishRequest{} }
@@ -65,26 +67,60 @@ func (m *PublishRequest) GetRid() string {
 	return ""
 }
 
-func (m *PublishRequest) GetDescription() *SessionDescription {
+type isPublishRequest_Payload interface {
+	isPublishRequest_Payload()
+}
+
+type PublishRequest_Connect struct {
+	Connect *Connect `protobuf:"bytes,2,opt,name=connect,proto3,oneof"`
+}
+
+type PublishRequest_Trickle struct {
+	Trickle *Trickle `protobuf:"bytes,3,opt,name=trickle,proto3,oneof"`
+}
+
+func (*PublishRequest_Connect) isPublishRequest_Payload() {}
+
+func (*PublishRequest_Trickle) isPublishRequest_Payload() {}
+
+func (m *PublishRequest) GetPayload() isPublishRequest_Payload {
 	if m != nil {
-		return m.Description
+		return m.Payload
 	}
 	return nil
 }
 
-func (m *PublishRequest) GetOptions() *Options {
-	if m != nil {
-		return m.Options
+func (m *PublishRequest) GetConnect() *Connect {
+	if x, ok := m.GetPayload().(*PublishRequest_Connect); ok {
+		return x.Connect
 	}
 	return nil
+}
+
+func (m *PublishRequest) GetTrickle() *Trickle {
+	if x, ok := m.GetPayload().(*PublishRequest_Trickle); ok {
+		return x.Trickle
+	}
+	return nil
+}
+
+// XXX_OneofWrappers is for the internal use of the proto package.
+func (*PublishRequest) XXX_OneofWrappers() []interface{} {
+	return []interface{}{
+		(*PublishRequest_Connect)(nil),
+		(*PublishRequest_Trickle)(nil),
+	}
 }
 
 type PublishReply struct {
-	Mid                  string              `protobuf:"bytes,1,opt,name=mid,proto3" json:"mid,omitempty"`
-	Description          *SessionDescription `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}            `json:"-"`
-	XXX_unrecognized     []byte              `json:"-"`
-	XXX_sizecache        int32               `json:"-"`
+	Mid string `protobuf:"bytes,1,opt,name=mid,proto3" json:"mid,omitempty"`
+	// Types that are valid to be assigned to Payload:
+	//	*PublishReply_Connect
+	//	*PublishReply_Trickle
+	Payload              isPublishReply_Payload `protobuf_oneof:"payload"`
+	XXX_NoUnkeyedLiteral struct{}               `json:"-"`
+	XXX_unrecognized     []byte                 `json:"-"`
+	XXX_sizecache        int32                  `json:"-"`
 }
 
 func (m *PublishReply) Reset()         { *m = PublishReply{} }
@@ -119,11 +155,49 @@ func (m *PublishReply) GetMid() string {
 	return ""
 }
 
-func (m *PublishReply) GetDescription() *SessionDescription {
+type isPublishReply_Payload interface {
+	isPublishReply_Payload()
+}
+
+type PublishReply_Connect struct {
+	Connect *Connect `protobuf:"bytes,2,opt,name=connect,proto3,oneof"`
+}
+
+type PublishReply_Trickle struct {
+	Trickle *Trickle `protobuf:"bytes,3,opt,name=trickle,proto3,oneof"`
+}
+
+func (*PublishReply_Connect) isPublishReply_Payload() {}
+
+func (*PublishReply_Trickle) isPublishReply_Payload() {}
+
+func (m *PublishReply) GetPayload() isPublishReply_Payload {
 	if m != nil {
-		return m.Description
+		return m.Payload
 	}
 	return nil
+}
+
+func (m *PublishReply) GetConnect() *Connect {
+	if x, ok := m.GetPayload().(*PublishReply_Connect); ok {
+		return x.Connect
+	}
+	return nil
+}
+
+func (m *PublishReply) GetTrickle() *Trickle {
+	if x, ok := m.GetPayload().(*PublishReply_Trickle); ok {
+		return x.Trickle
+	}
+	return nil
+}
+
+// XXX_OneofWrappers is for the internal use of the proto package.
+func (*PublishReply) XXX_OneofWrappers() []interface{} {
+	return []interface{}{
+		(*PublishReply_Connect)(nil),
+		(*PublishReply_Trickle)(nil),
+	}
 }
 
 type UnpublishRequest struct {
@@ -415,6 +489,92 @@ func (m *SessionDescription) GetSdp() string {
 	return ""
 }
 
+type Connect struct {
+	Description          *SessionDescription `protobuf:"bytes,1,opt,name=description,proto3" json:"description,omitempty"`
+	Options              *Options            `protobuf:"bytes,2,opt,name=options,proto3" json:"options,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}            `json:"-"`
+	XXX_unrecognized     []byte              `json:"-"`
+	XXX_sizecache        int32               `json:"-"`
+}
+
+func (m *Connect) Reset()         { *m = Connect{} }
+func (m *Connect) String() string { return proto.CompactTextString(m) }
+func (*Connect) ProtoMessage()    {}
+func (*Connect) Descriptor() ([]byte, []int) {
+	return fileDescriptor_e599a6ad2e115568, []int{9}
+}
+
+func (m *Connect) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_Connect.Unmarshal(m, b)
+}
+func (m *Connect) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_Connect.Marshal(b, m, deterministic)
+}
+func (m *Connect) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Connect.Merge(m, src)
+}
+func (m *Connect) XXX_Size() int {
+	return xxx_messageInfo_Connect.Size(m)
+}
+func (m *Connect) XXX_DiscardUnknown() {
+	xxx_messageInfo_Connect.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_Connect proto.InternalMessageInfo
+
+func (m *Connect) GetDescription() *SessionDescription {
+	if m != nil {
+		return m.Description
+	}
+	return nil
+}
+
+func (m *Connect) GetOptions() *Options {
+	if m != nil {
+		return m.Options
+	}
+	return nil
+}
+
+type Trickle struct {
+	Candidate            string   `protobuf:"bytes,1,opt,name=candidate,proto3" json:"candidate,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *Trickle) Reset()         { *m = Trickle{} }
+func (m *Trickle) String() string { return proto.CompactTextString(m) }
+func (*Trickle) ProtoMessage()    {}
+func (*Trickle) Descriptor() ([]byte, []int) {
+	return fileDescriptor_e599a6ad2e115568, []int{10}
+}
+
+func (m *Trickle) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_Trickle.Unmarshal(m, b)
+}
+func (m *Trickle) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_Trickle.Marshal(b, m, deterministic)
+}
+func (m *Trickle) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Trickle.Merge(m, src)
+}
+func (m *Trickle) XXX_Size() int {
+	return xxx_messageInfo_Trickle.Size(m)
+}
+func (m *Trickle) XXX_DiscardUnknown() {
+	xxx_messageInfo_Trickle.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_Trickle proto.InternalMessageInfo
+
+func (m *Trickle) GetCandidate() string {
+	if m != nil {
+		return m.Candidate
+	}
+	return ""
+}
+
 type Options struct {
 	Bandwidth            uint32   `protobuf:"varint,1,opt,name=bandwidth,proto3" json:"bandwidth,omitempty"`
 	Transportcc          bool     `protobuf:"varint,2,opt,name=transportcc,proto3" json:"transportcc,omitempty"`
@@ -428,7 +588,7 @@ func (m *Options) Reset()         { *m = Options{} }
 func (m *Options) String() string { return proto.CompactTextString(m) }
 func (*Options) ProtoMessage()    {}
 func (*Options) Descriptor() ([]byte, []int) {
-	return fileDescriptor_e599a6ad2e115568, []int{9}
+	return fileDescriptor_e599a6ad2e115568, []int{11}
 }
 
 func (m *Options) XXX_Unmarshal(b []byte) error {
@@ -470,92 +630,6 @@ func (m *Options) GetCodec() string {
 	return ""
 }
 
-type TrickleRequest struct {
-	Mid                  string   `protobuf:"bytes,1,opt,name=mid,proto3" json:"mid,omitempty"`
-	Candidate            string   `protobuf:"bytes,2,opt,name=candidate,proto3" json:"candidate,omitempty"`
-	Pub                  string   `protobuf:"bytes,3,opt,name=pub,proto3" json:"pub,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *TrickleRequest) Reset()         { *m = TrickleRequest{} }
-func (m *TrickleRequest) String() string { return proto.CompactTextString(m) }
-func (*TrickleRequest) ProtoMessage()    {}
-func (*TrickleRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_e599a6ad2e115568, []int{10}
-}
-
-func (m *TrickleRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_TrickleRequest.Unmarshal(m, b)
-}
-func (m *TrickleRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_TrickleRequest.Marshal(b, m, deterministic)
-}
-func (m *TrickleRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TrickleRequest.Merge(m, src)
-}
-func (m *TrickleRequest) XXX_Size() int {
-	return xxx_messageInfo_TrickleRequest.Size(m)
-}
-func (m *TrickleRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_TrickleRequest.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_TrickleRequest proto.InternalMessageInfo
-
-func (m *TrickleRequest) GetMid() string {
-	if m != nil {
-		return m.Mid
-	}
-	return ""
-}
-
-func (m *TrickleRequest) GetCandidate() string {
-	if m != nil {
-		return m.Candidate
-	}
-	return ""
-}
-
-func (m *TrickleRequest) GetPub() string {
-	if m != nil {
-		return m.Pub
-	}
-	return ""
-}
-
-type TrickleReply struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *TrickleReply) Reset()         { *m = TrickleReply{} }
-func (m *TrickleReply) String() string { return proto.CompactTextString(m) }
-func (*TrickleReply) ProtoMessage()    {}
-func (*TrickleReply) Descriptor() ([]byte, []int) {
-	return fileDescriptor_e599a6ad2e115568, []int{11}
-}
-
-func (m *TrickleReply) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_TrickleReply.Unmarshal(m, b)
-}
-func (m *TrickleReply) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_TrickleReply.Marshal(b, m, deterministic)
-}
-func (m *TrickleReply) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TrickleReply.Merge(m, src)
-}
-func (m *TrickleReply) XXX_Size() int {
-	return xxx_messageInfo_TrickleReply.Size(m)
-}
-func (m *TrickleReply) XXX_DiscardUnknown() {
-	xxx_messageInfo_TrickleReply.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_TrickleReply proto.InternalMessageInfo
-
 func init() {
 	proto.RegisterType((*PublishRequest)(nil), "sfu.PublishRequest")
 	proto.RegisterType((*PublishReply)(nil), "sfu.PublishReply")
@@ -566,45 +640,46 @@ func init() {
 	proto.RegisterType((*UnsubscribeRequest)(nil), "sfu.UnsubscribeRequest")
 	proto.RegisterType((*UnsubscribeReply)(nil), "sfu.UnsubscribeReply")
 	proto.RegisterType((*SessionDescription)(nil), "sfu.SessionDescription")
+	proto.RegisterType((*Connect)(nil), "sfu.Connect")
+	proto.RegisterType((*Trickle)(nil), "sfu.Trickle")
 	proto.RegisterType((*Options)(nil), "sfu.Options")
-	proto.RegisterType((*TrickleRequest)(nil), "sfu.TrickleRequest")
-	proto.RegisterType((*TrickleReply)(nil), "sfu.TrickleReply")
 }
 
 func init() { proto.RegisterFile("pkg/proto/sfu.proto", fileDescriptor_e599a6ad2e115568) }
 
 var fileDescriptor_e599a6ad2e115568 = []byte{
-	// 479 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x54, 0xdf, 0x8b, 0xd3, 0x40,
-	0x10, 0xbe, 0x34, 0x6a, 0xcd, 0xb4, 0x86, 0x3a, 0xf5, 0xb8, 0x52, 0xee, 0xa1, 0xae, 0x72, 0xf4,
-	0xc5, 0x46, 0xee, 0x1e, 0xe4, 0x04, 0x11, 0x44, 0x7c, 0x55, 0xb6, 0xf6, 0x45, 0x11, 0x69, 0x7e,
-	0xf4, 0xba, 0x5c, 0xba, 0xbb, 0x66, 0x37, 0x48, 0xff, 0x00, 0xf1, 0xbf, 0xf1, 0x6f, 0x94, 0xdd,
-	0xae, 0x69, 0x92, 0xe2, 0x89, 0xe8, 0x53, 0x26, 0xb3, 0xf3, 0xcd, 0x7c, 0xdf, 0xb7, 0x93, 0xc0,
-	0x50, 0x5e, 0x5f, 0x45, 0xb2, 0x10, 0x5a, 0x44, 0x6a, 0x55, 0xce, 0x6c, 0x84, 0xbe, 0x5a, 0x95,
-	0xe4, 0x9b, 0x07, 0xe1, 0xbb, 0x32, 0xce, 0x99, 0x5a, 0xd3, 0xec, 0x4b, 0x99, 0x29, 0x8d, 0x03,
-	0xf0, 0x0b, 0x96, 0x8e, 0xbc, 0x89, 0x37, 0x0d, 0xa8, 0x09, 0xf1, 0x12, 0x7a, 0x69, 0xa6, 0x92,
-	0x82, 0x49, 0xcd, 0x04, 0x1f, 0x75, 0x26, 0xde, 0xb4, 0x77, 0x7e, 0x32, 0x33, 0xad, 0xe6, 0x99,
-	0x52, 0x4c, 0xf0, 0xd7, 0xfb, 0x63, 0x5a, 0xaf, 0xc5, 0x33, 0xe8, 0x0a, 0x1b, 0xa9, 0x91, 0x6f,
-	0x61, 0x7d, 0x0b, 0x7b, 0xbb, 0xcb, 0xd1, 0x5f, 0x87, 0xe4, 0x23, 0xf4, 0x2b, 0x1a, 0x32, 0xdf,
-	0x1a, 0x12, 0x9b, 0x3d, 0x89, 0xcd, 0x3f, 0x91, 0x20, 0x8f, 0x61, 0xb0, 0xe0, 0xf2, 0x40, 0x65,
-	0x73, 0x00, 0x19, 0x40, 0x58, 0xab, 0x92, 0xf9, 0x96, 0x7c, 0xf7, 0x60, 0x30, 0x2f, 0x63, 0xd3,
-	0x28, 0xce, 0x7e, 0x0b, 0xac, 0x6b, 0xec, 0xdc, 0xa0, 0xb1, 0xad, 0xc0, 0xff, 0x0b, 0x05, 0x9f,
-	0x20, 0xac, 0x11, 0xf9, 0xef, 0x06, 0x9d, 0x01, 0x2e, 0xb8, 0xfa, 0xa3, 0x52, 0x82, 0xc6, 0x48,
-	0xd5, 0x20, 0x42, 0x9e, 0x03, 0x1e, 0xb6, 0x47, 0x84, 0x5b, 0x7a, 0x2b, 0x33, 0x07, 0xb6, 0xb1,
-	0xe9, 0xa7, 0x52, 0x69, 0x89, 0x05, 0xd4, 0x84, 0xe4, 0x33, 0x74, 0x9d, 0x4b, 0x78, 0x0a, 0x41,
-	0xbc, 0xe4, 0xe9, 0x57, 0x96, 0xea, 0xb5, 0x45, 0xdd, 0xa3, 0xfb, 0x04, 0x4e, 0xa0, 0xa7, 0x8b,
-	0x25, 0x57, 0x52, 0x14, 0x3a, 0x49, 0x6c, 0x8b, 0xbb, 0xb4, 0x9e, 0xc2, 0x07, 0x70, 0x3b, 0x11,
-	0x69, 0x96, 0x58, 0x5b, 0x03, 0xba, 0x7b, 0x21, 0x14, 0xc2, 0xf7, 0x05, 0x4b, 0xae, 0xf3, 0x1b,
-	0xae, 0xef, 0x14, 0x82, 0x64, 0xc9, 0x53, 0x96, 0x2e, 0x75, 0xe6, 0xc8, 0xed, 0x13, 0xa6, 0x5e,
-	0x96, 0xb1, 0xeb, 0x6a, 0x42, 0x12, 0x42, 0xbf, 0xea, 0x29, 0xf3, 0xed, 0xf9, 0x8f, 0x0e, 0xf8,
-	0xf3, 0x37, 0x0b, 0x7c, 0x06, 0x5d, 0xb7, 0xc2, 0x38, 0xb4, 0xae, 0x37, 0xbf, 0xab, 0xf1, 0xfd,
-	0x66, 0xd2, 0x78, 0x77, 0x34, 0xf5, 0x9e, 0x7a, 0x78, 0x09, 0x41, 0xb5, 0x78, 0x78, 0x6c, 0xab,
-	0xda, 0xeb, 0x3a, 0x1e, 0xb6, 0xd3, 0x16, 0x8e, 0x2f, 0x20, 0xa8, 0xf6, 0xc2, 0x41, 0xdb, 0x0b,
-	0xeb, 0xa0, 0xcd, 0xf5, 0x71, 0x93, 0x5f, 0x42, 0xaf, 0x76, 0x9f, 0x78, 0xe2, 0x86, 0xb4, 0x37,
-	0x61, 0x7c, 0x7c, 0x78, 0xb0, 0x9b, 0x7f, 0x01, 0x5d, 0xe7, 0x85, 0xd3, 0xdc, 0x74, 0xdb, 0x69,
-	0xae, 0xdb, 0x45, 0x8e, 0x5e, 0x3d, 0xfa, 0xf0, 0xf0, 0x8a, 0xe9, 0x75, 0x19, 0xcf, 0x12, 0xb1,
-	0x89, 0x24, 0x13, 0x3c, 0x62, 0x82, 0x3f, 0x51, 0xab, 0x32, 0xaa, 0xfe, 0x53, 0xf1, 0x1d, 0xfb,
-	0xb8, 0xf8, 0x19, 0x00, 0x00, 0xff, 0xff, 0x67, 0x3b, 0x2e, 0x55, 0xbb, 0x04, 0x00, 0x00,
+	// 491 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x94, 0xc1, 0x8f, 0xd2, 0x40,
+	0x14, 0xc6, 0xe9, 0xa2, 0xd6, 0x3e, 0x56, 0x82, 0x0f, 0x37, 0x4b, 0x88, 0x07, 0x1c, 0xcd, 0xca,
+	0x45, 0x6a, 0xd6, 0x83, 0x59, 0x2f, 0x26, 0xab, 0x31, 0xde, 0x34, 0x45, 0x2e, 0x26, 0xc6, 0xb4,
+	0xd3, 0xb2, 0x4c, 0xb6, 0xcc, 0x8c, 0x9d, 0x69, 0x0c, 0x27, 0xe3, 0xc9, 0xbf, 0xd8, 0xbb, 0x99,
+	0x61, 0x80, 0xb6, 0x68, 0xc4, 0x83, 0x27, 0x5e, 0xbf, 0xf7, 0xbd, 0xd7, 0x1f, 0x6f, 0xde, 0x14,
+	0xfa, 0xf2, 0xfa, 0x2a, 0x94, 0x85, 0xd0, 0x22, 0x54, 0xf3, 0x72, 0x62, 0x23, 0x6c, 0xab, 0x79,
+	0x49, 0xbe, 0x7b, 0xd0, 0x7d, 0x5f, 0x26, 0x39, 0x53, 0x8b, 0x28, 0xfb, 0x52, 0x66, 0x4a, 0x63,
+	0x0f, 0xda, 0x05, 0x4b, 0x07, 0xde, 0xc8, 0x1b, 0x07, 0x91, 0x09, 0x71, 0x0c, 0x3e, 0x15, 0x9c,
+	0x67, 0x54, 0x0f, 0x8e, 0x46, 0xde, 0xb8, 0x73, 0x7e, 0x3c, 0x31, 0x6d, 0x5e, 0xad, 0xb5, 0xb7,
+	0xad, 0x68, 0x93, 0x36, 0x4e, 0x5d, 0x30, 0x7a, 0x9d, 0x67, 0x83, 0x76, 0xc5, 0xf9, 0x61, 0xad,
+	0x19, 0xa7, 0x4b, 0x5f, 0x06, 0xe0, 0xcb, 0x78, 0x95, 0x8b, 0x38, 0x25, 0xdf, 0xe0, 0x78, 0x8b,
+	0x20, 0xf3, 0x95, 0x01, 0x58, 0xee, 0x00, 0x96, 0xff, 0x1f, 0xe0, 0x11, 0xf4, 0x66, 0x5c, 0xee,
+	0x4d, 0xa1, 0x0e, 0x41, 0x7a, 0xd0, 0xad, 0xb8, 0x64, 0xbe, 0x22, 0x3f, 0x3c, 0xe8, 0x4d, 0xcb,
+	0x44, 0xd1, 0x82, 0x25, 0xd9, 0x1f, 0x0b, 0xf1, 0x0c, 0x7c, 0x21, 0x35, 0x13, 0x5c, 0xd5, 0xe8,
+	0xdf, 0xad, 0xb5, 0x68, 0x93, 0xc4, 0x0b, 0xe8, 0xa4, 0x99, 0x69, 0x66, 0x9f, 0x1d, 0xff, 0xa9,
+	0xf5, 0x4e, 0x33, 0xa5, 0x98, 0xe0, 0xaf, 0x77, 0xe9, 0xa8, 0xea, 0x25, 0x9f, 0xa0, 0x5b, 0x01,
+	0xf9, 0xfd, 0x10, 0x1b, 0xed, 0x8f, 0xfe, 0xa1, 0xfd, 0x19, 0xe0, 0x8c, 0xab, 0xbf, 0xfe, 0x53,
+	0x82, 0x66, 0x90, 0xaa, 0x06, 0x42, 0x5e, 0x00, 0xee, 0xb7, 0x47, 0x84, 0x1b, 0x7a, 0x25, 0x33,
+	0x57, 0x6c, 0x63, 0xd3, 0x4f, 0xa5, 0xd2, 0x82, 0x05, 0x91, 0x09, 0x49, 0x0e, 0xbe, 0x3b, 0xe3,
+	0x26, 0xbd, 0x77, 0x38, 0xfd, 0xa1, 0xf3, 0x27, 0x8f, 0xc1, 0x77, 0x7b, 0x82, 0xf7, 0x21, 0xa0,
+	0x31, 0x4f, 0x59, 0x1a, 0xeb, 0x0d, 0xe3, 0x4e, 0x20, 0x9f, 0xc1, 0x77, 0xc5, 0xc6, 0x98, 0xc4,
+	0x3c, 0xfd, 0xca, 0x52, 0xbd, 0xb0, 0xc6, 0x3b, 0xd1, 0x4e, 0xc0, 0x11, 0x74, 0x74, 0x11, 0x73,
+	0x25, 0x45, 0xa1, 0x29, 0xb5, 0x6f, 0xbf, 0x1d, 0x55, 0x25, 0xbc, 0x07, 0x37, 0xa9, 0x48, 0x33,
+	0x6a, 0x4f, 0x3b, 0x88, 0xd6, 0x0f, 0xe7, 0x3f, 0x3d, 0x68, 0x4f, 0xdf, 0xcc, 0xf0, 0x39, 0xf8,
+	0xee, 0x66, 0x60, 0xdf, 0x32, 0xd7, 0xaf, 0xea, 0xf0, 0x6e, 0x5d, 0x34, 0xe3, 0x6e, 0x8d, 0xbd,
+	0xa7, 0x1e, 0x5e, 0x40, 0xb0, 0xdd, 0x55, 0x3c, 0xb1, 0xae, 0xe6, 0x86, 0x0f, 0xfb, 0x4d, 0xd9,
+	0x96, 0x9b, 0xd2, 0xed, 0x2a, 0xb9, 0xd2, 0xe6, 0x8e, 0xbb, 0xd2, 0xfa, 0xc6, 0x91, 0x16, 0xbe,
+	0x84, 0x4e, 0xe5, 0xf8, 0xf1, 0xd4, 0xbd, 0xa0, 0xb9, 0x38, 0xc3, 0x93, 0xfd, 0x84, 0x6d, 0x70,
+	0xf9, 0xf0, 0xe3, 0x83, 0x2b, 0xa6, 0x17, 0x65, 0x32, 0xa1, 0x62, 0x19, 0x4a, 0x26, 0x78, 0xc8,
+	0x04, 0x7f, 0xa2, 0xe6, 0x65, 0xb8, 0xfd, 0x82, 0x25, 0xb7, 0xec, 0xcf, 0xb3, 0x5f, 0x01, 0x00,
+	0x00, 0xff, 0xff, 0x0c, 0xf1, 0xa4, 0x88, 0xd5, 0x04, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -621,9 +696,8 @@ const _ = grpc.SupportPackageIsVersion4
 type SFUClient interface {
 	Publish(ctx context.Context, opts ...grpc.CallOption) (SFU_PublishClient, error)
 	Unpublish(ctx context.Context, in *UnpublishRequest, opts ...grpc.CallOption) (*UnpublishReply, error)
-	Subscribe(ctx context.Context, opts ...grpc.CallOption) (SFU_SubscribeClient, error)
+	Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (*SubscribeReply, error)
 	Unsubscribe(ctx context.Context, in *UnsubscribeRequest, opts ...grpc.CallOption) (*UnsubscribeReply, error)
-	Trickle(ctx context.Context, in *TrickleRequest, opts ...grpc.CallOption) (*TrickleReply, error)
 }
 
 type sFUClient struct {
@@ -674,35 +748,13 @@ func (c *sFUClient) Unpublish(ctx context.Context, in *UnpublishRequest, opts ..
 	return out, nil
 }
 
-func (c *sFUClient) Subscribe(ctx context.Context, opts ...grpc.CallOption) (SFU_SubscribeClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_SFU_serviceDesc.Streams[1], "/sfu.SFU/Subscribe", opts...)
+func (c *sFUClient) Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (*SubscribeReply, error) {
+	out := new(SubscribeReply)
+	err := c.cc.Invoke(ctx, "/sfu.SFU/Subscribe", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &sFUSubscribeClient{stream}
-	return x, nil
-}
-
-type SFU_SubscribeClient interface {
-	Send(*SubscribeRequest) error
-	Recv() (*SubscribeReply, error)
-	grpc.ClientStream
-}
-
-type sFUSubscribeClient struct {
-	grpc.ClientStream
-}
-
-func (x *sFUSubscribeClient) Send(m *SubscribeRequest) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *sFUSubscribeClient) Recv() (*SubscribeReply, error) {
-	m := new(SubscribeReply)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
+	return out, nil
 }
 
 func (c *sFUClient) Unsubscribe(ctx context.Context, in *UnsubscribeRequest, opts ...grpc.CallOption) (*UnsubscribeReply, error) {
@@ -714,22 +766,12 @@ func (c *sFUClient) Unsubscribe(ctx context.Context, in *UnsubscribeRequest, opt
 	return out, nil
 }
 
-func (c *sFUClient) Trickle(ctx context.Context, in *TrickleRequest, opts ...grpc.CallOption) (*TrickleReply, error) {
-	out := new(TrickleReply)
-	err := c.cc.Invoke(ctx, "/sfu.SFU/Trickle", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // SFUServer is the server API for SFU service.
 type SFUServer interface {
 	Publish(SFU_PublishServer) error
 	Unpublish(context.Context, *UnpublishRequest) (*UnpublishReply, error)
-	Subscribe(SFU_SubscribeServer) error
+	Subscribe(context.Context, *SubscribeRequest) (*SubscribeReply, error)
 	Unsubscribe(context.Context, *UnsubscribeRequest) (*UnsubscribeReply, error)
-	Trickle(context.Context, *TrickleRequest) (*TrickleReply, error)
 }
 
 // UnimplementedSFUServer can be embedded to have forward compatible implementations.
@@ -742,14 +784,11 @@ func (*UnimplementedSFUServer) Publish(srv SFU_PublishServer) error {
 func (*UnimplementedSFUServer) Unpublish(ctx context.Context, req *UnpublishRequest) (*UnpublishReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Unpublish not implemented")
 }
-func (*UnimplementedSFUServer) Subscribe(srv SFU_SubscribeServer) error {
-	return status.Errorf(codes.Unimplemented, "method Subscribe not implemented")
+func (*UnimplementedSFUServer) Subscribe(ctx context.Context, req *SubscribeRequest) (*SubscribeReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Subscribe not implemented")
 }
 func (*UnimplementedSFUServer) Unsubscribe(ctx context.Context, req *UnsubscribeRequest) (*UnsubscribeReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Unsubscribe not implemented")
-}
-func (*UnimplementedSFUServer) Trickle(ctx context.Context, req *TrickleRequest) (*TrickleReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Trickle not implemented")
 }
 
 func RegisterSFUServer(s *grpc.Server, srv SFUServer) {
@@ -800,30 +839,22 @@ func _SFU_Unpublish_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
-func _SFU_Subscribe_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(SFUServer).Subscribe(&sFUSubscribeServer{stream})
-}
-
-type SFU_SubscribeServer interface {
-	Send(*SubscribeReply) error
-	Recv() (*SubscribeRequest, error)
-	grpc.ServerStream
-}
-
-type sFUSubscribeServer struct {
-	grpc.ServerStream
-}
-
-func (x *sFUSubscribeServer) Send(m *SubscribeReply) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *sFUSubscribeServer) Recv() (*SubscribeRequest, error) {
-	m := new(SubscribeRequest)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
+func _SFU_Subscribe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubscribeRequest)
+	if err := dec(in); err != nil {
 		return nil, err
 	}
-	return m, nil
+	if interceptor == nil {
+		return srv.(SFUServer).Subscribe(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sfu.SFU/Subscribe",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SFUServer).Subscribe(ctx, req.(*SubscribeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _SFU_Unsubscribe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -844,24 +875,6 @@ func _SFU_Unsubscribe_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
-func _SFU_Trickle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(TrickleRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(SFUServer).Trickle(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/sfu.SFU/Trickle",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SFUServer).Trickle(ctx, req.(*TrickleRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 var _SFU_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "sfu.SFU",
 	HandlerType: (*SFUServer)(nil),
@@ -871,24 +884,18 @@ var _SFU_serviceDesc = grpc.ServiceDesc{
 			Handler:    _SFU_Unpublish_Handler,
 		},
 		{
-			MethodName: "Unsubscribe",
-			Handler:    _SFU_Unsubscribe_Handler,
+			MethodName: "Subscribe",
+			Handler:    _SFU_Subscribe_Handler,
 		},
 		{
-			MethodName: "Trickle",
-			Handler:    _SFU_Trickle_Handler,
+			MethodName: "Unsubscribe",
+			Handler:    _SFU_Unsubscribe_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "Publish",
 			Handler:       _SFU_Publish_Handler,
-			ServerStreams: true,
-			ClientStreams: true,
-		},
-		{
-			StreamName:    "Subscribe",
-			Handler:       _SFU_Subscribe_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},
