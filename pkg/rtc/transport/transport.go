@@ -24,6 +24,6 @@ type Transport interface {
 	Close()
 	WriteErrTotal() int
 	WriteErrReset()
-	GetBandwidth() int
+	GetBandwidth() uint32
 	SetShutdownChan(chan string)
 }

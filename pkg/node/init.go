@@ -6,7 +6,7 @@ import (
 	"github.com/pion/ion-sfu/pkg/log"
 	"google.golang.org/grpc"
 
-	pb "github.com/pion/ion-sfu/pkg/proto/sfu"
+	pb "github.com/pion/ion-sfu/pkg/proto"
 )
 
 type server struct {
