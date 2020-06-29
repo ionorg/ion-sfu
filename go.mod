@@ -3,7 +3,6 @@ module github.com/pion/ion-sfu
 go 1.13
 
 require (
-	github.com/envoyproxy/go-control-plane v0.9.4 // indirect
 	github.com/golang/protobuf v1.4.2
 	github.com/klauspost/cpuid v1.2.3 // indirect
 	github.com/klauspost/reedsolomon v1.9.3 // indirect

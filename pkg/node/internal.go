@@ -1,9 +1,8 @@
 package sfu
 
 import (
-	"context"
 	"errors"
-	"fmt"
+	"io"
 	"strings"
 
 	"github.com/lucsky/cuid"
@@ -16,237 +15,310 @@ import (
 	pb "github.com/pion/ion-sfu/pkg/proto"
 )
 
-func handleTrickle(r *rtc.Router, t *transport.WebRTCTransport) {
-	// for {
-	// 	trickle := <-t.GetCandidateChan()
-	// 	if trickle != nil {
-	// 		broadcaster.Say(proto.SFUTrickleICE, util.Map("mid", t.ID(), "trickle", trickle.ToJSON()))
-	// 	} else {
-	// 		return
-	// 	}
-	// }
-}
-
-// Publish a stream to the sfu
-func (s *server) Publish(in *pb.PublishRequest, out pb.SFU_PublishServer) error {
-	log.Infof("publish msg=%v", in)
-	if in.Description.Sdp == "" {
-		return errors.New("publish: jsep invaild")
-	}
+// Publish a stream to the sfu. Publish creates a bidirectional
+// streaming rpc connection between the client and sfu.
+//
+// The sfu will respond with a message containing the stream mid
+// and one of two different payload types:
+// 1. `Connect` containing the session answer description. This
+// message is *always* returned first.
+// 2. `Trickle` containg candidate information for Trickle ICE.
+//
+// If the webrtc connection is closed, the server will close this stream.
+//
+// The client should send a message containg the room id
+// and one of two different payload types:
+// 1. `Connect` containing the session offer description. This
+// message must *always* be sent first.
+// 2. `Trickle` containing candidate information for Trickle ICE.
+//
+// If the client closes this stream, the webrtc stream will be closed.
+func (s *server) Publish(stream pb.SFU_PublishServer) error {
+	var pub *transport.WebRTCTransport
 	mid := cuid.New()
-	offer := webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: in.Description.Sdp}
 
-	rtcOptions := transport.RTCOptions{
-		Publish:     true,
-		Codec:       in.Options.Codec,
-		Bandwidth:   in.Options.Bandwidth,
-		TransportCC: in.Options.Transportcc,
-	}
+	for {
+		in, err := stream.Recv()
+		if err == io.EOF {
+			log.Infof("publish: close")
+			rtc.DelRouter(mid)
+			return nil
+		}
 
-	videoCodec := strings.ToUpper(rtcOptions.Codec)
+		switch payload := in.Payload.(type) {
+		case *pb.PublishRequest_Connect:
+			log.Infof("publish->connect called: %v", payload.Connect)
 
-	sdpObj, err := sdptransform.Parse(offer.SDP)
-	if err != nil {
-		log.Errorf("err=%v sdpObj=%v", err, sdpObj)
-		return errors.New("publish: sdp parse failed")
-	}
+			options := payload.Connect.Options
+			sdp := payload.Connect.Description.Sdp
 
-	allowedCodecs := make([]uint8, 0)
-	for _, s := range sdpObj.GetStreams() {
-		for _, track := range s.GetTracks() {
-			pt, _ := getPubPTForTrack(videoCodec, track, sdpObj)
-
-			if len(track.GetSSRCS()) == 0 {
-				return errors.New("publish: ssrc not found")
+			if sdp == "" {
+				return errors.New("publish->connect: sdp invalid")
 			}
-			allowedCodecs = append(allowedCodecs, pt)
-		}
-	}
 
-	rtcOptions.Codecs = allowedCodecs
-	pub := transport.NewWebRTCTransport(mid, rtcOptions)
-	if pub == nil {
-		return errors.New("publish: transport.NewWebRTCTransport failed")
-	}
+			offer := webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: sdp}
 
-	router := rtc.GetOrNewRouter(mid)
+			rtcOptions := transport.RTCOptions{
+				Publish:     true,
+				Codec:       options.Codec,
+				Bandwidth:   options.Bandwidth,
+				TransportCC: options.Transportcc,
+			}
 
-	go handleTrickle(router, pub)
+			videoCodec := strings.ToUpper(rtcOptions.Codec)
 
-	answer, err := pub.Answer(offer, rtcOptions)
-	if err != nil {
-		log.Errorf("err=%v answer=%v", err, answer)
-		return errors.New("publish: pub.Answer failed")
-	}
+			sdpObj, err := sdptransform.Parse(offer.SDP)
+			if err != nil {
+				log.Errorf("err=%v sdpObj=%v", err, sdpObj)
+				return errors.New("publish->connect: sdp parse failed")
+			}
 
-	router.AddPub(pub)
+			allowedCodecs := make([]uint8, 0)
+			for _, s := range sdpObj.GetStreams() {
+				for _, track := range s.GetTracks() {
+					pt, _ := getPubPTForTrack(videoCodec, track, sdpObj)
 
-	log.Infof("publish answer = %v", answer)
+					if len(track.GetSSRCS()) == 0 {
+						return errors.New("publish->connect: ssrc not found")
+					}
+					allowedCodecs = append(allowedCodecs, pt)
+				}
+			}
 
-	err = out.Send(&pb.PublishReply{
-		Mid: mid,
-		Description: &pb.SessionDescription{
-			Type: answer.Type.String(),
-			Sdp:  answer.SDP,
-		},
-	})
+			rtcOptions.Codecs = allowedCodecs
+			pub = transport.NewWebRTCTransport(mid, rtcOptions)
+			if pub == nil {
+				return errors.New("publish->connect: transport.NewWebRTCTransport failed")
+			}
 
-	if err != nil {
-		log.Errorf("Error publishing stream")
-		return err
-	}
+			router := rtc.GetOrNewRouter(mid)
 
-	<-router.CloseChan
-	return nil
-}
+			answer, err := pub.Answer(offer, rtcOptions)
+			if err != nil {
+				log.Errorf("publish->connect: error creating answer. err=%v answer=%v", err, answer)
+				return err
+			}
 
-// Unpublish a stream
-func (s *server) Unpublish(ctx context.Context, in *pb.UnpublishRequest) (*pb.UnpublishReply, error) {
-	log.Infof("unpublish msg=%v", in)
+			router.AddPub(pub)
 
-	mid := in.Mid
-	router := rtc.GetOrNewRouter(mid)
-	if router != nil {
-		rtc.DelRouter(mid)
-		return &pb.UnpublishReply{}, nil
-	}
-	return nil, errors.New("unpublish: Router not found")
-}
+			log.Infof("publish->connect: answer => %v", answer)
 
-// Subscribe to a stream
-func (s *server) Subscribe(ctx context.Context, in *pb.SubscribeRequest) (*pb.SubscribeReply, error) {
-	log.Infof("subscribe msg=%v", in)
-	router := rtc.GetOrNewRouter(in.Mid)
+			err = stream.Send(&pb.PublishReply{
+				Mid: mid,
+				Payload: &pb.PublishReply_Connect{
+					Connect: &pb.Connect{
+						Description: &pb.SessionDescription{
+							Type: answer.Type.String(),
+							Sdp:  answer.SDP,
+						},
+					},
+				},
+			})
 
-	if router == nil {
-		return nil, errors.New("subscribe: router not found")
-	}
+			if err != nil {
+				log.Errorf("publish->connect: error publishing stream: %v", err)
+				return err
+			}
 
-	pub := router.GetPub().(*transport.WebRTCTransport)
+			go func() {
+				for {
+					trickle := <-pub.GetCandidateChan()
+					if trickle != nil {
+						err = stream.Send(&pb.PublishReply{
+							Mid: mid,
+							Payload: &pb.PublishReply_Trickle{
+								Trickle: &pb.Trickle{
+									Candidate: trickle.String(),
+								},
+							},
+						})
+					} else {
+						return
+					}
+				}
+			}()
 
-	if in.Description.Sdp == "" {
-		return nil, errors.New("subscribe: unsupported media type")
-	}
+			<-router.CloseChan
+			return nil
+		case *pb.PublishRequest_Trickle:
+			if pub == nil {
+				return errors.New("publish->trickle: called before connect")
+			}
 
-	sdp := in.Description.Sdp
-
-	rtcOptions := transport.RTCOptions{
-		Subscribe: true,
-	}
-
-	if in.Options != nil {
-		if in.Options.Bandwidth != 0 {
-			rtcOptions.Bandwidth = in.Options.Bandwidth
-		}
-
-		rtcOptions.TransportCC = in.Options.Transportcc
-	}
-
-	subID := cuid.New()
-
-	tracks := pub.GetInTracks()
-	rtcOptions.Ssrcpt = make(map[uint32]uint8)
-
-	for ssrc, track := range tracks {
-		rtcOptions.Ssrcpt[ssrc] = uint8(track.PayloadType())
-	}
-
-	sdpObj, err := sdptransform.Parse(sdp)
-	if err != nil {
-		log.Errorf("err=%v sdpObj=%v", err, sdpObj)
-		return nil, errors.New("subscribe: sdp parse failed")
-	}
-
-	ssrcPTMap := make(map[uint32]uint8)
-	allowedCodecs := make([]uint8, 0, len(tracks))
-
-	for ssrc, track := range tracks {
-		// Find pt for track given track.Payload and sdp
-		ssrcPTMap[ssrc] = getSubPTForTrack(track, sdpObj)
-		allowedCodecs = append(allowedCodecs, ssrcPTMap[ssrc])
-	}
-
-	// Set media engine codecs based on found pts
-	log.Infof("Allowed codecs %v", allowedCodecs)
-	rtcOptions.Codecs = allowedCodecs
-
-	// New api
-	sub := transport.NewWebRTCTransport(subID, rtcOptions)
-
-	if sub == nil {
-		return nil, errors.New("subscribe: transport.NewWebRTCTransport failed")
-	}
-
-	go handleTrickle(router, sub)
-
-	for ssrc, track := range tracks {
-		// Get payload type from request track
-		pt := track.PayloadType()
-		if newPt, ok := ssrcPTMap[ssrc]; ok {
-			// Override with "negotiated" PT
-			pt = newPt
-		}
-
-		// I2AacsRLsZZriGapnvPKiKBcLi8rTrO1jOpq c84ded42-d2b0-4351-88d2-b7d240c33435
-		//                streamID                        trackID
-		log.Infof("AddTrack: codec:%s, ssrc:%d, pt:%d, streamID %s, trackID %s", track.Codec().MimeType, ssrc, pt, pub.ID(), track.ID())
-		_, err := sub.AddSendTrack(ssrc, pt, pub.ID(), track.ID())
-		if err != nil {
-			log.Errorf("err=%v", err)
-		}
-	}
-
-	// Build answer
-	offer := webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: sdp}
-	answer, err := sub.Answer(offer, rtcOptions)
-	if err != nil {
-		log.Errorf("err=%v answer=%v", err, answer)
-		return nil, errors.New("unsupported media type")
-	}
-
-	router.AddSub(subID, sub)
-
-	log.Infof("subscribe mid %s, answer = %v", subID, answer)
-	return &pb.SubscribeReply{
-		Mid: subID,
-		Description: &pb.SessionDescription{
-			Type: answer.Type.String(),
-			Sdp:  answer.SDP,
-		},
-	}, nil
-}
-
-// Unsubscribe from a stream
-func (s *server) Unsubscribe(ctx context.Context, in *pb.UnsubscribeRequest) (*pb.UnsubscribeReply, error) {
-	log.Infof("unsubscribe msg=%v", in)
-	mid := in.Mid
-	found := false
-	rtc.MapRouter(func(id string, r *rtc.Router) {
-		subs := r.GetSubs()
-		for sid := range subs {
-			if sid == mid {
-				r.DelSub(mid)
-				found = true
-				return
+			if err := pub.AddCandidate(payload.Trickle.Candidate); err != nil {
+				return errors.New("publish->trickle: error adding candidate")
 			}
 		}
-	})
-	if found {
-		return &pb.UnsubscribeReply{}, nil
 	}
-	return nil, fmt.Errorf("unsubscribe: sub [%s] not found", mid)
 }
 
-// func trickle(msg map[string]interface{}) (map[string]interface{}, *nprotoo.Error) {
-// 	log.Infof("trickle msg=%v", msg)
-// 	router := util.Val(msg, "router")
-// 	mid := util.Val(msg, "mid")
-// 	//cand := msg["trickle"]
-// 	r := rtc.GetOrNewRouter(router)
-// 	t := r.GetSub(mid)
-// 	if t != nil {
-// 		//t.(*transport.WebRTCTransport).AddCandidate(cand)
-// 	}
+// Subscribe to a stream from the sfu. Subscribe creates a bidirectional
+// streaming rpc connection between the client and sfu.
+//
+// The sfu will respond with a message containing the stream mid
+// and one of two different payload types:
+// 1. `Connect` containing the session answer description. This
+// message is *always* returned first.
+// 2. `Trickle` containg candidate information for Trickle ICE.
+//
+// If the webrtc connection is closed, the server will close this stream.
+//
+// The client should send a message containg the room id
+// and one of two different payload types:
+// 1. `Connect` containing the session offer description. This
+// message must *always* be sent first.
+// 2. `Trickle` containing candidate information for Trickle ICE.
+//
+// If the client closes this stream, the webrtc stream will be closed.
+func (s *server) Subscribe(stream pb.SFU_SubscribeServer) error {
+	var router *rtc.Router
+	var sub *transport.WebRTCTransport
+	subMid := cuid.New()
 
-// 	return nil, util.NewNpError(404, "trickle: WebRTCTransport not found!")
-// }
+	for {
+		in, err := stream.Recv()
+		if err == io.EOF {
+			log.Infof("subscribe: close")
+			if router != nil {
+				router.DelSub(subMid)
+			}
+			return nil
+		}
+
+		switch payload := in.Payload.(type) {
+		case *pb.SubscribeRequest_Connect:
+			log.Infof("subscribe->connect called: %v", payload.Connect)
+			router = rtc.GetOrNewRouter(in.Mid)
+
+			if router == nil {
+				return errors.New("subscribe->connect: router not found")
+			}
+
+			pub := router.GetPub().(*transport.WebRTCTransport)
+			sdp := payload.Connect.Description.Sdp
+
+			if sdp == "" {
+				return errors.New("subscribe->connect: no sdp provided")
+			}
+
+			rtcOptions := transport.RTCOptions{
+				Subscribe: true,
+			}
+
+			if payload.Connect.Options != nil {
+				if payload.Connect.Options.Bandwidth != 0 {
+					rtcOptions.Bandwidth = payload.Connect.Options.Bandwidth
+				}
+
+				rtcOptions.TransportCC = payload.Connect.Options.Transportcc
+			}
+
+			tracks := pub.GetInTracks()
+			rtcOptions.Ssrcpt = make(map[uint32]uint8)
+
+			for ssrc, track := range tracks {
+				rtcOptions.Ssrcpt[ssrc] = uint8(track.PayloadType())
+			}
+
+			sdpObj, err := sdptransform.Parse(sdp)
+			if err != nil {
+				log.Errorf("err=%v sdpObj=%v", err, sdpObj)
+				return errors.New("subscribe: sdp parse failed")
+			}
+
+			ssrcPTMap := make(map[uint32]uint8)
+			allowedCodecs := make([]uint8, 0, len(tracks))
+
+			for ssrc, track := range tracks {
+				// Find pt for track given track.Payload and sdp
+				ssrcPTMap[ssrc] = getSubPTForTrack(track, sdpObj)
+				allowedCodecs = append(allowedCodecs, ssrcPTMap[ssrc])
+			}
+
+			// Set media engine codecs based on found pts
+			log.Infof("Allowed codecs %v", allowedCodecs)
+			rtcOptions.Codecs = allowedCodecs
+
+			// New api
+			sub := transport.NewWebRTCTransport(subMid, rtcOptions)
+
+			if sub == nil {
+				return errors.New("subscribe->connect: transport.NewWebRTCTransport failed")
+			}
+
+			for ssrc, track := range tracks {
+				// Get payload type from request track
+				pt := track.PayloadType()
+				if newPt, ok := ssrcPTMap[ssrc]; ok {
+					// Override with "negotiated" PT
+					pt = newPt
+				}
+
+				// I2AacsRLsZZriGapnvPKiKBcLi8rTrO1jOpq c84ded42-d2b0-4351-88d2-b7d240c33435
+				//                streamID                        trackID
+				log.Infof("AddTrack: codec:%s, ssrc:%d, pt:%d, streamID %s, trackID %s", track.Codec().MimeType, ssrc, pt, pub.ID(), track.ID())
+				_, err := sub.AddSendTrack(ssrc, pt, pub.ID(), track.ID())
+				if err != nil {
+					log.Errorf("err=%v", err)
+				}
+			}
+
+			// Build answer
+			offer := webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: sdp}
+			answer, err := sub.Answer(offer, rtcOptions)
+			if err != nil {
+				log.Errorf("err=%v answer=%v", err, answer)
+				return errors.New("unsupported media type")
+			}
+
+			router.AddSub(subMid, sub)
+
+			log.Infof("subscribe->connect: mid %s, answer = %v", subMid, answer)
+			err = stream.Send(&pb.SubscribeReply{
+				Mid: subMid,
+				Payload: &pb.SubscribeReply_Connect{
+					Connect: &pb.Connect{
+						Description: &pb.SessionDescription{
+							Type: answer.Type.String(),
+							Sdp:  answer.SDP,
+						},
+					},
+				},
+			})
+
+			if err != nil {
+				log.Errorf("subscribe->connect: error subscribing to stream: %v", err)
+				return err
+			}
+
+			go func() {
+				for {
+					trickle := <-pub.GetCandidateChan()
+					if trickle != nil {
+						err = stream.Send(&pb.SubscribeReply{
+							Mid: subMid,
+							Payload: &pb.SubscribeReply_Trickle{
+								Trickle: &pb.Trickle{
+									Candidate: trickle.String(),
+								},
+							},
+						})
+					} else {
+						return
+					}
+				}
+			}()
+
+			<-sub.ShutdownChan
+			return nil
+		case *pb.SubscribeRequest_Trickle:
+			if sub == nil {
+				return errors.New("subscribe->trickle: called before connect")
+			}
+
+			if err := sub.AddCandidate(payload.Trickle.Candidate); err != nil {
+				return errors.New("subscribe->trickle: error adding candidate")
+			}
+		}
+	}
+}
