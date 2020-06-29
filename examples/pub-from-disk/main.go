@@ -180,7 +180,7 @@ func main() {
 	ctx := context.Background()
 	stream, err := c.Publish(ctx, &sfu.PublishRequest{
 		Rid: "default",
-		Options: &sfu.PublishOptions{
+		Options: &sfu.Options{
 			Codec: "VP8",
 		},
 		Description: &sfu.SessionDescription{
@@ -198,7 +198,7 @@ func main() {
 		log.Fatalf("Error receving publish response: %v", err)
 	}
 
-	fmt.Printf("Got answer from sfu. Starting streaming for mid %s!\n", answer.Mediainfo.Mid)
+	fmt.Printf("Got answer from sfu. Starting streaming for mid %s!\n", answer.Mid)
 
 	// Set the remote SessionDescription
 	if err = peerConnection.SetRemoteDescription(webrtc.SessionDescription{
