@@ -34,34 +34,41 @@ func main() {
 	}
 
 	ctx := context.Background()
-	stream, err := c.Publish(ctx, &sfu.PublishRequest{
+	stream, err := c.Publish(ctx)
+
+	if err != nil {
+		log.Fatalf("Error publishing response: %v", err)
+	}
+
+	stream.Send(&sfu.PublishRequest{
 		Rid: "default",
-		Options: &sfu.Options{
-			Codec: "VP8",
+		Payload: &sfu.PublishRequest_Connect{
+			Connect: &sfu.Connect{
+				Options: &sfu.Options{
+					Codec: "VP8",
+				},
+				Description: &pubOffer,
+			},
 		},
-		Description: &pubOffer,
 	})
 
-	if err != nil {
-		log.Fatalf("Error publishing stream: %v", err)
-	}
+	for {
+		res, err := stream.Recv()
+		if err == io.EOF {
+			// WebRTC Transport closed
+			fmt.Println("WebRTC Transport Closed")
+			return
+		}
 
-	answer, err := stream.Recv()
-	if err != nil {
-		log.Fatalf("Error receving publish response: %v", err)
-	}
+		if err != nil {
+			log.Fatalf("Error receving publish response: %v", err)
+		}
 
-	// Output the mid and answer in base64 so we can paste it in browser
-	fmt.Printf("\npub mid: %s", answer.Mid)
-	fmt.Printf("\npub answer: %s", signal.Encode(answer.Description))
-
-	answer, err = stream.Recv()
-	if err == io.EOF {
-		// WebRTC Transport closed
-		fmt.Println("WebRTC Transport Closed")
-	}
-
-	if err != nil {
-		log.Fatalf("Error receving publish response: %v", err)
+		switch payload := res.Payload.(type) {
+		case *sfu.PublishReply_Connect:
+			// Output the mid and answer in base64 so we can paste it in browser
+			fmt.Printf("\npub mid: %s", res.Mid)
+			fmt.Printf("\npub answer: %s", signal.Encode(payload.Connect.Description))
+		}
 	}
 }
