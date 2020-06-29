@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/pion/ion-sfu/examples/internal/signal"
-	"github.com/pion/ion-sfu/pkg/proto/sfu"
+	sfu "github.com/pion/ion-sfu/pkg/proto"
 	"google.golang.org/grpc"
 )
 
