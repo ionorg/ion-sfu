@@ -485,10 +485,11 @@ func (w *WebRTCTransport) receiveOutTracksRTCP() {
 func (w *WebRTCTransport) receiveOutTrackRTCP(sender *webrtc.RTPSender) {
 	for {
 		pkts, err := sender.ReadRTCP()
+		if err == io.EOF {
+			return
+		}
+
 		if err != nil {
-			if err == io.EOF {
-				return
-			}
 			log.Errorf("rtcp err => %v", err)
 		}
 
