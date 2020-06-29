@@ -1,3 +1,5 @@
+// Package pub-from-disk contains an example of publishing a stream to
+// an ion-sfu instance from a file on disk.
 package main
 
 import (

@@ -90,7 +90,7 @@ func ServeWithKCP(port int, kcpPwd, kcpSalt string) (chan *transport.RTPTranspor
 	return ch, nil
 }
 
-// Close close listener and break loop
+// Close closes the rtp listener and stops accepting new connections.
 func Close() {
 	if !stop {
 		return

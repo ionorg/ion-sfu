@@ -13,12 +13,12 @@ type server struct {
 	pb.UnimplementedSFUServer
 }
 
-// InitLogLevel for sfu
+// InitLogLevel can be used to set a log level for the sfu.
 func InitLogLevel(level string) {
 	log.Init(level)
 }
 
-// Init func
+// Init initializes the SFU gRPC server at the configured port.
 func Init(port string) {
 	lis, err := net.Listen("tcp", port)
 	if err != nil {

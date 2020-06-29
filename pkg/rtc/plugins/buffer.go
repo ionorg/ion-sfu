@@ -7,8 +7,6 @@ import (
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
-	"github.com/pion/rtp/codecs"
-	"github.com/pion/webrtc/v2"
 )
 
 const (
@@ -438,22 +436,4 @@ func (b *Buffer) GetLostRateBandwidth(cycle uint64) (float64, uint64) {
 // GetPacket get packet by sequence number
 func (b *Buffer) GetPacket(sn uint16) *rtp.Packet {
 	return b.pktBuffer[sn]
-}
-
-// IsVP8KeyFrame check key frame
-func IsVP8KeyFrame(pkt *rtp.Packet) bool {
-	if pkt != nil && pkt.PayloadType == webrtc.DefaultPayloadTypeVP8 {
-		vp8 := &codecs.VP8Packet{}
-		_, err := vp8.Unmarshal(pkt.Payload)
-		if err != nil {
-			return false
-		}
-		// start of a frame, there is a payload header  when S == 1
-		if vp8.S == 1 && vp8.Payload[0]&0x01 == 0 {
-			//key frame
-			// log.Infof("vp8.Payload[0]=%b pkt=%v", vp8.Payload[0], pkt)
-			return true
-		}
-	}
-	return false
 }
