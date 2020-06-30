@@ -30,14 +30,15 @@ type RouterConfig struct {
 //                                      +--->sub
 // Router is rtp router
 type Router struct {
-	id          string
-	pub         transport.Transport
-	subs        map[string]transport.Transport
-	subLock     sync.RWMutex
-	stop        bool
-	pluginChain *plugins.PluginChain
-	subChans    map[string]chan *rtp.Packet
-	rembChan    chan *rtcp.ReceiverEstimatedMaximumBitrate
+	id             string
+	pub            transport.Transport
+	subs           map[string]transport.Transport
+	subLock        sync.RWMutex
+	stop           bool
+	pluginChain    *plugins.PluginChain
+	subChans       map[string]chan *rtp.Packet
+	rembChan       chan *rtcp.ReceiverEstimatedMaximumBitrate
+	onCloseHandler func()
 }
 
 // NewRouter return a new Router
@@ -108,15 +109,18 @@ func (r *Router) AddPub(t transport.Transport) transport.Transport {
 	r.pub = t
 	r.pluginChain.AttachPub(t)
 	r.start()
+	t.OnClose(func() {
+		r.Close()
+	})
 	return t
 }
 
 // delPub del pub
 func (r *Router) delPub() {
 	log.Infof("Router.delPub %s", r.pub.ID())
-	if r.pub != nil {
-		r.pub.Close()
-	}
+	// if r.pub != nil {
+	// 	r.pub.Close()
+	// }
 	if r.pluginChain != nil {
 		r.pluginChain.Close()
 	}
@@ -137,7 +141,7 @@ func (r *Router) subWriteLoop(subID string, trans transport.Transport) {
 			// log.Errorf("wt.WriteRTP err=%v", err)
 			// del sub when err is increasing
 			if trans.WriteErrTotal() > maxWriteErr {
-				r.DelSub(trans.ID())
+				r.delSub(trans.ID())
 			}
 		}
 		trans.WriteErrReset()
@@ -261,6 +265,10 @@ func (r *Router) AddSub(id string, t transport.Transport) transport.Transport {
 	r.subChans[id] = make(chan *rtp.Packet, 1000)
 	log.Infof("Router.AddSub id=%s t=%p", id, t)
 
+	t.OnClose(func() {
+		r.delSub(id)
+	})
+
 	// Sub loops
 	go r.subWriteLoop(id, t)
 	go r.subFeedbackLoop(id, t)
@@ -283,9 +291,9 @@ func (r *Router) GetSubs() map[string]transport.Transport {
 	return r.subs
 }
 
-// DelSub del sub by id
-func (r *Router) DelSub(id string) {
-	log.Infof("Router.DelSub id=%s", id)
+// delSub del sub by id
+func (r *Router) delSub(id string) {
+	log.Infof("Router.delSub id=%s", id)
 	r.subLock.Lock()
 	defer r.subLock.Unlock()
 	if r.subs[id] != nil {
@@ -298,9 +306,9 @@ func (r *Router) DelSub(id string) {
 	delete(r.subChans, id)
 }
 
-// DelSubs del all sub
-func (r *Router) DelSubs() {
-	log.Infof("Router.DelSubs")
+// delSubs del all sub
+func (r *Router) delSubs() {
+	log.Infof("Router.delSubs")
 	r.subLock.RLock()
 	keys := make([]string, 0, len(r.subs))
 	for k := range r.subs {
@@ -309,7 +317,7 @@ func (r *Router) DelSubs() {
 	r.subLock.RUnlock()
 
 	for _, id := range keys {
-		r.DelSub(id)
+		r.delSub(id)
 	}
 }
 
@@ -319,9 +327,15 @@ func (r *Router) Close() {
 		return
 	}
 	log.Infof("Router.Close")
+	r.onCloseHandler()
 	r.delPub()
 	r.stop = true
-	r.DelSubs()
+	r.delSubs()
+}
+
+// OnClose handler called when router is closed.
+func (r *Router) OnClose(f func()) {
+	r.onCloseHandler = f
 }
 
 func (r *Router) resendRTP(sid string, ssrc uint32, sn uint16) bool {
