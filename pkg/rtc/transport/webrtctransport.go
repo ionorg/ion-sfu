@@ -325,8 +325,6 @@ func (w *WebRTCTransport) Answer(offer webrtc.SessionDescription, options RTCOpt
 			w.inTrackLock.Lock()
 			w.inTracks[remoteTrack.SSRC()] = remoteTrack
 			w.inTrackLock.Unlock()
-			// TODO replace with broadcast when receiving rtp failed
-			// etcdKeepFunc(remoteTrack.SSRC(), remoteTrack.PayloadType())
 			w.receiveInTrackRTP(remoteTrack)
 		})
 	} else {

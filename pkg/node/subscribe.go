@@ -22,7 +22,7 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 	}
 
 	pub := router.GetPub().(*transport.WebRTCTransport)
-	sdp := payload.Connect.Description.Sdp
+	sdp := payload.Connect.Sdp
 
 	rtcOptions := transport.RTCOptions{
 		Subscribe: true,
@@ -43,7 +43,7 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 		rtcOptions.Ssrcpt[ssrc] = uint8(track.PayloadType())
 	}
 
-	sdpObj, err := sdptransform.Parse(sdp)
+	sdpObj, err := sdptransform.Parse(string(sdp))
 	if err != nil {
 		log.Errorf("err=%v sdpObj=%v", err, sdpObj)
 		return nil, nil, errors.New("subscribe: sdp parse failed")
@@ -52,11 +52,11 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 	ssrcPTMap := make(map[uint32]uint8)
 	allowedCodecs := make([]uint8, 0, len(tracks))
 
-	for ssrc, track := range tracks {
-		// Find pt for track given track.Payload and sdp
-		ssrcPTMap[ssrc] = getSubPTForTrack(track, sdpObj)
-		allowedCodecs = append(allowedCodecs, ssrcPTMap[ssrc])
-	}
+	// for ssrc, track := range tracks {
+	// 	// Find pt for track given track.Payload and sdp
+	// 	ssrcPTMap[ssrc] = getSubPTForTrack(track, sdpObj)
+	// 	allowedCodecs = append(allowedCodecs, ssrcPTMap[ssrc])
+	// }
 
 	// Set media engine codecs based on found pts
 	log.Infof("Allowed codecs %v", allowedCodecs)
@@ -86,7 +86,7 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 	}
 
 	// Build answer
-	offer := webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: sdp}
+	offer := webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: string(sdp)}
 	answer, err := sub.Answer(offer, rtcOptions)
 	if err != nil {
 		log.Errorf("err=%v answer=%v", err, answer)
@@ -98,10 +98,7 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 	log.Infof("subscribe->connect: mid %s, answer = %v", mid, answer)
 	return sub, &pb.SubscribeReply_Connect{
 		Connect: &pb.Connect{
-			Description: &pb.SessionDescription{
-				Type: answer.Type.String(),
-				Sdp:  answer.SDP,
-			},
+			Sdp: []byte(answer.SDP),
 		},
 	}, nil
 }

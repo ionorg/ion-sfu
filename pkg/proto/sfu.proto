@@ -42,17 +42,12 @@ message SubscribeReply {
 }
 
 message Connect {
-    SessionDescription description = 1;
+    bytes sdp = 1;
     Options options = 2;
 }
 
 message Trickle {
     string candidate = 1;
-}
-
-message SessionDescription {
-    string type = 1; // "answer" | "offer" | "pranswer" | "rollback"
-    string sdp = 2;
 }
 
 message Options {
