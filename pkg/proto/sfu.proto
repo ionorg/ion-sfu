@@ -53,5 +53,4 @@ message Trickle {
 message Options {
     uint32 bandwidth = 1;
     bool transportcc = 2;
-    string codec = 3;
 }

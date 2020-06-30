@@ -2,16 +2,63 @@ package sfu
 
 import (
 	"errors"
+	"strconv"
+	"strings"
 
 	"github.com/lucsky/cuid"
-	sdptransform "github.com/notedit/sdp"
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/ion-sfu/pkg/rtc"
 	transport "github.com/pion/ion-sfu/pkg/rtc/transport"
+	"github.com/pion/sdp/v2"
 	"github.com/pion/webrtc/v2"
 
 	pb "github.com/pion/ion-sfu/pkg/proto"
 )
+
+func getSubCodec(track *webrtc.Track, sdp sdp.SessionDescription) uint8 {
+	transform := transport.PayloadTransformMap()
+	for _, md := range sdp.MediaDescriptions {
+		if md.MediaName.Media != "audio" && md.MediaName.Media != "video" {
+			continue
+		}
+
+		for _, format := range md.MediaName.Formats {
+			pt, err := strconv.Atoi(format)
+
+			if err != nil {
+				return 0
+			}
+
+			if pt < 0 || pt > 255 {
+				return 0
+			}
+
+			payloadType := uint8(pt)
+
+			// 	If offer contains pub payload type, use that
+			if track.PayloadType() == payloadType {
+				return payloadType
+			}
+
+			payloadCodec, err := sdp.GetCodecForPayloadType(payloadType)
+			if err != nil {
+				return 0
+			}
+
+			// Otherwise look for first supported pt that can be transformed from pub
+			log.Infof("%s %s", payloadCodec.Name, track.Codec().Name)
+			if strings.EqualFold(payloadCodec.Name, track.Codec().Name) {
+				for _, k := range transform[track.PayloadType()] {
+					if payloadType == k {
+						return k
+					}
+				}
+			}
+		}
+	}
+
+	return 0
+}
 
 func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*transport.WebRTCTransport, *pb.SubscribeReply_Connect, error) {
 	log.Infof("subscribe->connect called: %v", payload.Connect)
@@ -22,41 +69,32 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 	}
 
 	pub := router.GetPub().(*transport.WebRTCTransport)
-	sdp := payload.Connect.Sdp
+	offer := sdp.SessionDescription{}
+	err := offer.Unmarshal(payload.Connect.Sdp)
 
-	rtcOptions := transport.RTCOptions{
-		Subscribe: true,
+	if err != nil {
+		log.Debugf("subscribe->connect: err=%v sdp=%v", err, offer)
+		return nil, nil, errSdpParseFailed
 	}
 
-	if payload.Connect.Options != nil {
-		if payload.Connect.Options.Bandwidth != 0 {
-			rtcOptions.Bandwidth = payload.Connect.Options.Bandwidth
-		}
-
-		rtcOptions.TransportCC = payload.Connect.Options.Transportcc
+	rtcOptions := transport.RTCOptions{
+		Subscribe:   true,
+		Bandwidth:   payload.Connect.Options.Bandwidth,
+		TransportCC: payload.Connect.Options.Transportcc,
+		Ssrcpt:      make(map[uint32]uint8),
 	}
 
 	tracks := pub.GetInTracks()
-	rtcOptions.Ssrcpt = make(map[uint32]uint8)
-
-	for ssrc, track := range tracks {
-		rtcOptions.Ssrcpt[ssrc] = uint8(track.PayloadType())
-	}
-
-	sdpObj, err := sdptransform.Parse(string(sdp))
-	if err != nil {
-		log.Errorf("err=%v sdpObj=%v", err, sdpObj)
-		return nil, nil, errors.New("subscribe: sdp parse failed")
-	}
-
 	ssrcPTMap := make(map[uint32]uint8)
 	allowedCodecs := make([]uint8, 0, len(tracks))
 
-	// for ssrc, track := range tracks {
-	// 	// Find pt for track given track.Payload and sdp
-	// 	ssrcPTMap[ssrc] = getSubPTForTrack(track, sdpObj)
-	// 	allowedCodecs = append(allowedCodecs, ssrcPTMap[ssrc])
-	// }
+	for ssrc, track := range tracks {
+		rtcOptions.Ssrcpt[ssrc] = uint8(track.PayloadType())
+
+		// Find pt for track given track.Payload and sdp
+		ssrcPTMap[ssrc] = getSubCodec(track, offer)
+		allowedCodecs = append(allowedCodecs, ssrcPTMap[ssrc])
+	}
 
 	// Set media engine codecs based on found pts
 	log.Infof("Allowed codecs %v", allowedCodecs)
@@ -85,12 +123,13 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 		}
 	}
 
-	// Build answer
-	offer := webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: string(sdp)}
-	answer, err := sub.Answer(offer, rtcOptions)
+	answer, err := sub.Answer(webrtc.SessionDescription{
+		Type: webrtc.SDPTypeOffer, SDP: string(payload.Connect.Sdp),
+	}, rtcOptions)
+
 	if err != nil {
-		log.Errorf("err=%v answer=%v", err, answer)
-		return nil, nil, errors.New("unsupported media type")
+		log.Debugf("subscribe->connect: error creating answer %v", err)
+		return nil, nil, errWebRTCTransportAnswerFailed
 	}
 
 	router.AddSub(mid, sub)

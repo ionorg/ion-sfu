@@ -404,7 +404,7 @@ func (b *Buffer) GetNackPair(buffer [65536]*rtp.Packet, begin, end uint16) (rtcp
 			lostPkt++
 		}
 	}
-	log.Debugf("NackPair begin=%v end=%v buffer=%v\n", begin, end, buffer[begin:end])
+	log.Tracef("NackPair begin=%v end=%v buffer=%v\n", begin, end, buffer[begin:end])
 	return rtcp.NackPair{PacketID: lost, LostPackets: rtcp.PacketBitmap(blp)}, lostPkt
 }
 
