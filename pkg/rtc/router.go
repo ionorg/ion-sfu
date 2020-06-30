@@ -53,6 +53,7 @@ func NewRouter(id string) *Router {
 	}
 }
 
+// InitPlugins initializes plugins for the router
 func (r *Router) InitPlugins(config plugins.Config) error {
 	log.Infof("Router.InitPlugins config=%+v", config)
 	if r.pluginChain != nil {
@@ -103,7 +104,7 @@ func (r *Router) start() {
 	}()
 }
 
-// AddPub add a pub transport
+// AddPub add a pub transport to the router
 func (r *Router) AddPub(t transport.Transport) transport.Transport {
 	log.Infof("AddPub")
 	r.pub = t
@@ -115,12 +116,12 @@ func (r *Router) AddPub(t transport.Transport) transport.Transport {
 	return t
 }
 
-// delPub del pub
+// delPub
 func (r *Router) delPub() {
 	log.Infof("Router.delPub %s", r.pub.ID())
-	// if r.pub != nil {
-	// 	r.pub.Close()
-	// }
+	if r.pub != nil {
+		r.pub.Close()
+	}
 	if r.pluginChain != nil {
 		r.pluginChain.Close()
 	}
