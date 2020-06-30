@@ -232,10 +232,10 @@ func NewWebRTCTransport(id string, options RTCOptions) *WebRTCTransport {
 			log.Infof("webrtc ice disconnected for mid: %s", id)
 		case webrtc.ICEConnectionStateFailed:
 			log.Infof("webrtc ice failed for mid: %s", id)
-			w.onCloseHandler()
+			w.Close()
 		case webrtc.ICEConnectionStateClosed:
 			log.Infof("webrtc ice closed for mid: %s", id)
-			w.onCloseHandler()
+			w.Close()
 		}
 	})
 
@@ -462,10 +462,11 @@ func (w *WebRTCTransport) Close() {
 	if w.stop {
 		return
 	}
+	w.stop = true
 	log.Infof("WebRTCTransport.Close t.ID()=%v", w.ID())
 	// close pc first, otherwise remoteTrack.ReadRTP will be blocked
 	w.pc.Close()
-	w.stop = true
+	w.onCloseHandler()
 }
 
 // OnClose calls passed handler when closing pc
