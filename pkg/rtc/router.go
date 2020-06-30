@@ -111,9 +111,9 @@ func (r *Router) AddPub(t transport.Transport) transport.Transport {
 	return t
 }
 
-// DelPub del pub
-func (r *Router) DelPub() {
-	log.Infof("Router.DelPub %v", r.pub)
+// delPub del pub
+func (r *Router) delPub() {
+	log.Infof("Router.delPub %s", r.pub.ID())
 	if r.pub != nil {
 		r.pub.Close()
 	}
@@ -227,7 +227,7 @@ func (r *Router) subFeedbackLoop(subID string, trans transport.Transport) {
 			// log.Infof("Router got nack: %+v", pkt)
 			nack := pkt
 			for _, nackPair := range nack.Nacks {
-				if !r.ReSendRTP(subID, nack.MediaSSRC, nackPair.PacketID) {
+				if !r.resendRTP(subID, nack.MediaSSRC, nackPair.PacketID) {
 					n := &rtcp.TransportLayerNack{
 						//origin ssrc
 						SenderSSRC: nack.SenderSSRC,
@@ -283,15 +283,6 @@ func (r *Router) GetSubs() map[string]transport.Transport {
 	return r.subs
 }
 
-// HasNoneSub check if sub == 0
-func (r *Router) HasNoneSub() bool {
-	r.subLock.RLock()
-	defer r.subLock.RUnlock()
-	isNoSub := len(r.subs) == 0
-	log.Infof("Router.HasNoneSub=%v", isNoSub)
-	return isNoSub
-}
-
 // DelSub del sub by id
 func (r *Router) DelSub(id string) {
 	log.Infof("Router.DelSub id=%s", id)
@@ -328,12 +319,12 @@ func (r *Router) Close() {
 		return
 	}
 	log.Infof("Router.Close")
-	r.DelPub()
+	r.delPub()
 	r.stop = true
 	r.DelSubs()
 }
 
-func (r *Router) ReSendRTP(sid string, ssrc uint32, sn uint16) bool {
+func (r *Router) resendRTP(sid string, ssrc uint32, sn uint16) bool {
 	if r.pub == nil {
 		return false
 	}
@@ -342,16 +333,16 @@ func (r *Router) ReSendRTP(sid string, ssrc uint32, sn uint16) bool {
 		jb := hd.(*plugins.JitterBuffer)
 		pkt := jb.GetPacket(ssrc, sn)
 		if pkt == nil {
-			// log.Infof("Router.ReSendRTP pkt not found sid=%s ssrc=%d sn=%d pkt=%v", sid, ssrc, sn, pkt)
+			// log.Infof("Router.resendRTP pkt not found sid=%s ssrc=%d sn=%d pkt=%v", sid, ssrc, sn, pkt)
 			return false
 		}
 		sub := r.GetSub(sid)
 		if sub != nil {
 			err := sub.WriteRTP(pkt)
 			if err != nil {
-				log.Errorf("router.ReSendRTP err=%v", err)
+				log.Errorf("router.resendRTP err=%v", err)
 			}
-			// log.Infof("Router.ReSendRTP sid=%s ssrc=%d sn=%d", sid, ssrc, sn)
+			// log.Infof("Router.resendRTP sid=%s ssrc=%d sn=%d", sid, ssrc, sn)
 			return true
 		}
 	}

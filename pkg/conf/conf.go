@@ -137,7 +137,7 @@ func (c *Config) load() bool {
 }
 
 func (c *Config) parse() bool {
-	flag.StringVar(&c.CfgFile, "c", "conf/conf.toml", "config file")
+	flag.StringVar(&c.CfgFile, "c", "config.toml", "config file")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
 	if !c.load() {

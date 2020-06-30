@@ -12,6 +12,8 @@ import (
 	"github.com/pion/ion-sfu/pkg/rtc"
 	transport "github.com/pion/ion-sfu/pkg/rtc/transport"
 	"github.com/pion/webrtc/v2"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	pb "github.com/pion/ion-sfu/pkg/proto"
 )
@@ -43,14 +45,19 @@ func (s *server) Publish(stream pb.SFU_PublishServer) error {
 		for {
 			in, err := stream.Recv()
 
-			if err == io.EOF || err == context.Canceled {
-				log.Infof("publish: close")
+			if err == io.EOF {
 				shutdownChan <- nil
 				return
 			}
 
 			if err != nil {
-				log.Errorf("publish error %v", err)
+				errStatus, _ := status.FromError(err)
+				if errStatus.Code() == codes.Canceled {
+					shutdownChan <- err
+					return
+				}
+
+				log.Errorf("publish error %v %v", errStatus.Message(), errStatus.Code())
 				shutdownChan <- err
 				return
 			}
@@ -208,12 +215,17 @@ func (s *server) Subscribe(stream pb.SFU_SubscribeServer) error {
 		for {
 			in, err := stream.Recv()
 			if err == io.EOF || err == context.Canceled {
-				log.Infof("subscribe: close")
 				shutdownChan <- nil
 				return
 			}
 
 			if err != nil {
+				errStatus, _ := status.FromError(err)
+				if errStatus.Code() == codes.Canceled {
+					shutdownChan <- err
+					return
+				}
+
 				log.Errorf("subscribe error %v", err)
 				shutdownChan <- nil
 				return
