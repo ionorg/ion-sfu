@@ -18,3 +18,4 @@ node_modules/
 cover.out
 main
 .DS_Store
+.vscode
