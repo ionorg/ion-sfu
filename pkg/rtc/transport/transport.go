@@ -22,8 +22,8 @@ type Transport interface {
 	WriteRTCP(rtcp.Packet) error
 	GetRTCPChan() chan rtcp.Packet
 	Close()
+	OnClose(func())
 	WriteErrTotal() int
 	WriteErrReset()
 	GetBandwidth() uint32
-	SetShutdownChan(chan string)
 }

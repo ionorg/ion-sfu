@@ -110,42 +110,24 @@ func AddRouter(id string) *Router {
 	log.Infof("rtc.AddRouter id=%s", id)
 	routerLock.Lock()
 	defer routerLock.Unlock()
-	routers[id] = NewRouter(id)
-	if err := routers[id].InitPlugins(pluginsConfig); err != nil {
+	router := NewRouter(id)
+	router.OnClose(func() {
+		delRouter(id)
+	})
+	if err := router.InitPlugins(pluginsConfig); err != nil {
 		log.Errorf("rtc.AddRouter InitPlugins err=%v", err)
 		return nil
 	}
-
+	routers[id] = router
 	return routers[id]
 }
 
-// DelRouter delete pub
-func DelRouter(id string) {
-	log.Infof("DelRouter id=%s", id)
-	router := GetRouter(id)
-	if router == nil {
-		return
-	}
-	router.Close()
+// delRouter delete pub
+func delRouter(id string) {
+	log.Infof("delRouter id=%s", id)
 	routerLock.Lock()
 	defer routerLock.Unlock()
 	delete(routers, id)
-}
-
-// Close close all Router
-func Close() {
-	if stop {
-		return
-	}
-	stop = true
-	routerLock.Lock()
-	defer routerLock.Unlock()
-	for id, router := range routers {
-		if router != nil {
-			router.Close()
-			delete(routers, id)
-		}
-	}
 }
 
 // check show all Routers' stat
@@ -160,11 +142,6 @@ func check() {
 		}
 
 		for id, router := range routers {
-			if !router.Alive() {
-				router.Close()
-				delete(routers, id)
-				log.Infof("Stat delete %v", id)
-			}
 			info += "pub: " + string(id) + "\n"
 			subs := router.GetSubs()
 			if len(subs) < 6 {
