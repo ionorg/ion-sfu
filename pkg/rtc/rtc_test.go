@@ -89,7 +89,7 @@ func TestRTPEngineAcceptKCPAndRead(t *testing.T) {
 }
 
 func TestWebRTCTransportP2P(t *testing.T) {
-	options := transport.RTCOptions{Codec: "VP8"}
+	options := transport.RTCOptions{}
 
 	// new pub
 	pub := transport.NewWebRTCTransport("pub", options)

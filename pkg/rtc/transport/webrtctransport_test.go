@@ -8,7 +8,6 @@ import (
 
 func TestWebRTCTransportOffer(t *testing.T) {
 	options := RTCOptions{
-		Codec:       "h264",
 		TransportCC: true,
 	}
 	pub := NewWebRTCTransport("pub", options)
@@ -20,7 +19,6 @@ func TestWebRTCTransportOffer(t *testing.T) {
 
 func TestWebRTCTransportAnswer(t *testing.T) {
 	options := RTCOptions{
-		Codec:       "h264",
 		TransportCC: true,
 	}
 	pub := NewWebRTCTransport("pub", options)
@@ -48,7 +46,6 @@ func TestWebRTCTransportAnswer(t *testing.T) {
 
 func TestWebRTCTransportCloseHandlerOnlyOnce(t *testing.T) {
 	options := RTCOptions{
-		Codec:       "h264",
 		TransportCC: true,
 	}
 	pub := NewWebRTCTransport("pub", options)

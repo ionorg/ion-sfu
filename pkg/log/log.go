@@ -17,6 +17,8 @@ const (
 func Init(level string) {
 	l := zerolog.GlobalLevel()
 	switch level {
+	case "trace":
+		l = zerolog.TraceLevel
 	case "debug":
 		l = zerolog.DebugLevel
 	case "info":
@@ -34,6 +36,11 @@ func Init(level string) {
 // Infof logs a formatted info level log to the console
 func Infof(format string, v ...interface{}) {
 	log.Info().Msgf(format, v...)
+}
+
+// Tracef logs a formatted debug level log to the console
+func Tracef(format string, v ...interface{}) {
+	log.Trace().Msgf(format, v...)
 }
 
 // Debugf logs a formatted debug level log to the console
