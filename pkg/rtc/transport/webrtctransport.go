@@ -101,16 +101,10 @@ type WebRTCTransport struct {
 	pendingCandidates []*webrtc.ICECandidate
 	candidateLock     sync.RWMutex
 	candidateCh       chan *webrtc.ICECandidate
-	alive             bool
 	bandwidth         uint32
 	isPub             bool
-	ShutdownChan      chan string
 	ssrcPtMap         map[uint32]uint8
-}
-
-// SetShutdownChan sets notify channel on transport shutdown
-func (w *WebRTCTransport) SetShutdownChan(ch chan string) {
-	w.ShutdownChan = ch
+	onCloseHandler    func()
 }
 
 func (w *WebRTCTransport) init(options RTCOptions) error {
@@ -189,7 +183,6 @@ func NewWebRTCTransport(id string, options RTCOptions) *WebRTCTransport {
 		rtpCh:       make(chan *rtp.Packet, maxChanSize),
 		rtcpCh:      make(chan rtcp.Packet, maxChanSize),
 		candidateCh: make(chan *webrtc.ICECandidate, maxChanSize),
-		alive:       true,
 		ssrcPtMap:   make(map[uint32]uint8),
 	}
 	err := w.init(options)
@@ -234,15 +227,15 @@ func NewWebRTCTransport(id string, options RTCOptions) *WebRTCTransport {
 	})
 
 	w.pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
-		log.Infof("ICEConnectionState change: %s", connectionState)
 		switch connectionState {
 		case webrtc.ICEConnectionStateDisconnected:
 			log.Infof("webrtc ice disconnected for mid: %s", id)
 		case webrtc.ICEConnectionStateFailed:
+			log.Infof("webrtc ice failed for mid: %s", id)
+			w.Close()
 		case webrtc.ICEConnectionStateClosed:
-			log.Infof("webrtc ice %s for mid: %s", connectionState, id)
-			w.alive = false
-			w.ShutdownChan <- id
+			log.Infof("webrtc ice closed for mid: %s", id)
+			w.Close()
 		}
 	})
 
@@ -469,10 +462,16 @@ func (w *WebRTCTransport) Close() {
 	if w.stop {
 		return
 	}
+	w.stop = true
 	log.Infof("WebRTCTransport.Close t.ID()=%v", w.ID())
 	// close pc first, otherwise remoteTrack.ReadRTP will be blocked
 	w.pc.Close()
-	w.stop = true
+	w.onCloseHandler()
+}
+
+// OnClose calls passed handler when closing pc
+func (w *WebRTCTransport) OnClose(f func()) {
+	w.onCloseHandler = f
 }
 
 func (w *WebRTCTransport) receiveOutTracksRTCP() {
@@ -485,7 +484,7 @@ func (w *WebRTCTransport) receiveOutTracksRTCP() {
 func (w *WebRTCTransport) receiveOutTrackRTCP(sender *webrtc.RTPSender) {
 	for {
 		pkts, err := sender.ReadRTCP()
-		if err == io.EOF {
+		if err == io.EOF || err == io.ErrClosedPipe {
 			return
 		}
 

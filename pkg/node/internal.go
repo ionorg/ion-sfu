@@ -11,6 +11,8 @@ import (
 	"github.com/pion/ion-sfu/pkg/rtc"
 	transport "github.com/pion/ion-sfu/pkg/rtc/transport"
 	"github.com/pion/webrtc/v2"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	pb "github.com/pion/ion-sfu/pkg/proto"
 )
@@ -34,15 +36,28 @@ import (
 //
 // If the client closes this stream, the webrtc stream will be closed.
 func (s *server) Publish(stream pb.SFU_PublishServer) error {
-	var pub *transport.WebRTCTransport
 	mid := cuid.New()
 
+	var pub *transport.WebRTCTransport
 	for {
 		in, err := stream.Recv()
-		if err == io.EOF {
-			log.Infof("publish: close")
-			rtc.DelRouter(mid)
-			return nil
+
+		if err != nil {
+			if pub != nil {
+				pub.Close()
+			}
+
+			if err == io.EOF {
+				return nil
+			}
+
+			errStatus, _ := status.FromError(err)
+			if errStatus.Code() == codes.Canceled {
+				return nil
+			}
+
+			log.Errorf("publish error %v %v", errStatus.Message(), errStatus.Code())
+			return err
 		}
 
 		switch payload := in.Payload.(type) {
@@ -91,11 +106,12 @@ func (s *server) Publish(stream pb.SFU_PublishServer) error {
 				return errors.New("publish->connect: transport.NewWebRTCTransport failed")
 			}
 
-			router := rtc.GetOrNewRouter(mid)
+			router := rtc.AddRouter(mid)
 
 			answer, err := pub.Answer(offer, rtcOptions)
 			if err != nil {
 				log.Errorf("publish->connect: error creating answer. err=%v answer=%v", err, answer)
+				pub.Close()
 				return err
 			}
 
@@ -117,9 +133,11 @@ func (s *server) Publish(stream pb.SFU_PublishServer) error {
 
 			if err != nil {
 				log.Errorf("publish->connect: error publishing stream: %v", err)
+				pub.Close()
 				return err
 			}
 
+			// TODO: Close
 			go func() {
 				for {
 					trickle := <-pub.GetCandidateChan()
@@ -138,8 +156,6 @@ func (s *server) Publish(stream pb.SFU_PublishServer) error {
 				}
 			}()
 
-			<-router.CloseChan
-			return nil
 		case *pb.PublishRequest_Trickle:
 			if pub == nil {
 				return errors.New("publish->trickle: called before connect")
@@ -171,24 +187,33 @@ func (s *server) Publish(stream pb.SFU_PublishServer) error {
 //
 // If the client closes this stream, the webrtc stream will be closed.
 func (s *server) Subscribe(stream pb.SFU_SubscribeServer) error {
-	var router *rtc.Router
 	var sub *transport.WebRTCTransport
-	subMid := cuid.New()
-
 	for {
 		in, err := stream.Recv()
-		if err == io.EOF {
-			log.Infof("subscribe: close")
-			if router != nil {
-				router.DelSub(subMid)
+
+		if err != nil {
+			if sub != nil {
+				sub.Close()
 			}
-			return nil
+
+			if err == io.EOF {
+				return nil
+			}
+
+			errStatus, _ := status.FromError(err)
+			if errStatus.Code() == codes.Canceled {
+				return nil
+			}
+
+			log.Errorf("subscribe error %v", err)
+			return err
 		}
 
 		switch payload := in.Payload.(type) {
 		case *pb.SubscribeRequest_Connect:
+			mid := cuid.New()
 			log.Infof("subscribe->connect called: %v", payload.Connect)
-			router = rtc.GetOrNewRouter(in.Mid)
+			router := rtc.GetOrNewRouter(in.Mid)
 
 			if router == nil {
 				return errors.New("subscribe->connect: router not found")
@@ -196,10 +221,6 @@ func (s *server) Subscribe(stream pb.SFU_SubscribeServer) error {
 
 			pub := router.GetPub().(*transport.WebRTCTransport)
 			sdp := payload.Connect.Description.Sdp
-
-			if sdp == "" {
-				return errors.New("subscribe->connect: no sdp provided")
-			}
 
 			rtcOptions := transport.RTCOptions{
 				Subscribe: true,
@@ -240,7 +261,7 @@ func (s *server) Subscribe(stream pb.SFU_SubscribeServer) error {
 			rtcOptions.Codecs = allowedCodecs
 
 			// New api
-			sub := transport.NewWebRTCTransport(subMid, rtcOptions)
+			sub = transport.NewWebRTCTransport(mid, rtcOptions)
 
 			if sub == nil {
 				return errors.New("subscribe->connect: transport.NewWebRTCTransport failed")
@@ -271,11 +292,11 @@ func (s *server) Subscribe(stream pb.SFU_SubscribeServer) error {
 				return errors.New("unsupported media type")
 			}
 
-			router.AddSub(subMid, sub)
+			router.AddSub(mid, sub)
 
-			log.Infof("subscribe->connect: mid %s, answer = %v", subMid, answer)
+			log.Infof("subscribe->connect: mid %s, answer = %v", mid, answer)
 			err = stream.Send(&pb.SubscribeReply{
-				Mid: subMid,
+				Mid: mid,
 				Payload: &pb.SubscribeReply_Connect{
 					Connect: &pb.Connect{
 						Description: &pb.SessionDescription{
@@ -288,15 +309,16 @@ func (s *server) Subscribe(stream pb.SFU_SubscribeServer) error {
 
 			if err != nil {
 				log.Errorf("subscribe->connect: error subscribing to stream: %v", err)
-				return err
+				return nil
 			}
 
+			// TODO: Close
 			go func() {
 				for {
 					trickle := <-pub.GetCandidateChan()
 					if trickle != nil {
 						err = stream.Send(&pb.SubscribeReply{
-							Mid: subMid,
+							Mid: mid,
 							Payload: &pb.SubscribeReply_Trickle{
 								Trickle: &pb.Trickle{
 									Candidate: trickle.String(),
@@ -309,8 +331,6 @@ func (s *server) Subscribe(stream pb.SFU_SubscribeServer) error {
 				}
 			}()
 
-			<-sub.ShutdownChan
-			return nil
 		case *pb.SubscribeRequest_Trickle:
 			if sub == nil {
 				return errors.New("subscribe->trickle: called before connect")
