@@ -44,9 +44,6 @@ func main() {
 		Rid: "default",
 		Payload: &sfu.PublishRequest_Connect{
 			Connect: &sfu.Connect{
-				Options: &sfu.Options{
-					Codec: "VP8",
-				},
 				Description: &pubOffer,
 			},
 		},

@@ -70,7 +70,7 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 
 	pub := router.GetPub().(*transport.WebRTCTransport)
 	offer := sdp.SessionDescription{}
-	err := offer.Unmarshal(payload.Connect.Sdp)
+	err := offer.Unmarshal(payload.Connect.Description.Sdp)
 
 	if err != nil {
 		log.Debugf("subscribe->connect: err=%v sdp=%v", err, offer)
@@ -124,7 +124,7 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 	}
 
 	answer, err := sub.Answer(webrtc.SessionDescription{
-		Type: webrtc.SDPTypeOffer, SDP: string(payload.Connect.Sdp),
+		Type: webrtc.SDPTypeOffer, SDP: string(payload.Connect.Description.Sdp),
 	}, rtcOptions)
 
 	if err != nil {
@@ -137,7 +137,10 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 	log.Infof("subscribe->connect: mid %s, answer = %v", mid, answer)
 	return sub, &pb.SubscribeReply_Connect{
 		Connect: &pb.Connect{
-			Sdp: []byte(answer.SDP),
+			Description: &pb.SessionDescription{
+				Type: answer.Type.String(),
+				Sdp:  []byte(answer.SDP),
+			},
 		},
 	}, nil
 }

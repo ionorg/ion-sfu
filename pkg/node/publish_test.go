@@ -5,6 +5,7 @@ import (
 
 	pb "github.com/pion/ion-sfu/pkg/proto"
 	"github.com/pion/sdp/v2"
+	"github.com/pion/webrtc/v2"
 	"google.golang.org/grpc"
 )
 
@@ -16,7 +17,10 @@ func TestPublishReturnsErrorWithInvalidSDP(t *testing.T) {
 	request := pb.PublishRequest_Connect{
 		Connect: &pb.Connect{
 			Options: &pb.Options{},
-			Sdp:     []byte("invalid"),
+			Description: &pb.SessionDescription{
+				Type: webrtc.SDPTypeOffer.String(),
+				Sdp:  []byte("invalid"),
+			},
 		},
 	}
 
@@ -49,7 +53,10 @@ func TestPublishReturnsErrorWithInvalidCodecsInSDP(t *testing.T) {
 	request := pb.PublishRequest_Connect{
 		Connect: &pb.Connect{
 			Options: &pb.Options{},
-			Sdp:     marshalled,
+			Description: &pb.SessionDescription{
+				Type: webrtc.SDPTypeOffer.String(),
+				Sdp:  marshalled,
+			},
 		},
 	}
 
