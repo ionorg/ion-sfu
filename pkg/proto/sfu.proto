@@ -52,11 +52,10 @@ message Trickle {
 
 message SessionDescription {
     string type = 1; // "answer" | "offer" | "pranswer" | "rollback"
-    string sdp = 2;
+    bytes sdp = 2;
 }
 
 message Options {
     uint32 bandwidth = 1;
     bool transportcc = 2;
-    string codec = 3;
 }

@@ -8,7 +8,6 @@ import (
 
 func TestWebRTCTransportOffer(t *testing.T) {
 	options := RTCOptions{
-		Codec:       "h264",
 		TransportCC: true,
 	}
 	pub := NewWebRTCTransport("pub", options)
@@ -20,7 +19,6 @@ func TestWebRTCTransportOffer(t *testing.T) {
 
 func TestWebRTCTransportAnswer(t *testing.T) {
 	options := RTCOptions{
-		Codec:       "h264",
 		TransportCC: true,
 	}
 	pub := NewWebRTCTransport("pub", options)
@@ -43,5 +41,24 @@ func TestWebRTCTransportAnswer(t *testing.T) {
 	answer, err := sub.Answer(offer, options)
 	if err != nil {
 		t.Fatalf("err=%v answer=%v", err, answer)
+	}
+}
+
+func TestWebRTCTransportCloseHandlerOnlyOnce(t *testing.T) {
+	options := RTCOptions{
+		TransportCC: true,
+	}
+	pub := NewWebRTCTransport("pub", options)
+
+	count := 0
+	pub.OnClose(func() {
+		count++
+	})
+
+	pub.Close()
+	pub.Close()
+
+	if count != 1 {
+		t.Fatal("OnClose called on already closed transport")
 	}
 }

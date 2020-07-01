@@ -53,7 +53,7 @@ var (
 	}
 )
 
-func PaylaodTransformMap() map[uint8][]uint8 {
+func PayloadTransformMap() map[uint8][]uint8 {
 	return ptTransformMap
 }
 
@@ -107,7 +107,7 @@ type WebRTCTransport struct {
 	onCloseHandler    func()
 }
 
-func (w *WebRTCTransport) init(options RTCOptions) error {
+func (w *WebRTCTransport) init(options RTCOptions) {
 	w.mediaEngine = webrtc.MediaEngine{}
 
 	rtcpfb := []webrtc.RTCPFeedback{
@@ -159,7 +159,6 @@ func (w *WebRTCTransport) init(options RTCOptions) error {
 		setting.DetachDataChannels()
 	}
 	w.api = webrtc.NewAPI(webrtc.WithMediaEngine(w.mediaEngine), webrtc.WithSettingEngine(setting))
-	return nil
 }
 
 // RTCOptions options to open new transport
@@ -168,7 +167,6 @@ type RTCOptions struct {
 	Subscribe   bool
 	DataChannel bool
 	TransportCC bool
-	Codec       string
 	Codecs      []uint8
 	Bandwidth   uint32
 	Ssrcpt      map[uint32]uint8
@@ -185,12 +183,9 @@ func NewWebRTCTransport(id string, options RTCOptions) *WebRTCTransport {
 		candidateCh: make(chan *webrtc.ICECandidate, maxChanSize),
 		ssrcPtMap:   make(map[uint32]uint8),
 	}
-	err := w.init(options)
-	if err != nil {
-		log.Errorf("NewWebRTCTransport init %v", err)
-		return nil
-	}
+	w.init(options)
 
+	var err error
 	w.pc, err = w.api.NewPeerConnection(cfg)
 	if err != nil {
 		log.Errorf("NewWebRTCTransport api.NewPeerConnection %v", err)
@@ -325,8 +320,6 @@ func (w *WebRTCTransport) Answer(offer webrtc.SessionDescription, options RTCOpt
 			w.inTrackLock.Lock()
 			w.inTracks[remoteTrack.SSRC()] = remoteTrack
 			w.inTrackLock.Unlock()
-			// TODO replace with broadcast when receiving rtp failed
-			// etcdKeepFunc(remoteTrack.SSRC(), remoteTrack.PayloadType())
 			w.receiveInTrackRTP(remoteTrack)
 		})
 	} else {

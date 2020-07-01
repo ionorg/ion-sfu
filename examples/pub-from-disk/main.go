@@ -190,12 +190,9 @@ func main() {
 		Rid: "default",
 		Payload: &sfu.PublishRequest_Connect{
 			Connect: &sfu.Connect{
-				Options: &sfu.Options{
-					Codec: "VP8",
-				},
 				Description: &sfu.SessionDescription{
 					Type: offer.Type.String(),
-					Sdp:  offer.SDP,
+					Sdp:  []byte(offer.SDP),
 				},
 			},
 		},
@@ -224,7 +221,7 @@ func main() {
 			// Set the remote SessionDescription
 			if err = peerConnection.SetRemoteDescription(webrtc.SessionDescription{
 				Type: webrtc.SDPTypeAnswer,
-				SDP:  payload.Connect.Description.Sdp,
+				SDP:  string(payload.Connect.Description.Sdp),
 			}); err != nil {
 				panic(err)
 			}
