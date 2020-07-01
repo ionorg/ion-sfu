@@ -7,11 +7,11 @@ require (
 	github.com/klauspost/cpuid v1.2.3 // indirect
 	github.com/klauspost/reedsolomon v1.9.3 // indirect
 	github.com/lucsky/cuid v1.0.2
-	github.com/notedit/sdp v0.0.4
 	github.com/onsi/ginkgo v1.10.1 // indirect
 	github.com/onsi/gomega v1.7.0 // indirect
 	github.com/pion/rtcp v1.2.3
 	github.com/pion/rtp v1.5.5
+	github.com/pion/sdp/v2 v2.3.9
 	github.com/pion/stun v0.3.5 // indirect
 	github.com/pion/transport v0.10.0
 	github.com/pion/webrtc/v2 v2.2.17
