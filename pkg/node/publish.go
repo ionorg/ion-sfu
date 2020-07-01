@@ -61,7 +61,7 @@ func (s *server) publish(payload *pb.PublishRequest_Connect) (*transport.WebRTCT
 	mid := cuid.New()
 	options := payload.Connect.Options
 	offer := sdp.SessionDescription{}
-	err := offer.Unmarshal(payload.Connect.Sdp)
+	err := offer.Unmarshal(payload.Connect.Description.Sdp)
 
 	if err != nil {
 		log.Debugf("publish->connect: err=%v sdp=%v", err, offer)
@@ -90,7 +90,7 @@ func (s *server) publish(payload *pb.PublishRequest_Connect) (*transport.WebRTCT
 	router := rtc.AddRouter(mid)
 
 	answer, err := pub.Answer(webrtc.SessionDescription{
-		Type: webrtc.SDPTypeOffer, SDP: string(payload.Connect.Sdp),
+		Type: webrtc.SDPTypeOffer, SDP: string(payload.Connect.Description.Sdp),
 	}, rtcOptions)
 
 	if err != nil {
@@ -104,7 +104,10 @@ func (s *server) publish(payload *pb.PublishRequest_Connect) (*transport.WebRTCT
 
 	return pub, &pb.PublishReply_Connect{
 		Connect: &pb.Connect{
-			Sdp: []byte(answer.SDP),
+			Description: &pb.SessionDescription{
+				Type: answer.Type.String(),
+				Sdp:  []byte(answer.SDP),
+			},
 		},
 	}, nil
 }
