@@ -422,7 +422,7 @@ func (w *WebRTCTransport) WriteRTP(pkt *rtp.Packet) error {
 				if destType == k {
 					// Do the transform
 					newPkt := *pkt
-					log.Infof("Transforming %v => %v", srcType, destType)
+					log.Tracef("Transforming %v => %v", srcType, destType)
 					newPkt.Header.PayloadType = destType
 					pkt = &newPkt
 					break
@@ -440,7 +440,7 @@ func (w *WebRTCTransport) WriteRTP(pkt *rtp.Packet) error {
 		return errInvalidTrack
 	}
 
-	log.Debugf("WebRTCTransport.WriteRTP pkt=%v", pkt)
+	log.Tracef("WebRTCTransport.WriteRTP pkt=%v", pkt)
 	err := track.WriteRTP(pkt)
 	if err != nil {
 		log.Errorf("WebRTCTransport.WriteRTP => %s", err.Error())

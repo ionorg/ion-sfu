@@ -156,7 +156,6 @@ func (s *server) Subscribe(stream pb.SFU_SubscribeServer) error {
 
 			if err != nil {
 				log.Errorf("subscribe->connect: error subscribing stream: %v", err)
-				sub.Close()
 				return err
 			}
 
