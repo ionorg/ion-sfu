@@ -26,5 +26,4 @@ type Transport interface {
 	WriteErrTotal() int
 	WriteErrReset()
 	GetBandwidth() uint32
-	CountMetrics(float32)
 }

@@ -10,8 +10,6 @@ import (
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v2"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 const (
@@ -53,19 +51,6 @@ var (
 		webrtc.H264: {webrtc.DefaultPayloadTypeH264, 97},
 		webrtc.Opus: {webrtc.DefaultPayloadTypeOpus, 109},
 	}
-
-	gaugeTransports = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "ion_sfu_webrtc_transports",
-		Help: "The number of input tracks",
-	}, []string{})
-	gaugeInTracks = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "ion_sfu_webrtc_intracks",
-		Help: "The number of input tracks",
-	}, []string{"codec"})
-	gaugeOutTracks = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "ion_sfu_webrtc_outtracks",
-		Help: "The number of output tracks",
-	}, []string{"codec"})
 )
 
 func PayloadTransformMap() map[uint8][]uint8 {
@@ -120,7 +105,6 @@ type WebRTCTransport struct {
 	isPub             bool
 	ssrcPtMap         map[uint32]uint8
 	onCloseHandler    func()
-	statsReport       webrtc.StatsReport
 }
 
 func (w *WebRTCTransport) init(options RTCOptions) {
@@ -557,32 +541,4 @@ func (w *WebRTCTransport) GetCandidateChan() chan *webrtc.ICECandidate {
 // GetBandwidth return bandwidth
 func (w *WebRTCTransport) GetBandwidth() uint32 {
 	return w.bandwidth
-}
-
-func (w *WebRTCTransport) CountMetrics(statCycle float32) {
-	gaugeTransports.With(prometheus.Labels{}).Add(1)
-	for in_id := range w.GetInTracks() {
-		track := w.inTracks[in_id]
-		gaugeInTracks.With(prometheus.Labels{
-			"codec": track.Codec().MimeType,
-		}).Add(1)
-		stats, ok := w.statsReport.GetConnectionStats(w.pc)
-		if ok {
-			log.Infof("Stats %s\n", stats)
-		} else {
-			log.Infof("StatsErr` %s\n", stats)
-		}
-	}
-	for out_id := range w.GetOutTracks() {
-		track := w.outTracks[out_id]
-		gaugeOutTracks.With(prometheus.Labels{
-			"codec": track.Codec().MimeType,
-		}).Add(1)
-	}
-}
-
-func ResetGauges() {
-	gaugeTransports.Reset()
-	gaugeInTracks.Reset()
-	gaugeOutTracks.Reset()
 }
