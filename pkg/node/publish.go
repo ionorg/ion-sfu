@@ -59,7 +59,6 @@ func getPubCodecs(sdp sdp.SessionDescription) ([]uint8, error) {
 
 func (s *server) publish(payload *pb.PublishRequest_Connect) (*transport.WebRTCTransport, *pb.PublishReply_Connect, error) {
 	mid := cuid.New()
-	options := payload.Connect.Options
 	offer := sdp.SessionDescription{}
 	err := offer.Unmarshal(payload.Connect.Description.Sdp)
 
@@ -69,9 +68,7 @@ func (s *server) publish(payload *pb.PublishRequest_Connect) (*transport.WebRTCT
 	}
 
 	rtcOptions := transport.RTCOptions{
-		Publish:     true,
-		Bandwidth:   options.Bandwidth,
-		TransportCC: options.Transportcc,
+		Publish: true,
 	}
 
 	codecs, err := getPubCodecs(offer)
