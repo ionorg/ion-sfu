@@ -11,6 +11,7 @@ maxbandwidth = 5000000
 
 [plugins]
 on = true
+metrics = ":2112"
 
 [plugins.jitterbuffer]
 on = true

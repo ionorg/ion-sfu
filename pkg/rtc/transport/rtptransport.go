@@ -355,3 +355,7 @@ func (r *RTPTransport) RemoteAddr() net.Addr {
 func (r *RTPTransport) GetBandwidth() uint32 {
 	return r.bandwidth
 }
+
+func (r *RTPTransport) CountMetrics(period float32) {
+	return
+}

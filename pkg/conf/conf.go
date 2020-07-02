@@ -62,6 +62,7 @@ type plugins struct {
 	On           bool         `mapstructure:"on"`
 	JitterBuffer jitterbuffer `mapstructure:"jitterbuffer"`
 	RTPForwarder rtpforwarder `mapstructure:"rtpforwarder"`
+	Metrics      string       `mapstructure:"metrics"`
 }
 
 type log struct {

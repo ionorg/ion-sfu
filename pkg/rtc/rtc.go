@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	statCycle = 3 * time.Second
+	statCycle = 3
 )
 
 var (
@@ -132,9 +132,10 @@ func delRouter(id string) {
 
 // check show all Routers' stat
 func check() {
-	t := time.NewTicker(statCycle)
+	t := time.NewTicker(statCycle * time.Second)
 	for range t.C {
 		info := "\n----------------rtc-----------------\n"
+		//transport.ResetGauges()
 		print := false
 		routerLock.Lock()
 		if len(routers) > 0 {
@@ -142,14 +143,16 @@ func check() {
 		}
 
 		for id, router := range routers {
-			info += "pub: " + string(id) + "\n"
 			subs := router.GetSubs()
-			if len(subs) < 6 {
-				for id := range subs {
+
+			info += fmt.Sprintf("pub (%s subs): "+string(id)+"\n", len(subs))
+			//router.GetPub().CountMetrics(statCycle)
+
+			for id := range subs {
+				if len(subs) < 6 {
 					info += fmt.Sprintf("sub: %s\n\n", id)
 				}
-			} else {
-				info += fmt.Sprintf("subs: %d\n\n", len(subs))
+				//subs[id].CountMetrics(statCycle)
 			}
 		}
 		routerLock.Unlock()

@@ -16,6 +16,7 @@ require (
 	github.com/pion/transport v0.10.0
 	github.com/pion/webrtc/v2 v2.2.17
 	github.com/pion/webrtc/v3 v3.0.0-20200625164527-89d7de178734
+	github.com/prometheus/client_golang v0.9.3
 	github.com/rs/zerolog v1.19.0
 	github.com/spf13/viper v1.7.0
 	github.com/templexxx/cpufeat v0.0.0-20180724012125-cef66df7f161 // indirect

@@ -2,12 +2,15 @@
 package main
 
 import (
+	"net/http"
+
 	conf "github.com/pion/ion-sfu/pkg/conf"
 	"github.com/pion/ion-sfu/pkg/log"
 	sfu "github.com/pion/ion-sfu/pkg/node"
 	"github.com/pion/ion-sfu/pkg/rtc"
 	"github.com/pion/ion-sfu/pkg/rtc/plugins"
 	"github.com/pion/webrtc/v2"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func init() {
@@ -34,6 +37,17 @@ func init() {
 
 	if err := rtc.InitRTP(conf.Rtp.Port, conf.Rtp.KcpKey, conf.Rtp.KcpSalt); err != nil {
 		panic(err)
+	}
+
+	if conf.Plugins.Metrics != "" {
+		go func() {
+			log.Infof("Serving metrics at %s/metrics", conf.Plugins.Metrics)
+			http.Handle("/metrics", promhttp.Handler())
+			err := http.ListenAndServe(conf.Plugins.Metrics, nil)
+			if err != nil {
+				panic(err)
+			}
+		}()
 	}
 
 	pluginConfig := plugins.Config{
