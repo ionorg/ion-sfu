@@ -78,10 +78,8 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 	}
 
 	rtcOptions := transport.RTCOptions{
-		Subscribe:   true,
-		Bandwidth:   payload.Connect.Options.Bandwidth,
-		TransportCC: payload.Connect.Options.Transportcc,
-		Ssrcpt:      make(map[uint32]uint8),
+		Subscribe: true,
+		Ssrcpt:    make(map[uint32]uint8),
 	}
 
 	tracks := pub.GetInTracks()
