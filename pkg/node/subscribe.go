@@ -62,7 +62,7 @@ func getSubCodec(track *webrtc.Track, sdp sdp.SessionDescription) uint8 {
 
 func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*transport.WebRTCTransport, *pb.SubscribeReply_Connect, error) {
 	log.Infof("subscribe->connect called: %v", payload.Connect)
-	router := rtc.GetOrNewRouter(mid)
+	router := rtc.GetRouter(mid)
 
 	if router == nil {
 		return nil, nil, errors.New("subscribe->connect: router not found")
@@ -95,7 +95,7 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 	}
 
 	// Set media engine codecs based on found pts
-	log.Infof("Allowed codecs %v", allowedCodecs)
+	log.Debugf("Allowed codecs %v", allowedCodecs)
 	rtcOptions.Codecs = allowedCodecs
 
 	sub := transport.NewWebRTCTransport(cuid.New(), rtcOptions)
@@ -114,7 +114,7 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 
 		// I2AacsRLsZZriGapnvPKiKBcLi8rTrO1jOpq c84ded42-d2b0-4351-88d2-b7d240c33435
 		//                streamID                        trackID
-		log.Infof("AddTrack: codec:%s, ssrc:%d, pt:%d, streamID %s, trackID %s", track.Codec().MimeType, ssrc, pt, pub.ID(), track.ID())
+		log.Debugf("AddTrack: codec:%s, ssrc:%d, pt:%d, streamID %s, trackID %s", track.Codec().MimeType, ssrc, pt, pub.ID(), track.ID())
 		_, err := sub.AddSendTrack(ssrc, pt, pub.ID(), track.ID())
 		if err != nil {
 			log.Errorf("err=%v", err)
@@ -132,7 +132,7 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 
 	router.AddSub(mid, sub)
 
-	log.Infof("subscribe->connect: mid %s, answer = %v", mid, answer)
+	log.Debugf("subscribe->connect: mid %s, answer = %v", mid, answer)
 	return sub, &pb.SubscribeReply_Connect{
 		Connect: &pb.Connect{
 			Description: &pb.SessionDescription{
