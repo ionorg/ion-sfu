@@ -152,7 +152,6 @@ func (s *server) Subscribe(stream pb.SFU_SubscribeServer) error {
 		switch payload := in.Payload.(type) {
 		case *pb.SubscribeRequest_Connect:
 			var reply *pb.SubscribeReply_Connect
-			log.Infof("subscribe->connect called: %v", payload.Connect)
 			sub, reply, err = s.subscribe(in.Mid, payload)
 
 			if err != nil {
