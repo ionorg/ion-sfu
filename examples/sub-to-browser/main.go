@@ -11,6 +11,7 @@ import (
 
 	"github.com/pion/ion-sfu/examples/internal/signal"
 	sfu "github.com/pion/ion-sfu/pkg/proto"
+	"github.com/pion/webrtc/v2"
 	"google.golang.org/grpc"
 )
 
@@ -27,7 +28,7 @@ func main() {
 	defer conn.Close()
 	c := sfu.NewSFUClient(conn)
 
-	subOffer := sfu.SessionDescription{}
+	subOffer := webrtc.SessionDescription{}
 	signal.Decode(signal.MustReadStdin(), &subOffer)
 
 	mid := os.Args[1]
@@ -41,7 +42,10 @@ func main() {
 
 	err = stream.Send(&sfu.SubscribeRequest{Mid: mid, Payload: &sfu.SubscribeRequest_Connect{
 		Connect: &sfu.Connect{
-			Description: &subOffer,
+			Description: &sfu.SessionDescription{
+				Type: subOffer.Type.String(),
+				Sdp:  []byte(subOffer.SDP),
+			},
 		},
 	}})
 
@@ -65,7 +69,10 @@ func main() {
 		case *sfu.SubscribeReply_Connect:
 			// Output the mid and answer in base64 so we can paste it in browser
 			fmt.Printf("\nsub mid: %s", res.Mid)
-			fmt.Printf("\nsub answer: %s", signal.Encode(payload.Connect.Description))
+			fmt.Printf("\nsub answer: %s", signal.Encode(webrtc.SessionDescription{
+				Type: webrtc.SDPTypeAnswer,
+				SDP:  string(payload.Connect.Description.Sdp),
+			}))
 			return
 		}
 	}
