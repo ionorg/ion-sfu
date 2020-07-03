@@ -73,7 +73,6 @@ func main() {
 				Type: webrtc.SDPTypeAnswer,
 				SDP:  string(payload.Connect.Description.Sdp),
 			}))
-			return
 		}
 	}
 }
