@@ -130,9 +130,9 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 		return nil, nil, errWebRTCTransportAnswerFailed
 	}
 
-	router.AddSub(mid, sub)
+	router.AddSub(sub.ID(), sub)
 
-	log.Debugf("subscribe->connect: mid %s, answer = %v", mid, answer)
+	log.Debugf("subscribe->connect: mid %s, answer = %v", sub.ID(), answer)
 	return sub, &pb.SubscribeReply_Connect{
 		Connect: &pb.Connect{
 			Description: &pb.SessionDescription{
