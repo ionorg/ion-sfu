@@ -146,8 +146,9 @@ func check() {
 			subs := router.GetSubs()
 			if len(subs) < 6 {
 				for id := range subs {
-					info += fmt.Sprintf("sub: %s\n\n", id)
+					info += fmt.Sprintf("sub: %s\n", id)
 				}
+				info += "\n"
 			} else {
 				info += fmt.Sprintf("subs: %d\n\n", len(subs))
 			}
