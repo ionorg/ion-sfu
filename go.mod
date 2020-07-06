@@ -13,7 +13,7 @@ require (
 	github.com/pion/rtp v1.5.5
 	github.com/pion/sdp/v2 v2.3.9
 	github.com/pion/stun v0.3.5 // indirect
-	github.com/pion/transport v0.10.0
+	github.com/pion/transport v0.10.1
 	github.com/pion/webrtc/v2 v2.2.17
 	github.com/pion/webrtc/v3 v3.0.0-20200625164527-89d7de178734
 	github.com/rs/zerolog v1.19.0
