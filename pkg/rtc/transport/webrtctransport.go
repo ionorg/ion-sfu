@@ -324,10 +324,12 @@ func (w *WebRTCTransport) Answer(offer webrtc.SessionDescription, options RTCOpt
 		})
 	} else {
 		if options.Ssrcpt == nil {
+			log.Debugf("Answer: invalid options, ssrcpt nil")
 			return webrtc.SessionDescription{}, errInvalidOptions
 		}
 		ssrcPTMap := options.Ssrcpt
 		if len(ssrcPTMap) == 0 {
+			log.Debugf("Answer: invalid options, ssrcpt len 0")
 			return webrtc.SessionDescription{}, errInvalidOptions
 		}
 
