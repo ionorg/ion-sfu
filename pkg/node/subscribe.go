@@ -83,6 +83,7 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 	}
 
 	tracks := pub.GetInTracks()
+	log.Debugf("Sub to pub with tracks %v", tracks)
 	ssrcPTMap := make(map[uint32]uint8)
 	allowedCodecs := make([]uint8, 0, len(tracks))
 
