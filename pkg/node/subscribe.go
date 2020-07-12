@@ -13,7 +13,7 @@ import (
 	"github.com/pion/webrtc/v2"
 )
 
-func getSubCodec(track *webrtc.Track, parsed sdp.SessionDescription) uint8 {
+func getSubPayloadType(track *webrtc.Track, parsed sdp.SessionDescription) uint8 {
 	transform := transport.PayloadTransformMap()
 	for _, md := range parsed.MediaDescriptions {
 		if md.MediaName.Media != "audio" && md.MediaName.Media != "video" {
@@ -34,7 +34,7 @@ func getSubCodec(track *webrtc.Track, parsed sdp.SessionDescription) uint8 {
 			payloadType := uint8(pt)
 
 			// 	If offer contains pub payload type, use that
-			if track.PayloadType() == payloadType {
+			if track.Codec().Name == payloadType {
 				return payloadType
 			}
 
@@ -82,6 +82,13 @@ func Subscribe(mid string, offer webrtc.SessionDescription) (*transport.WebRTCTr
 		Ssrcpt:    make(map[uint32]uint8),
 	}
 
+	// We make our own mediaEngine so we can place the sender's codecs in it.  This because we must use the
+	// dynamic media type from the sender in our answer. This is not required if we are the offerer
+	mediaEngine := webrtc.MediaEngine{}
+	if err = mediaEngine.PopulateFromSDP(offer); err != nil {
+		return nil, nil, errors.New("subscribe->connect: failed to initialize media engine")
+	}
+
 	tracks := pub.GetInTracks()
 	log.Debugf("Sub to pub with tracks %v", tracks)
 	ssrcPTMap := make(map[uint32]uint8)
@@ -91,7 +98,7 @@ func Subscribe(mid string, offer webrtc.SessionDescription) (*transport.WebRTCTr
 		rtcOptions.Ssrcpt[ssrc] = uint8(track.PayloadType())
 
 		// Find pt for track given track.Payload and sdp
-		ssrcPTMap[ssrc] = getSubCodec(track, parsed)
+		ssrcPTMap[ssrc] = getSubPayloadType(track, parsed)
 		allowedCodecs = append(allowedCodecs, ssrcPTMap[ssrc])
 	}
 

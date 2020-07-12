@@ -8,7 +8,7 @@ import (
 	"github.com/pion/webrtc/v2"
 )
 
-func TestGetSubCodecsReturnsCorrectAudioCodec(t *testing.T) {
+func TestGetSubPayloadTypeReturnsCorrectAudioCodec(t *testing.T) {
 	offer := sdp.SessionDescription{
 		MediaDescriptions: []*sdp.MediaDescription{
 			{
@@ -32,14 +32,14 @@ func TestGetSubCodecsReturnsCorrectAudioCodec(t *testing.T) {
 		webrtc.DefaultPayloadTypeOpus,
 		&codecs.OpusPayloader{})
 	track, _ := webrtc.NewTrack(webrtc.DefaultPayloadTypeOpus, 1111, "msid", "label", c)
-	codec := getSubCodec(track, offer)
+	codec := getSubPayloadTypetrack, offer)
 
 	if codec != 111 {
 		t.Fatal("Should return opus codec type")
 	}
 }
 
-func TestGetSubCodecsReturnsCorrectVideoCodec(t *testing.T) {
+func TestGetSubPayloadTypeReturnsCorrectVideoCodec(t *testing.T) {
 	offer := sdp.SessionDescription{
 		MediaDescriptions: []*sdp.MediaDescription{
 			{
@@ -66,14 +66,46 @@ func TestGetSubCodecsReturnsCorrectVideoCodec(t *testing.T) {
 		&codecs.VP8Payloader{})
 	track, _ := webrtc.NewTrack(webrtc.DefaultPayloadTypeVP8, 1111, "msid", "label", c)
 
-	codec := getSubCodec(track, offer)
+	codec := getSubPayloadTypetrack, offer)
 
 	if codec != webrtc.DefaultPayloadTypeVP8 {
 		t.Fatal("Should return VP8 codec type")
 	}
 }
 
-func TestGetSubCodecsIgnoresH264PT126Codec(t *testing.T) {
+func TestGetSubPayloadTypeReturnsCorrectVideoCodec2(t *testing.T) {
+	offer := sdp.SessionDescription{
+		MediaDescriptions: []*sdp.MediaDescription{
+			{
+				MediaName: sdp.MediaName{
+					Media:   "video",
+					Formats: []string{"100", "96"},
+				},
+				Attributes: []sdp.Attribute{
+					sdp.NewAttribute("rtpmap:100 VP8/90000", ""),
+					sdp.NewAttribute("rtpmap:96 H264/90000", ""),
+				},
+			},
+		},
+	}
+
+	c := webrtc.NewRTPCodec(webrtc.RTPCodecTypeVideo,
+		"VP8",
+		90000,
+		0,
+		"",
+		webrtc.DefaultPayloadTypeVP8,
+		&codecs.VP8Payloader{})
+	track, _ := webrtc.NewTrack(webrtc.DefaultPayloadTypeVP8, 1111, "msid", "label", c)
+
+	codec := getSubPayloadTypetrack, offer)
+
+	if codec != 100 {
+		t.Fatal("Should return VP8 codec type")
+	}
+}
+
+func TestGetSubPayloadTypeIgnoresH264PT126Codec(t *testing.T) {
 	offer := sdp.SessionDescription{
 		MediaDescriptions: []*sdp.MediaDescription{
 			{
@@ -98,7 +130,7 @@ func TestGetSubCodecsIgnoresH264PT126Codec(t *testing.T) {
 		&codecs.H264Payloader{})
 	track, _ := webrtc.NewTrack(webrtc.DefaultPayloadTypeH264, 1111, "msid", "label", c)
 
-	codec := getSubCodec(track, offer)
+	codec := getSubPayloadTypetrack, offer)
 
 	if codec != 97 {
 		t.Fatal("Should return VP8 codec type")
