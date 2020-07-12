@@ -9,12 +9,10 @@ import (
 
 // RTPForwarderConfig describes configuration parameters for the rtp forwarder.
 type RTPForwarderConfig struct {
-	ID      string
-	MID     string
-	On      bool
-	Addr    string
-	KcpKey  string
-	KcpSalt string
+	On      bool   `mapstructure:"on"`
+	Addr    string `mapstructure:"addr"`
+	KcpKey  string `mapstructure:"kcpkey"`
+	KcpSalt string `mapstructure:"kcpsalt"`
 }
 
 // RTPForwarder represents an RTPForwarder plugin.
@@ -30,18 +28,18 @@ type RTPForwarder struct {
 
 // NewRTPForwarder create new RTPForwarder. The RTPForwarder connects to
 // the configured RTP endpoint.
-func NewRTPForwarder(config RTPForwarderConfig) *RTPForwarder {
-	log.Infof("New RTPForwarder Plugin with id %s address %s for mid %s", config.ID, config.Addr, config.MID)
+func NewRTPForwarder(id, mid string, config RTPForwarderConfig) *RTPForwarder {
+	log.Infof("New RTPForwarder Plugin with id %s address %s for mid %s", id, config.Addr, mid)
 	var rtpTransport *transport.RTPTransport
 
 	if config.KcpKey != "" && config.KcpSalt != "" {
-		rtpTransport = transport.NewOutRTPTransportWithKCP(config.MID, config.Addr, config.KcpKey, config.KcpSalt)
+		rtpTransport = transport.NewOutRTPTransportWithKCP(mid, config.Addr, config.KcpKey, config.KcpSalt)
 	} else {
-		rtpTransport = transport.NewOutRTPTransport(config.MID, config.Addr)
+		rtpTransport = transport.NewOutRTPTransport(mid, config.Addr)
 	}
 
 	return &RTPForwarder{
-		id:         config.ID,
+		id:         id,
 		Transport:  rtpTransport,
 		outRTPChan: make(chan *rtp.Packet, maxSize),
 	}

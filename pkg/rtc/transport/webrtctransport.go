@@ -72,11 +72,42 @@ func IsVideo(pt uint8) bool {
 	return false
 }
 
+// ICEServerConfig defines parameters for ice servers
+type ICEServerConfig struct {
+	URLs       []string `mapstructure:"urls"`
+	Username   string   `mapstructure:"username"`
+	Credential string   `mapstructure:"credential"`
+}
+
+// WebRTCConfig defines parameters for ice
+type WebRTCConfig struct {
+	ICEPortRange []uint16          `mapstructure:"portrange"`
+	ICEServers   []ICEServerConfig `mapstructure:"iceserver"`
+}
+
 // InitWebRTC init WebRTCTransport setting
-func InitWebRTC(iceServers []webrtc.ICEServer, icePortStart, icePortEnd uint16) error {
+func InitWebRTC(config WebRTCConfig) error {
 	var err error
+
+	var icePortStart, icePortEnd uint16
+
+	if len(config.ICEPortRange) == 2 {
+		icePortStart = config.ICEPortRange[0]
+		icePortEnd = config.ICEPortRange[1]
+	}
+
 	if icePortStart != 0 || icePortEnd != 0 {
 		err = setting.SetEphemeralUDPPortRange(icePortStart, icePortEnd)
+	}
+
+	var iceServers []webrtc.ICEServer
+	for _, iceServer := range config.ICEServers {
+		s := webrtc.ICEServer{
+			URLs:       iceServer.URLs,
+			Username:   iceServer.Username,
+			Credential: iceServer.Credential,
+		}
+		iceServers = append(iceServers, s)
 	}
 
 	cfg.ICEServers = iceServers

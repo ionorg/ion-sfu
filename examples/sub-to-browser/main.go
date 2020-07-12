@@ -9,8 +9,8 @@ import (
 	"log"
 	"os"
 
+	sfu "github.com/pion/ion-sfu/cmd/server/grpc/proto"
 	"github.com/pion/ion-sfu/examples/internal/signal"
-	sfu "github.com/pion/ion-sfu/pkg/proto"
 	"github.com/pion/webrtc/v2"
 	"google.golang.org/grpc"
 )

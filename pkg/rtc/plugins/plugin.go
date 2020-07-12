@@ -28,10 +28,11 @@ const (
 	maxSize = 100
 )
 
+// Config for plugin initialization
 type Config struct {
-	On           bool
-	JitterBuffer JitterBufferConfig
-	RTPForwarder RTPForwarderConfig
+	On           bool               `mapstructure:"on"`
+	JitterBuffer JitterBufferConfig `mapstructure:"jitterbuffer"`
+	RTPForwarder RTPForwarderConfig `mapstructure:"rtpforwarder"`
 }
 
 type PluginChain struct {
@@ -92,16 +93,13 @@ func (p *PluginChain) Init(config Config) error {
 	// first, add JitterBuffer plugin
 	if config.JitterBuffer.On {
 		log.Infof("PluginChain.Init config.JitterBuffer.On=true config=%v", config.JitterBuffer)
-		config.JitterBuffer.ID = TypeJitterBuffer
-		p.AddPlugin(TypeJitterBuffer, NewJitterBuffer(config.JitterBuffer))
+		p.AddPlugin(TypeJitterBuffer, NewJitterBuffer(TypeJitterBuffer, config.JitterBuffer))
 	}
 
 	// second, add others
 	if config.RTPForwarder.On {
 		log.Infof("PluginChain.Init config.RTPForwarder.On=true config=%v", config.RTPForwarder)
-		config.RTPForwarder.ID = TypeRTPForwarder
-		config.RTPForwarder.MID = p.mid
-		p.AddPlugin(TypeRTPForwarder, NewRTPForwarder(config.RTPForwarder))
+		p.AddPlugin(TypeRTPForwarder, NewRTPForwarder(TypeRTPForwarder, p.mid, config.RTPForwarder))
 	}
 
 	// forward packets along plugin chain
