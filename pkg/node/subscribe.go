@@ -11,13 +11,11 @@ import (
 	transport "github.com/pion/ion-sfu/pkg/rtc/transport"
 	"github.com/pion/sdp/v2"
 	"github.com/pion/webrtc/v2"
-
-	pb "github.com/pion/ion-sfu/pkg/proto"
 )
 
-func getSubCodec(track *webrtc.Track, sdp sdp.SessionDescription) uint8 {
+func getSubCodec(track *webrtc.Track, parsed sdp.SessionDescription) uint8 {
 	transform := transport.PayloadTransformMap()
-	for _, md := range sdp.MediaDescriptions {
+	for _, md := range parsed.MediaDescriptions {
 		if md.MediaName.Media != "audio" && md.MediaName.Media != "video" {
 			continue
 		}
@@ -40,7 +38,7 @@ func getSubCodec(track *webrtc.Track, sdp sdp.SessionDescription) uint8 {
 				return payloadType
 			}
 
-			payloadCodec, err := sdp.GetCodecForPayloadType(payloadType)
+			payloadCodec, err := parsed.GetCodecForPayloadType(payloadType)
 			if err != nil {
 				return 0
 			}
@@ -60,8 +58,17 @@ func getSubCodec(track *webrtc.Track, sdp sdp.SessionDescription) uint8 {
 	return 0
 }
 
-func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*transport.WebRTCTransport, *pb.SubscribeReply_Connect, error) {
-	log.Infof("subscribe->connect called: %v", payload.Connect)
+// Subscribe to a mid
+func Subscribe(mid string, offer webrtc.SessionDescription) (*transport.WebRTCTransport, *webrtc.SessionDescription, error) {
+	parsed := sdp.SessionDescription{}
+	err := parsed.Unmarshal([]byte(offer.SDP))
+
+	if err != nil {
+		log.Debugf("subscribe->connect: err=%v sdp=%v", err, parsed)
+		return nil, nil, errSdpParseFailed
+	}
+
+	log.Infof("subscribe->connect called: %v", parsed)
 	router := rtc.GetRouter(mid)
 
 	if router == nil {
@@ -69,13 +76,6 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 	}
 
 	pub := router.GetPub().(*transport.WebRTCTransport)
-	offer := sdp.SessionDescription{}
-	err := offer.Unmarshal(payload.Connect.Description.Sdp)
-
-	if err != nil {
-		log.Debugf("subscribe->connect: err=%v sdp=%v", err, offer)
-		return nil, nil, errSdpParseFailed
-	}
 
 	rtcOptions := transport.RTCOptions{
 		Subscribe: true,
@@ -91,7 +91,7 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 		rtcOptions.Ssrcpt[ssrc] = uint8(track.PayloadType())
 
 		// Find pt for track given track.Payload and sdp
-		ssrcPTMap[ssrc] = getSubCodec(track, offer)
+		ssrcPTMap[ssrc] = getSubCodec(track, parsed)
 		allowedCodecs = append(allowedCodecs, ssrcPTMap[ssrc])
 	}
 
@@ -122,9 +122,7 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 		}
 	}
 
-	answer, err := sub.Answer(webrtc.SessionDescription{
-		Type: webrtc.SDPTypeOffer, SDP: string(payload.Connect.Description.Sdp),
-	}, rtcOptions)
+	answer, err := sub.Answer(offer, rtcOptions)
 
 	if err != nil {
 		log.Debugf("subscribe->connect: error creating answer %v", err)
@@ -134,12 +132,5 @@ func (s *server) subscribe(mid string, payload *pb.SubscribeRequest_Connect) (*t
 	router.AddSub(sub.ID(), sub)
 
 	log.Debugf("subscribe->connect: mid %s, answer = %v", sub.ID(), answer)
-	return sub, &pb.SubscribeReply_Connect{
-		Connect: &pb.Connect{
-			Description: &pb.SessionDescription{
-				Type: answer.Type.String(),
-				Sdp:  []byte(answer.SDP),
-			},
-		},
-	}, nil
+	return sub, &answer, nil
 }

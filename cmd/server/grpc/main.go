@@ -1,16 +1,124 @@
-package sfu
+// Package cmd contains an entrypoint for running an ion-sfu instance.
+package main
 
 import (
 	"errors"
+	"flag"
+	"fmt"
 	"io"
+	"net"
+	"os"
 
 	"github.com/pion/ion-sfu/pkg/log"
-	transport "github.com/pion/ion-sfu/pkg/rtc/transport"
+	sfu "github.com/pion/ion-sfu/pkg/node"
+	"github.com/pion/ion-sfu/pkg/rtc/transport"
+	"github.com/pion/webrtc/v2"
+	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	pb "github.com/pion/ion-sfu/pkg/proto"
+	pb "github.com/pion/ion-sfu/cmd/server/grpc/proto"
 )
+
+type grpcConfig struct {
+	Port string `mapstructure:"port"`
+}
+
+// Config defines parameters for configuring the sfu instance
+type Config struct {
+	sfu.Config `mapstructure:",squash"`
+	GRPC       grpcConfig `mapstructure:"grpc"`
+}
+
+var (
+	conf = Config{}
+	file string
+)
+
+type server struct {
+	pb.UnimplementedSFUServer
+}
+
+const (
+	portRangeLimit = 100
+)
+
+func showHelp() {
+	fmt.Printf("Usage:%s {params}\n", os.Args[0])
+	fmt.Println("      -c {config file}")
+	fmt.Println("      -h (show help info)")
+}
+
+func load() bool {
+	_, err := os.Stat(file)
+	if err != nil {
+		return false
+	}
+
+	viper.SetConfigFile(file)
+	viper.SetConfigType("toml")
+
+	err = viper.ReadInConfig()
+	if err != nil {
+		fmt.Printf("config file %s read failed. %v\n", file, err)
+		return false
+	}
+	err = viper.GetViper().Unmarshal(&conf)
+	if err != nil {
+		fmt.Printf("sfu config file %s loaded failed. %v\n", file, err)
+		return false
+	}
+
+	if len(conf.WebRTC.ICEPortRange) > 2 {
+		fmt.Printf("config file %s loaded failed. range port must be [min,max]\n", file)
+		return false
+	}
+
+	if len(conf.WebRTC.ICEPortRange) != 0 && conf.WebRTC.ICEPortRange[1]-conf.WebRTC.ICEPortRange[0] <= portRangeLimit {
+		fmt.Printf("config file %s loaded failed. range port must be [min, max] and max - min >= %d\n", file, portRangeLimit)
+		return false
+	}
+
+	fmt.Printf("config %s load ok!\n", file)
+	return true
+}
+
+func parse() bool {
+	flag.StringVar(&file, "c", "config.toml", "config file")
+	help := flag.Bool("h", false, "help info")
+	flag.Parse()
+	if !load() {
+		return false
+	}
+
+	if *help {
+		showHelp()
+		return false
+	}
+	return true
+}
+
+func main() {
+	if !parse() {
+		showHelp()
+		os.Exit(-1)
+	}
+
+	sfu.Init(conf.Config)
+	log.Infof("--- Starting SFU Node ---")
+	lis, err := net.Listen("tcp", conf.GRPC.Port)
+	if err != nil {
+		log.Panicf("failed to listen: %v", err)
+	}
+	log.Infof("SFU Listening at %s", conf.GRPC.Port)
+	s := grpc.NewServer()
+	pb.RegisterSFUServer(s, &server{})
+	if err := s.Serve(lis); err != nil {
+		log.Panicf("failed to serve: %v", err)
+	}
+	select {}
+}
 
 // Publish a stream to the sfu. Publish creates a bidirectional
 // streaming rpc connection between the client and sfu.
@@ -55,10 +163,13 @@ func (s *server) Publish(stream pb.SFU_PublishServer) error {
 
 		switch payload := in.Payload.(type) {
 		case *pb.PublishRequest_Connect:
-			var reply *pb.PublishReply_Connect
+			var answer *webrtc.SessionDescription
 			log.Infof("publish->connect called: %v", payload.Connect)
 
-			pub, reply, err = s.publish(payload)
+			pub, answer, err = sfu.Publish(webrtc.SessionDescription{
+				Type: webrtc.SDPTypeOffer,
+				SDP:  string(payload.Connect.Description.Sdp),
+			})
 
 			if err != nil {
 				log.Errorf("publish->connect: error publishing stream: %v", err)
@@ -67,8 +178,15 @@ func (s *server) Publish(stream pb.SFU_PublishServer) error {
 			}
 
 			err = stream.Send(&pb.PublishReply{
-				Mid:     pub.ID(),
-				Payload: reply,
+				Mid: pub.ID(),
+				Payload: &pb.PublishReply_Connect{
+					Connect: &pb.Connect{
+						Description: &pb.SessionDescription{
+							Type: answer.Type.String(),
+							Sdp:  []byte(answer.SDP),
+						},
+					},
+				},
 			})
 
 			if err != nil {
@@ -151,8 +269,12 @@ func (s *server) Subscribe(stream pb.SFU_SubscribeServer) error {
 
 		switch payload := in.Payload.(type) {
 		case *pb.SubscribeRequest_Connect:
-			var reply *pb.SubscribeReply_Connect
-			sub, reply, err = s.subscribe(in.Mid, payload)
+			var answer *webrtc.SessionDescription
+			log.Infof("subscribe->connect called: %v", payload.Connect)
+			sub, answer, err = sfu.Subscribe(in.Mid, webrtc.SessionDescription{
+				Type: webrtc.SDPTypeOffer,
+				SDP:  string(payload.Connect.Description.Sdp),
+			})
 
 			if err != nil {
 				log.Errorf("subscribe->connect: error subscribing stream: %v", err)
@@ -160,8 +282,15 @@ func (s *server) Subscribe(stream pb.SFU_SubscribeServer) error {
 			}
 
 			err = stream.Send(&pb.SubscribeReply{
-				Mid:     sub.ID(),
-				Payload: reply,
+				Mid: sub.ID(),
+				Payload: &pb.SubscribeReply_Connect{
+					Connect: &pb.Connect{
+						Description: &pb.SessionDescription{
+							Type: answer.Type.String(),
+							Sdp:  []byte(answer.SDP),
+						},
+					},
+				},
 			})
 
 			if err != nil {
