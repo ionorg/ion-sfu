@@ -23,7 +23,7 @@ Ion sfu is a high performance WebRTC SFU microservice implemented in Go. It expo
 If you have a local golang environment already setup, simply do
 
 ```
-go build cmd/main.go && ./main -c config.toml
+go build ./cmd/server/grpc/main.go && ./main -c config.toml
 ```
 
 If you prefer a containerized environment, you can use the included Docker image

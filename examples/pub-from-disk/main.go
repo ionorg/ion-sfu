@@ -11,7 +11,7 @@ import (
 	"os"
 	"time"
 
-	sfu "github.com/pion/ion-sfu/pkg/proto"
+	sfu "github.com/pion/ion-sfu/cmd/server/grpc/proto"
 	"github.com/pion/webrtc/v3"
 	"github.com/pion/webrtc/v3/pkg/media"
 	"github.com/pion/webrtc/v3/pkg/media/ivfreader"
