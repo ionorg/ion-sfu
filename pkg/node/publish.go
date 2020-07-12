@@ -11,8 +11,6 @@ import (
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/ion-sfu/pkg/rtc"
 	transport "github.com/pion/ion-sfu/pkg/rtc/transport"
-
-	pb "github.com/pion/ion-sfu/pkg/proto"
 )
 
 func getPubCodecs(sdp sdp.SessionDescription) ([]uint8, error) {
@@ -57,10 +55,11 @@ func getPubCodecs(sdp sdp.SessionDescription) ([]uint8, error) {
 	return allowedCodecs, nil
 }
 
-func (s *server) publish(payload *pb.PublishRequest_Connect) (*transport.WebRTCTransport, *pb.PublishReply_Connect, error) {
+// Publish a webrtc stream
+func Publish(offer webrtc.SessionDescription) (*transport.WebRTCTransport, *webrtc.SessionDescription, error) {
 	mid := cuid.New()
-	offer := sdp.SessionDescription{}
-	err := offer.Unmarshal(payload.Connect.Description.Sdp)
+	parsed := sdp.SessionDescription{}
+	err := parsed.Unmarshal([]byte(offer.SDP))
 
 	if err != nil {
 		log.Debugf("publish->connect: err=%v sdp=%v", err, offer)
@@ -71,7 +70,7 @@ func (s *server) publish(payload *pb.PublishRequest_Connect) (*transport.WebRTCT
 		Publish: true,
 	}
 
-	codecs, err := getPubCodecs(offer)
+	codecs, err := getPubCodecs(parsed)
 
 	if err != nil {
 		log.Debugf("publish->connect: err=%v", err)
@@ -86,9 +85,7 @@ func (s *server) publish(payload *pb.PublishRequest_Connect) (*transport.WebRTCT
 
 	router := rtc.AddRouter(mid)
 
-	answer, err := pub.Answer(webrtc.SessionDescription{
-		Type: webrtc.SDPTypeOffer, SDP: string(payload.Connect.Description.Sdp),
-	}, rtcOptions)
+	answer, err := pub.Answer(offer, rtcOptions)
 
 	if err != nil {
 		log.Debugf("publish->connect: error creating answer %v", err)
@@ -99,12 +96,5 @@ func (s *server) publish(payload *pb.PublishRequest_Connect) (*transport.WebRTCT
 
 	router.AddPub(pub)
 
-	return pub, &pb.PublishReply_Connect{
-		Connect: &pb.Connect{
-			Description: &pb.SessionDescription{
-				Type: answer.Type.String(),
-				Sdp:  []byte(answer.SDP),
-			},
-		},
-	}, nil
+	return pub, &answer, nil
 }

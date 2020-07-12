@@ -12,6 +12,11 @@ const (
 	timeFormat = "2006-01-02 15:04:05.999"
 )
 
+// Config defines parameters for the logger
+type Config struct {
+	Level string `mapstructure:"level"`
+}
+
 // Init initializes the package logger.
 // Supported levels are: ["debug", "info", "warn", "error"]
 func Init(level string) {

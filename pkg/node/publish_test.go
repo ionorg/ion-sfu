@@ -3,28 +3,15 @@ package sfu
 import (
 	"testing"
 
-	pb "github.com/pion/ion-sfu/pkg/proto"
 	"github.com/pion/sdp/v2"
 	"github.com/pion/webrtc/v2"
-	"google.golang.org/grpc"
 )
 
 func TestPublishReturnsErrorWithInvalidSDP(t *testing.T) {
-	sfu := &server{}
-	s := grpc.NewServer()
-	pb.RegisterSFUServer(s, sfu)
-
-	request := pb.PublishRequest_Connect{
-		Connect: &pb.Connect{
-			Options: &pb.Options{},
-			Description: &pb.SessionDescription{
-				Type: webrtc.SDPTypeOffer.String(),
-				Sdp:  []byte("invalid"),
-			},
-		},
-	}
-
-	_, _, err := sfu.publish(&request)
+	_, _, err := Publish(webrtc.SessionDescription{
+		Type: webrtc.SDPTypeOffer,
+		SDP:  "invalid",
+	})
 
 	if err != errSdpParseFailed {
 		t.Fatal("Should return error on invalid sdp")
@@ -32,10 +19,6 @@ func TestPublishReturnsErrorWithInvalidSDP(t *testing.T) {
 }
 
 func TestPublishReturnsErrorWithInvalidCodecsInSDP(t *testing.T) {
-	sfu := &server{}
-	s := grpc.NewServer()
-	pb.RegisterSFUServer(s, sfu)
-
 	offer := sdp.SessionDescription{
 		MediaDescriptions: []*sdp.MediaDescription{
 			{
@@ -50,17 +33,10 @@ func TestPublishReturnsErrorWithInvalidCodecsInSDP(t *testing.T) {
 
 	marshalled, _ := offer.Marshal()
 
-	request := pb.PublishRequest_Connect{
-		Connect: &pb.Connect{
-			Options: &pb.Options{},
-			Description: &pb.SessionDescription{
-				Type: webrtc.SDPTypeOffer.String(),
-				Sdp:  marshalled,
-			},
-		},
-	}
-
-	_, _, err := sfu.publish(&request)
+	_, _, err := Publish(webrtc.SessionDescription{
+		Type: webrtc.SDPTypeOffer,
+		SDP:  string(marshalled),
+	})
 
 	if err != errSdpParseFailed {
 		t.Fatal("Should return error on invalid sdp")
