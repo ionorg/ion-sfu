@@ -29,7 +29,7 @@ _lint_job: &lint_job
 _build_job: &build_job
   env: CACHE_NAME=build
   script:
-    - go build ./cmd/main.go
+    - go build ./cmd/server/grpc/main.go
 
 _build_sfu_docker_job: &build_sfu_docker_job
   env: CACHE_NAME=build_sfu_docker

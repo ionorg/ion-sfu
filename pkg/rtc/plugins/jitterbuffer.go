@@ -20,13 +20,12 @@ const (
 
 // JitterBufferConfig .
 type JitterBufferConfig struct {
-	ID            string
-	On            bool
-	TCCOn         bool
-	REMBCycle     int
-	PLICycle      int
-	MaxBandwidth  int
-	MaxBufferTime int
+	On            bool `mapstructure:"on"`
+	TCCOn         bool `mapstructure:"tccon"`
+	REMBCycle     int  `mapstructure:"rembcycle"`
+	PLICycle      int  `mapstructure:"plicycle"`
+	MaxBandwidth  int  `mapstructure:"maxbandwidth"`
+	MaxBufferTime int  `mapstructure:"maxbuffertime"`
 }
 
 // JitterBuffer core buffer module
@@ -36,14 +35,16 @@ type JitterBuffer struct {
 	bandwidth uint64
 	lostRate  float64
 
+	id         string
 	config     JitterBufferConfig
 	Pub        transport.Transport
 	outRTPChan chan *rtp.Packet
 }
 
 // NewJitterBuffer return new JitterBuffer
-func NewJitterBuffer(config JitterBufferConfig) *JitterBuffer {
+func NewJitterBuffer(ID string, config JitterBufferConfig) *JitterBuffer {
 	j := &JitterBuffer{
+		id:         ID,
 		buffers:    make(map[uint32]*Buffer),
 		outRTPChan: make(chan *rtp.Packet, maxSize),
 	}
@@ -74,7 +75,7 @@ func (j *JitterBuffer) Init(config JitterBufferConfig) {
 
 // ID return id
 func (j *JitterBuffer) ID() string {
-	return j.config.ID
+	return j.id
 }
 
 // AttachPub Attach pub stream

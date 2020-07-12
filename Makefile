@@ -23,7 +23,7 @@ example:
 	go build -o bin/service-watch $(GO_LDFLAGS) examples/watch/service-watch.go
 
 nodes: go_deps
-	go build -o bin/sfu $(GO_LDFLAGS) cmd/main.go
+	go build -o bin/sfu $(GO_LDFLAGS) ./cmd/server/grpc/main.go
 
 test: nodes
 	go test \

@@ -9,7 +9,6 @@ import (
 	"github.com/pion/ion-sfu/pkg/rtc/plugins"
 	"github.com/pion/ion-sfu/pkg/rtc/rtpengine"
 	"github.com/pion/ion-sfu/pkg/rtc/transport"
-	"github.com/pion/webrtc/v2"
 )
 
 const (
@@ -25,11 +24,18 @@ var (
 	stop          bool
 )
 
-// InitIce ice urls
-func InitIce(iceServers []webrtc.ICEServer, icePortStart, icePortEnd uint16) error {
-	//init ice urls and ICE settings
-	return transport.InitWebRTC(iceServers, icePortStart, icePortEnd)
+// RTPConfig defines parameters for the rtp engine
+type RTPConfig struct {
+	Port    int    `mapstructure:"port"`
+	KcpKey  string `mapstructure:"kcpkey"`
+	KcpSalt string `mapstructure:"kcpsalt"`
 }
+
+// InitIce ice urls
+// func InitIce(iceServers []webrtc.ICEServer, icePortStart, icePortEnd uint16) error {
+// 	//init ice urls and ICE settings
+// 	return transport.InitWebRTC(iceServers, icePortStart, icePortEnd)
+// }
 
 func InitRouter(config RouterConfig) {
 	routerConfig = config
@@ -47,17 +53,17 @@ func CheckPlugins(config plugins.Config) error {
 }
 
 // InitRTP rtp port
-func InitRTP(port int, kcpKey, kcpSalt string) error {
+func InitRTP(config RTPConfig) error {
 	// show stat about all routers
 	go check()
 
 	var connCh chan *transport.RTPTransport
 	var err error
 	// accept relay rtptransport
-	if kcpKey != "" && kcpSalt != "" {
-		connCh, err = rtpengine.ServeWithKCP(port, kcpKey, kcpSalt)
+	if config.KcpKey != "" && config.KcpSalt != "" {
+		connCh, err = rtpengine.ServeWithKCP(config.Port, config.KcpKey, config.KcpSalt)
 	} else {
-		connCh, err = rtpengine.Serve(port)
+		connCh, err = rtpengine.Serve(config.Port)
 	}
 	if err != nil {
 		log.Errorf("rtc.InitRPC err=%v", err)
