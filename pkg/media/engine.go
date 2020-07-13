@@ -10,10 +10,10 @@ import (
 )
 
 const (
-	mediaNameAudio    = "audio"
-	mediaNameVideo    = "video"
-	iOSH264Fmtp       = "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f"
-	firefoxH264Fmtp97 = "profile-level-id=42e01f;level-asymmetry-allowed=1"
+	mediaNameAudio = "audio"
+	mediaNameVideo = "video"
+	// iOSH264Fmtp       = "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f"
+	// firefoxH264Fmtp97 = "profile-level-id=42e01f;level-asymmetry-allowed=1"
 )
 
 var (
