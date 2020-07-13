@@ -233,13 +233,6 @@ func (w *WebRTCTransport) AddOutTrack(mid string, track *webrtc.Track) (*webrtc.
 	return track, nil
 }
 
-// GetOutTracks return incoming tracks
-func (w *WebRTCTransport) GetOutTracks() map[uint32]*webrtc.Track {
-	w.outTrackLock.RLock()
-	defer w.outTrackLock.RUnlock()
-	return w.outTracks
-}
-
 // WriteRTCP write rtcp packet to pc
 func (w *WebRTCTransport) WriteRTCP(pkt rtcp.Packet) error {
 	if w.pc == nil {

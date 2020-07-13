@@ -1,9 +1,15 @@
 package sfu
 
 import (
+	"math/rand"
+	"testing"
+
 	"github.com/pion/ion-sfu/pkg/log"
+	"github.com/pion/ion-sfu/pkg/media"
 	"github.com/pion/ion-sfu/pkg/rtc"
 	"github.com/pion/ion-sfu/pkg/rtc/plugins"
+	"github.com/pion/webrtc/v2"
+	"github.com/stretchr/testify/assert"
 )
 
 var conf = Config{
@@ -36,43 +42,46 @@ func init() {
 	Init(conf)
 }
 
-// func TestPubSub(t *testing.T) {
-// 	me := &media.Engine{}
-// 	me.MediaEngine.RegisterDefaultCodecs()
-// 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine))
-// 	pub, _ := api.NewPeerConnection(webrtc.Configuration{})
+func TestPubSub(t *testing.T) {
+	me := &media.Engine{}
+	me.MediaEngine.RegisterDefaultCodecs()
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine))
+	pub, err := api.NewPeerConnection(webrtc.Configuration{})
+	assert.NoError(t, err)
+	sub, err := api.NewPeerConnection(webrtc.Configuration{})
+	assert.NoError(t, err)
+	_, err = sub.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RtpTransceiverInit{
+		Direction: webrtc.RTPTransceiverDirectionSendrecv,
+	})
+	assert.NoError(t, err)
 
-// 	track, _ := pub.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
-// 	pub.AddTrack(track)
+	track, err := sub.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+	_, err = pub.AddTrack(track)
+	assert.NoError(t, err)
 
-// 	offer, _ := pub.CreateOffer(nil)
-// 	pub.SetLocalDescription(offer)
+	offer, err := pub.CreateOffer(nil)
+	assert.NoError(t, err)
+	err = pub.SetLocalDescription(offer)
+	assert.NoError(t, err)
 
-// 	mid, _, answer, _ := Publish(offer)
+	mid, _, answer, err := Publish(offer)
+	assert.NoError(t, err)
+	err = pub.SetRemoteDescription(*answer)
+	assert.NoError(t, err)
 
-// 	pub.SetRemoteDescription(*answer)
+	sub.OnTrack(func(track *webrtc.Track, r *webrtc.RTPReceiver) {
+		t.Logf("on track %v", track)
+	})
 
-// 	sub, _ := api.NewPeerConnection(webrtc.Configuration{})
-// 	sub.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RtpTransceiverInit{
-// 		Direction: webrtc.RTPTransceiverDirectionRecvonly,
-// 	})
+	offer, err = sub.CreateOffer(nil)
+	assert.NoError(t, err)
+	err = sub.SetLocalDescription(offer)
+	assert.NoError(t, err)
 
-// 	// var subTrack *webrtc.Track
-// 	sub.OnTrack(func(track *webrtc.Track, r *webrtc.RTPReceiver) {
-// 		t.Logf("on track %v", track)
-// 	})
+	_, _, answer, err = Subscribe(mid, offer)
+	assert.NoError(t, err)
 
-// 	offer, _ = sub.CreateOffer(nil)
-// 	sub.SetLocalDescription(offer)
-
-// 	_, _, answer, _ = Subscribe(mid, offer)
-
-// 	sub.SetRemoteDescription(*answer)
-
-// 	rawPkt := []byte{
-// 		0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64,
-// 		0x27, 0x82, 0x00, 0x01, 0x00, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x98, 0x36, 0xbe, 0x88, 0x9e,
-// 	}
-
-// 	_, _ = track.Write(rawPkt)
-// }
+	err = sub.SetRemoteDescription(*answer)
+	assert.NoError(t, err)
+}
