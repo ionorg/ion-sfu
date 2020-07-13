@@ -34,8 +34,19 @@ func Publish(offer webrtc.SessionDescription) (string, *webrtc.PeerConnection, *
 		return "", nil, nil, errWebRTCTransportInitFailed
 	}
 
+	router := rtc.AddRouter(mid)
+
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
+		log.Infof("Publish: Got track %v", track)
 		pub.AddInTrack(track)
+
+		for _, t := range router.GetSubs() {
+			sub := t.(*transport.WebRTCTransport)
+			_, err := sub.AddOutTrack(mid, track)
+			if err != nil {
+				log.Errorf("Error adding out track to sub: %s", err)
+			}
+		}
 	})
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
@@ -49,8 +60,6 @@ func Publish(offer webrtc.SessionDescription) (string, *webrtc.PeerConnection, *
 			pub.Close()
 		}
 	})
-
-	router := rtc.AddRouter(mid)
 
 	err = pc.SetRemoteDescription(offer)
 	if err != nil {
