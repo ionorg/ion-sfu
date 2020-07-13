@@ -119,6 +119,19 @@ func TestMatchFrom(t *testing.T) {
 	}
 }
 
+func TestNoMatch(t *testing.T) {
+	fe := &Engine{}
+	fe.MediaEngine.RegisterCodec(webrtc.NewRTPVP8Codec(webrtc.DefaultPayloadTypeVP8, 90000))
+	te := &Engine{}
+	te.MediaEngine.RegisterCodec(webrtc.NewRTPVP9Codec(webrtc.DefaultPayloadTypeVP9, 90000))
+
+	te.MapFromEngine(fe)
+
+	_, ok := te.MapTo(webrtc.DefaultPayloadTypeVP8)
+
+	assert.False(t, ok)
+}
+
 func TestNoMatchFromMapToWhenNotInitilaized(t *testing.T) {
 	e := Engine{}
 	_, ok := e.MapTo(97)
