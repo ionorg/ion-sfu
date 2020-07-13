@@ -200,7 +200,7 @@ func (w *WebRTCTransport) AddOutTrack(mid string, track *webrtc.Track) (*webrtc.
 	if w.pc == nil {
 		return nil, errInvalidPC
 	}
-
+	log.Debugf("AddOutTrack: %s %v", mid, track)
 	pt, ok := w.me.MapTo(track.Codec().PayloadType)
 
 	if !ok {
