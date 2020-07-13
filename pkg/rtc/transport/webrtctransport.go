@@ -71,41 +71,6 @@ func (w *WebRTCTransport) Type() int {
 	return TypeWebRTCTransport
 }
 
-// Answer answer to pub or sub
-// func (w *WebRTCTransport) Answer(offer webrtc.SessionDescription, options RTCOptions) (webrtc.SessionDescription, error) {
-// 	w.isPub = options.Publish
-// 	if w.isPub {
-//
-// 	} else {
-// 		if options.Ssrcpt == nil {
-// 			log.Debugf("Answer: invalid options, ssrcpt nil")
-// 			return webrtc.SessionDescription{}, errInvalidOptions
-// 		}
-// 		ssrcPTMap := options.Ssrcpt
-// 		if len(ssrcPTMap) == 0 {
-// 			log.Debugf("Answer: invalid options, ssrcpt len 0")
-// 			return webrtc.SessionDescription{}, errInvalidOptions
-// 		}
-//
-// 		for ssrc, pt := range ssrcPTMap {
-// 			if _, found := w.outTracks[ssrc]; !found {
-// 				track, _ := w.pc.NewTrack(pt, ssrc, "pion", "pion")
-// 				if track != nil {
-// 					_, err := w.pc.AddTrack(track)
-// 					if err == nil {
-// 						w.outTrackLock.Lock()
-// 						w.outTracks[ssrc] = track
-// 						w.outTrackLock.Unlock()
-// 					} else {
-// 						log.Errorf("w.pc.AddTrack err=%v", err)
-// 					}
-// 				}
-// 			}
-// 		}
-// 		w.receiveOutTracksRTCP()
-// 	}
-// }
-
 // receiveInTrackRTP receive all incoming tracks' rtp and sent to one channel
 func (w *WebRTCTransport) receiveInTrackRTP(remoteTrack *webrtc.Track) {
 	for {
@@ -186,12 +151,6 @@ func (w *WebRTCTransport) OnClose(f func()) {
 	w.onCloseHandler = f
 }
 
-func (w *WebRTCTransport) receiveOutTracksRTCP() {
-	for _, sender := range w.pc.GetSenders() {
-		go w.receiveOutTrackRTCP(sender)
-	}
-}
-
 // receive rtcp from outgoing track
 func (w *WebRTCTransport) receiveOutTrackRTCP(sender *webrtc.RTPSender) {
 	for {
@@ -216,10 +175,17 @@ func (w *WebRTCTransport) receiveOutTrackRTCP(sender *webrtc.RTPSender) {
 
 // AddInTrack add an incoming track
 func (w *WebRTCTransport) AddInTrack(track *webrtc.Track) {
+	_, err := w.pc.AddTransceiver(track.Kind(), webrtc.RtpTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly})
+	if err != nil {
+		log.Errorf("AddInTrack error: pc.AddTransceiver %v", err)
+		return
+	}
+
 	w.inTrackLock.Lock()
 	w.inTracks[track.SSRC()] = track
 	w.inTrackLock.Unlock()
-	w.receiveInTrackRTP(track)
+
+	go w.receiveInTrackRTP(track)
 }
 
 // GetInTracks return incoming tracks
@@ -247,7 +213,7 @@ func (w *WebRTCTransport) AddOutTrack(mid string, track *webrtc.Track) (*webrtc.
 		return nil, err
 	}
 
-	_, err = w.pc.AddTransceiverFromTrack(track, webrtc.RtpTransceiverInit{
+	t, err := w.pc.AddTransceiverFromTrack(track, webrtc.RtpTransceiverInit{
 		Direction: webrtc.RTPTransceiverDirectionSendonly,
 		SendEncodings: []webrtc.RTPEncodingParameters{{
 			RTPCodingParameters: webrtc.RTPCodingParameters{SSRC: ssrc, PayloadType: pt},
@@ -261,6 +227,9 @@ func (w *WebRTCTransport) AddOutTrack(mid string, track *webrtc.Track) (*webrtc.
 	w.outTrackLock.Lock()
 	w.outTracks[ssrc] = track
 	w.outTrackLock.Unlock()
+
+	go w.receiveOutTrackRTCP(t.Sender())
+
 	return track, nil
 }
 

@@ -5,34 +5,30 @@ import (
 
 	"github.com/pion/ion-sfu/pkg/media"
 	"github.com/pion/webrtc/v2"
+	"github.com/stretchr/testify/assert"
 )
 
-// func TestWebRTCTransportAnswer(t *testing.T) {
-// 	options := RTCOptions{
-// 		TransportCC: true,
-// 	}
-// 	pub := NewWebRTCTransport("pub", options)
-// 	offer, err := pub.Offer()
-// 	if err != nil {
-// 		t.Fatalf("err=%v", err)
-// 	}
+func TestTypeReturnsWebRTCTransportType(t *testing.T) {
+	me := media.Engine{}
+	me.MediaEngine.RegisterDefaultCodecs()
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine))
+	pc, _ := api.NewPeerConnection(webrtc.Configuration{})
 
-// 	_, err = pub.AddSendTrack(12345, webrtc.DefaultPayloadTypeH264, "video", "pion")
-// 	if err != nil {
-// 		t.Fatalf("err=%v", err)
-// 	}
+	pub := NewWebRTCTransport("pub", pc, &me)
 
-// 	sub := NewWebRTCTransport("sub", options)
-// 	options.Subscribe = true
-// 	options.Ssrcpt = make(map[uint32]uint8)
-// 	for ssrc, track := range pub.GetOutTracks() {
-// 		options.Ssrcpt[ssrc] = track.PayloadType()
-// 	}
-// 	answer, err := sub.Answer(offer, options)
-// 	if err != nil {
-// 		t.Fatalf("err=%v answer=%v", err, answer)
-// 	}
-// }
+	assert.Equal(t, pub.Type(), TypeWebRTCTransport)
+}
+
+func TestMediaEngineReturnsMediaEngine(t *testing.T) {
+	me := &media.Engine{}
+	me.MediaEngine.RegisterDefaultCodecs()
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine))
+	pc, _ := api.NewPeerConnection(webrtc.Configuration{})
+
+	pub := NewWebRTCTransport("pub", pc, me)
+
+	assert.Equal(t, pub.MediaEngine(), me)
+}
 
 func TestWebRTCTransportCloseHandlerOnlyOnce(t *testing.T) {
 	me := media.Engine{}

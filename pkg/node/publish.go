@@ -2,7 +2,6 @@ package sfu
 
 import (
 	"github.com/lucsky/cuid"
-	"github.com/pion/sdp/v2"
 	"github.com/pion/webrtc/v2"
 
 	"github.com/pion/ion-sfu/pkg/log"
@@ -14,18 +13,11 @@ import (
 // Publish a webrtc stream
 func Publish(offer webrtc.SessionDescription) (string, *webrtc.PeerConnection, *webrtc.SessionDescription, error) {
 	mid := cuid.New()
-	parsed := sdp.SessionDescription{}
-	err := parsed.Unmarshal([]byte(offer.SDP))
-
-	if err != nil {
-		log.Debugf("Publish error: err=%v sdp=%v", err, offer)
-		return "", nil, nil, errSdpParseFailed
-	}
 
 	// We make our own mediaEngine so we can place the sender's codecs in it.  This because we must use the
 	// dynamic media type from the sender in our answer. This is not required if we are the offerer
 	me := media.Engine{}
-	if err = me.PopulateFromSDP(offer); err != nil {
+	if err := me.PopulateFromSDP(offer); err != nil {
 		return "", nil, nil, errSdpParseFailed
 	}
 
@@ -43,11 +35,6 @@ func Publish(offer webrtc.SessionDescription) (string, *webrtc.PeerConnection, *
 	}
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
-		_, err = pc.AddTransceiver(track.Kind(), webrtc.RtpTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly})
-		if err != nil {
-			log.Errorf("Publish error: pc.AddTransceiver video %v", err)
-		}
-
 		pub.AddInTrack(track)
 	})
 

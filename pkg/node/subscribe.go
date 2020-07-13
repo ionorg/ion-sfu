@@ -8,33 +8,24 @@ import (
 	"github.com/pion/ion-sfu/pkg/media"
 	"github.com/pion/ion-sfu/pkg/rtc"
 	transport "github.com/pion/ion-sfu/pkg/rtc/transport"
-	"github.com/pion/sdp/v2"
 	"github.com/pion/webrtc/v2"
 )
 
 // Subscribe to a mid
 func Subscribe(mid string, offer webrtc.SessionDescription) (string, *webrtc.PeerConnection, *webrtc.SessionDescription, error) {
-	parsed := sdp.SessionDescription{}
-	err := parsed.Unmarshal([]byte(offer.SDP))
-
-	if err != nil {
-		log.Debugf("Subscribe: err=%v sdp=%v", err, parsed)
+	me := media.Engine{}
+	if err := me.PopulateFromSDP(offer); err != nil {
 		return "", nil, nil, errSdpParseFailed
 	}
 
-	log.Infof("Subscribe called: %v", parsed)
 	router := rtc.GetRouter(mid)
 
 	if router == nil {
-		return "", nil, nil, errors.New("Subscribe: router not found")
+		return "", nil, nil, errRouterNotFound
 	}
 
 	pub := router.GetPub().(*transport.WebRTCTransport)
 
-	me := media.Engine{}
-	if err = me.PopulateFromSDP(offer); err != nil {
-		return "", nil, nil, errSdpParseFailed
-	}
 	me.MapFromEngine(pub.MediaEngine())
 
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine), webrtc.WithSettingEngine(setting))
