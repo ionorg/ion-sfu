@@ -11,7 +11,6 @@ import (
 
 	"github.com/pion/ion-sfu/pkg/log"
 	sfu "github.com/pion/ion-sfu/pkg/node"
-	"github.com/pion/ion-sfu/pkg/rtc/transport"
 	"github.com/pion/webrtc/v2"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
@@ -139,7 +138,8 @@ func main() {
 //
 // If the client closes this stream, the webrtc stream will be closed.
 func (s *server) Publish(stream pb.SFU_PublishServer) error {
-	var pub *transport.WebRTCTransport
+	var mid string
+	var pub *webrtc.PeerConnection
 	for {
 		in, err := stream.Recv()
 
@@ -166,7 +166,7 @@ func (s *server) Publish(stream pb.SFU_PublishServer) error {
 			var answer *webrtc.SessionDescription
 			log.Infof("publish->connect called: %v", payload.Connect)
 
-			pub, answer, err = sfu.Publish(webrtc.SessionDescription{
+			mid, pub, answer, err = sfu.Publish(webrtc.SessionDescription{
 				Type: webrtc.SDPTypeOffer,
 				SDP:  string(payload.Connect.Description.Sdp),
 			})
@@ -178,7 +178,7 @@ func (s *server) Publish(stream pb.SFU_PublishServer) error {
 			}
 
 			err = stream.Send(&pb.PublishReply{
-				Mid: pub.ID(),
+				Mid: mid,
 				Payload: &pb.PublishReply_Connect{
 					Connect: &pb.Connect{
 						Description: &pb.SessionDescription{
@@ -195,31 +195,25 @@ func (s *server) Publish(stream pb.SFU_PublishServer) error {
 				return err
 			}
 
-			// TODO: Close
-			go func() {
-				for {
-					trickle := <-pub.GetCandidateChan()
-					if trickle != nil {
-						err = stream.Send(&pb.PublishReply{
-							Mid: pub.ID(),
-							Payload: &pb.PublishReply_Trickle{
-								Trickle: &pb.Trickle{
-									Candidate: trickle.String(),
-								},
-							},
-						})
-					} else {
-						return
-					}
-				}
-			}()
+			pub.OnICECandidate(func(c *webrtc.ICECandidate) {
+				err = stream.Send(&pb.PublishReply{
+					Mid: mid,
+					Payload: &pb.PublishReply_Trickle{
+						Trickle: &pb.Trickle{
+							Candidate: c.String(),
+						},
+					},
+				})
+			})
 
 		case *pb.PublishRequest_Trickle:
 			if pub == nil {
 				return errors.New("publish->trickle: called before connect")
 			}
 
-			if err := pub.AddCandidate(payload.Trickle.Candidate); err != nil {
+			if err := pub.AddICECandidate(webrtc.ICECandidateInit{
+				Candidate: payload.Trickle.Candidate,
+			}); err != nil {
 				return errors.New("publish->trickle: error adding candidate")
 			}
 		}
@@ -245,7 +239,8 @@ func (s *server) Publish(stream pb.SFU_PublishServer) error {
 //
 // If the client closes this stream, the webrtc stream will be closed.
 func (s *server) Subscribe(stream pb.SFU_SubscribeServer) error {
-	var sub *transport.WebRTCTransport
+	var sub *webrtc.PeerConnection
+	var mid string
 	for {
 		in, err := stream.Recv()
 
@@ -271,7 +266,7 @@ func (s *server) Subscribe(stream pb.SFU_SubscribeServer) error {
 		case *pb.SubscribeRequest_Connect:
 			var answer *webrtc.SessionDescription
 			log.Infof("subscribe->connect called: %v", payload.Connect)
-			sub, answer, err = sfu.Subscribe(in.Mid, webrtc.SessionDescription{
+			mid, sub, answer, err = sfu.Subscribe(in.Mid, webrtc.SessionDescription{
 				Type: webrtc.SDPTypeOffer,
 				SDP:  string(payload.Connect.Description.Sdp),
 			})
@@ -282,7 +277,7 @@ func (s *server) Subscribe(stream pb.SFU_SubscribeServer) error {
 			}
 
 			err = stream.Send(&pb.SubscribeReply{
-				Mid: sub.ID(),
+				Mid: mid,
 				Payload: &pb.SubscribeReply_Connect{
 					Connect: &pb.Connect{
 						Description: &pb.SessionDescription{
@@ -299,31 +294,25 @@ func (s *server) Subscribe(stream pb.SFU_SubscribeServer) error {
 				return nil
 			}
 
-			// TODO: Close
-			go func() {
-				for {
-					trickle := <-sub.GetCandidateChan()
-					if trickle != nil {
-						err = stream.Send(&pb.SubscribeReply{
-							Mid: sub.ID(),
-							Payload: &pb.SubscribeReply_Trickle{
-								Trickle: &pb.Trickle{
-									Candidate: trickle.String(),
-								},
-							},
-						})
-					} else {
-						return
-					}
-				}
-			}()
+			sub.OnICECandidate(func(c *webrtc.ICECandidate) {
+				err = stream.Send(&pb.SubscribeReply{
+					Mid: mid,
+					Payload: &pb.SubscribeReply_Trickle{
+						Trickle: &pb.Trickle{
+							Candidate: c.String(),
+						},
+					},
+				})
+			})
 
 		case *pb.SubscribeRequest_Trickle:
 			if sub == nil {
 				return errors.New("subscribe->trickle: called before connect")
 			}
 
-			if err := sub.AddCandidate(payload.Trickle.Candidate); err != nil {
+			if err := sub.AddICECandidate(webrtc.ICECandidateInit{
+				Candidate: payload.Trickle.Candidate,
+			}); err != nil {
 				return errors.New("subscribe->trickle: error adding candidate")
 			}
 		}
