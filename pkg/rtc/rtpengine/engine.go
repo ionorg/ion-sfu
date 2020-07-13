@@ -24,7 +24,6 @@ var (
 )
 
 // Serve listen on a port and accept udp conn
-// func Serve(port int) chan *udp.Conn {
 func Serve(port int) (chan *transport.RTPTransport, error) {
 	log.Infof("rtpengine.Serve port=%d ", port)
 	if listener != nil {

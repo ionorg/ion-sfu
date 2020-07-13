@@ -18,6 +18,7 @@ require (
 	github.com/pion/webrtc/v3 v3.0.0-20200625164527-89d7de178734
 	github.com/rs/zerolog v1.19.0
 	github.com/spf13/viper v1.7.0
+	github.com/stretchr/testify v1.6.1
 	github.com/templexxx/cpufeat v0.0.0-20180724012125-cef66df7f161 // indirect
 	github.com/templexxx/xor v0.0.0-20191217153810-f85b25db303b // indirect
 	github.com/tjfoc/gmsm v1.3.1 // indirect
