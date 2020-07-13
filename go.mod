@@ -3,7 +3,6 @@ module github.com/pion/ion-sfu
 go 1.13
 
 require (
-	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869
 	github.com/golang/protobuf v1.4.2
 	github.com/klauspost/cpuid v1.2.3 // indirect
 	github.com/klauspost/reedsolomon v1.9.3 // indirect
