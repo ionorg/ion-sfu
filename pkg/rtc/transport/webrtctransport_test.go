@@ -203,3 +203,122 @@ func TestSend(t *testing.T) {
 	assert.NoError(t, sub.Close())
 	assert.NoError(t, remote.Close())
 }
+
+// Tests that VP8 codec payloadtype is correctly mapped from 96->99
+func TestSendWithCodecMapping(t *testing.T) {
+	rawPkt := []byte{
+		0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64,
+		0x27, 0x82, 0x00, 0x01, 0x00, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x98, 0x36, 0xbe, 0x88, 0x9e,
+	}
+
+	pkt := &rtp.Packet{}
+	_ = pkt.Unmarshal(rawPkt)
+
+	me := &media.Engine{}
+	customPayloadTypeVP8 := uint8(99)
+	me.MediaEngine.RegisterCodec(webrtc.NewRTPVP8Codec(customPayloadTypeVP8, 90000))
+	subAPI := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine))
+	remoteAPI := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine))
+
+	// Initialize mapping
+	te := &media.Engine{}
+	te.MediaEngine.RegisterCodec(webrtc.NewRTPVP8Codec(webrtc.DefaultPayloadTypeVP8, 90000))
+	me.MapFromEngine(te)
+
+	remote, _ := remoteAPI.NewPeerConnection(webrtc.Configuration{})
+	sub, _ := subAPI.NewPeerConnection(webrtc.Configuration{})
+
+	_, onReadRTPFiredFunc := context.WithCancel(context.Background())
+
+	_, _ = remote.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RtpTransceiverInit{
+		Direction: webrtc.RTPTransceiverDirectionRecvonly,
+	})
+
+	expectedPkt := &rtp.Packet{}
+	_ = expectedPkt.Unmarshal(rawPkt)
+	expectedPkt.PayloadType = customPayloadTypeVP8
+	remote.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
+		for {
+			packet, err := track.ReadRTP()
+			assert.NoError(t, err)
+			assert.Equal(t, expectedPkt, packet)
+			onReadRTPFiredFunc()
+		}
+	})
+
+	send := NewWebRTCTransport("sender", sub, me)
+
+	track, _ := webrtc.NewTrack(webrtc.DefaultPayloadTypeVP8, pkt.SSRC, "video", "pion", webrtc.NewRTPVP8Codec(webrtc.DefaultPayloadTypeVP8, 90000))
+	_, err := send.AddOutTrack("video", track)
+	assert.NoError(t, err)
+
+	// Negotiate
+	offer, _ := remote.CreateOffer(nil)
+	_ = remote.SetLocalDescription(offer)
+	_ = sub.SetRemoteDescription(offer)
+	answer, _ := sub.CreateAnswer(nil)
+	_ = sub.SetLocalDescription(answer)
+	_ = remote.SetRemoteDescription(answer)
+
+	err = send.WriteRTP(pkt)
+	assert.NoError(t, err)
+
+	assert.NoError(t, sub.Close())
+	assert.NoError(t, remote.Close())
+}
+
+func TestSendAudio(t *testing.T) {
+	rawPkt := []byte{
+		0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64,
+		0x27, 0x82, 0x00, 0x01, 0x00, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x98, 0x36, 0xbe, 0x88, 0x9e,
+	}
+
+	rtp := &rtp.Packet{}
+	rtp.PayloadType = webrtc.DefaultPayloadTypeOpus
+	_ = rtp.Unmarshal(rawPkt)
+
+	me := &media.Engine{}
+	me.MediaEngine.RegisterCodec(webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 4800))
+	subAPI := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine))
+	remoteAPI := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine))
+
+	// Initialize mapping
+	me.MapFromEngine(me)
+
+	remote, _ := remoteAPI.NewPeerConnection(webrtc.Configuration{})
+	sub, _ := subAPI.NewPeerConnection(webrtc.Configuration{})
+
+	_, onReadRTPFiredFunc := context.WithCancel(context.Background())
+
+	_, _ = remote.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RtpTransceiverInit{
+		Direction: webrtc.RTPTransceiverDirectionRecvonly,
+	})
+
+	remote.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
+		for {
+			packet, err := track.ReadRTP()
+			assert.NoError(t, err)
+			assert.Equal(t, rtp, packet)
+			onReadRTPFiredFunc()
+		}
+	})
+
+	send := NewWebRTCTransport("sender", sub, me)
+
+	track, _ := webrtc.NewTrack(webrtc.DefaultPayloadTypeOpus, rtp.SSRC, "audio", "pion", webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 4800))
+	_, _ = send.AddOutTrack("audio", track)
+
+	// Negotiate
+	offer, _ := remote.CreateOffer(nil)
+	_ = remote.SetLocalDescription(offer)
+	_ = sub.SetRemoteDescription(offer)
+	answer, _ := sub.CreateAnswer(nil)
+	_ = sub.SetLocalDescription(answer)
+	_ = remote.SetRemoteDescription(answer)
+
+	err := send.WriteRTP(rtp)
+	assert.NoError(t, err)
+
+	assert.NoError(t, sub.Close())
+	assert.NoError(t, remote.Close())
+}
