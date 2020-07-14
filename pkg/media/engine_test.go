@@ -50,13 +50,13 @@ s=-
 t=0 0
 a=fingerprint:sha-256 1D:6B:6D:18:95:41:F9:BC:E4:AC:25:6A:26:A3:C8:09:D2:8C:EE:1B:7D:54:53:33:F7:E3:2C:0D:FE:7A:9D:6B
 a=group:BUNDLE 0 1 2
-m=audio 9 UDP/TLS/RTP/SAVPF 0 8 111 9
+m=audio 9 UDP/TLS/RTP/SAVPF 0 8 112 9
 c=IN IP4 0.0.0.0
 a=mid:0
 a=rtpmap:0 PCMU/8000
 a=rtpmap:8 PCMA/8000
-a=rtpmap:111 opus/48000/2
-a=fmtp:111 minptime=10;useinbandfec=1
+a=rtpmap:112 opus/48000/2
+a=fmtp:112 minptime=10;useinbandfec=1
 a=rtpmap:9 G722/8000
 a=ssrc:1823804162 cname:pion1
 a=ssrc:1823804162 msid:pion1 audio
@@ -110,7 +110,7 @@ func TestMatchFrom(t *testing.T) {
 
 	te.MapFromEngine(&fe)
 
-	mappings := [][]uint8{{105, 115}, {115, 96}, {135, 155}}
+	mappings := [][]uint8{{105, 115}, {115, 96}, {135, 155}, {111, 112}}
 
 	for _, mapping := range mappings {
 		to, ok := te.MapTo(mapping[0])
