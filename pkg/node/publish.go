@@ -1,100 +1,86 @@
 package sfu
 
 import (
-	"fmt"
-	"strconv"
-
 	"github.com/lucsky/cuid"
-	"github.com/pion/sdp/v2"
 	"github.com/pion/webrtc/v2"
 
 	"github.com/pion/ion-sfu/pkg/log"
+	"github.com/pion/ion-sfu/pkg/media"
 	"github.com/pion/ion-sfu/pkg/rtc"
 	transport "github.com/pion/ion-sfu/pkg/rtc/transport"
 )
 
-func getPubCodecs(sdp sdp.SessionDescription) ([]uint8, error) {
-	allowedCodecs := make([]uint8, 0)
-	for _, md := range sdp.MediaDescriptions {
-		if md.MediaName.Media != "audio" && md.MediaName.Media != "video" {
-			continue
-		}
-
-		for _, format := range md.MediaName.Formats {
-			pt, err := strconv.Atoi(format)
-			if err != nil {
-				return nil, fmt.Errorf("format parse error")
-			}
-
-			if pt < 0 || pt > 255 {
-				return nil, fmt.Errorf("payload type out of range: %d", pt)
-			}
-
-			payloadType := uint8(pt)
-			payloadCodec, err := sdp.GetCodecForPayloadType(payloadType)
-			if err != nil {
-				return nil, fmt.Errorf("could not find codec for payload type %d", payloadType)
-			}
-
-			if md.MediaName.Media == "audio" {
-				if payloadCodec.Name == webrtc.Opus {
-					allowedCodecs = append(allowedCodecs, payloadType)
-					break
-				}
-			} else {
-				// skip 126 for pub, chrome sub decode will fail when H264 playload type is 126
-				if payloadCodec.Name == webrtc.H264 && payloadType == 126 {
-					continue
-				}
-				allowedCodecs = append(allowedCodecs, payloadType)
-				break
-			}
-		}
-	}
-
-	return allowedCodecs, nil
-}
-
 // Publish a webrtc stream
-func Publish(offer webrtc.SessionDescription) (*transport.WebRTCTransport, *webrtc.SessionDescription, error) {
+func Publish(offer webrtc.SessionDescription) (string, *webrtc.PeerConnection, *webrtc.SessionDescription, error) {
 	mid := cuid.New()
-	parsed := sdp.SessionDescription{}
-	err := parsed.Unmarshal([]byte(offer.SDP))
+
+	// We make our own mediaEngine so we can place the sender's codecs in it.  This because we must use the
+	// dynamic media type from the sender in our answer. This is not required if we are the offerer
+	me := media.Engine{}
+	if err := me.PopulateFromSDP(offer); err != nil {
+		return "", nil, nil, errSdpParseFailed
+	}
+
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine), webrtc.WithSettingEngine(setting))
+	pc, err := api.NewPeerConnection(cfg)
 
 	if err != nil {
-		log.Debugf("publish->connect: err=%v sdp=%v", err, offer)
-		return nil, nil, errSdpParseFailed
+		log.Errorf("Publish error: %v", err)
+		return "", nil, nil, errPeerConnectionInitFailed
 	}
 
-	rtcOptions := transport.RTCOptions{
-		Publish: true,
-	}
-
-	codecs, err := getPubCodecs(parsed)
-
-	if err != nil {
-		log.Debugf("publish->connect: err=%v", err)
-		return nil, nil, errSdpParseFailed
-	}
-
-	rtcOptions.Codecs = codecs
-	pub := transport.NewWebRTCTransport(mid, rtcOptions)
+	pub := transport.NewWebRTCTransport(mid, pc, &me)
 	if pub == nil {
-		return nil, nil, errWebRTCTransportInitFailed
+		return "", nil, nil, errWebRTCTransportInitFailed
 	}
 
 	router := rtc.AddRouter(mid)
 
-	answer, err := pub.Answer(offer, rtcOptions)
+	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
+		log.Infof("Publish: Got track %v", track)
+		pub.AddInTrack(track)
 
+		for _, t := range router.GetSubs() {
+			sub := t.(*transport.WebRTCTransport)
+			_, err := sub.AddOutTrack(mid, track)
+			if err != nil {
+				log.Errorf("Error adding out track to sub: %s", err)
+			}
+		}
+	})
+
+	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
+		switch connectionState {
+		case webrtc.ICEConnectionStateDisconnected:
+			log.Infof("webrtc ice disconnected for mid: %s", mid)
+		case webrtc.ICEConnectionStateFailed:
+			fallthrough
+		case webrtc.ICEConnectionStateClosed:
+			log.Infof("webrtc ice closed for mid: %s", mid)
+			pub.Close()
+		}
+	})
+
+	err = pc.SetRemoteDescription(offer)
 	if err != nil {
-		log.Debugf("publish->connect: error creating answer %v", err)
-		return nil, nil, errWebRTCTransportAnswerFailed
+		log.Errorf("Publish error: pc.SetRemoteDescription %v", err)
+		return "", nil, nil, err
 	}
 
-	log.Debugf("publish->connect: answer => %v", answer)
+	answer, err := pc.CreateAnswer(nil)
+	if err != nil {
+		log.Errorf("Publish error: pc.CreateAnswer answer=%v err=%v", answer, err)
+		return "", nil, nil, err
+	}
+
+	err = pc.SetLocalDescription(answer)
+	if err != nil {
+		log.Errorf("Publish error: pc.SetLocalDescription answer=%v err=%v", answer, err)
+		return "", nil, nil, err
+	}
 
 	router.AddPub(pub)
 
-	return pub, &answer, nil
+	log.Debugf("Publish: answer => %v", answer)
+	return mid, pc, &answer, nil
 }
