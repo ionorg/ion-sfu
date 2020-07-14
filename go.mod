@@ -9,9 +9,9 @@ require (
 	github.com/lucsky/cuid v1.0.2
 	github.com/pion/rtcp v1.2.3
 	github.com/pion/rtp v1.6.0
-	github.com/pion/sdp/v2 v2.3.9
+	github.com/pion/sdp/v2 v2.4.0
 	github.com/pion/transport v0.10.1
-	github.com/pion/webrtc/v2 v2.2.19
+	github.com/pion/webrtc/v2 v2.2.20
 	github.com/pion/webrtc/v3 v3.0.0-20200625164527-89d7de178734
 	github.com/rs/zerolog v1.19.0
 	github.com/spf13/viper v1.7.0
