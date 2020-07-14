@@ -88,6 +88,17 @@ func (e *Engine) MapFromEngine(from *Engine) {
 		e.mapping = make(map[uint8]uint8)
 	}
 
+	// Map audio codecs. We do audio/video separately due to MediaEngine api constraints.
+	for _, codec := range from.MediaEngine.GetCodecsByKind(webrtc.RTPCodecTypeAudio) {
+		to := e.GetCodecsByName(codec.Name)
+
+		if len(to) > 0 {
+			// Just take first?
+			e.mapping[codec.PayloadType] = to[0].PayloadType
+		}
+	}
+
+	// Map video codecs
 	for _, codec := range from.MediaEngine.GetCodecsByKind(webrtc.RTPCodecTypeVideo) {
 		to := e.GetCodecsByName(codec.Name)
 
