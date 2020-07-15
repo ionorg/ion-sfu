@@ -123,7 +123,7 @@ type SubscribeReply struct {
 
 // Subscribe a stream to the sfu
 func (r *RPC) Subscribe(req *SubscribeRequest, resp *SubscribeReply) error {
-	log.Infof("Got subbscribe request: %v", req)
+	log.Infof("Got subscribe request: %v", req)
 	mid, _, answer, err := sfu.Subscribe(req.Mid, req.Offer)
 	if err != nil {
 		return err

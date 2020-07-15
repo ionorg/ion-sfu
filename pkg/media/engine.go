@@ -20,7 +20,7 @@ var (
 		{Type: webrtc.TypeRTCPFBCCM},
 		{Type: webrtc.TypeRTCPFBNACK},
 		{Type: "nack pli"},
-		{Type: webrtc.TypeRTCPFBTransportCC},
+		// {Type: webrtc.TypeRTCPFBTransportCC},
 	}
 )
 
