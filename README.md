@@ -14,7 +14,7 @@
 </p>
 <br>
 
-Ion sfu is a high performance WebRTC SFU microservice implemented in Go. It exposes a gRPC interface and can be easily integrated into existing systems.
+Ion-sfu is a high performance WebRTC SFU microservice implemented in Go. It can be called directly or through a gRPC or json-rpc interface.
 
 ## Getting Started
 
