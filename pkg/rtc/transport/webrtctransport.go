@@ -209,7 +209,7 @@ func (w *WebRTCTransport) AddOutTrack(mid string, track *webrtc.Track) (*webrtc.
 	}
 
 	ssrc := track.SSRC()
-	track, err := w.pc.NewTrack(pt, ssrc, mid, track.ID())
+	track, err := w.pc.NewTrack(pt, ssrc, track.ID(), mid)
 	if err != nil {
 		return nil, err
 	}
