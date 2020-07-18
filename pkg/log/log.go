@@ -1,7 +1,11 @@
 package log
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/rs/zerolog"
 )
@@ -9,7 +13,7 @@ import (
 var log zerolog.Logger
 
 const (
-	timeFormat = "2006-01-02 15:04:05.999"
+	timeFormat = "2006-01-02 15:04:05.000"
 )
 
 // Config defines parameters for the logger
@@ -35,6 +39,18 @@ func Init(level string) {
 	}
 	zerolog.TimeFieldFormat = timeFormat
 	output := zerolog.ConsoleWriter{Out: os.Stdout, NoColor: false, TimeFormat: timeFormat}
+	output.FormatTimestamp = func(i interface{}) string {
+		return "[" + i.(string) + "]"
+	}
+	output.FormatLevel = func(i interface{}) string {
+		return strings.ToUpper(fmt.Sprintf("[%-3s]", i))
+	}
+	output.FormatMessage = func(i interface{}) string {
+		caller, file, line, _ := runtime.Caller(9)
+		fileName := filepath.Base(file)
+		funcName := strings.TrimPrefix(filepath.Ext((runtime.FuncForPC(caller).Name())), ".")
+		return fmt.Sprintf("[%d][%s][%s] => %s", line, fileName, funcName, i)
+	}
 	log = zerolog.New(output).Level(l).With().Timestamp().Logger()
 }
 
