@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.com/pion/ionsfu/cmd/server/grpc/proto";
+option go_package = "github.com/pion/ion-sfu/cmd/server/grpc/proto";
 
 package sfu;
 
