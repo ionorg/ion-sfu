@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
-	"github.com/pion/ion-sfu/pkg/rtc/transport"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 )
@@ -35,29 +34,28 @@ type JitterBuffer struct {
 	bandwidth uint64
 	lostRate  float64
 
-	id         string
-	config     JitterBufferConfig
-	Pub        transport.Transport
-	outRTPChan chan *rtp.Packet
+	id          string
+	config      JitterBufferConfig
+	outRTPChan  chan *rtp.Packet
+	outRTCPChan chan rtcp.Packet
 }
 
 // NewJitterBuffer return new JitterBuffer
-func NewJitterBuffer(ID string, config JitterBufferConfig) *JitterBuffer {
+func NewJitterBuffer(config JitterBufferConfig, outRTPChan chan *rtp.Packet, outRTCPChan chan rtcp.Packet) *JitterBuffer {
 	j := &JitterBuffer{
-		id:         ID,
-		buffers:    make(map[uint32]*Buffer),
-		outRTPChan: make(chan *rtp.Packet, maxSize),
+		buffers:     make(map[uint32]*Buffer),
+		outRTPChan:  outRTPChan,
+		outRTCPChan: outRTCPChan,
 	}
-	j.Init(config)
+	j.init(config)
 	j.rembLoop()
 	j.pliLoop()
 	return j
 }
 
-// Init jitterbuffer config
-func (j *JitterBuffer) Init(config JitterBufferConfig) {
+func (j *JitterBuffer) init(config JitterBufferConfig) {
 	j.config = config
-	log.Infof("JitterBuffer.Init j.config=%+v", j.config)
+	log.Infof("JitterBuffer.init j.config=%+v", j.config)
 	if j.config.REMBCycle > maxREMBCycle {
 		j.config.REMBCycle = maxREMBCycle
 	}
@@ -70,35 +68,7 @@ func (j *JitterBuffer) Init(config JitterBufferConfig) {
 		j.config.MaxBandwidth = minBandwidth
 	}
 
-	log.Infof("JitterBuffer.Init ok  j.config=%v", j.config)
-}
-
-// ID return id
-func (j *JitterBuffer) ID() string {
-	return j.id
-}
-
-// AttachPub Attach pub stream
-func (j *JitterBuffer) AttachPub(t transport.Transport) {
-	j.Pub = t
-	go func() {
-		for {
-			if j.stop {
-				return
-			}
-			pkt, err := j.Pub.ReadRTP()
-			if err != nil {
-				log.Errorf("AttachPub j.Pub.ReadRTP pkt=%+v", pkt)
-				continue
-			}
-
-			err = j.WriteRTP(pkt)
-			if err != nil {
-				log.Errorf("AttachPub j.WriteRTP err=%+v", err)
-				continue
-			}
-		}
-	}()
+	log.Infof("JitterBuffer.init ok  j.config=%v", j.config)
 }
 
 // AddBuffer add a buffer by ssrc
@@ -129,28 +99,20 @@ func (j *JitterBuffer) WriteRTP(pkt *rtp.Packet) error {
 	ssrc := pkt.SSRC
 	pt := pkt.PayloadType
 
-	// only video, because opus doesn't need nack, use fec: `a=fmtp:111 minptime=10;useinbandfec=1`
-	if transport.IsVideo(pt) {
-		buffer := j.GetBuffer(ssrc)
-		if buffer == nil {
-			buffer = j.AddBuffer(ssrc)
-			log.Infof("JitterBuffer.WriteRTP buffer.SetSSRCPT(%d,%d)", ssrc, pt)
-			buffer.SetSSRCPT(ssrc, pt)
-		}
-
-		if buffer == nil {
-			return errors.New("buffer is nil")
-		}
-
-		buffer.Push(pkt)
+	buffer := j.GetBuffer(ssrc)
+	if buffer == nil {
+		buffer = j.AddBuffer(ssrc)
+		log.Infof("JitterBuffer.WriteRTP buffer.SetSSRCPT(%d,%d)", ssrc, pt)
+		buffer.SetSSRCPT(ssrc, pt)
 	}
+
+	if buffer == nil {
+		return errors.New("buffer is nil")
+	}
+
+	buffer.Push(pkt)
 	j.outRTPChan <- pkt
 	return nil
-}
-
-// ReadRTP return the last packet
-func (j *JitterBuffer) ReadRTP() <-chan *rtp.Packet {
-	return j.outRTPChan
 }
 
 func (j *JitterBuffer) rtcpLoop(b *Buffer) {
@@ -159,13 +121,10 @@ func (j *JitterBuffer) rtcpLoop(b *Buffer) {
 			if j.stop {
 				return
 			}
-			if j.Pub == nil {
+			if j.outRTCPChan == nil {
 				continue
 			}
-			err := j.Pub.WriteRTCP(pkt)
-			if err != nil {
-				log.Errorf("JitterBuffer.rtcpLoop j.Pub.WriteRTCP err=%v", err)
-			}
+			j.outRTCPChan <- pkt
 		}
 	}()
 }
@@ -185,9 +144,6 @@ func (j *JitterBuffer) rembLoop() {
 			time.Sleep(time.Duration(j.config.REMBCycle) * time.Second)
 			for _, buffer := range j.GetBuffers() {
 				// only calc video recently
-				if !transport.IsVideo(buffer.GetPayloadType()) {
-					continue
-				}
 				j.lostRate, j.bandwidth = buffer.GetLostRateBandwidth(uint64(j.config.REMBCycle))
 				var bw uint64
 				if j.lostRate == 0 && j.bandwidth == 0 {
@@ -212,13 +168,7 @@ func (j *JitterBuffer) rembLoop() {
 					SSRCs:      []uint32{buffer.GetSSRC()},
 				}
 
-				if j.Pub == nil {
-					continue
-				}
-				err := j.Pub.WriteRTCP(remb)
-				if err != nil {
-					log.Errorf("JitterBuffer.rembLoop j.Pub.WriteRTCP err=%v", err)
-				}
+				j.outRTCPChan <- remb
 			}
 		}
 	}()
@@ -237,17 +187,10 @@ func (j *JitterBuffer) pliLoop() {
 			}
 			time.Sleep(time.Duration(j.config.PLICycle) * time.Second)
 			for _, buffer := range j.GetBuffers() {
-				if transport.IsVideo(buffer.GetPayloadType()) {
-					pli := &rtcp.PictureLossIndication{SenderSSRC: buffer.GetSSRC(), MediaSSRC: buffer.GetSSRC()}
-					if j.Pub == nil {
-						continue
-					}
-					// log.Infof("pliLoop send pli=%d pt=%v", buffer.GetSSRC(), buffer.GetPayloadType())
-					err := j.Pub.WriteRTCP(pli)
-					if err != nil {
-						log.Errorf("JitterBuffer.pliLoop j.Pub.WriteRTCP err=%v", err)
-					}
-				}
+				pli := &rtcp.PictureLossIndication{SenderSSRC: buffer.GetSSRC(), MediaSSRC: buffer.GetSSRC()}
+				// log.Infof("pliLoop send pli=%d pt=%v", buffer.GetSSRC(), buffer.GetPayloadType())
+
+				j.outRTCPChan <- pli
 			}
 		}
 	}()

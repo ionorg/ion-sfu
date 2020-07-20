@@ -7,6 +7,7 @@ require (
 	github.com/klauspost/cpuid v1.2.3 // indirect
 	github.com/klauspost/reedsolomon v1.9.3 // indirect
 	github.com/lucsky/cuid v1.0.2
+	github.com/micro/go-micro v1.18.0
 	github.com/pion/rtcp v1.2.3
 	github.com/pion/rtp v1.6.0
 	github.com/pion/sdp/v2 v2.4.0

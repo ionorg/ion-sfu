@@ -7,4 +7,6 @@ var (
 	errPeerConnectionInitFailed  = errors.New("pc init failed")
 	errWebRTCTransportInitFailed = errors.New("WebRTCTransport init failed")
 	errRouterNotFound            = errors.New("router not found")
+	errChanClosed                = errors.New("channel closed")
+	errPtNotSupported            = errors.New("payloadtype not supported")
 )

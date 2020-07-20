@@ -1,49 +1,35 @@
 syntax = "proto3";
 
-option go_package = "github.com/pion/ion-sfu/cmd/server/grpc/proto";
+option go_package = "github.com/pion/ionsfu/cmd/server/grpc/proto";
 
 package sfu;
 
 service SFU {
-    rpc Publish(stream PublishRequest) returns (stream PublishReply) {}
-    rpc Subscribe(stream SubscribeRequest) returns (stream SubscribeReply) {}
+    rpc Signal(stream SignalRequest) returns (stream SignalReply) {}
 }
 
-message PublishRequest {
-    string rid = 1;
+message SignalRequest {
     oneof payload {
-        Connect connect = 2;
-        Trickle trickle = 3;
+        SessionDescription connect = 1;
+        Trickle trickle = 2;
+        Subscribe subscribe = 3;
     }
 }
 
-message PublishReply {
+message SignalReply {
+    oneof payload {
+        ConnectReply connect = 1;
+        Trickle trickle = 2;
+    }
+}
+
+message ConnectReply {
     string mid = 1;
-    oneof payload {
-        Connect connect = 2;
-        Trickle trickle = 3;
-    }
+    SessionDescription answer = 2;
 }
 
-message SubscribeRequest {
+message Subscribe {
     string mid = 1;
-    oneof payload {
-        Connect connect = 2;
-        Trickle trickle = 3;
-    }
-}
-
-message SubscribeReply {
-    string mid = 1;
-    oneof payload {
-        Connect connect = 2;
-        Trickle trickle = 3;
-    }
-}
-
-message Connect {
-    SessionDescription description = 1;
-    Options options = 2;
 }
 
 message Trickle {
@@ -53,9 +39,4 @@ message Trickle {
 message SessionDescription {
     string type = 1; // "answer" | "offer" | "pranswer" | "rollback"
     bytes sdp = 2;
-}
-
-message Options {
-    uint32 bandwidth = 1;
-    bool transportcc = 2;
 }
