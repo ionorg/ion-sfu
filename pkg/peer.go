@@ -23,8 +23,7 @@ type Peer struct {
 	routers        map[uint32]*Router
 	routersLock    sync.RWMutex
 	onCloseHandler func()
-	onTrackHander  func(*webrtc.Track)
-	onRecvHander   func(Receiver)
+	onRouterHander func(*Router)
 }
 
 // NewPeer creates a new Peer
@@ -61,26 +60,20 @@ func NewPeer(offer webrtc.SessionDescription) (*Peer, error) {
 			recv = NewAudioReceiver(track)
 		}
 
-		_, err := p.pc.AddTransceiver(recv.Track().Kind(), webrtc.RtpTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly})
-		if err != nil {
-			log.Errorf("AddReceiver error: pc.AddTransceiver %v", err)
-			return
+		if recv.Track().Kind() == webrtc.RTPCodecTypeVideo {
+			go p.sendRTCP(recv)
 		}
 
-		go p.sendRTCP(recv)
+		router := NewRouter(recv)
 
 		p.routersLock.Lock()
-		p.routers[recv.Track().SSRC()] = NewRouter(recv)
+		p.routers[recv.Track().SSRC()] = router
 		p.routersLock.Unlock()
 
 		log.Infof("Create router %s %d", p.id, recv.Track().SSRC())
 
-		if p.onRecvHander != nil {
-			p.onRecvHander(recv)
-		}
-
-		if p.onTrackHander != nil {
-			p.onTrackHander(recv.Track())
+		if p.onRouterHander != nil {
+			p.onRouterHander(router)
 		}
 	})
 
@@ -99,27 +92,65 @@ func NewPeer(offer webrtc.SessionDescription) (*Peer, error) {
 	return p, nil
 }
 
-// Answer an offer
-func (p *Peer) Answer(offer webrtc.SessionDescription) (webrtc.SessionDescription, error) {
-	err := p.pc.SetRemoteDescription(offer)
+// CreateOffer generates the localDescription
+func (p *Peer) CreateOffer() (webrtc.SessionDescription, error) {
+	offer, err := p.pc.CreateOffer(nil)
 	if err != nil {
-		log.Errorf("Publish error: p.pc.SetRemoteDescription %v", err)
+		log.Errorf("CreateOffer error: %v", err)
 		return webrtc.SessionDescription{}, err
 	}
 
-	answer, err := p.pc.CreateAnswer(nil)
+	return offer, nil
+}
+
+// SetLocalDescription sets the SessionDescription of the remote peer
+func (p *Peer) SetLocalDescription(desc webrtc.SessionDescription) error {
+	err := p.pc.SetLocalDescription(desc)
 	if err != nil {
-		log.Errorf("Publish error: p.pc.CreateAnswer answer=%v err=%v", answer, err)
+		log.Errorf("SetLocalDescription error: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+// CreateAnswer generates the localDescription
+func (p *Peer) CreateAnswer() (webrtc.SessionDescription, error) {
+	offer, err := p.pc.CreateAnswer(nil)
+	if err != nil {
+		log.Errorf("CreateAnswer error: %v", err)
 		return webrtc.SessionDescription{}, err
 	}
 
-	err = p.pc.SetLocalDescription(answer)
+	return offer, nil
+}
+
+// SetRemoteDescription sets the SessionDescription of the remote peer
+func (p *Peer) SetRemoteDescription(desc webrtc.SessionDescription) error {
+	err := p.pc.SetRemoteDescription(desc)
 	if err != nil {
-		log.Errorf("Publish error: p.pc.SetLocalDescription answer=%v err=%v", answer, err)
+		log.Errorf("SetRemoteDescription error: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+// Offer ..
+func (p *Peer) Offer() (webrtc.SessionDescription, error) {
+	offer, err := p.pc.CreateOffer(nil)
+	if err != nil {
+		log.Errorf("Offer error: p.pc.CreateOffer %v", err)
 		return webrtc.SessionDescription{}, err
 	}
 
-	return answer, nil
+	err = p.pc.SetLocalDescription(offer)
+	if err != nil {
+		log.Errorf("Offer error: p.pc.SetLocalDescription offer=%v err=%v", offer, err)
+		return webrtc.SessionDescription{}, err
+	}
+
+	return offer, nil
 }
 
 // OnClose is called when the peer is closed
@@ -127,15 +158,10 @@ func (p *Peer) OnClose(f func()) {
 	p.onCloseHandler = f
 }
 
-// OnRecv handler called when a track is added
-func (p *Peer) onRecv(f func(Receiver)) {
-	p.onRecvHander = f
-}
-
-// OnTrack handler called when a track is added
-func (p *Peer) OnTrack(f func(*webrtc.Track)) {
+// OnRouter handler called when a router is added
+func (p *Peer) OnRouter(f func(*Router)) {
 	log.Infof("add on track")
-	p.onTrackHander = f
+	p.onRouterHander = f
 }
 
 // AddICECandidate to peer connection
@@ -175,6 +201,24 @@ func (p *Peer) NewSender(track *webrtc.Track) (*Sender, error) {
 	return send, nil
 }
 
+// Subscribe to a router
+func (p *Peer) Subscribe(router *Router) error {
+	log.Infof("Subscribing to router %v", router)
+
+	// Create sender track on peer we are sending track to
+	sender, err := p.NewSender(router.pub.Track())
+
+	if err != nil {
+		log.Errorf("Error creating send track")
+		return err
+	}
+
+	// Attach sender to source
+	router.AddSub(p.id, sender)
+
+	return nil
+}
+
 // GetRouter for track
 func (p *Peer) GetRouter(ssrc uint32) *Router {
 	p.routersLock.RLock()
@@ -189,7 +233,7 @@ func (p *Peer) ID() string {
 
 // GetStats returns string formatted peer stats
 func (p *Peer) GetStats() string {
-	info := fmt.Sprintf("\n----peer %s----\n", p.id)
+	info := fmt.Sprintf("peer: %s\n", p.id)
 
 	p.routersLock.RLock()
 	for ssrc, router := range p.routers {
@@ -229,8 +273,11 @@ func (p *Peer) sendRTCP(recv Receiver) {
 		pkt, err := recv.ReadRTCP()
 		if err != nil {
 			// TODO: do something
+			log.Errorf("Error reading RTCP %s", err)
+			continue
 		}
-		// log.Tracef("sendRTCP %v", pkt)
+
+		log.Tracef("sendRTCP %v", pkt)
 		p.pc.WriteRTCP([]rtcp.Packet{pkt})
 	}
 }

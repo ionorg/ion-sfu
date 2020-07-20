@@ -163,46 +163,70 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 		}
 
 		switch payload := in.Payload.(type) {
-		case *pb.SignalRequest_Connect:
-			var answer *webrtc.SessionDescription
-			log.Infof("signal->connect called: %v", payload.Connect)
+		case *pb.SignalRequest_Negotiate:
+			var answer webrtc.SessionDescription
+			log.Infof("signal->negotiate called: %v", payload.Negotiate)
 
-			peer, answer, err = node.Connect(webrtc.SessionDescription{
-				Type: webrtc.SDPTypeOffer,
-				SDP:  string(payload.Connect.Sdp),
-			})
-			pid = peer.ID()
+			if peer == nil {
+				peer, answer, err = node.Connect(webrtc.SessionDescription{
+					Type: webrtc.SDPTypeOffer,
+					SDP:  string(payload.Negotiate.Sdp),
+				})
 
-			// When a remote track is added to the peer connection,
-			// notify the grpc client so they can subscribe other
-			// peers to the track
-			peer.OnTrack(func(track *webrtc.Track) {
-				stream.Send(&pb.SignalReply{
-					Payload: &pb.SignalReply_Track{
-						Track: &pb.OnTrack{
-							Ssrc:  int32(track.SSRC()),
-							Label: track.Label(),
+				// When a remote track is added to the peer connection,
+				// notify the grpc client so they can subscribe other
+				// peers to the track
+				// peer.OnTrack(func(track *webrtc.Track) {
+				// 	stream.Send(&pb.SignalReply{
+				// 		Payload: &pb.SignalReply_Track{
+				// 			Track: &pb.OnTrack{
+				// 				Ssrc:  int32(track.SSRC()),
+				// 				Label: track.Label(),
+				// 			},
+				// 		},
+				// 	})
+				// })
+
+				if err != nil {
+					log.Errorf("signal->connect: error publishing stream: %v", err)
+					return err
+				}
+
+				err = stream.Send(&pb.SignalReply{
+					Payload: &pb.SignalReply_Negotiate{
+						Connect: &pb.NegotiateReply{
+							Pid: pid,
+							Answer: &pb.SessionDescription{
+								Type: answer.Type.String(),
+								Sdp:  []byte(answer.SDP),
+							},
 						},
 					},
 				})
-			})
+			} else if payload.Negotiate.Type == webrtc.SDPTypeOffer.String() {
+				answer, err := peer.Answer(webrtc.SessionDescription{
+					Type: webrtc.SDPTypeOffer,
+					SDP:  string(payload.Negotiate.Sdp),
+				})
 
-			if err != nil {
-				log.Errorf("signal->connect: error publishing stream: %v", err)
-				return err
-			}
-
-			err = stream.Send(&pb.SignalReply{
-				Payload: &pb.SignalReply_Connect{
-					Connect: &pb.ConnectReply{
-						Pid: pid,
-						Answer: &pb.SessionDescription{
-							Type: answer.Type.String(),
-							Sdp:  []byte(answer.SDP),
+				err = stream.Send(&pb.SignalReply{
+					Payload: &pb.SignalReply_Negotiate{
+						Connect: &pb.NegotiateReply{
+							Pid: pid,
+							Answer: &pb.SessionDescription{
+								Type: answer.Type.String(),
+								Sdp:  []byte(answer.SDP),
+							},
 						},
 					},
-				},
-			})
+				})
+			} else if payload.Negotiate.Type == webrtc.SDPTypeAnswer.String() {
+				peer.Answer(webrtc.SessionDescription{
+					Type: webrtc.SDPTypeAnswer,
+					SDP:  string(payload.Negotiate.Sdp),
+				})
+			}
+			pid = peer.ID()
 
 			if err != nil {
 				log.Errorf("signal->connect: error publishing stream: %v", err)

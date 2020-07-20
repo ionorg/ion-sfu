@@ -9,4 +9,5 @@ var (
 	errRouterNotFound            = errors.New("router not found")
 	errChanClosed                = errors.New("channel closed")
 	errPtNotSupported            = errors.New("payloadtype not supported")
+	errCreateOfferFailed         = errors.New("create offer failed")
 )

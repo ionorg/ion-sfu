@@ -2,18 +2,21 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
-	"net/rpc"
-	"net/rpc/jsonrpc"
 	"os"
 
+	"github.com/gorilla/websocket"
+	sfu "github.com/pion/ion-sfu/pkg"
 	"github.com/pion/ion-sfu/pkg/log"
-	sfu "github.com/pion/ion-sfu/pkg/node"
 	"github.com/pion/webrtc/v2"
+	"github.com/sourcegraph/jsonrpc2"
+	websocketjsonrpc2 "github.com/sourcegraph/jsonrpc2/websocket"
 	"github.com/spf13/viper"
-	"golang.org/x/net/websocket"
 )
 
 var (
@@ -80,59 +83,174 @@ func parse() bool {
 	return true
 }
 
+type contextKey struct {
+	name string
+}
+type peerContext struct {
+	peer *sfu.Peer
+}
+
+var peerCtxKey = &contextKey{"peer"}
+
+func forContext(ctx context.Context) *peerContext {
+	raw, _ := ctx.Value(peerCtxKey).(*peerContext)
+	return raw
+}
+
 // RPC defines the json-rpc
-type RPC struct{}
-
-// PublishRequest defines a json-rpc request to publish a stream
-type PublishRequest struct {
-	Rid   string
-	Offer webrtc.SessionDescription
+type RPC struct {
+	sfu *sfu.SFU
 }
 
-// PublishReply defines a json-rpc reply to a publish request
-type PublishReply struct {
-	Mid    string
-	Answer webrtc.SessionDescription
-}
-
-// Publish a stream to the sfu
-func (r *RPC) Publish(req *PublishRequest, resp *PublishReply) error {
-	log.Infof("Got publish request: %v", req)
-	mid, _, answer, err := sfu.Publish(req.Offer)
-	if err != nil {
-		return err
+// NewRPC ...
+func NewRPC() *RPC {
+	return &RPC{
+		sfu: sfu.NewSFU(conf),
 	}
-
-	resp.Mid = mid
-	resp.Answer = *answer
-
-	return nil
 }
 
-// SubscribeRequest defines a json-rpc request to publish a stream
-type SubscribeRequest struct {
-	Mid   string
-	Offer webrtc.SessionDescription
-}
+// Handle RPC call
+func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
+	p := forContext(ctx)
 
-// SubscribeReply defines a json-rpc reply to a publish request
-type SubscribeReply struct {
-	Mid    string
-	Answer webrtc.SessionDescription
-}
+	switch req.Method {
+	case "offer":
+		log.Infof("offer")
 
-// Subscribe a stream to the sfu
-func (r *RPC) Subscribe(req *SubscribeRequest, resp *SubscribeReply) error {
-	log.Infof("Got subscribe request: %v", req)
-	mid, _, answer, err := sfu.Subscribe(req.Mid, req.Offer)
-	if err != nil {
-		return err
+		var offer webrtc.SessionDescription
+		err := json.Unmarshal(*req.Params, &offer)
+		if err != nil {
+			log.Errorf("connect: error parsing offer: %v", err)
+			conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", err),
+			})
+			break
+		}
+
+		// If no peer exists, create one
+		if p.peer == nil {
+			peer, answer, err := r.sfu.CreatePeer(offer)
+
+			if err != nil {
+				log.Errorf("connect: error creating peer: %v", err)
+				conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+					Code:    500,
+					Message: fmt.Sprintf("%s", err),
+				})
+				break
+			}
+
+			// Notify user of trickle candidates
+			peer.OnICECandidate(func(c *webrtc.ICECandidate) {
+				log.Infof("Sending ice candidate")
+				if err := conn.Notify(ctx, "trickle", c.String()); err != nil {
+					log.Errorf("error sending trickle %s", err)
+				}
+			})
+
+			// New track router added to peer
+			peer.OnRouter(func(router *sfu.Router) {
+				// offer, err := p.peer.CreateOffer()
+				// if err != nil {
+				// 	log.Errorf("OnTrack error: %v", offer, err)
+				// 	return
+				// }
+
+				// err = p.peer.SetLocalDescription(offer)
+				// if err != nil {
+				// 	log.Errorf("OnTrack error: %v", offer, err)
+				// 	return
+				// }
+				// conn.Notify(ctx, "offer", offer)
+			})
+
+			p.peer = peer
+
+			conn.Reply(ctx, req.ID, answer)
+		} else {
+			// Peer exists, renegotiating existing peer
+			err := p.peer.SetRemoteDescription(offer)
+			if err != nil {
+				log.Errorf("Offer error: %v", err)
+				conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+					Code:    500,
+					Message: fmt.Sprintf("%s", err),
+				})
+				break
+			}
+
+			answer, err := p.peer.CreateAnswer()
+			if err != nil {
+				log.Errorf("Offer error: answer=%v err=%v", answer, err)
+				conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+					Code:    500,
+					Message: fmt.Sprintf("%s", err),
+				})
+				break
+			}
+
+			err = p.peer.SetLocalDescription(answer)
+			if err != nil {
+				log.Errorf("Offer error: answer=%v err=%v", answer, err)
+				conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+					Code:    500,
+					Message: fmt.Sprintf("%s", err),
+				})
+				break
+			}
+
+			conn.Reply(ctx, req.ID, answer)
+		}
+
+	case "answer":
+		log.Infof("answer")
+		if p.peer == nil {
+			log.Errorf("connect: no peer exists for connection")
+			conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", errors.New("no peer exists")),
+			})
+			break
+		}
+
+		var answer webrtc.SessionDescription
+		err := json.Unmarshal(*req.Params, &answer)
+		if err != nil {
+			log.Errorf("connect: error parsing answer: %v", err)
+			conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", err),
+			})
+			break
+		}
+
+		p.peer.SetRemoteDescription(answer)
+
+	case "trickle":
+		log.Infof("trickle")
+		if p.peer == nil {
+			log.Errorf("connect: no peer exists for connection")
+			conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", errors.New("no peer exists")),
+			})
+			break
+		}
+
+		var candidate webrtc.ICECandidateInit
+		err := json.Unmarshal(*req.Params, &candidate)
+		if err != nil {
+			log.Errorf("connect: error parsing candidate: %v", err)
+			conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", err),
+			})
+			break
+		}
+
+		p.peer.AddICECandidate(candidate)
 	}
-
-	resp.Mid = mid
-	resp.Answer = *answer
-
-	return nil
 }
 
 func main() {
@@ -141,22 +259,32 @@ func main() {
 		os.Exit(-1)
 	}
 
-	sfu.Init(conf)
 	log.Infof("--- Starting SFU Node ---")
-	err := rpc.Register(new(RPC))
-	if err != nil {
-		panic(err)
+	rpc := NewRPC()
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
 	}
 
-	http.Handle("/ws", websocket.Handler(serve))
+	http.Handle("/ws", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			panic(err)
+		}
+		defer c.Close()
+
+		p := &peerContext{}
+		ctx := context.WithValue(r.Context(), peerCtxKey, p)
+		jc := jsonrpc2.NewConn(ctx, websocketjsonrpc2.NewObjectStream(c), rpc)
+		<-jc.DisconnectNotify()
+	}))
 
 	log.Infof("Listening at %s", "localhost:7000")
-	err = http.ListenAndServe("localhost:7000", nil)
+	err := http.ListenAndServe("localhost:7000", nil)
 	if err != nil {
 		panic(err)
 	}
-}
-
-func serve(ws *websocket.Conn) {
-	jsonrpc.ServeConn(ws)
 }

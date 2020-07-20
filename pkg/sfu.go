@@ -39,17 +39,14 @@ var (
 
 // SFU represents an sfu instance
 type SFU struct {
-	peers      map[string]*Peer
-	peerLock   sync.RWMutex
-	tracks     map[uint32]*Peer
-	tracksLock sync.RWMutex
+	peers    map[string]*Peer
+	peerLock sync.RWMutex
 }
 
 // NewSFU creates a new sfu instance
 func NewSFU(config Config) *SFU {
 	s := &SFU{
-		peers:  make(map[string]*Peer),
-		tracks: make(map[uint32]*Peer),
+		peers: make(map[string]*Peer),
 	}
 
 	log.Init(config.Log.Level)
@@ -84,8 +81,8 @@ func NewSFU(config Config) *SFU {
 	return s
 }
 
-// Connect a webrtc stream
-func (s *SFU) Connect(offer webrtc.SessionDescription) (*Peer, *webrtc.SessionDescription, error) {
+// CreatePeer a webrtc stream
+func (s *SFU) CreatePeer(offer webrtc.SessionDescription) (*Peer, webrtc.SessionDescription, error) {
 	peer, err := NewPeer(offer)
 	peer.OnClose(func() {
 		s.peerLock.Lock()
@@ -93,63 +90,30 @@ func (s *SFU) Connect(offer webrtc.SessionDescription) (*Peer, *webrtc.SessionDe
 		s.peerLock.Unlock()
 	})
 
-	peer.onRecv(func(recv Receiver) {
-		s.tracksLock.Lock()
-		s.tracks[recv.Track().SSRC()] = peer
-		s.tracksLock.Unlock()
-	})
-
-	answer, err := peer.Answer(offer)
+	err = peer.SetRemoteDescription(offer)
 	if err != nil {
-		log.Errorf("Publish error: pc.CreateAnswer answer=%v err=%v", answer, err)
-		return nil, nil, err
+		log.Errorf("Offer error: %v", err)
+		return nil, webrtc.SessionDescription{}, err
+	}
+
+	answer, err := peer.CreateAnswer()
+	if err != nil {
+		log.Errorf("Offer error: answer=%v err=%v", answer, err)
+		return nil, webrtc.SessionDescription{}, err
+	}
+
+	err = peer.SetLocalDescription(answer)
+	if err != nil {
+		log.Errorf("Offer error: answer=%v err=%v", answer, err)
+		return nil, webrtc.SessionDescription{}, err
 	}
 
 	s.peerLock.Lock()
 	s.peers[peer.id] = peer
 	s.peerLock.Unlock()
 
-	log.Debugf("Publish: answer => %v", answer)
-	return peer, &answer, nil
-}
-
-// Subscribe adds a track to a peer
-func (s *SFU) Subscribe(pid string, ssrcs []uint32) {
-	s.peerLock.RLock()
-	to := s.peers[pid]
-	s.peerLock.RUnlock()
-
-	for _, ssrc := range ssrcs {
-		s.tracksLock.RLock()
-		source := s.tracks[ssrc]
-		s.tracksLock.RUnlock()
-
-		if source == nil {
-			log.Errorf("Source peer not found")
-			continue
-		}
-
-		log.Infof("Source peer %s %d", source.id, ssrc)
-
-		// Get source router
-		router := source.GetRouter(ssrc)
-
-		if router == nil {
-			log.Errorf("Router not found for track")
-			continue
-		}
-
-		// Create sender track on peer we are sending track to
-		sender, err := to.NewSender(router.pub.Track())
-
-		if err != nil {
-			log.Errorf("Error creating send track")
-			continue
-		}
-
-		// Attach sender to source
-		router.AddSub(pid, sender)
-	}
+	log.Debugf("Connect answer => %v", answer)
+	return peer, answer, nil
 }
 
 func (s *SFU) stats() {

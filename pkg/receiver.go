@@ -4,7 +4,7 @@ import (
 	"io"
 
 	"github.com/pion/ion-sfu/pkg/log"
-	"github.com/pion/ion-sfu/pkg/rtc/plugins"
+	"github.com/pion/ion-sfu/pkg/plugins"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v2"
@@ -143,6 +143,7 @@ func (t *VideoReceiver) receiveRTP() {
 		}
 
 		rtp, err := t.track.ReadRTP()
+		log.Tracef("got packet %v", rtp)
 		if err != nil {
 			if err == io.EOF {
 				return

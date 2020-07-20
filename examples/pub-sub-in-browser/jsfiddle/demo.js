@@ -3,18 +3,36 @@ let log = msg =>
   document.getElementById('logs').innerHTML += msg + '<br>'
 
 let config = {
-  iceServers: [
-    {
-      urls: 'stun:stun.l.google.com:19302'
-    }
-  ]
+  iceServers: [{
+    urls: 'stun:stun.l.google.com:19302'
+  }]
 }
 
 let socket = new WebSocket("ws://localhost:7000/ws");
+let pc = new RTCPeerConnection(config)
+pc.ontrack = function (event) {
+  log("got track")
+  pc.addTransceiver(event.track, {
+    direction: 'recvonly'
+  });
+  let el = document.createElement(event.track.kind)
+  el.srcObject = event.streams[0]
+  el.autoplay = true
+  el.controls = true
+
+  event.track.onmute = function () {
+    el.parentNode.removeChild(el);
+  }
+
+  document.getElementById('remoteVideos').appendChild(el)
+}
 
 let localStream
-let mid
-navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+let pid
+navigator.mediaDevices.getUserMedia({
+  video: true,
+  audio: true
+})
   .then(stream => {
     let el = document.createElement("Video")
     el.srcObject = stream
@@ -29,7 +47,6 @@ navigator.mediaDevices.getUserMedia({ video: true, audio: true })
 window.publish = () => {
   log("Publishing local stream")
   const id = uuid.v4()
-  let pc = new RTCPeerConnection(config)
   pc.addStream(localStream)
   pc.createOffer({
     offerToReceiveVideo: false,
@@ -39,10 +56,10 @@ window.publish = () => {
   pc.oniceconnectionstatechange = e => log(`ICE connection state: ${pc.iceConnectionState}`)
   pc.onicecandidate = event => {
     if (event.candidate === null) {
+      log("ice gathering complete")
       socket.send(JSON.stringify({
-        method: "RPC.Publish",
+        method: "RPC.Connect",
         params: [{
-          Rid: "test",
           Offer: pc.localDescription
         }],
         id
@@ -53,51 +70,32 @@ window.publish = () => {
   socket.addEventListener('message', (event) => {
     const resp = JSON.parse(event.data)
     if (resp.id === id) {
-      mid = resp.result.Mid
-      log(`Publishing local published with mid: ${mid}`)
+      pid = resp.result.Pid
+      log(`Publishing local published with pid: ${pid}`)
       pc.setRemoteDescription(resp.result.Answer)
     }
   })
 }
 
 window.subscribe = () => {
-  log(`Subscribing to remote stream: ${mid}`)
   const id = uuid.v4()
-  let pc = new RTCPeerConnection(config)
+  let ssrc = document.getElementById('ssrc').value
+  log(`Subscribing to remote ssrc ${ssrc} with peer ${pid}`)
 
-  pc.addTransceiver("audio", { direction: 'recvonly' });
-  pc.addTransceiver("video", { direction: 'recvonly' });
-  pc.createOffer().then(d => pc.setLocalDescription(d)).catch(log)
-
-  pc.oniceconnectionstatechange = e => log(pc.iceConnectionState)
-  pc.onicecandidate = event => {
-    if (event.candidate === null) {
-      socket.send(JSON.stringify({
-        method: "RPC.Subscribe",
-        params: [{
-          Mid: mid,
-          Offer: pc.localDescription
-        }],
-        id
-      }))
-    }
-  }
-  pc.ontrack = function (event) {
-    if (event.track.kind === "video") {
-      let el = document.createElement(event.track.kind)
-      el.srcObject = event.streams[0]
-      el.autoplay = true
-      el.controls = true
-
-      document.getElementById('remoteVideos').appendChild(el)
-    }
-  }
+  socket.send(JSON.stringify({
+    method: "RPC.Subscribe",
+    params: [{
+      Pid: pid,
+      Ssrcs: [parseInt(ssrc, 10)],
+    }],
+    id
+  }))
 
   socket.addEventListener('message', (event) => {
     const resp = JSON.parse(event.data)
     if (resp.id === id) {
-      log(`Got answer for subscribe`)
-      pc.setRemoteDescription(resp.result.Answer)
+      log(`Got answer for subscribe ${resp.result.Offer}`)
+      pc.setRemoteDescription(resp.result.Offer)
     }
   })
 }
