@@ -123,7 +123,7 @@ func main() {
 // Publish a stream to the sfu. Publish creates a bidirectional
 // streaming rpc connection between the client and sfu.
 //
-// The sfu will respond with a message containing the stream mid
+// The sfu will respond with a message containing the stream pid
 // and one of two different payload types:
 // 1. `Connect` containing the session answer description. This
 // message is *always* returned first.
@@ -139,7 +139,7 @@ func main() {
 //
 // If the client closes this stream, the webrtc stream will be closed.
 func (s *server) Signal(stream pb.SFU_SignalServer) error {
-	var mid string
+	var pid string
 	var peer *sfu.Peer
 	for {
 		in, err := stream.Recv()
@@ -171,9 +171,20 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 				Type: webrtc.SDPTypeOffer,
 				SDP:  string(payload.Connect.Sdp),
 			})
-			mid = peer.ID()
+			pid = peer.ID()
+
+			// When a remote track is added to the peer connection,
+			// notify the grpc client so they can subscribe other
+			// peers to the track
 			peer.OnTrack(func(track *webrtc.Track) {
-				log.Infof("got track")
+				stream.Send(&pb.SignalReply{
+					Payload: &pb.SignalReply_Track{
+						Track: &pb.OnTrack{
+							Ssrc:  int32(track.SSRC()),
+							Label: track.Label(),
+						},
+					},
+				})
 			})
 
 			if err != nil {
@@ -184,7 +195,7 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 			err = stream.Send(&pb.SignalReply{
 				Payload: &pb.SignalReply_Connect{
 					Connect: &pb.ConnectReply{
-						Mid: mid,
+						Pid: pid,
 						Answer: &pb.SessionDescription{
 							Type: answer.Type.String(),
 							Sdp:  []byte(answer.SDP),
@@ -208,6 +219,13 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 					},
 				})
 			})
+
+		case *pb.SignalRequest_Subscribe:
+			var ssrcs []uint32
+			for _, ssrc := range payload.Subscribe.Ssrc {
+				ssrcs = append(ssrcs, uint32(ssrc))
+			}
+			node.Subscribe(pid, ssrcs)
 
 		case *pb.SignalRequest_Trickle:
 			if peer == nil {

@@ -1,7 +1,6 @@
 package sfu
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -40,17 +39,17 @@ var (
 
 // SFU represents an sfu instance
 type SFU struct {
-	peers       map[string]*Peer
-	peerLock    sync.RWMutex
-	routers     map[uint32]*Router
-	routersLock sync.RWMutex
+	peers      map[string]*Peer
+	peerLock   sync.RWMutex
+	tracks     map[uint32]*Peer
+	tracksLock sync.RWMutex
 }
 
 // NewSFU creates a new sfu instance
 func NewSFU(config Config) *SFU {
 	s := &SFU{
-		peers:   make(map[string]*Peer),
-		routers: make(map[uint32]*Router),
+		peers:  make(map[string]*Peer),
+		tracks: make(map[uint32]*Peer),
 	}
 
 	log.Init(config.Log.Level)
@@ -88,10 +87,16 @@ func NewSFU(config Config) *SFU {
 // Connect a webrtc stream
 func (s *SFU) Connect(offer webrtc.SessionDescription) (*Peer, *webrtc.SessionDescription, error) {
 	peer, err := NewPeer(offer)
+	peer.OnClose(func() {
+		s.peerLock.Lock()
+		delete(s.peers, peer.id)
+		s.peerLock.Unlock()
+	})
+
 	peer.onRecv(func(recv Receiver) {
-		s.routersLock.Lock()
-		s.routers[recv.Track().SSRC()] = NewRouter(recv)
-		s.routersLock.Unlock()
+		s.tracksLock.Lock()
+		s.tracks[recv.Track().SSRC()] = peer
+		s.tracksLock.Unlock()
 	})
 
 	answer, err := peer.Answer(offer)
@@ -100,46 +105,63 @@ func (s *SFU) Connect(offer webrtc.SessionDescription) (*Peer, *webrtc.SessionDe
 		return nil, nil, err
 	}
 
+	s.peerLock.Lock()
+	s.peers[peer.id] = peer
+	s.peerLock.Unlock()
+
 	log.Debugf("Publish: answer => %v", answer)
 	return peer, &answer, nil
 }
 
-// SubTracks to a peer
-func (s *SFU) SubTracks(pid string, ssrcs []uint32) {
-	peer := s.peers[pid]
+// Subscribe adds a track to a peer
+func (s *SFU) Subscribe(pid string, ssrcs []uint32) {
+	s.peerLock.RLock()
+	to := s.peers[pid]
+	s.peerLock.RUnlock()
 
 	for _, ssrc := range ssrcs {
-		router := s.routers[ssrc]
-		send, err := peer.NewSender(router.pub.Track())
+		s.tracksLock.RLock()
+		source := s.tracks[ssrc]
+		s.tracksLock.RUnlock()
+
+		if source == nil {
+			log.Errorf("Source peer not found")
+			continue
+		}
+
+		log.Infof("Source peer %s %d", source.id, ssrc)
+
+		// Get source router
+		router := source.GetRouter(ssrc)
+
+		if router == nil {
+			log.Errorf("Router not found for track")
+			continue
+		}
+
+		// Create sender track on peer we are sending track to
+		sender, err := to.NewSender(router.pub.Track())
 
 		if err != nil {
 			log.Errorf("Error creating send track")
 			continue
 		}
 
-		router.AddSub(pid, send)
+		// Attach sender to source
+		router.AddSub(pid, sender)
 	}
 }
 
 func (s *SFU) stats() {
 	t := time.NewTicker(statCycle)
 	for range t.C {
-		info := "\n----------------rtc-----------------\n"
+		info := "\n----------------stats-----------------\n"
 
-		// info += "peer: " + string(s.id) + "\n"
-
-		s.routersLock.Lock()
-		router := s.routers
-		if len(router) < 6 {
-			for ssrc := range router {
-				info += fmt.Sprintf("router: %d\n", ssrc)
-			}
-			info += "\n"
-		} else {
-			info += fmt.Sprintf("routers: %d\n\n", len(router))
+		s.peerLock.RLock()
+		for _, peer := range s.peers {
+			info += peer.GetStats()
 		}
-
-		s.routersLock.Unlock()
+		s.peerLock.RUnlock()
 		log.Infof(info)
 	}
 }

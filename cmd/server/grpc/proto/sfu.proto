@@ -20,20 +20,26 @@ message SignalReply {
     oneof payload {
         ConnectReply connect = 1;
         Trickle trickle = 2;
+        OnTrack track = 3;
     }
 }
 
 message ConnectReply {
-    string mid = 1;
+    string pid = 1;
     SessionDescription answer = 2;
 }
 
 message Subscribe {
-    string mid = 1;
+    repeated int32 ssrc = 1;
 }
 
 message Trickle {
     string candidate = 1;
+}
+
+message OnTrack {
+    int32 ssrc = 1;
+    string label = 2;
 }
 
 message SessionDescription {

@@ -99,7 +99,6 @@ func (s *Sender) receiveRTCP(sender *webrtc.RTPSender) {
 			}
 		}
 	}
-	log.Infof("Closing sub feedback")
 }
 
 func (s *Sender) rembLoop() {

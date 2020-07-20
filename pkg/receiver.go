@@ -17,9 +17,10 @@ var (
 // Receiver defines a interface for a track receiver
 type Receiver interface {
 	Track() *webrtc.Track
+	GetPacket(sn uint16) *rtp.Packet
 	ReadRTP() (*rtp.Packet, error)
 	ReadRTCP() (rtcp.Packet, error)
-	WriteRTCP([]rtcp.Packet) error
+	WriteRTCP(rtcp.Packet) error
 	Close()
 }
 
@@ -52,13 +53,18 @@ func (t *AudioReceiver) ReadRTCP() (rtcp.Packet, error) {
 }
 
 // WriteRTCP write rtcp packet
-func (t *AudioReceiver) WriteRTCP(pkts []rtcp.Packet) error {
+func (t *AudioReceiver) WriteRTCP(pkt rtcp.Packet) error {
 	return nil
 }
 
 // Track read rtp packet
 func (t *AudioReceiver) Track() *webrtc.Track {
 	return t.track
+}
+
+// GetPacket returns nil since audio isn't buffered (uses fec)
+func (t *AudioReceiver) GetPacket(sn uint16) *rtp.Packet {
+	return nil
 }
 
 // Close track
@@ -108,40 +114,20 @@ func (t *VideoReceiver) ReadRTCP() (rtcp.Packet, error) {
 	return rtcp, nil
 }
 
-// WriteRTCP write rtcp packet. WriteRTCP intercepts rtcp packets from the
-// sub and either handles them or forwards them back to the publisher.
-func (t *VideoReceiver) WriteRTCP(pkts []rtcp.Packet) error {
-	for _, pkt := range pkts {
-		switch pkt := pkt.(type) {
-		case *rtcp.TransportLayerNack:
-			log.Infof("Router got nack: %+v", pkt)
-			for _, pair := range pkt.Nacks {
-				bufferpkt := t.jitterbuffer.GetPacket(pkt.MediaSSRC, pair.PacketID)
-				if bufferpkt != nil {
-					// We found the packet in the buffer, resend
-					t.rtpCh <- bufferpkt
-					continue
-				}
-
-				nack := &rtcp.TransportLayerNack{
-					//origin ssrc
-					SenderSSRC: pkt.SenderSSRC,
-					MediaSSRC:  pkt.MediaSSRC,
-					Nacks:      []rtcp.NackPair{{PacketID: pair.PacketID}},
-				}
-				t.rtcpCh <- nack
-			}
-		default:
-			t.rtcpCh <- pkt
-		}
-	}
-
+// WriteRTCP write rtcp packet
+func (t *VideoReceiver) WriteRTCP(pkt rtcp.Packet) error {
+	t.rtcpCh <- pkt
 	return nil
 }
 
 // Track read rtp packet
 func (t *VideoReceiver) Track() *webrtc.Track {
 	return t.track
+}
+
+// GetPacket get a buffered packet if we have one
+func (t *VideoReceiver) GetPacket(sn uint16) *rtp.Packet {
+	return t.jitterbuffer.GetPacket(t.track.SSRC(), sn)
 }
 
 // Close track
