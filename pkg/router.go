@@ -37,6 +37,13 @@ func (r *Router) AddSub(pid string, sub *Sender) {
 	go r.subFeedbackLoop(sub)
 }
 
+// DelSub to router
+func (r *Router) DelSub(pid string) {
+	r.subsLock.Lock()
+	delete(r.subs, pid)
+	r.subsLock.Unlock()
+}
+
 // Close a router
 func (r *Router) Close() {
 	r.stop = true
@@ -73,7 +80,10 @@ func (r *Router) start() {
 		// Push to client send queues
 		for _, sub := range r.subs {
 			// TODO: Nonblock sending?
-			sub.WriteRTP(pkt)
+			err := sub.WriteRTP(pkt)
+			if err != nil {
+				log.Errorf("Error writing RTP %s", err)
+			}
 		}
 		r.subsLock.RUnlock()
 	}
@@ -90,7 +100,8 @@ func (r *Router) subFeedbackLoop(sub *Sender) {
 		pkt, err := sub.ReadRTCP()
 
 		if err != nil {
-			continue
+			log.Errorf("sub nil rtcp packet")
+			return
 		}
 
 		switch pkt := pkt.(type) {
@@ -100,7 +111,10 @@ func (r *Router) subFeedbackLoop(sub *Sender) {
 				bufferpkt := r.pub.GetPacket(pair.PacketID)
 				if bufferpkt != nil {
 					// We found the packet in the buffer, resend to sub
-					sub.WriteRTP(bufferpkt)
+					err = sub.WriteRTP(bufferpkt)
+					if err != nil {
+						log.Errorf("error writing rtp %s", err)
+					}
 					continue
 				}
 
@@ -111,10 +125,16 @@ func (r *Router) subFeedbackLoop(sub *Sender) {
 					MediaSSRC:  pkt.MediaSSRC,
 					Nacks:      []rtcp.NackPair{{PacketID: pair.PacketID}},
 				}
-				r.pub.WriteRTCP(nack)
+				err = r.pub.WriteRTCP(nack)
+				if err != nil {
+					log.Errorf("Error writing nack RTCP %s", err)
+				}
 			}
 		default:
-			r.pub.WriteRTCP(pkt)
+			err = r.pub.WriteRTCP(pkt)
+			if err != nil {
+				log.Errorf("Error writing RTCP %s", err)
+			}
 		}
 	}
 }

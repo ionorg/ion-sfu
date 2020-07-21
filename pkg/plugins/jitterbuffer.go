@@ -34,7 +34,6 @@ type JitterBuffer struct {
 	bandwidth uint64
 	lostRate  float64
 
-	id          string
 	config      JitterBufferConfig
 	outRTPChan  chan *rtp.Packet
 	outRTCPChan chan rtcp.Packet

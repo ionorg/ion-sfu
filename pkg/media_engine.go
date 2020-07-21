@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/sdp/v2"
 	"github.com/pion/webrtc/v2"
 )
@@ -59,10 +58,6 @@ func (e *MediaEngine) PopulateFromSDP(sd webrtc.SessionDescription) error {
 				return fmt.Errorf("could not find codec for payload type %d", payloadType)
 			}
 
-			for _, feedback := range payloadCodec.RTCPFeedback {
-				log.Infof(feedback)
-			}
-
 			var codec *webrtc.RTPCodec
 			switch {
 			case strings.EqualFold(payloadCodec.Name, webrtc.Opus):
@@ -82,25 +77,4 @@ func (e *MediaEngine) PopulateFromSDP(sd webrtc.SessionDescription) error {
 		}
 	}
 	return nil
-}
-
-// GetPayloadType returns the payload type for a codec name
-func (e *MediaEngine) GetPayloadType(name string) (uint8, bool) {
-	// Try video codecs. We do audio/video separately due to MediaEngine api constraints.
-	for _, codec := range e.MediaEngine.GetCodecsByKind(webrtc.RTPCodecTypeVideo) {
-		to := e.GetCodecsByName(codec.Name)
-		if len(to) > 0 {
-			return to[0].PayloadType, true
-		}
-	}
-
-	// Try audio codecs. We do audio/video separately due to MediaEngine api constraints.
-	for _, codec := range e.MediaEngine.GetCodecsByKind(webrtc.RTPCodecTypeAudio) {
-		to := e.GetCodecsByName(codec.Name)
-		if len(to) > 0 {
-			return to[0].PayloadType, true
-		}
-	}
-
-	return 0, false
 }

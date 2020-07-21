@@ -1,30 +1,102 @@
 /* eslint-env browser */
-let log = msg =>
+const log = msg =>
   document.getElementById('logs').innerHTML += msg + '<br>'
 
-let config = {
+const config = {
   iceServers: [{
     urls: 'stun:stun.l.google.com:19302'
   }]
 }
 
-let socket = new WebSocket("ws://localhost:7000/ws");
-let pc = new RTCPeerConnection(config)
-pc.ontrack = function (event) {
-  log("got track")
-  pc.addTransceiver(event.track, {
-    direction: 'recvonly'
-  });
-  let el = document.createElement(event.track.kind)
-  el.srcObject = event.streams[0]
-  el.autoplay = true
-  el.controls = true
+const socket = new WebSocket("ws://localhost:7000/ws");
+const pc = new RTCPeerConnection(config)
 
-  event.track.onmute = function () {
-    el.parentNode.removeChild(el);
+pc.ontrack = function ({ track, streams }) {
+  if (track.kind === "video") {
+    log("got track")
+    track.onunmute = () => {
+      let el = document.createElement(track.kind)
+      el.srcObject = streams[0]
+      el.autoplay = true
+
+      document.getElementById('remoteVideos').appendChild(el)
+    }
   }
+}
 
-  document.getElementById('remoteVideos').appendChild(el)
+pc.oniceconnectionstatechange = e => log(`ICE connection state: ${pc.iceConnectionState}`)
+pc.onicecandidate = event => {
+  if (event.candidate !== null) {
+    socket.send(JSON.stringify({
+      method: "trickle",
+      params: {
+        candidate: event.candidate,
+      }
+    }))
+  }
+}
+
+socket.addEventListener('message', async (event) => {
+  const resp = JSON.parse(event.data)
+
+  // Listen for server renegotiation notifications
+  if (!resp.id && resp.method === "offer") {
+    log(`Got offer notification`)
+    await pc.setRemoteDescription(resp.params)
+    const answer = await pc.createAnswer()
+    await pc.setLocalDescription(answer)
+
+    const id = uuid.v4()
+    log(`Sending answer`)
+    socket.send(JSON.stringify({
+      method: "answer",
+      params: { desc: answer },
+      id
+    }))
+  }
+})
+
+const join = async () => {
+  const offer = await pc.createOffer()
+  await pc.setLocalDescription(offer)
+  const id = uuid.v4()
+
+  socket.send(JSON.stringify({
+    method: "join",
+    params: { rid: "test room", offer: pc.localDescription },
+    id
+  }))
+
+
+  socket.addEventListener('message', (event) => {
+    const resp = JSON.parse(event.data)
+    if (resp.id === id) {
+      log(`Got publish answer`)
+
+      // Hook this here so it's not called before joining
+      pc.onnegotiationneeded = async function () {
+        log("Renegotiating")
+        const offer = await pc.createOffer()
+        await pc.setLocalDescription(offer)
+        const id = uuid.v4()
+        socket.send(JSON.stringify({
+          method: "offer",
+          params: { desc: offer },
+          id
+        }))
+
+        socket.addEventListener('message', (event) => {
+          const resp = JSON.parse(event.data)
+          if (resp.id === id) {
+            log(`Got renegotiation answer`)
+            pc.setRemoteDescription(resp.result)
+          }
+        })
+      }
+
+      pc.setRemoteDescription(resp.result)
+    }
+  })
 }
 
 let localStream
@@ -32,83 +104,22 @@ let pid
 navigator.mediaDevices.getUserMedia({
   video: true,
   audio: true
-})
-  .then(stream => {
-    let el = document.createElement("Video")
-    el.srcObject = stream
-    el.autoplay = true
-    el.controls = true
-    el.muted = true
-    document.getElementById('localVideos').appendChild(el)
+}).then(stream => {
+  let el = document.createElement("Video")
+  el.srcObject = stream
+  el.autoplay = true
+  el.controls = true
+  el.muted = true
+  document.getElementById('localVideos').appendChild(el)
 
-    localStream = stream
-  }).catch(log)
+  localStream = stream
+}).catch(log)
 
 window.publish = () => {
-  log("Publishing local stream")
-  const id = uuid.v4()
-  pc.addStream(localStream)
-  pc.createOffer({
-    offerToReceiveVideo: false,
-    offerToReceiveAudio: false,
-  }).then(d => pc.setLocalDescription(d)).catch(log)
+  log("Publishing stream")
+  localStream.getTracks().forEach((track) => {
+    pc.addTrack(track, localStream);
+  });
 
-  pc.oniceconnectionstatechange = e => log(`ICE connection state: ${pc.iceConnectionState}`)
-  pc.onicecandidate = event => {
-    if (event.candidate === null) {
-      log("ice gathering complete")
-      socket.send(JSON.stringify({
-        method: "RPC.Connect",
-        params: [{
-          Offer: pc.localDescription
-        }],
-        id
-      }))
-    }
-  }
-
-  socket.addEventListener('message', (event) => {
-    const resp = JSON.parse(event.data)
-    if (resp.id === id) {
-      pid = resp.result.Pid
-      log(`Publishing local published with pid: ${pid}`)
-      pc.setRemoteDescription(resp.result.Answer)
-    }
-  })
-}
-
-window.subscribe = () => {
-  const id = uuid.v4()
-  let ssrc = document.getElementById('ssrc').value
-  log(`Subscribing to remote ssrc ${ssrc} with peer ${pid}`)
-
-  socket.send(JSON.stringify({
-    method: "RPC.Subscribe",
-    params: [{
-      Pid: pid,
-      Ssrcs: [parseInt(ssrc, 10)],
-    }],
-    id
-  }))
-
-  socket.addEventListener('message', (event) => {
-    const resp = JSON.parse(event.data)
-    if (resp.id === id) {
-      log(`Got answer for subscribe ${resp.result.Offer}`)
-      pc.setRemoteDescription(resp.result.Offer)
-    }
-  })
-}
-
-window.startSession = () => {
-  let sd = document.getElementById('remoteSessionDescription').value
-  if (sd === '') {
-    return alert('Session Description must not be empty')
-  }
-
-  try {
-    pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(sd))))
-  } catch (e) {
-    alert(e)
-  }
+  join()
 }

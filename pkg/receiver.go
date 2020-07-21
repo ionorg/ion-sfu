@@ -26,10 +26,9 @@ type Receiver interface {
 
 // AudioReceiver receives a video track
 type AudioReceiver struct {
-	track  *webrtc.Track
-	stop   bool
-	rtpCh  chan *rtp.Packet
-	rtcpCh chan rtcp.Packet
+	track *webrtc.Track
+	stop  bool
+	rtpCh chan *rtp.Packet
 }
 
 // NewAudioReceiver creates a new video track receiver
@@ -151,5 +150,9 @@ func (t *VideoReceiver) receiveRTP() {
 			log.Errorf("rtp err => %v", err)
 		}
 		err = t.jitterbuffer.WriteRTP(rtp)
+
+		if err != nil {
+			log.Errorf("jb err => %v", err)
+		}
 	}
 }

@@ -22,7 +22,6 @@ type SenderConfig struct {
 type Sender struct {
 	track    *webrtc.Track
 	stop     bool
-	rtpCh    chan *rtp.Packet
 	rtcpCh   chan rtcp.Packet
 	useRemb  bool
 	rembChan chan *rtcp.ReceiverEstimatedMaximumBitrate
@@ -38,6 +37,7 @@ func NewSender(track *webrtc.Track, trans *webrtc.RTPTransceiver) *Sender {
 		switch feedback.Type {
 		case webrtc.TypeRTCPFBGoogREMB:
 			s.useRemb = true
+			go s.rembLoop()
 		case webrtc.TypeRTCPFBTransportCC:
 			// TODO
 		}

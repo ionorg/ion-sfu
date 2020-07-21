@@ -39,14 +39,14 @@ var (
 
 // SFU represents an sfu instance
 type SFU struct {
-	peers    map[string]*Peer
-	peerLock sync.RWMutex
+	rooms    map[string]*Room
+	roomLock sync.RWMutex
 }
 
 // NewSFU creates a new sfu instance
 func NewSFU(config Config) *SFU {
 	s := &SFU{
-		peers: make(map[string]*Peer),
+		rooms: make(map[string]*Room),
 	}
 
 	log.Init(config.Log.Level)
@@ -81,39 +81,26 @@ func NewSFU(config Config) *SFU {
 	return s
 }
 
-// CreatePeer a webrtc stream
-func (s *SFU) CreatePeer(offer webrtc.SessionDescription) (*Peer, webrtc.SessionDescription, error) {
-	peer, err := NewPeer(offer)
-	peer.OnClose(func() {
-		s.peerLock.Lock()
-		delete(s.peers, peer.id)
-		s.peerLock.Unlock()
+// CreateRoom creates a new room instance
+func (s *SFU) CreateRoom(id string) *Room {
+	room := NewRoom(id)
+	room.OnClose(func() {
+		s.roomLock.Lock()
+		delete(s.rooms, id)
+		s.roomLock.Unlock()
 	})
 
-	err = peer.SetRemoteDescription(offer)
-	if err != nil {
-		log.Errorf("Offer error: %v", err)
-		return nil, webrtc.SessionDescription{}, err
-	}
+	s.roomLock.Lock()
+	s.rooms[id] = room
+	s.roomLock.Unlock()
+	return room
+}
 
-	answer, err := peer.CreateAnswer()
-	if err != nil {
-		log.Errorf("Offer error: answer=%v err=%v", answer, err)
-		return nil, webrtc.SessionDescription{}, err
-	}
-
-	err = peer.SetLocalDescription(answer)
-	if err != nil {
-		log.Errorf("Offer error: answer=%v err=%v", answer, err)
-		return nil, webrtc.SessionDescription{}, err
-	}
-
-	s.peerLock.Lock()
-	s.peers[peer.id] = peer
-	s.peerLock.Unlock()
-
-	log.Debugf("Connect answer => %v", answer)
-	return peer, answer, nil
+// GetRoom by id
+func (s *SFU) GetRoom(id string) *Room {
+	s.roomLock.RLock()
+	defer s.roomLock.RUnlock()
+	return s.rooms[id]
 }
 
 func (s *SFU) stats() {
@@ -121,11 +108,16 @@ func (s *SFU) stats() {
 	for range t.C {
 		info := "\n----------------stats-----------------\n"
 
-		s.peerLock.RLock()
-		for _, peer := range s.peers {
-			info += peer.GetStats()
+		s.roomLock.RLock()
+		if len(s.rooms) == 0 {
+			s.roomLock.RUnlock()
+			continue
 		}
-		s.peerLock.RUnlock()
+
+		for _, room := range s.rooms {
+			info += room.stats()
+		}
+		s.roomLock.RUnlock()
 		log.Infof(info)
 	}
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/lucsky/cuid"
 	"github.com/pion/ion-sfu/pkg/log"
+	"github.com/pion/ion-sfu/pkg/util"
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v2"
 )
@@ -15,15 +16,18 @@ const (
 	statCycle = 6 * time.Second
 )
 
+var debounced = util.NewDebouncer(100 * time.Millisecond)
+
 // Peer represents a sfu peer connection
 type Peer struct {
-	id             string
-	pc             *webrtc.PeerConnection
-	me             MediaEngine
-	routers        map[uint32]*Router
-	routersLock    sync.RWMutex
-	onCloseHandler func()
-	onRouterHander func(*Router)
+	id                         string
+	pc                         *webrtc.PeerConnection
+	me                         MediaEngine
+	routers                    map[uint32]*Router
+	routersLock                sync.RWMutex
+	onCloseHandler             func()
+	onNegotiationNeededHandler func()
+	onRouterHander             func(*Router)
 }
 
 // NewPeer creates a new Peer
@@ -78,6 +82,7 @@ func NewPeer(offer webrtc.SessionDescription) (*Peer, error) {
 	})
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
+		log.Infof("ice connection state: %s", connectionState)
 		switch connectionState {
 		case webrtc.ICEConnectionStateDisconnected:
 			log.Infof("webrtc ice disconnected for peer: %s", p.id)
@@ -160,7 +165,6 @@ func (p *Peer) OnClose(f func()) {
 
 // OnRouter handler called when a router is added
 func (p *Peer) OnRouter(f func(*Router)) {
-	log.Infof("add on track")
 	p.onRouterHander = f
 }
 
@@ -170,24 +174,35 @@ func (p *Peer) AddICECandidate(candidate webrtc.ICECandidateInit) error {
 }
 
 // OnICECandidate handler
-func (p *Peer) OnICECandidate(handler func(c *webrtc.ICECandidate)) {
-	p.pc.OnICECandidate(handler)
+func (p *Peer) OnICECandidate(f func(c *webrtc.ICECandidate)) {
+	p.pc.OnICECandidate(f)
 }
 
-// NewSender on this peer
-func (p *Peer) NewSender(track *webrtc.Track) (*Sender, error) {
-	pt, ok := p.me.GetPayloadType(track.Codec().Name)
+// OnNegotiationNeeded handler
+func (p *Peer) OnNegotiationNeeded(f func()) {
+	p.onNegotiationNeededHandler = f
+}
 
-	if !ok {
+// Subscribe to a router
+func (p *Peer) Subscribe(router *Router) error {
+	log.Infof("Subscribing to router %v", router)
+
+	track := router.pub.Track()
+	to := p.me.GetCodecsByName(track.Codec().Name)
+
+	if len(to) == 0 {
 		log.Errorf("Error mapping payload type")
-		return nil, errPtNotSupported
+		return errPtNotSupported
 	}
 
+	pt := to[0].PayloadType
+
+	log.Debugf("Creating track: %d %d %s %s", pt, track.SSRC(), track.ID(), track.Label())
 	track, err := p.pc.NewTrack(pt, track.SSRC(), track.ID(), track.Label())
 
 	if err != nil {
 		log.Errorf("Error creating track")
-		return nil, err
+		return err
 	}
 
 	trans, err := p.pc.AddTransceiverFromTrack(track, webrtc.RtpTransceiverInit{
@@ -197,59 +212,28 @@ func (p *Peer) NewSender(track *webrtc.Track) (*Sender, error) {
 		}},
 	})
 
-	send := NewSender(track, trans)
-	return send, nil
-}
-
-// Subscribe to a router
-func (p *Peer) Subscribe(router *Router) error {
-	log.Infof("Subscribing to router %v", router)
-
-	// Create sender track on peer we are sending track to
-	sender, err := p.NewSender(router.pub.Track())
-
 	if err != nil {
-		log.Errorf("Error creating send track")
+		log.Errorf("Error creating send transceiver")
 		return err
 	}
+
+	// Create sender track on peer we are sending track to
+	sender := NewSender(track, trans)
 
 	// Attach sender to source
 	router.AddSub(p.id, sender)
 
-	return nil
-}
+	// Debounced until `OnNegotiationNeeded` supported by pion
+	debounced(func() {
+		p.onNegotiationNeededHandler()
+	})
 
-// GetRouter for track
-func (p *Peer) GetRouter(ssrc uint32) *Router {
-	p.routersLock.RLock()
-	defer p.routersLock.RUnlock()
-	return p.routers[ssrc]
+	return nil
 }
 
 // ID of peer
 func (p *Peer) ID() string {
 	return p.id
-}
-
-// GetStats returns string formatted peer stats
-func (p *Peer) GetStats() string {
-	info := fmt.Sprintf("peer: %s\n", p.id)
-
-	p.routersLock.RLock()
-	for ssrc, router := range p.routers {
-		info += fmt.Sprintf("router: %d\n", ssrc)
-
-		if len(router.subs) < 6 {
-			for pid := range router.subs {
-				info += fmt.Sprintf("sub: %s\n", pid)
-			}
-			info += "\n"
-		} else {
-			info += fmt.Sprintf("subs: %d\n\n", len(router.subs))
-		}
-	}
-	p.routersLock.RUnlock()
-	return info
 }
 
 // Close peer
@@ -278,6 +262,30 @@ func (p *Peer) sendRTCP(recv Receiver) {
 		}
 
 		log.Tracef("sendRTCP %v", pkt)
-		p.pc.WriteRTCP([]rtcp.Packet{pkt})
+		err = p.pc.WriteRTCP([]rtcp.Packet{pkt})
+		if err != nil {
+			// TODO: do something
+			log.Errorf("Error writing RTCP %s", err)
+		}
 	}
+}
+
+func (p *Peer) stats() string {
+	info := fmt.Sprintf("  peer: %s\n", p.id)
+
+	p.routersLock.RLock()
+	for ssrc, router := range p.routers {
+		info += fmt.Sprintf("    router: %d\n", ssrc)
+
+		if len(router.subs) < 6 {
+			for pid := range router.subs {
+				info += fmt.Sprintf("      sub: %s\n", pid)
+			}
+			info += "\n"
+		} else {
+			info += fmt.Sprintf("      subs: %d\n\n", len(router.subs))
+		}
+	}
+	p.routersLock.RUnlock()
+	return info
 }
