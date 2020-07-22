@@ -20,17 +20,19 @@ type SenderConfig struct {
 
 // Sender represents a track being sent to a peer
 type Sender struct {
-	track    *webrtc.Track
-	stop     bool
-	rtcpCh   chan rtcp.Packet
-	useRemb  bool
-	rembChan chan *rtcp.ReceiverEstimatedMaximumBitrate
+	track   *webrtc.Track
+	stop    bool
+	rtcpCh  chan rtcp.Packet
+	useRemb bool
+	rembCh  chan *rtcp.ReceiverEstimatedMaximumBitrate
 }
 
 // NewSender creates a new send track instance
 func NewSender(track *webrtc.Track, trans *webrtc.RTPTransceiver) *Sender {
 	s := &Sender{
-		track: track,
+		track:  track,
+		rtcpCh: make(chan rtcp.Packet, maxSize),
+		rembCh: make(chan *rtcp.ReceiverEstimatedMaximumBitrate, maxSize),
 	}
 
 	for _, feedback := range track.Codec().RTCPFeedback {
@@ -93,7 +95,7 @@ func (s *Sender) receiveRTCP(sender *webrtc.RTPSender) {
 				s.rtcpCh <- pkt
 			case *rtcp.ReceiverEstimatedMaximumBitrate:
 				if s.useRemb {
-					s.rembChan <- pkt
+					s.rembCh <- pkt
 				}
 			default:
 			}
@@ -115,7 +117,7 @@ func (s *Sender) rembLoop() {
 	var lowest uint64 = math.MaxUint64
 	var rembCount, rembTotalRate uint64
 
-	for pkt := range s.rembChan {
+	for pkt := range s.rembCh {
 		// Update stats
 		rembCount++
 		rembTotalRate += pkt.Bitrate
