@@ -224,9 +224,11 @@ func (p *Peer) Subscribe(router *Router) error {
 	router.AddSub(p.id, sender)
 
 	// Debounced until `OnNegotiationNeeded` supported by pion
-	debounced(func() {
-		p.onNegotiationNeededHandler()
-	})
+	if p.onNegotiationNeededHandler != nil {
+		debounced(func() {
+			p.onNegotiationNeededHandler()
+		})
+	}
 
 	return nil
 }

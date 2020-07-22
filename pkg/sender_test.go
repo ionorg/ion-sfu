@@ -18,22 +18,6 @@ var rawPkt = []byte{
 	0x27, 0x82, 0x00, 0x01, 0x00, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x98, 0x36, 0xbe, 0x88, 0x9e,
 }
 
-// newPair creates two new peer connections (an offerer and an answerer) using
-// the api.
-func newPair(cfg webrtc.Configuration, api *webrtc.API) (pcOffer *webrtc.PeerConnection, pcAnswer *webrtc.PeerConnection, err error) {
-	pca, err := api.NewPeerConnection(cfg)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	pcb, err := api.NewPeerConnection(cfg)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return pca, pcb, nil
-}
-
 func signalPair(pcOffer *webrtc.PeerConnection, pcAnswer *webrtc.PeerConnection) error {
 	offer, err := pcOffer.CreateOffer(nil)
 	if err != nil {
