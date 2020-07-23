@@ -10,25 +10,28 @@ service SFU {
 
 message SignalRequest {
     oneof payload {
-        SessionDescription negotiate = 1;
-        Trickle trickle = 2;
+        JoinRequest join = 1;
+        SessionDescription negotiate = 2;
+        Trickle trickle = 3;
     }
 }
 
 message SignalReply {
     oneof payload {
-        SessionDescription negotiate = 1;
-        Trickle trickle = 2;
+        JoinReply join = 1;
+        SessionDescription negotiate = 2;
+        Trickle trickle = 3;
     }
 }
 
-message ConnectReply {
-    string pid = 1;
-    SessionDescription answer = 2;
+message JoinRequest {
+    string rid = 1;
+    SessionDescription offer = 2;
 }
 
-message Subscribe {
-    repeated int32 ssrc = 1;
+message JoinReply {
+    string pid = 1;
+    SessionDescription answer = 2;
 }
 
 message Trickle {
