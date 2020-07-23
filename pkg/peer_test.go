@@ -136,14 +136,16 @@ func TestPeerPairClientBGetsOnRouterWhenClientAAddsVideo(t *testing.T) {
 	// Subscribe b to a
 	peerAOnRouterCalled := make(chan bool)
 	peerA.OnRouter(func(r *Router) {
-		peerB.Subscribe(r)
+		err = peerB.Subscribe(r)
+		assert.NoError(t, err)
 		close(peerAOnRouterCalled)
 	})
 
 	// Subscribe a to b
 	peerBOnRouterCalled := make(chan bool)
 	peerB.OnRouter(func(r *Router) {
-		peerA.Subscribe(r)
+		err = peerA.Subscribe(r)
+		assert.NoError(t, err)
 		close(peerBOnRouterCalled)
 	})
 

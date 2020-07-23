@@ -18,7 +18,8 @@ func TestAudioReceiverRTPForwarding(t *testing.T) {
 
 	track, err := remote.NewTrack(webrtc.DefaultPayloadTypeOpus, rand.Uint32(), "audio", "pion")
 	assert.NoError(t, err)
-	remote.AddTrack(track)
+	_, err = remote.AddTrack(track)
+	assert.NoError(t, err)
 
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
 	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
@@ -62,7 +63,8 @@ func TestVideoReceiverRTPForwarding(t *testing.T) {
 
 	track, err := remote.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
 	assert.NoError(t, err)
-	remote.AddTrack(track)
+	_, err = remote.AddTrack(track)
+	assert.NoError(t, err)
 
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
 	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
