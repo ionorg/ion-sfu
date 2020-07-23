@@ -7,7 +7,7 @@ import (
 	"github.com/pion/ion-sfu/pkg/plugins"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
-	"github.com/pion/webrtc/v2"
+	"github.com/pion/webrtc/v3"
 )
 
 var (
@@ -43,17 +43,20 @@ func NewAudioReceiver(track *webrtc.Track) *AudioReceiver {
 
 // ReadRTP read rtp packet
 func (t *AudioReceiver) ReadRTP() (*rtp.Packet, error) {
+	if t.stop {
+		return nil, errReceiverClosed
+	}
 	return t.track.ReadRTP()
 }
 
 // ReadRTCP read rtp packet
 func (t *AudioReceiver) ReadRTCP() (rtcp.Packet, error) {
-	return nil, nil
+	return nil, errMethodNotSupported
 }
 
 // WriteRTCP write rtcp packet
 func (t *AudioReceiver) WriteRTCP(pkt rtcp.Packet) error {
-	return nil
+	return errMethodNotSupported
 }
 
 // Track read rtp packet

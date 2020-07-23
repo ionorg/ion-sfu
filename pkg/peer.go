@@ -9,14 +9,12 @@ import (
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/ion-sfu/pkg/util"
 	"github.com/pion/rtcp"
-	"github.com/pion/webrtc/v2"
+	"github.com/pion/webrtc/v3"
 )
 
 const (
 	statCycle = 6 * time.Second
 )
-
-var debounced = util.NewDebouncer(100 * time.Millisecond)
 
 // Peer represents a sfu peer connection
 type Peer struct {
@@ -180,7 +178,10 @@ func (p *Peer) OnICECandidate(f func(c *webrtc.ICECandidate)) {
 
 // OnNegotiationNeeded handler
 func (p *Peer) OnNegotiationNeeded(f func()) {
-	p.onNegotiationNeededHandler = f
+	p.onNegotiationNeededHandler = func() {
+		var debounced = util.NewDebouncer(100 * time.Millisecond)
+		debounced(f)
+	}
 }
 
 // Subscribe to a router
@@ -225,9 +226,7 @@ func (p *Peer) Subscribe(router *Router) error {
 
 	// Debounced until `OnNegotiationNeeded` supported by pion
 	if p.onNegotiationNeededHandler != nil {
-		debounced(func() {
-			p.onNegotiationNeededHandler()
-		})
+		p.onNegotiationNeededHandler()
 	}
 
 	return nil

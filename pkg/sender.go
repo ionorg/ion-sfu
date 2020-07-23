@@ -8,7 +8,7 @@ import (
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
-	"github.com/pion/webrtc/v2"
+	"github.com/pion/webrtc/v3"
 )
 
 // SenderConfig describes configuration of a sender

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/pion/sdp/v2"
-	"github.com/pion/webrtc/v2"
+	"github.com/pion/webrtc/v3"
 )
 
 const (

@@ -8,8 +8,8 @@ import (
 
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
-	"github.com/pion/webrtc/v2"
-	"github.com/pion/webrtc/v2/pkg/media"
+	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v3/pkg/media"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -23,9 +23,11 @@ func signalPair(pcOffer *webrtc.PeerConnection, pcAnswer *webrtc.PeerConnection)
 	if err != nil {
 		return err
 	}
+	gatherComplete := webrtc.GatheringCompletePromise(pcOffer)
 	if err = pcOffer.SetLocalDescription(offer); err != nil {
 		return err
 	}
+	<-gatherComplete
 	if err = pcAnswer.SetRemoteDescription(*pcOffer.LocalDescription()); err != nil {
 		return err
 	}

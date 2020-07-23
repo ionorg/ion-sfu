@@ -1,0 +1,92 @@
+package sfu
+
+import (
+	"context"
+	"math/rand"
+	"testing"
+
+	"github.com/pion/webrtc/v3"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestAudioReceiverRTPForwarding(t *testing.T) {
+	me := webrtc.MediaEngine{}
+	me.RegisterDefaultCodecs()
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+	sfu, remote, err := newPair(webrtc.Configuration{}, api)
+	assert.NoError(t, err)
+
+	track, err := remote.NewTrack(webrtc.DefaultPayloadTypeOpus, rand.Uint32(), "audio", "pion")
+	assert.NoError(t, err)
+	remote.AddTrack(track)
+
+	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
+	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
+		receiver := NewAudioReceiver(track)
+		assert.Equal(t, track, receiver.Track())
+
+		rtcp, err := receiver.ReadRTCP()
+		assert.Nil(t, rtcp)
+		assert.Equal(t, errMethodNotSupported, err)
+		err = receiver.WriteRTCP(nil)
+		assert.Equal(t, errMethodNotSupported, err)
+		rtp := receiver.GetPacket(0)
+		assert.Nil(t, rtp)
+
+		out, err := receiver.ReadRTP()
+		assert.NoError(t, err)
+		assert.Equal(t, []byte{0x01, 0x02, 0x03, 0x04}, out.Payload)
+
+		receiver.Close()
+
+		out, err = receiver.ReadRTP()
+		assert.Nil(t, out)
+		assert.Equal(t, errReceiverClosed, err)
+
+		onReadRTPFiredFunc()
+	})
+
+	err = signalPair(remote, sfu)
+	assert.NoError(t, err)
+
+	sendVideoUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
+
+}
+
+func TestVideoReceiverRTPForwarding(t *testing.T) {
+	me := webrtc.MediaEngine{}
+	me.RegisterDefaultCodecs()
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+	sfu, remote, err := newPair(webrtc.Configuration{}, api)
+	assert.NoError(t, err)
+
+	track, err := remote.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+	remote.AddTrack(track)
+
+	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
+	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
+		receiver := NewVideoReceiver(track)
+		assert.Equal(t, track, receiver.Track())
+
+		out, err := receiver.ReadRTP()
+		assert.NoError(t, err)
+		assert.Equal(t, []byte{0x10, 0x01, 0x02, 0x03, 0x04}, out.Payload)
+
+		// Test fetching from buffer
+		buf := receiver.GetPacket(out.SequenceNumber)
+		assert.Equal(t, out, buf)
+
+		// GetPacket on unbuffered returns nil packet
+		buf = receiver.GetPacket(1)
+		assert.Nil(t, buf)
+
+		onReadRTPFiredFunc()
+	})
+
+	err = signalPair(remote, sfu)
+	assert.NoError(t, err)
+
+	sendVideoUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
+
+}
