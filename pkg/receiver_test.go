@@ -4,10 +4,25 @@ import (
 	"context"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v3/pkg/media"
 	"github.com/stretchr/testify/assert"
 )
+
+func sendRTPUntilDone(done <-chan struct{}, t *testing.T, tracks []*webrtc.Track) {
+	for {
+		select {
+		case <-time.After(20 * time.Millisecond):
+			for _, track := range tracks {
+				assert.NoError(t, track.WriteSample(media.Sample{Data: []byte{0x01, 0x02, 0x03, 0x04}, Samples: 1}))
+			}
+		case <-done:
+			return
+		}
+	}
+}
 
 func TestAudioReceiverRTPForwarding(t *testing.T) {
 	me := webrtc.MediaEngine{}
@@ -89,5 +104,4 @@ func TestVideoReceiverRTPForwarding(t *testing.T) {
 	assert.NoError(t, err)
 
 	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
-
 }

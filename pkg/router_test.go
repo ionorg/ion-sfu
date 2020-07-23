@@ -30,34 +30,37 @@ func TestRouter(t *testing.T) {
 		subsfu, sub, err := newPair(webrtc.Configuration{}, api)
 		assert.NoError(t, err)
 
+		ontrackFired := make(chan bool)
 		sub.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 			out, err := track.ReadRTP()
 			assert.NoError(t, err)
 
 			assert.Equal(t, []byte{0x10, 0x01, 0x02, 0x03, 0x04}, out.Payload)
 			onReadRTPFiredFunc()
+			close(ontrackFired)
 		})
 
-		track, err = subsfu.NewTrack(webrtc.DefaultPayloadTypeVP8, track.SSRC(), "video", "pion")
+		subtrack, err := subsfu.NewTrack(webrtc.DefaultPayloadTypeVP8, track.SSRC(), "video", "pion")
 		assert.NoError(t, err)
 
-		trans, err := subsfu.AddTransceiverFromTrack(track, webrtc.RtpTransceiverInit{
+		trans, err := subsfu.AddTransceiverFromTrack(subtrack, webrtc.RtpTransceiverInit{
 			Direction: webrtc.RTPTransceiverDirectionSendonly,
 			SendEncodings: []webrtc.RTPEncodingParameters{{
-				RTPCodingParameters: webrtc.RTPCodingParameters{SSRC: track.SSRC(), PayloadType: webrtc.DefaultPayloadTypeVP8},
+				RTPCodingParameters: webrtc.RTPCodingParameters{SSRC: subtrack.SSRC(), PayloadType: webrtc.DefaultPayloadTypeVP8},
 			}},
 		})
 		assert.NoError(t, err)
 
-		subPid := "subpid"
-		sender := NewSender(track, trans)
-
 		err = signalPair(subsfu, sub)
 		assert.NoError(t, err)
 
+		subPid := "subpid"
+		sender := NewSender(subtrack, trans)
 		router.AddSub(subPid, sender)
 		assert.Len(t, router.subs, 1)
 		assert.Equal(t, sender, router.subs[subPid])
+
+		<-ontrackFired
 
 		// test deleting sub
 		router.DelSub(subPid)
@@ -68,7 +71,7 @@ func TestRouter(t *testing.T) {
 		router.Close()
 		assert.Len(t, router.subs, 0)
 		assert.True(t, sender.stop)
-		// assert.True(t, receiver.stop)
+		assert.True(t, receiver.stop)
 	})
 
 	err = signalPair(pub, pubsfu)

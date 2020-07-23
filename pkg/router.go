@@ -4,7 +4,6 @@ import (
 	"sync"
 
 	"github.com/pion/ion-sfu/pkg/log"
-	"github.com/pion/ion-sfu/pkg/util"
 	"github.com/pion/rtcp"
 )
 
@@ -59,7 +58,7 @@ func (r *Router) Close() {
 }
 
 func (r *Router) start() {
-	defer util.Recover("[Router.start]")
+	// defer util.Recover("[Router.start]")
 	for {
 		if r.stop {
 			return

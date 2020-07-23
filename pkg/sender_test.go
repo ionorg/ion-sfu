@@ -9,7 +9,6 @@ import (
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
-	"github.com/pion/webrtc/v3/pkg/media"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -42,13 +41,12 @@ func signalPair(pcOffer *webrtc.PeerConnection, pcAnswer *webrtc.PeerConnection)
 	return pcOffer.SetRemoteDescription(*pcAnswer.LocalDescription())
 }
 
-func sendRTPUntilDone(done <-chan struct{}, t *testing.T, tracks []*webrtc.Track) {
+func sendRTPWithSenderUntilDone(done <-chan struct{}, t *testing.T, track *webrtc.Track, sender *Sender) {
 	for {
 		select {
 		case <-time.After(20 * time.Millisecond):
-			for _, track := range tracks {
-				assert.NoError(t, track.WriteSample(media.Sample{Data: []byte{0x01, 0x02, 0x03, 0x04}, Samples: 1}))
-			}
+			pkt := track.Packetizer().Packetize([]byte{0x01, 0x02, 0x03, 0x04}, 1)[0]
+			assert.NoError(t, sender.WriteRTP(pkt))
 		case <-done:
 			return
 		}
@@ -92,10 +90,7 @@ func TestSenderRTPForwarding(t *testing.T) {
 	err = signalPair(sfu, remote)
 	assert.NoError(t, err)
 
-	err = sender.WriteRTP(rtp)
-	assert.NoError(t, err)
-
-	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
+	sendRTPWithSenderUntilDone(onReadRTPFired.Done(), t, track, sender)
 }
 
 func sendRTCPUntilDone(done <-chan struct{}, t *testing.T, pc *webrtc.PeerConnection, pkt rtcp.Packet) {

@@ -9,11 +9,7 @@ rembfeedback = false
 minbandwidth = 100000
 maxbandwidth = 5000000
 
-[plugins]
-on = true
-
-[plugins.jitterbuffer]
-on = true
+[jitterbuffer]
 # transport-cc (experiment feature)
 tccon = false
 # the remb cycle sending to pub, this told the pub it's bandwidth
@@ -24,15 +20,6 @@ plicycle = 1
 maxbandwidth = 1000
 # max buffer time by ms
 maxbuffertime = 1000
-
-[plugins.rtpforwarder]
-on = false
-# remote address
-addr = ""
-# kcp key
-kcpkey = ""
-# kcp salt
-kcpsalt = ""
 
 [webrtc]
 
@@ -46,11 +33,5 @@ kcpsalt = ""
 # urls = ["turn:turn.awsome.org:3478"]
 # username = "awsome"
 # credential = "awsome"
-[rtp]
-# listen port
-port = 6666
-
-# kcpkey = ""
-# kcpsalt = ""
 [log]
 level = "debug"
