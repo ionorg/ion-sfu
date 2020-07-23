@@ -1,17 +1,22 @@
 package sfu
 
 import (
+	"fmt"
 	"io"
+	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
-	"github.com/pion/ion-sfu/pkg/plugins"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
 )
 
-var (
-	maxSize = 100
+const (
+	// bandwidth range(kbps)
+	minBandwidth = 200
+	maxREMBCycle = 5
+	maxPLICycle  = 5
+	maxSize      = 100
 )
 
 // Receiver defines a interface for a track receiver
@@ -76,31 +81,53 @@ func (t *AudioReceiver) Close() {
 
 // VideoReceiver receives a video track
 type VideoReceiver struct {
-	track        *webrtc.Track
-	jitterbuffer *plugins.JitterBuffer
-	stop         bool
-	rtpCh        chan *rtp.Packet
-	rtcpCh       chan rtcp.Packet
+	buffer    *Buffer
+	track     *webrtc.Track
+	bandwidth uint64
+	lostRate  float64
+	stop      bool
+	rtpCh     chan *rtp.Packet
+	rtcpCh    chan rtcp.Packet
+
+	pliCycle     int
+	rembCycle    int
+	maxBandwidth int
+}
+
+// VideoReceiverConfig .
+type VideoReceiverConfig struct {
+	TCCOn         bool `mapstructure:"tccon"`
+	REMBCycle     int  `mapstructure:"rembcycle"`
+	PLICycle      int  `mapstructure:"rembcycle"`
+	MaxBandwidth  int  `mapstructure:"maxbandwidth"`
+	MaxBufferTime int  `mapstructure:"maxbuffertime"`
 }
 
 // NewVideoReceiver creates a new video track receiver
-func NewVideoReceiver(track *webrtc.Track) *VideoReceiver {
-	t := &VideoReceiver{
-		track:  track,
-		rtpCh:  make(chan *rtp.Packet, maxSize),
-		rtcpCh: make(chan rtcp.Packet, maxSize),
+func NewVideoReceiver(config VideoReceiverConfig, track *webrtc.Track) *VideoReceiver {
+	v := &VideoReceiver{
+		buffer: NewBuffer(track.SSRC(), track.PayloadType(), BufferOptions{
+			TCCOn:      config.TCCOn,
+			BufferTime: config.MaxBufferTime,
+		}),
+		track:        track,
+		rtpCh:        make(chan *rtp.Packet, maxSize),
+		rtcpCh:       make(chan rtcp.Packet, maxSize),
+		rembCycle:    config.REMBCycle,
+		pliCycle:     config.PLICycle,
+		maxBandwidth: config.MaxBandwidth,
 	}
 
-	t.jitterbuffer = plugins.NewJitterBuffer(plugins.JitterBufferConfig{}, t.rtpCh, t.rtcpCh)
+	go v.receiveRTP()
+	go v.pliLoop()
+	go v.rembLoop()
 
-	go t.receiveRTP()
-
-	return t
+	return v
 }
 
 // ReadRTP read rtp packet
-func (t *VideoReceiver) ReadRTP() (*rtp.Packet, error) {
-	rtp, ok := <-t.rtpCh
+func (v *VideoReceiver) ReadRTP() (*rtp.Packet, error) {
+	rtp, ok := <-v.rtpCh
 	if !ok {
 		return nil, errChanClosed
 	}
@@ -108,8 +135,8 @@ func (t *VideoReceiver) ReadRTP() (*rtp.Packet, error) {
 }
 
 // ReadRTCP read rtp packet
-func (t *VideoReceiver) ReadRTCP() (rtcp.Packet, error) {
-	rtcp, ok := <-t.rtcpCh
+func (v *VideoReceiver) ReadRTCP() (rtcp.Packet, error) {
+	rtcp, ok := <-v.rtcpCh
 	if !ok {
 		return nil, errChanClosed
 	}
@@ -117,34 +144,35 @@ func (t *VideoReceiver) ReadRTCP() (rtcp.Packet, error) {
 }
 
 // WriteRTCP write rtcp packet
-func (t *VideoReceiver) WriteRTCP(pkt rtcp.Packet) error {
-	t.rtcpCh <- pkt
+func (v *VideoReceiver) WriteRTCP(pkt rtcp.Packet) error {
+	v.rtcpCh <- pkt
 	return nil
 }
 
 // Track read rtp packet
-func (t *VideoReceiver) Track() *webrtc.Track {
-	return t.track
+func (v *VideoReceiver) Track() *webrtc.Track {
+	return v.track
 }
 
 // GetPacket get a buffered packet if we have one
-func (t *VideoReceiver) GetPacket(sn uint16) *rtp.Packet {
-	return t.jitterbuffer.GetPacket(t.track.SSRC(), sn)
+func (v *VideoReceiver) GetPacket(sn uint16) *rtp.Packet {
+	return v.buffer.GetPacket(sn)
 }
 
 // Close track
-func (t *VideoReceiver) Close() {
-	t.stop = true
+func (v *VideoReceiver) Close() {
+	v.stop = true
+	v.buffer.Stop()
 }
 
 // receiveRTP receive all incoming tracks' rtp and sent to one channel
-func (t *VideoReceiver) receiveRTP() {
+func (v *VideoReceiver) receiveRTP() {
 	for {
-		if t.stop {
+		if v.stop {
 			return
 		}
 
-		rtp, err := t.track.ReadRTP()
+		rtp, err := v.track.ReadRTP()
 		log.Tracef("got packet %v", rtp)
 		if err != nil {
 			if err == io.EOF {
@@ -152,10 +180,88 @@ func (t *VideoReceiver) receiveRTP() {
 			}
 			log.Errorf("rtp err => %v", err)
 		}
-		err = t.jitterbuffer.WriteRTP(rtp)
+
+		v.buffer.Push(rtp)
+		v.rtpCh <- rtp
 
 		if err != nil {
 			log.Errorf("jb err => %v", err)
 		}
 	}
+}
+
+func (v *VideoReceiver) pliLoop() {
+	for {
+		if v.stop {
+			return
+		}
+
+		if v.pliCycle <= 0 {
+			time.Sleep(time.Second)
+			continue
+		}
+
+		time.Sleep(time.Duration(v.pliCycle) * time.Second)
+		pli := &rtcp.PictureLossIndication{SenderSSRC: v.track.SSRC(), MediaSSRC: v.track.SSRC()}
+		// log.Infof("pliLoop send pli=%d pt=%v", buffer.GetSSRC(), buffer.GetPayloadType())
+
+		v.rtcpCh <- pli
+	}
+}
+
+func (v *VideoReceiver) rtcpLoop(b *Buffer) {
+	for pkt := range b.GetRTCPChan() {
+		if v.stop {
+			return
+		}
+		v.rtcpCh <- pkt
+	}
+}
+
+func (v *VideoReceiver) rembLoop() {
+	for {
+		if v.stop {
+			return
+		}
+
+		if v.rembCycle <= 0 {
+			time.Sleep(time.Second)
+			continue
+		}
+
+		time.Sleep(time.Duration(v.rembCycle) * time.Second)
+		// only calc video recently
+		v.lostRate, v.bandwidth = v.buffer.GetLostRateBandwidth(uint64(v.rembCycle))
+		var bw uint64
+		if v.lostRate == 0 && v.bandwidth == 0 {
+			bw = uint64(v.maxBandwidth)
+		} else if v.lostRate >= 0 && v.lostRate < 0.1 {
+			bw = uint64(v.bandwidth * 2)
+		} else {
+			bw = uint64(float64(v.bandwidth) * (1 - v.lostRate))
+		}
+
+		if bw < minBandwidth {
+			bw = minBandwidth
+		}
+
+		if bw > uint64(v.maxBandwidth) {
+			bw = uint64(v.maxBandwidth)
+		}
+
+		remb := &rtcp.ReceiverEstimatedMaximumBitrate{
+			SenderSSRC: v.buffer.GetSSRC(),
+			Bitrate:    bw * 1000,
+			SSRCs:      []uint32{v.buffer.GetSSRC()},
+		}
+
+		v.rtcpCh <- remb
+	}
+}
+
+// Stat get stat from buffers
+func (v *VideoReceiver) stat() string {
+	out := ""
+	out += fmt.Sprintf("payload:%d | lostRate:%.2f | bandwidth:%dkbps | %s", v.buffer.GetPayloadType(), v.lostRate, v.bandwidth, v.buffer.GetStat())
+	return out
 }

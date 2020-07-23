@@ -50,8 +50,7 @@ func TestAudioReceiverRTPForwarding(t *testing.T) {
 	err = signalPair(remote, sfu)
 	assert.NoError(t, err)
 
-	sendVideoUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
-
+	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
 }
 
 func TestVideoReceiverRTPForwarding(t *testing.T) {
@@ -68,7 +67,7 @@ func TestVideoReceiverRTPForwarding(t *testing.T) {
 
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
 	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
-		receiver := NewVideoReceiver(track)
+		receiver := NewVideoReceiver(VideoReceiverConfig{}, track)
 		assert.Equal(t, track, receiver.Track())
 
 		out, err := receiver.ReadRTP()
@@ -89,6 +88,6 @@ func TestVideoReceiverRTPForwarding(t *testing.T) {
 	err = signalPair(remote, sfu)
 	assert.NoError(t, err)
 
-	sendVideoUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
+	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
 
 }

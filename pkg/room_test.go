@@ -43,6 +43,10 @@ func TestRoom(t *testing.T) {
 	assert.Equal(t, peer, room.peers[peer.id])
 	assert.Len(t, room.peers, 1)
 
+	stats := room.stats()
+
+	assert.Contains(t, stats, peer.id)
+
 	// Close peer so they are removed from room
 	peer.Close()
 

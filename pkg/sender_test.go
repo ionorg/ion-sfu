@@ -42,7 +42,7 @@ func signalPair(pcOffer *webrtc.PeerConnection, pcAnswer *webrtc.PeerConnection)
 	return pcOffer.SetRemoteDescription(*pcAnswer.LocalDescription())
 }
 
-func sendVideoUntilDone(done <-chan struct{}, t *testing.T, tracks []*webrtc.Track) {
+func sendRTPUntilDone(done <-chan struct{}, t *testing.T, tracks []*webrtc.Track) {
 	for {
 		select {
 		case <-time.After(20 * time.Millisecond):
@@ -68,13 +68,11 @@ func TestSenderRTPForwarding(t *testing.T) {
 
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
 	remote.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
-		for {
-			out, err := track.ReadRTP()
-			assert.NoError(t, err)
+		out, err := track.ReadRTP()
+		assert.NoError(t, err)
 
-			assert.Equal(t, []byte{0x10, 0x01, 0x02, 0x03, 0x04}, out.Payload)
-			onReadRTPFiredFunc()
-		}
+		assert.Equal(t, []byte{0x10, 0x01, 0x02, 0x03, 0x04}, out.Payload)
+		onReadRTPFiredFunc()
 	})
 
 	track, err := sfu.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
@@ -97,7 +95,7 @@ func TestSenderRTPForwarding(t *testing.T) {
 	err = sender.WriteRTP(rtp)
 	assert.NoError(t, err)
 
-	sendVideoUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
+	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
 }
 
 func sendRTCPUntilDone(done <-chan struct{}, t *testing.T, pc *webrtc.PeerConnection, pkt rtcp.Packet) {

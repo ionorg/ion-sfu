@@ -248,6 +248,10 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 						},
 					},
 				})
+
+				if err != nil {
+					log.Errorf("negotiation error %s", err)
+				}
 			})
 
 			err = stream.Send(&pb.SignalReply{

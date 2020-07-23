@@ -57,7 +57,7 @@ func NewPeer(offer webrtc.SessionDescription) (*Peer, error) {
 		var recv Receiver
 		switch track.Kind() {
 		case webrtc.RTPCodecTypeVideo:
-			recv = NewVideoReceiver(track)
+			recv = NewVideoReceiver(VideoReceiverConfig{}, track)
 		case webrtc.RTPCodecTypeAudio:
 			recv = NewAudioReceiver(track)
 		}

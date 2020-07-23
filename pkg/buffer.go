@@ -1,4 +1,4 @@
-package plugins
+package sfu
 
 import (
 	"fmt"
@@ -90,8 +90,10 @@ type BufferOptions struct {
 }
 
 // NewBuffer constructs a new Buffer
-func NewBuffer(o BufferOptions) *Buffer {
+func NewBuffer(ssrc uint32, pt uint8, o BufferOptions) *Buffer {
 	b := &Buffer{
+		ssrc:           ssrc,
+		payloadType:    pt,
 		rtcpCh:         make(chan rtcp.Packet, maxPktSize),
 		rtpExtInfoChan: make(chan rtpExtInfo, maxPktSize),
 	}
@@ -406,12 +408,6 @@ func (b *Buffer) GetNackPair(buffer [65536]*rtp.Packet, begin, end uint16) (rtcp
 	}
 	// log.Tracef("NackPair begin=%v end=%v buffer=%v\n", begin, end, buffer[begin:end])
 	return rtcp.NackPair{PacketID: lost, LostPackets: rtcp.PacketBitmap(blp)}, lostPkt
-}
-
-// SetSSRCPT set ssrc payloadtype
-func (b *Buffer) SetSSRCPT(ssrc uint32, pt uint8) {
-	b.ssrc = ssrc
-	b.payloadType = pt
 }
 
 // GetSSRC get ssrc

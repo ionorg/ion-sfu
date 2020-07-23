@@ -82,7 +82,7 @@ func TestNewPeerCallsOnRouterWithVideoTrackRouter(t *testing.T) {
 		onRouterFiredFunc()
 	})
 
-	sendVideoUntilDone(onRouterFired.Done(), t, []*webrtc.Track{track})
+	sendRTPUntilDone(onRouterFired.Done(), t, []*webrtc.Track{track})
 }
 
 // func TestPeerPairClientBGetsOnRouterWhenClientAAddsVideo(t *testing.T) {
