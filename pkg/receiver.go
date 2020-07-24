@@ -14,8 +14,6 @@ import (
 const (
 	// bandwidth range(kbps)
 	minBandwidth = 200
-	maxREMBCycle = 5
-	maxPLICycle  = 5
 	maxSize      = 100
 )
 
@@ -121,6 +119,7 @@ func NewVideoReceiver(config VideoReceiverConfig, track *webrtc.Track) *VideoRec
 	go v.receiveRTP()
 	go v.pliLoop()
 	go v.rembLoop()
+	go v.bufferRtcpLoop()
 
 	return v
 }
@@ -209,8 +208,8 @@ func (v *VideoReceiver) pliLoop() {
 	}
 }
 
-func (v *VideoReceiver) rtcpLoop(b *Buffer) {
-	for pkt := range b.GetRTCPChan() {
+func (v *VideoReceiver) bufferRtcpLoop() {
+	for pkt := range v.buffer.GetRTCPChan() {
 		if v.stop {
 			return
 		}
