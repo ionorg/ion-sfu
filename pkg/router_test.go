@@ -43,19 +43,14 @@ func TestRouter(t *testing.T) {
 		subtrack, err := subsfu.NewTrack(webrtc.DefaultPayloadTypeVP8, track.SSRC(), "video", "pion")
 		assert.NoError(t, err)
 
-		trans, err := subsfu.AddTransceiverFromTrack(subtrack, webrtc.RtpTransceiverInit{
-			Direction: webrtc.RTPTransceiverDirectionSendonly,
-			SendEncodings: []webrtc.RTPEncodingParameters{{
-				RTPCodingParameters: webrtc.RTPCodingParameters{SSRC: subtrack.SSRC(), PayloadType: webrtc.DefaultPayloadTypeVP8},
-			}},
-		})
+		s, err := subsfu.AddTrack(subtrack)
 		assert.NoError(t, err)
 
 		err = signalPair(subsfu, sub)
 		assert.NoError(t, err)
 
 		subPid := "subpid"
-		sender := NewSender(subtrack, trans)
+		sender := NewSender(subtrack, s)
 		router.AddSub(subPid, sender)
 		assert.Len(t, router.subs, 1)
 		assert.Equal(t, sender, router.subs[subPid])

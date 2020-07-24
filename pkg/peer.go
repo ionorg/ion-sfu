@@ -26,6 +26,7 @@ type Peer struct {
 	onCloseHandler             func()
 	onNegotiationNeededHandler func()
 	onRouterHander             func(*Router)
+	onRouterHanderLock         sync.RWMutex
 }
 
 // NewPeer creates a new Peer
@@ -75,7 +76,9 @@ func NewPeer(offer webrtc.SessionDescription) (*Peer, error) {
 		log.Infof("Create router %s %d", p.id, recv.Track().SSRC())
 
 		if p.onRouterHander != nil {
+			p.onRouterHanderLock.Lock()
 			p.onRouterHander(router)
+			p.onRouterHanderLock.Unlock()
 		}
 	})
 
@@ -163,7 +166,9 @@ func (p *Peer) OnClose(f func()) {
 
 // OnRouter handler called when a router is added
 func (p *Peer) OnRouter(f func(*Router)) {
+	p.onRouterHanderLock.Lock()
 	p.onRouterHander = f
+	p.onRouterHanderLock.Unlock()
 }
 
 // AddICECandidate to peer connection
@@ -206,28 +211,23 @@ func (p *Peer) Subscribe(router *Router) error {
 		return err
 	}
 
-	trans, err := p.pc.AddTransceiverFromTrack(track, webrtc.RtpTransceiverInit{
-		Direction: webrtc.RTPTransceiverDirectionSendonly,
-		SendEncodings: []webrtc.RTPEncodingParameters{{
-			RTPCodingParameters: webrtc.RTPCodingParameters{SSRC: track.SSRC(), PayloadType: pt},
-		}},
-	})
+	s, err := p.pc.AddTrack(track)
 
 	if err != nil {
-		log.Errorf("Error creating send transceiver")
+		log.Errorf("Error adding send track")
 		return err
 	}
 
 	// Create sender track on peer we are sending track to
-	sender := NewSender(track, trans)
+	sender := NewSender(track, s)
 
 	// Attach sender to source
 	router.AddSub(p.id, sender)
 
 	// Debounced until `OnNegotiationNeeded` supported by pion
-	if p.onNegotiationNeededHandler != nil {
-		p.onNegotiationNeededHandler()
-	}
+	// if p.onNegotiationNeededHandler != nil {
+	// 	p.onNegotiationNeededHandler()
+	// }
 
 	return nil
 }

@@ -28,7 +28,7 @@ type Sender struct {
 }
 
 // NewSender creates a new send track instance
-func NewSender(track *webrtc.Track, trans *webrtc.RTPTransceiver) *Sender {
+func NewSender(track *webrtc.Track, sender *webrtc.RTPSender) *Sender {
 	s := &Sender{
 		track:  track,
 		rtcpCh: make(chan rtcp.Packet, maxSize),
@@ -45,7 +45,7 @@ func NewSender(track *webrtc.Track, trans *webrtc.RTPTransceiver) *Sender {
 		}
 	}
 
-	go s.receiveRTCP(trans.Sender())
+	go s.receiveRTCP(sender)
 
 	return s
 }

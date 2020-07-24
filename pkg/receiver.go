@@ -1,7 +1,6 @@
 package sfu
 
 import (
-	"fmt"
 	"io"
 	"time"
 
@@ -259,8 +258,8 @@ func (v *VideoReceiver) rembLoop() {
 }
 
 // Stat get stat from buffers
-func (v *VideoReceiver) stat() string {
-	out := ""
-	out += fmt.Sprintf("payload:%d | lostRate:%.2f | bandwidth:%dkbps | %s", v.buffer.GetPayloadType(), v.lostRate, v.bandwidth, v.buffer.GetStat())
-	return out
-}
+// func (v *VideoReceiver) stat() string {
+// 	out := ""
+// 	out += fmt.Sprintf("payload:%d | lostRate:%.2f | bandwidth:%dkbps | %s", v.buffer.GetPayloadType(), v.lostRate, v.bandwidth, v.buffer.GetStat())
+// 	return out
+// }

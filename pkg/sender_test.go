@@ -76,15 +76,10 @@ func TestSenderRTPForwarding(t *testing.T) {
 	track, err := sfu.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
 	assert.NoError(t, err)
 
-	trans, err := sfu.AddTransceiverFromTrack(track, webrtc.RtpTransceiverInit{
-		Direction: webrtc.RTPTransceiverDirectionSendonly,
-		SendEncodings: []webrtc.RTPEncodingParameters{{
-			RTPCodingParameters: webrtc.RTPCodingParameters{SSRC: track.SSRC(), PayloadType: webrtc.DefaultPayloadTypeVP8},
-		}},
-	})
+	s, err := sfu.AddTrack(track)
 	assert.NoError(t, err)
 
-	sender := NewSender(track, trans)
+	sender := NewSender(track, s)
 	assert.NotNil(t, sender)
 
 	err = signalPair(sfu, remote)
@@ -118,15 +113,10 @@ func TestSenderRTCPForwarding(t *testing.T) {
 	track, err := sfu.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
 	assert.NoError(t, err)
 
-	trans, err := sfu.AddTransceiverFromTrack(track, webrtc.RtpTransceiverInit{
-		Direction: webrtc.RTPTransceiverDirectionSendonly,
-		SendEncodings: []webrtc.RTPEncodingParameters{{
-			RTPCodingParameters: webrtc.RTPCodingParameters{SSRC: track.SSRC(), PayloadType: webrtc.DefaultPayloadTypeVP8},
-		}},
-	})
+	s, err := sfu.AddTrack(track)
 	assert.NoError(t, err)
 
-	sender := NewSender(track, trans)
+	sender := NewSender(track, s)
 	assert.NotNil(t, sender)
 
 	err = signalPair(sfu, remote)
@@ -176,15 +166,10 @@ func TestSenderRTCPREMBForwarding(t *testing.T) {
 	track, err := sfu.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
 	assert.NoError(t, err)
 
-	trans, err := sfu.AddTransceiverFromTrack(track, webrtc.RtpTransceiverInit{
-		Direction: webrtc.RTPTransceiverDirectionSendonly,
-		SendEncodings: []webrtc.RTPEncodingParameters{{
-			RTPCodingParameters: webrtc.RTPCodingParameters{SSRC: track.SSRC(), PayloadType: webrtc.DefaultPayloadTypeVP8},
-		}},
-	})
+	s, err := sfu.AddTrack(track)
 	assert.NoError(t, err)
 
-	sender := NewSender(track, trans)
+	sender := NewSender(track, s)
 	assert.NotNil(t, sender)
 
 	err = signalPair(sfu, remote)
