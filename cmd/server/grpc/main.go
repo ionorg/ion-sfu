@@ -214,6 +214,10 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 
 			// Notify user of trickle candidates
 			peer.OnICECandidate(func(c *webrtc.ICECandidate) {
+				if c == nil {
+					// Gathering done
+					return
+				}
 				err = stream.Send(&pb.SignalReply{
 					Payload: &pb.SignalReply_Trickle{
 						Trickle: &pb.Trickle{

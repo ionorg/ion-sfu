@@ -202,7 +202,12 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 
 		// Notify user of trickle candidates
 		peer.OnICECandidate(func(c *webrtc.ICECandidate) {
-			log.Debugf("Sending ice candidate")
+			log.Debugf("Sending ICE candidate")
+			if c == nil {
+				// Gathering done
+				return
+			}
+
 			if err := conn.Notify(ctx, "trickle", c.String()); err != nil {
 				log.Errorf("error sending trickle %s", err)
 			}

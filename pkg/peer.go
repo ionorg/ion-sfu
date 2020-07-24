@@ -142,23 +142,6 @@ func (p *Peer) SetRemoteDescription(desc webrtc.SessionDescription) error {
 	return nil
 }
 
-// Offer ..
-func (p *Peer) Offer() (webrtc.SessionDescription, error) {
-	offer, err := p.pc.CreateOffer(nil)
-	if err != nil {
-		log.Errorf("Offer error: p.pc.CreateOffer %v", err)
-		return webrtc.SessionDescription{}, err
-	}
-
-	err = p.pc.SetLocalDescription(offer)
-	if err != nil {
-		log.Errorf("Offer error: p.pc.SetLocalDescription offer=%v err=%v", offer, err)
-		return webrtc.SessionDescription{}, err
-	}
-
-	return offer, nil
-}
-
 // OnClose is called when the peer is closed
 func (p *Peer) OnClose(f func()) {
 	p.onCloseHandler = f
