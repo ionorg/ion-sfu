@@ -114,7 +114,6 @@ func TestPeerPairRemoteBGetsOnTrack(t *testing.T) {
 	})
 
 	// Subscribe b to a
-	// peerAOnRouterCalled := make(chan bool)
 	peerA.OnRouter(func(r *Router) {
 		// Setup remote <-> peer for b
 		offer, err := remoteB.CreateOffer(nil)
@@ -147,130 +146,79 @@ func TestPeerPairRemoteBGetsOnTrack(t *testing.T) {
 	sendRTPUntilDone(remoteBOnTrackFired.Done(), t, []*webrtc.Track{trackA, trackB})
 }
 
-// func TestPeerPairRemoteAGetsOnTrackWhenRemoteBJoinsWithPub(t *testing.T) {
-// 	me := webrtc.MediaEngine{}
-// 	me.RegisterDefaultCodecs()
-// 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
-// 	remoteA, remoteB, err := newPair(webrtc.Configuration{}, api)
-// 	assert.NoError(t, err)
+func TestPeerPairRemoteAGetsOnTrackWhenRemoteBJoinsWithPub(t *testing.T) {
+	me := webrtc.MediaEngine{}
+	me.RegisterDefaultCodecs()
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+	remoteA, remoteB, err := newPair(webrtc.Configuration{}, api)
+	assert.NoError(t, err)
 
-// 	// Add a pub track for remote A
-// 	trackA, err := remoteA.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
-// 	assert.NoError(t, err)
-// 	_, err = remoteA.AddTrack(trackA)
-// 	assert.NoError(t, err)
+	// Add a pub track for remote A
+	trackA, err := remoteA.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+	_, err = remoteA.AddTrack(trackA)
+	assert.NoError(t, err)
 
-// 	// Add a pub track for remote B
-// 	trackB, err := remoteB.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
-// 	assert.NoError(t, err)
-// 	_, err = remoteB.AddTrack(trackB)
-// 	assert.NoError(t, err)
+	// Setup remote <-> peer for a
+	peerA, err := signalPeer(remoteA)
+	assert.NoError(t, err)
 
-// 	remoteAOnTrackFired, remoteAOnTrackFiredFunc := context.WithCancel(context.Background())
-// 	remoteA.OnTrack(func(*webrtc.Track, *webrtc.RTPReceiver) {
-// 		remoteAOnTrackFiredFunc()
-// 	})
+	// Add a pub track for remote B
+	trackB, err := remoteB.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+	_, err = remoteB.AddTrack(trackB)
+	assert.NoError(t, err)
 
-// 	remoteB.OnTrack(func(*webrtc.Track, *webrtc.RTPReceiver) {
-// 		remoteAOnTrackFiredFunc()
-// 	})
+	remoteAOnTrackFired, remoteAOnTrackFiredFunc := context.WithCancel(context.Background())
+	remoteA.OnTrack(func(*webrtc.Track, *webrtc.RTPReceiver) {
+		remoteAOnTrackFiredFunc()
+	})
 
-// 	// Setup remote <-> peer for a
-// 	offerA, err := remoteA.CreateOffer(nil)
-// 	assert.NoError(t, err)
-// 	gatherComplete := webrtc.GatheringCompletePromise(remoteA)
-// 	err = remoteA.SetLocalDescription(offerA)
-// 	assert.NoError(t, err)
-// 	<-gatherComplete
-// 	peerA, err := NewPeer(*remoteA.LocalDescription())
-// 	assert.NoError(t, err)
+	// Subscribe a to b
+	// Setup remote <-> peer for b
+	offer, err := remoteB.CreateOffer(nil)
+	assert.NoError(t, err)
 
-// 	// Setup remote <-> peer for b
-// 	offerB, err := remoteB.CreateOffer(nil)
-// 	assert.NoError(t, err)
-// 	gatherComplete = webrtc.GatheringCompletePromise(remoteA)
-// 	err = remoteB.SetLocalDescription(offerB)
-// 	assert.NoError(t, err)
-// 	<-gatherComplete
-// 	peerB, err := NewPeer(*remoteB.LocalDescription())
-// 	assert.NoError(t, err)
+	err = remoteB.SetLocalDescription(offer)
+	assert.NoError(t, err)
+	gatherComplete := webrtc.GatheringCompletePromise(remoteB)
 
-// 	// Subscribe b to a
-// 	peerAOnRouterCalled := make(chan bool)
-// 	peerA.OnRouter(func(r *Router) {
-// 		err = peerB.Subscribe(r)
-// 		assert.NoError(t, err)
-// 		close(peerAOnRouterCalled)
-// 	})
+	peerB, err := NewPeer(offer)
+	assert.NoError(t, err)
 
-// 	// Subscribe a to b
-// 	peerBOnRouterCalled := make(chan bool)
-// 	peerB.OnRouter(func(r *Router) {
-// 		err = peerA.Subscribe(r)
-// 		assert.NoError(t, err)
-// 		close(peerBOnRouterCalled)
-// 	})
+	peerB.OnRouter(func(r *Router) {
+		// Subscribe to remoteA track
+		err = peerA.Subscribe(r)
+		assert.NoError(t, err)
 
-// 	// Resignal for remote a
-// 	peerANegotiationHandlerCalled := make(chan bool)
-// 	peerA.OnNegotiationNeeded(func() {
-// 		offer, err := peerA.CreateOffer()
-// 		assert.NoError(t, err)
-// 		gatherComplete := webrtc.GatheringCompletePromise(remoteA)
-// 		err = peerA.SetLocalDescription(offer)
-// 		assert.NoError(t, err)
-// 		<-gatherComplete
-// 		err = remoteA.SetRemoteDescription(*peerA.pc.LocalDescription())
-// 		assert.NoError(t, err)
-// 		answer, err := remoteA.CreateAnswer(nil)
-// 		assert.NoError(t, err)
-// 		err = peerA.SetRemoteDescription(answer)
-// 		assert.NoError(t, err)
-// 		close(peerANegotiationHandlerCalled)
-// 		remoteAOnTrackFiredFunc()
-// 	})
+		// Renegotiate
+		offer, err := peerA.CreateOffer()
+		assert.NoError(t, err)
+		err = peerA.SetLocalDescription(offer)
+		assert.NoError(t, err)
+		gatherComplete := webrtc.GatheringCompletePromise(peerA.pc)
+		<-gatherComplete
+		err = remoteA.SetRemoteDescription(*peerA.pc.LocalDescription())
+		assert.NoError(t, err)
+		answer, err := remoteA.CreateAnswer(nil)
+		assert.NoError(t, err)
+		err = remoteA.SetLocalDescription(answer)
+		assert.NoError(t, err)
+		err = peerA.SetRemoteDescription(*remoteA.LocalDescription())
+		assert.NoError(t, err)
+	})
 
-// 	// Resignal for remote b
-// 	peerBNegotiationHandlerCalled := make(chan bool)
-// 	peerB.OnNegotiationNeeded(func() {
-// 		offer, err := peerB.CreateOffer()
-// 		assert.NoError(t, err)
-// 		gatherComplete := webrtc.GatheringCompletePromise(remoteA)
-// 		err = peerB.SetLocalDescription(offer)
-// 		assert.NoError(t, err)
-// 		<-gatherComplete
-// 		err = remoteB.SetRemoteDescription(*peerB.pc.LocalDescription())
-// 		assert.NoError(t, err)
-// 		answer, err := remoteB.CreateAnswer(nil)
-// 		assert.NoError(t, err)
-// 		err = peerB.SetRemoteDescription(answer)
-// 		assert.NoError(t, err)
-// 		close(peerBNegotiationHandlerCalled)
-// 	})
+	<-gatherComplete
 
-// 	// Complete intial signaling for A
-// 	err = peerA.SetRemoteDescription(*remoteA.LocalDescription())
-// 	assert.NoError(t, err)
-// 	answer, err := peerA.CreateAnswer()
-// 	assert.NoError(t, err)
-// 	err = peerA.SetLocalDescription(answer)
-// 	assert.NoError(t, err)
-// 	err = remoteA.SetRemoteDescription(answer)
-// 	assert.NoError(t, err)
+	// Finish signaling
+	err = peerB.SetRemoteDescription(*remoteB.LocalDescription())
+	assert.NoError(t, err)
+	answer, err := peerB.CreateAnswer()
+	assert.NoError(t, err)
+	err = peerB.SetLocalDescription(answer)
+	assert.NoError(t, err)
+	err = remoteB.SetRemoteDescription(*peerB.pc.LocalDescription())
+	assert.NoError(t, err)
 
-// 	// Complete intial signaling for B
-// 	err = peerB.SetRemoteDescription(*remoteB.LocalDescription())
-// 	assert.NoError(t, err)
-// 	answer, err = peerB.CreateAnswer()
-// 	assert.NoError(t, err)
-// 	err = peerB.SetLocalDescription(answer)
-// 	assert.NoError(t, err)
-// 	err = remoteB.SetRemoteDescription(answer)
-// 	assert.NoError(t, err)
-
-// 	sendRTPUntilDone(remoteAOnTrackFired.Done(), t, []*webrtc.Track{trackA, trackB})
-// 	<-peerAOnRouterCalled
-// 	<-peerBOnRouterCalled
-// 	<-peerANegotiationHandlerCalled
-// 	<-peerBNegotiationHandlerCalled
-// }
+	sendRTPUntilDone(remoteAOnTrackFired.Done(), t, []*webrtc.Track{trackA, trackB})
+}
