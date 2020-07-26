@@ -19,6 +19,9 @@ import (
 var (
 	conf = sfu.Config{}
 	file string
+	cert string
+	key  string
+	addr string
 )
 
 const (
@@ -28,6 +31,9 @@ const (
 func showHelp() {
 	fmt.Printf("Usage:%s {params}\n", os.Args[0])
 	fmt.Println("      -c {config file}")
+	fmt.Println("      -cert {cert file}")
+	fmt.Println("      -key {key file}")
+	fmt.Println("      -a{listen addr}")
 	fmt.Println("      -h (show help info)")
 }
 
@@ -67,6 +73,9 @@ func load() bool {
 
 func parse() bool {
 	flag.StringVar(&file, "c", "config.toml", "config file")
+	flag.StringVar(&cert, "cert", "", "cert file")
+	flag.StringVar(&key, "key", "", "key file")
+	flag.StringVar(&addr, "a", "0.0.0.0:7000", "listen addr")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
 	if !load() {
@@ -150,8 +159,13 @@ func main() {
 
 	http.Handle("/ws", websocket.Handler(serve))
 
-	log.Infof("Listening at %s", "localhost:7000")
-	err = http.ListenAndServe("localhost:7000", nil)
+	if key != "" && cert != "" {
+		log.Infof("Listening at TLS [%s]", addr)
+		err = http.ListenAndServeTLS(addr, cert, key, nil)
+	} else {
+		log.Infof("Listening at non-TLS [%s]", addr)
+		err = http.ListenAndServe(addr, nil)
+	}
 	if err != nil {
 		panic(err)
 	}
