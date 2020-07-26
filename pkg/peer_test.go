@@ -75,6 +75,34 @@ func TestNewPeerCallsOnRouterWithVideoTrackRouter(t *testing.T) {
 	// Create sfu peer for remote A and complete signaling
 	peer, err := signalPeer(remote)
 	assert.NoError(t, err)
+	assert.Equal(t, peer.id, peer.ID())
+
+	onRouterFired, onRouterFiredFunc := context.WithCancel(context.Background())
+	peer.OnRouter(func(r *Router) {
+		assert.Equal(t, track.SSRC(), r.pub.Track().SSRC())
+		onRouterFiredFunc()
+	})
+
+	sendRTPUntilDone(onRouterFired.Done(), t, []*webrtc.Track{track})
+}
+
+func TestNewPeerCallsOnRouterWithAudioTrackRouter(t *testing.T) {
+	me := webrtc.MediaEngine{}
+	me.RegisterDefaultCodecs()
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+	remote, err := api.NewPeerConnection(webrtc.Configuration{})
+	assert.NoError(t, err)
+
+	track, err := remote.NewTrack(webrtc.DefaultPayloadTypeOpus, rand.Uint32(), "audio", "pion")
+	assert.NoError(t, err)
+
+	_, err = remote.AddTrack(track)
+	assert.NoError(t, err)
+
+	// Create sfu peer for remote A and complete signaling
+	peer, err := signalPeer(remote)
+	assert.NoError(t, err)
+	assert.Equal(t, peer.id, peer.ID())
 
 	onRouterFired, onRouterFiredFunc := context.WithCancel(context.Background())
 	peer.OnRouter(func(r *Router) {
@@ -171,6 +199,7 @@ func TestPeerPairRemoteAGetsOnTrackWhenRemoteBJoinsWithPub(t *testing.T) {
 
 	remoteAOnTrackFired, remoteAOnTrackFiredFunc := context.WithCancel(context.Background())
 	remoteA.OnTrack(func(*webrtc.Track, *webrtc.RTPReceiver) {
+		peerA.stats()
 		remoteAOnTrackFiredFunc()
 	})
 
