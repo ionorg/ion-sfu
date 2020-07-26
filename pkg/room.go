@@ -74,6 +74,9 @@ func (r *Room) AddPeer(p *Peer) {
 			if err != nil {
 				log.Errorf("Error subscribing peer to router: %s", err)
 			}
+			if peer.onNegotiationNeededHandler != nil {
+				peer.onNegotiationNeededHandler()
+			}
 		}
 	})
 }

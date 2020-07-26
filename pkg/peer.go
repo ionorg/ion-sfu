@@ -207,11 +207,6 @@ func (p *Peer) Subscribe(router *Router) error {
 	// Attach sender to source
 	router.AddSub(p.id, sender)
 
-	// Debounced until `OnNegotiationNeeded` supported by pion
-	// if p.onNegotiationNeededHandler != nil {
-	// 	p.onNegotiationNeededHandler()
-	// }
-
 	return nil
 }
 

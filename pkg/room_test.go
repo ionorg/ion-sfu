@@ -89,6 +89,11 @@ func TestMultiPeerRoom(t *testing.T) {
 		onReadRTPFiredFunc()
 	})
 
+	onNegotationNeededFired, onNegotationNeededFiredFunc := context.WithCancel(context.Background())
+	peerA.OnNegotiationNeeded(func() {
+		onNegotationNeededFiredFunc()
+	})
+
 	room.AddPeer(peerA)
 
 	cacheFn := peerA.onRouterHander
@@ -116,4 +121,5 @@ func TestMultiPeerRoom(t *testing.T) {
 	})
 
 	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{trackA})
+	<-onNegotationNeededFired.Done()
 }
