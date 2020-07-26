@@ -54,3 +54,66 @@ func TestRoom(t *testing.T) {
 
 	<-onCloseFired.Done()
 }
+
+func TestMultiPeerRoom(t *testing.T) {
+	me := webrtc.MediaEngine{}
+	me.RegisterDefaultCodecs()
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+	remoteA, remoteB, err := newPair(webrtc.Configuration{}, api)
+	assert.NoError(t, err)
+
+	// Add a pub track for remote A
+	trackA, err := remoteA.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+	_, err = remoteA.AddTrack(trackA)
+	assert.NoError(t, err)
+
+	// Setup remote <-> peer for a
+	peerA, err := signalPeer(remoteA)
+	assert.NoError(t, err)
+
+	// Add a pub track for remote B
+	trackB, err := remoteB.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+	_, err = remoteB.AddTrack(trackB)
+	assert.NoError(t, err)
+
+	// Setup remote <-> peer for b
+	peerB, err := signalPeer(remoteB)
+	assert.NoError(t, err)
+
+	room := NewRoom("room")
+
+	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
+	room.OnClose(func() {
+		onReadRTPFiredFunc()
+	})
+
+	room.AddPeer(peerA)
+
+	cacheFn := peerA.onRouterHander
+	peerA.OnRouter(func(router *Router) {
+		cacheFn(router)
+		assert.Len(t, peerA.routers, 1)
+
+		room.AddPeer(peerB)
+
+		cacheFn = peerB.onRouterHander
+		peerB.OnRouter(func(router *Router) {
+			cacheFn(router)
+			assert.Len(t, peerB.routers, 1)
+
+			assert.Len(t, peerA.routers[trackA.SSRC()].subs, 1)
+			assert.Equal(t, trackA.SSRC(), peerA.routers[trackA.SSRC()].subs[peerB.id].track.SSRC())
+			assert.Len(t, peerB.routers[trackB.SSRC()].subs, 1)
+			assert.Equal(t, trackB.SSRC(), peerB.routers[trackB.SSRC()].subs[peerA.id].track.SSRC())
+
+			peerA.Close()
+			peerB.Close()
+		})
+
+		sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{trackB})
+	})
+
+	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{trackA})
+}

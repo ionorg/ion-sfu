@@ -2,6 +2,7 @@ package sfu
 
 import (
 	"io"
+	"sync"
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
@@ -26,14 +27,14 @@ type Receiver interface {
 	Close()
 }
 
-// AudioReceiver receives a video track
+// AudioReceiver receives a audio track
 type AudioReceiver struct {
 	track *webrtc.Track
 	stop  bool
 	rtpCh chan *rtp.Packet
 }
 
-// NewAudioReceiver creates a new video track receiver
+// NewAudioReceiver creates a new audio track receiver
 func NewAudioReceiver(track *webrtc.Track) *AudioReceiver {
 	t := &AudioReceiver{
 		track: track,
@@ -51,7 +52,7 @@ func (t *AudioReceiver) ReadRTP() (*rtp.Packet, error) {
 	return t.track.ReadRTP()
 }
 
-// ReadRTCP read rtp packet
+// ReadRTCP read rtcp packet
 func (t *AudioReceiver) ReadRTCP() (rtcp.Packet, error) {
 	return nil, errMethodNotSupported
 }
@@ -61,7 +62,7 @@ func (t *AudioReceiver) WriteRTCP(pkt rtcp.Packet) error {
 	return errMethodNotSupported
 }
 
-// Track read rtp packet
+// Track returns receiver track
 func (t *AudioReceiver) Track() *webrtc.Track {
 	return t.track
 }
@@ -85,6 +86,7 @@ type VideoReceiver struct {
 	stop      bool
 	rtpCh     chan *rtp.Packet
 	rtcpCh    chan rtcp.Packet
+	mu        sync.RWMutex
 
 	pliCycle     int
 	rembCycle    int
@@ -95,7 +97,7 @@ type VideoReceiver struct {
 type VideoReceiverConfig struct {
 	TCCOn         bool `mapstructure:"tccon"`
 	REMBCycle     int  `mapstructure:"rembcycle"`
-	PLICycle      int  `mapstructure:"rembcycle"`
+	PLICycle      int  `mapstructure:"plicycle"`
 	MaxBandwidth  int  `mapstructure:"maxbandwidth"`
 	MaxBufferTime int  `mapstructure:"maxbuffertime"`
 }
@@ -123,7 +125,7 @@ func NewVideoReceiver(config VideoReceiverConfig, track *webrtc.Track) *VideoRec
 	return v
 }
 
-// ReadRTP read rtp packet
+// ReadRTP read rtp packets
 func (v *VideoReceiver) ReadRTP() (*rtp.Packet, error) {
 	rtp, ok := <-v.rtpCh
 	if !ok {
@@ -132,7 +134,7 @@ func (v *VideoReceiver) ReadRTP() (*rtp.Packet, error) {
 	return rtp, nil
 }
 
-// ReadRTCP read rtp packet
+// ReadRTCP read rtcp packets
 func (v *VideoReceiver) ReadRTCP() (rtcp.Packet, error) {
 	rtcp, ok := <-v.rtcpCh
 	if !ok {
@@ -147,7 +149,7 @@ func (v *VideoReceiver) WriteRTCP(pkt rtcp.Packet) error {
 	return nil
 }
 
-// Track read rtp packet
+// Track returns receiver track
 func (v *VideoReceiver) Track() *webrtc.Track {
 	return v.track
 }
@@ -159,6 +161,11 @@ func (v *VideoReceiver) GetPacket(sn uint16) *rtp.Packet {
 
 // Close track
 func (v *VideoReceiver) Close() {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.stop {
+		return
+	}
 	v.stop = true
 	v.buffer.Stop()
 }
@@ -166,9 +173,11 @@ func (v *VideoReceiver) Close() {
 // receiveRTP receive all incoming tracks' rtp and sent to one channel
 func (v *VideoReceiver) receiveRTP() {
 	for {
+		v.mu.RLock()
 		if v.stop {
 			return
 		}
+		v.mu.RUnlock()
 
 		rtp, err := v.track.ReadRTP()
 		log.Tracef("got packet %v", rtp)
@@ -190,9 +199,11 @@ func (v *VideoReceiver) receiveRTP() {
 
 func (v *VideoReceiver) pliLoop() {
 	for {
+		v.mu.RLock()
 		if v.stop {
 			return
 		}
+		v.mu.RUnlock()
 
 		if v.pliCycle <= 0 {
 			time.Sleep(time.Second)
@@ -209,18 +220,22 @@ func (v *VideoReceiver) pliLoop() {
 
 func (v *VideoReceiver) bufferRtcpLoop() {
 	for pkt := range v.buffer.GetRTCPChan() {
+		v.mu.RLock()
 		if v.stop {
 			return
 		}
+		v.mu.RUnlock()
 		v.rtcpCh <- pkt
 	}
 }
 
 func (v *VideoReceiver) rembLoop() {
 	for {
+		v.mu.RLock()
 		if v.stop {
 			return
 		}
+		v.mu.RUnlock()
 
 		if v.rembCycle <= 0 {
 			time.Sleep(time.Second)

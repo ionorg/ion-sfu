@@ -75,10 +75,10 @@ func NewPeer(offer webrtc.SessionDescription) (*Peer, error) {
 
 		log.Infof("Create router %s %d", p.id, recv.Track().SSRC())
 
+		p.onRouterHanderLock.Lock()
+		defer p.onRouterHanderLock.Unlock()
 		if p.onRouterHander != nil {
-			p.onRouterHanderLock.Lock()
 			p.onRouterHander(router)
-			p.onRouterHanderLock.Unlock()
 		}
 	})
 
