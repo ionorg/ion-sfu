@@ -75,9 +75,8 @@ func (r *Router) start() {
 		r.stopLock.RUnlock()
 
 		// get rtp from pub
-		r.pubLock.RLock()
 		pkt, err := r.pub.ReadRTP()
-		r.pubLock.RUnlock()
+
 		if err != nil {
 			log.Errorf("r.pub.ReadRTP err=%v", err)
 			continue

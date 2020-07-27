@@ -12,7 +12,7 @@ import (
 type Room struct {
 	id             string
 	peers          map[string]*Peer
-	peerLock       sync.RWMutex
+	peersLock      sync.RWMutex
 	onCloseHandler func()
 }
 
@@ -26,25 +26,20 @@ func NewRoom(id string) *Room {
 
 // AddPeer adds a peer to the room
 func (r *Room) AddPeer(p *Peer) {
-	r.peerLock.Lock()
+	r.peersLock.Lock()
 
 	// Subscribe new peer to existing peers
-	for _, src := range r.peers {
-		for _, router := range src.routers {
-			err := p.Subscribe(router)
-			if err != nil {
-				log.Errorf("Error subscribing peer to router: %s", err)
-			}
-		}
+	for _, peer := range r.peers {
+		log.Infof("Peer %s add sub %s", peer.id, p.id)
+		peer.AddSub(p)
 	}
 
 	r.peers[p.id] = p
-	r.peerLock.Unlock()
+	r.peersLock.Unlock()
 
 	p.OnClose(func() {
-		r.peerLock.Lock()
+		r.peersLock.Lock()
 		delete(r.peers, p.id)
-
 		// Remove peer subs from pubs
 		for _, peer := range r.peers {
 			for _, router := range peer.routers {
@@ -56,15 +51,15 @@ func (r *Room) AddPeer(p *Peer) {
 		if len(r.peers) == 0 && r.onCloseHandler != nil {
 			r.onCloseHandler()
 		}
-		r.peerLock.Unlock()
+		r.peersLock.Unlock()
 	})
 
 	// New track router added to peer, subscribe
 	// other peers in room to it
 	p.OnRouter(func(router *Router) {
-		r.peerLock.RLock()
-		defer r.peerLock.RUnlock()
-
+		r.peersLock.Lock()
+		defer r.peersLock.Unlock()
+		log.Debugf("on router %v", router)
 		for pid, peer := range r.peers {
 			// Don't sub to self
 			if p.id == pid {
@@ -75,6 +70,7 @@ func (r *Room) AddPeer(p *Peer) {
 				log.Errorf("Error subscribing peer to router: %s", err)
 			}
 			if peer.onNegotiationNeededHandler != nil {
+				log.Infof("debounced %s", peer.id)
 				peer.onNegotiationNeededHandler()
 			}
 		}
@@ -89,11 +85,11 @@ func (r *Room) OnClose(f func()) {
 func (r *Room) stats() string {
 	info := fmt.Sprintf("\nroom: %s\n", r.id)
 
-	r.peerLock.RLock()
+	r.peersLock.RLock()
 	for _, peer := range r.peers {
 		info += peer.stats()
 	}
-	r.peerLock.RUnlock()
+	r.peersLock.RUnlock()
 	log.Infof(info)
 
 	return info

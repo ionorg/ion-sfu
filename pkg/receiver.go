@@ -15,7 +15,23 @@ const (
 	// bandwidth range(kbps)
 	minBandwidth = 200
 	maxSize      = 100
+
+	// tcc stuff
+	tccExtMapID = 3
+	//64ms = 64000us = 250 << 8
+	//https://webrtc.googlesource.com/src/webrtc/+/f54860e9ef0b68e182a01edc994626d21961bc4b/modules/rtp_rtcp/source/rtcp_packet/transport_feedback.cc#41
+	baseScaleFactor = 64000
+	//https://webrtc.googlesource.com/src/webrtc/+/f54860e9ef0b68e182a01edc994626d21961bc4b/modules/rtp_rtcp/source/rtcp_packet/transport_feedback.cc#43
+	timeWrapPeriodUs = (int64(1) << 24) * baseScaleFactor
+	//experiment cycle
+	tccCycle = 10 * time.Millisecond
 )
+
+type rtpExtInfo struct {
+	//transport sequence num
+	TSN       uint16
+	Timestamp int64
+}
 
 // Receiver defines a interface for a track receiver
 type Receiver interface {
@@ -79,14 +95,16 @@ func (t *AudioReceiver) Close() {
 
 // VideoReceiver receives a video track
 type VideoReceiver struct {
-	buffer    *Buffer
-	track     *webrtc.Track
-	bandwidth uint64
-	lostRate  float64
-	stop      bool
-	rtpCh     chan *rtp.Packet
-	rtcpCh    chan rtcp.Packet
-	mu        sync.RWMutex
+	buffer              *Buffer
+	track               *webrtc.Track
+	bandwidth           uint64
+	lostRate            float64
+	feedbackPacketCount uint8
+	stop                bool
+	rtpCh               chan *rtp.Packet
+	rtcpCh              chan rtcp.Packet
+	mu                  sync.RWMutex
+	rtpExtInfoChan      chan rtpExtInfo
 
 	pliCycle     int
 	rembCycle    int
@@ -95,31 +113,38 @@ type VideoReceiver struct {
 
 // VideoReceiverConfig .
 type VideoReceiverConfig struct {
-	TCCOn         bool `mapstructure:"tccon"`
-	REMBCycle     int  `mapstructure:"rembcycle"`
-	PLICycle      int  `mapstructure:"plicycle"`
-	MaxBandwidth  int  `mapstructure:"maxbandwidth"`
-	MaxBufferTime int  `mapstructure:"maxbuffertime"`
+	REMBCycle     int `mapstructure:"rembcycle"`
+	PLICycle      int `mapstructure:"plicycle"`
+	MaxBandwidth  int `mapstructure:"maxbandwidth"`
+	MaxBufferTime int `mapstructure:"maxbuffertime"`
 }
 
 // NewVideoReceiver creates a new video track receiver
 func NewVideoReceiver(config VideoReceiverConfig, track *webrtc.Track) *VideoReceiver {
 	v := &VideoReceiver{
 		buffer: NewBuffer(track.SSRC(), track.PayloadType(), BufferOptions{
-			TCCOn:      config.TCCOn,
 			BufferTime: config.MaxBufferTime,
 		}),
-		track:        track,
-		rtpCh:        make(chan *rtp.Packet, maxSize),
-		rtcpCh:       make(chan rtcp.Packet, maxSize),
-		rembCycle:    config.REMBCycle,
-		pliCycle:     config.PLICycle,
-		maxBandwidth: config.MaxBandwidth,
+		track:          track,
+		rtpCh:          make(chan *rtp.Packet, maxSize),
+		rtcpCh:         make(chan rtcp.Packet, maxSize),
+		rtpExtInfoChan: make(chan rtpExtInfo, maxSize),
+		rembCycle:      config.REMBCycle,
+		pliCycle:       config.PLICycle,
+		maxBandwidth:   config.MaxBandwidth,
+	}
+
+	for _, feedback := range track.Codec().RTCPFeedback {
+		switch feedback.Type {
+		// case webrtc.TypeRTCPFBTransportCC:
+		// 	go v.tccLoop()
+		case webrtc.TypeRTCPFBGoogREMB:
+			go v.rembLoop()
+		}
 	}
 
 	go v.receiveRTP()
 	go v.pliLoop()
-	go v.rembLoop()
 	go v.bufferRtcpLoop()
 
 	return v
@@ -179,8 +204,8 @@ func (v *VideoReceiver) receiveRTP() {
 		}
 		v.mu.RUnlock()
 
-		rtp, err := v.track.ReadRTP()
-		log.Tracef("got packet %v", rtp)
+		pkt, err := v.track.ReadRTP()
+		log.Tracef("got packet %v", pkt)
 		if err != nil {
 			if err == io.EOF {
 				return
@@ -188,8 +213,28 @@ func (v *VideoReceiver) receiveRTP() {
 			log.Errorf("rtp err => %v", err)
 		}
 
-		v.buffer.Push(rtp)
-		v.rtpCh <- rtp
+		v.buffer.Push(pkt)
+
+		//store arrival time
+		// timestampUs := time.Now().UnixNano() / 1000
+		// rtpTCC := rtp.TransportCCExtension{}
+		// err = rtpTCC.Unmarshal(pkt.GetExtension(tccExtMapID))
+		// if err == nil {
+		// 	// if time.Now().Sub(b.bufferStartTS) > time.Second {
+
+		// 	//only calc the packet which rtpTCC.TransportSequence > b.lastTCCSN
+		// 	//https://webrtc.googlesource.com/src/webrtc/+/f54860e9ef0b68e182a01edc994626d21961bc4b/modules/rtp_rtcp/source/rtcp_packet/transport_feedback.cc#353
+		// 	// if rtpTCC.TransportSequence > b.lastTCCSN {
+		// 	v.rtpExtInfoChan <- rtpExtInfo{
+		// 		TSN:       rtpTCC.TransportSequence,
+		// 		Timestamp: timestampUs,
+		// 	}
+		// 	// b.lastTCCSN = rtpTCC.TransportSequence
+		// 	// }
+		// }
+		// }
+
+		v.rtpCh <- pkt
 
 		if err != nil {
 			log.Errorf("jb err => %v", err)
@@ -269,6 +314,123 @@ func (v *VideoReceiver) rembLoop() {
 		}
 
 		v.rtcpCh <- remb
+	}
+}
+
+func (v *VideoReceiver) tccLoop() {
+	t := time.NewTicker(tccCycle)
+	defer t.Stop()
+	for {
+		if v.stop {
+			return
+		}
+		<-t.C
+		v.calcTCC()
+	}
+}
+
+func (v *VideoReceiver) calcTCC() {
+	cap := len(v.rtpExtInfoChan)
+	if cap == 0 {
+		return
+	}
+
+	//get all rtp extension infos from channel
+	rtpExtInfo := make(map[uint16]int64)
+	for i := 0; i < cap; i++ {
+		info := <-v.rtpExtInfoChan
+		rtpExtInfo[info.TSN] = info.Timestamp
+	}
+
+	//find the min and max transport sn
+	var minTSN, maxTSN uint16
+	for tsn := range rtpExtInfo {
+
+		//init
+		if minTSN == 0 {
+			minTSN = tsn
+		}
+
+		if minTSN > tsn {
+			minTSN = tsn
+		}
+
+		if maxTSN < tsn {
+			maxTSN = tsn
+		}
+	}
+
+	//force small deta rtcp.RunLengthChunk
+	chunk := &rtcp.RunLengthChunk{
+		Type:               rtcp.TypeTCCRunLengthChunk,
+		PacketStatusSymbol: rtcp.TypeTCCPacketReceivedSmallDelta,
+		RunLength:          maxTSN - minTSN + 1,
+	}
+
+	//gather deltas
+	var recvDeltas []*rtcp.RecvDelta
+	var refTime uint32
+	var lastTS int64
+	var baseTimeTicks int64
+	for i := minTSN; i <= maxTSN; i++ {
+		ts, ok := rtpExtInfo[i]
+
+		//lost packet
+		if !ok {
+			recvDelta := &rtcp.RecvDelta{
+				Type: rtcp.TypeTCCPacketReceivedSmallDelta,
+			}
+			recvDeltas = append(recvDeltas, recvDelta)
+			continue
+		}
+
+		// init lastTS
+		if lastTS == 0 {
+			lastTS = ts
+		}
+
+		//received packet
+		if baseTimeTicks == 0 {
+			baseTimeTicks = (ts % timeWrapPeriodUs) / baseScaleFactor
+		}
+
+		var delta int64
+		if lastTS == ts {
+			delta = ts%timeWrapPeriodUs - baseTimeTicks*baseScaleFactor
+		} else {
+			delta = (ts - lastTS) % timeWrapPeriodUs
+		}
+
+		if refTime == 0 {
+			refTime = uint32(baseTimeTicks) & 0x007FFFFF
+		}
+
+		recvDelta := &rtcp.RecvDelta{
+			Type:  rtcp.TypeTCCPacketReceivedSmallDelta,
+			Delta: delta,
+		}
+		recvDeltas = append(recvDeltas, recvDelta)
+	}
+	rtcpTCC := &rtcp.TransportLayerCC{
+		Header: rtcp.Header{
+			Padding: false,
+			Count:   rtcp.FormatTCC,
+			Type:    rtcp.TypeTransportSpecificFeedback,
+			// Length:  5, //need calc
+		},
+		// SenderSSRC:         v.ssrc,
+		MediaSSRC:          v.track.SSRC(),
+		BaseSequenceNumber: minTSN,
+		PacketStatusCount:  maxTSN - minTSN + 1,
+		ReferenceTime:      refTime,
+		FbPktCount:         v.feedbackPacketCount,
+		RecvDeltas:         recvDeltas,
+		PacketChunks:       []rtcp.PacketStatusChunk{chunk},
+	}
+	rtcpTCC.Header.Length = rtcpTCC.Len()/4 - 1
+	if !v.stop {
+		v.rtcpCh <- rtcpTCC
+		v.feedbackPacketCount++
 	}
 }
 

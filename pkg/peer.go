@@ -21,6 +21,7 @@ type Peer struct {
 	id                         string
 	pc                         *webrtc.PeerConnection
 	me                         MediaEngine
+	mu                         sync.RWMutex
 	routers                    map[uint32]*Router
 	routersLock                sync.RWMutex
 	onCloseHandler             func()
@@ -166,8 +167,8 @@ func (p *Peer) OnICECandidate(f func(c *webrtc.ICECandidate)) {
 
 // OnNegotiationNeeded handler
 func (p *Peer) OnNegotiationNeeded(f func()) {
+	var debounced = util.NewDebouncer(100 * time.Millisecond)
 	p.onNegotiationNeededHandler = func() {
-		var debounced = util.NewDebouncer(100 * time.Millisecond)
 		debounced(f)
 	}
 }
@@ -194,7 +195,9 @@ func (p *Peer) Subscribe(router *Router) error {
 		return err
 	}
 
+	log.Infof("before %v", p.pc.GetTransceivers())
 	s, err := p.pc.AddTrack(track)
+	log.Infof("after %v", p.pc.GetTransceivers())
 
 	if err != nil {
 		log.Errorf("Error adding send track")
@@ -208,6 +211,15 @@ func (p *Peer) Subscribe(router *Router) error {
 	router.AddSub(p.id, sender)
 
 	return nil
+}
+
+// AddSub adds peer as a sub
+func (p *Peer) AddSub(peer *Peer) {
+	p.routersLock.Lock()
+	for _, router := range p.routers {
+		peer.Subscribe(router)
+	}
+	p.routersLock.Unlock()
 }
 
 // ID of peer
@@ -226,7 +238,6 @@ func (p *Peer) Close() error {
 	if p.onCloseHandler != nil {
 		p.onCloseHandler()
 	}
-
 	return p.pc.Close()
 }
 

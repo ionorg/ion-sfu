@@ -145,7 +145,7 @@ func (s *Sender) rembLoop() {
 				SSRCs:      pkt.SSRCs,
 			}
 
-			log.Infof("Router.rembLoop send REMB: %+v", newPkt)
+			// log.Debugf("Router.rembLoop send REMB: %+v", newPkt)
 
 			s.rtcpCh <- newPkt
 
