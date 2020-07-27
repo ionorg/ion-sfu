@@ -30,7 +30,6 @@ func (r *Room) AddPeer(p *Peer) {
 
 	// Subscribe new peer to existing peers
 	for _, peer := range r.peers {
-		log.Infof("Peer %s add sub %s", peer.id, p.id)
 		peer.AddSub(p)
 	}
 
