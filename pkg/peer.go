@@ -21,7 +21,6 @@ type Peer struct {
 	id                         string
 	pc                         *webrtc.PeerConnection
 	me                         MediaEngine
-	mu                         sync.RWMutex
 	routers                    map[uint32]*Router
 	routersLock                sync.RWMutex
 	onCloseHandler             func()
@@ -55,7 +54,7 @@ func NewPeer(offer webrtc.SessionDescription) (*Peer, error) {
 	}
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
-		log.Infof("Peer %s got remote track %v", p.id, track)
+		log.Debugf("Peer %s got remote track %v", p.id, track)
 		var recv Receiver
 		switch track.Kind() {
 		case webrtc.RTPCodecTypeVideo:
@@ -74,7 +73,7 @@ func NewPeer(offer webrtc.SessionDescription) (*Peer, error) {
 		p.routers[recv.Track().SSRC()] = router
 		p.routersLock.Unlock()
 
-		log.Infof("Create router %s %d", p.id, recv.Track().SSRC())
+		log.Debugf("Create router %s %d", p.id, recv.Track().SSRC())
 
 		p.onRouterHanderLock.Lock()
 		defer p.onRouterHanderLock.Unlock()
@@ -217,7 +216,10 @@ func (p *Peer) Subscribe(router *Router) error {
 func (p *Peer) AddSub(peer *Peer) {
 	p.routersLock.Lock()
 	for _, router := range p.routers {
-		peer.Subscribe(router)
+		err := peer.Subscribe(router)
+		if err != nil {
+			log.Errorf("Error subscribing peer %s to router %v", peer.id, router)
+		}
 	}
 	p.routersLock.Unlock()
 }

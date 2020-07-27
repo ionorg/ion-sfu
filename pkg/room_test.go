@@ -21,6 +21,7 @@ func createPeer(t *testing.T, api *webrtc.API) (*Peer, *webrtc.PeerConnection, *
 
 	// Add a pub track for remote
 	track, err := remote.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
 	_, err = remote.AddTrack(track)
 	if err != nil {
 		return nil, nil, nil, err
@@ -308,6 +309,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 		cacheFn(router)
 
 		remoteB, err := api.NewPeerConnection(cfg)
+		assert.NoError(t, err)
 		// Add a pub track for remote B
 		trackB, err := remoteB.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
 		assert.NoError(t, err)
@@ -333,6 +335,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 
 		desc := sdp.SessionDescription{}
 		err = desc.Unmarshal([]byte(peerB.pc.LocalDescription().SDP))
+		assert.NoError(t, err)
 
 		trackASeen := false
 		for _, md := range desc.MediaDescriptions {
@@ -356,8 +359,11 @@ func Test3PeerStaggerJoin(t *testing.T) {
 			cacheFn(router)
 
 			remoteC, err := api.NewPeerConnection(cfg)
+			assert.NoError(t, err)
 			// Add transceiver to match number of recv tracks
-			remoteC.AddTransceiverFromTrack(trackB)
+			_, err = remoteC.AddTransceiverFromTrack(trackB)
+			assert.NoError(t, err)
+
 			// Add a pub track for remote B
 			trackC, err := remoteC.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
 			assert.NoError(t, err)
@@ -384,6 +390,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 
 			desc := sdp.SessionDescription{}
 			err = desc.Unmarshal([]byte(peerC.pc.LocalDescription().SDP))
+			assert.NoError(t, err)
 
 			trackASeen := false
 			trackBSeen := false

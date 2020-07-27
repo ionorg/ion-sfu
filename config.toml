@@ -10,12 +10,12 @@ minbandwidth = 100000
 maxbandwidth = 5000000
 
 [jitterbuffer]
-# transport-cc (experiment feature)
-tccon = false
 # the remb cycle sending to pub, this told the pub it's bandwidth
 rembcycle = 2
 # pli cycle sending to pub, and pub will send a key frame
 plicycle = 1
+# transport-cc cycle (experiment feature)
+tcccycle = 1
 # this limit the remb bandwidth
 maxbandwidth = 1000
 # max buffer time by ms
