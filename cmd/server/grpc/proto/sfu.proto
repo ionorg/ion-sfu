@@ -35,7 +35,7 @@ message JoinReply {
 }
 
 message Trickle {
-    string candidate = 1;
+    string init = 1;
 }
 
 message SessionDescription {

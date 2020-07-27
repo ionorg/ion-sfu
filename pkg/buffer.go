@@ -2,6 +2,7 @@ package sfu
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/rtcp"
@@ -59,6 +60,7 @@ type Buffer struct {
 	maxBufferTS uint32
 
 	stop bool
+	mu   sync.RWMutex
 
 	// lastTCCSN      uint16
 	// bufferStartTS time.Time
@@ -111,7 +113,10 @@ func (b *Buffer) Push(p *rtp.Packet) {
 		b.lastNackSN = p.SequenceNumber
 	}
 
+	b.mu.Lock()
 	b.pktBuffer[p.SequenceNumber] = p
+	b.mu.Unlock()
+
 	b.lastPushSN = p.SequenceNumber
 
 	// clear old packet by timestamp
@@ -185,6 +190,8 @@ func (b *Buffer) Stop() {
 }
 
 func (b *Buffer) clear() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	for i := range b.pktBuffer {
 		b.pktBuffer[i] = nil
 	}

@@ -2,6 +2,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -218,10 +219,15 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 					// Gathering done
 					return
 				}
+				bytes, err := json.Marshal(c.ToJSON())
+				if err != nil {
+					log.Errorf("OnIceCandidate error %s", err)
+				}
+
 				err = stream.Send(&pb.SignalReply{
 					Payload: &pb.SignalReply_Trickle{
 						Trickle: &pb.Trickle{
-							Candidate: c.String(),
+							Init: string(bytes),
 						},
 					},
 				})
@@ -324,9 +330,13 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 				return status.Errorf(codes.FailedPrecondition, "%s", errNoPeer)
 			}
 
-			if err := peer.AddICECandidate(webrtc.ICECandidateInit{
-				Candidate: payload.Trickle.Candidate,
-			}); err != nil {
+			var candidate webrtc.ICECandidateInit
+			err := json.Unmarshal([]byte(payload.Trickle.Init), &candidate)
+			if err != nil {
+				log.Errorf("error parsing ice candidate: %v", err)
+			}
+
+			if err := peer.AddICECandidate(candidate); err != nil {
 				return status.Errorf(codes.Internal, "error adding ice candidate")
 			}
 		}
