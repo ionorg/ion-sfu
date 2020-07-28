@@ -1,6 +1,7 @@
 package sfu
 
 import (
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -39,6 +40,7 @@ type Receiver interface {
 	ReadRTCP() (rtcp.Packet, error)
 	WriteRTCP(rtcp.Packet) error
 	Close()
+	stats() string
 }
 
 // AudioReceiver receives a audio track
@@ -50,45 +52,50 @@ type AudioReceiver struct {
 
 // NewAudioReceiver creates a new audio track receiver
 func NewAudioReceiver(track *webrtc.Track) *AudioReceiver {
-	t := &AudioReceiver{
+	a := &AudioReceiver{
 		track: track,
 		rtpCh: make(chan *rtp.Packet, maxSize),
 	}
 
-	return t
+	return a
 }
 
 // ReadRTP read rtp packet
-func (t *AudioReceiver) ReadRTP() (*rtp.Packet, error) {
-	if t.stop {
+func (a *AudioReceiver) ReadRTP() (*rtp.Packet, error) {
+	if a.stop {
 		return nil, errReceiverClosed
 	}
-	return t.track.ReadRTP()
+	return a.track.ReadRTP()
 }
 
 // ReadRTCP read rtcp packet
-func (t *AudioReceiver) ReadRTCP() (rtcp.Packet, error) {
+func (a *AudioReceiver) ReadRTCP() (rtcp.Packet, error) {
 	return nil, errMethodNotSupported
 }
 
 // WriteRTCP write rtcp packet
-func (t *AudioReceiver) WriteRTCP(pkt rtcp.Packet) error {
+func (a *AudioReceiver) WriteRTCP(pkt rtcp.Packet) error {
 	return errMethodNotSupported
 }
 
 // Track returns receiver track
-func (t *AudioReceiver) Track() *webrtc.Track {
-	return t.track
+func (a *AudioReceiver) Track() *webrtc.Track {
+	return a.track
 }
 
 // GetPacket returns nil since audio isn't buffered (uses fec)
-func (t *AudioReceiver) GetPacket(sn uint16) *rtp.Packet {
+func (a *AudioReceiver) GetPacket(sn uint16) *rtp.Packet {
 	return nil
 }
 
 // Close track
-func (t *AudioReceiver) Close() {
-	t.stop = true
+func (a *AudioReceiver) Close() {
+	a.stop = true
+}
+
+// Stats get stats for video receiver
+func (a *AudioReceiver) stats() string {
+	return fmt.Sprintf("payload:%d", a.track.PayloadType())
 }
 
 // VideoReceiver receives a video track
@@ -138,9 +145,11 @@ func NewVideoReceiver(config VideoReceiverConfig, track *webrtc.Track) *VideoRec
 	for _, feedback := range track.Codec().RTCPFeedback {
 		switch feedback.Type {
 		case webrtc.TypeRTCPFBTransportCC:
+			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBTransportCC)
 			v.feedback = webrtc.TypeRTCPFBTransportCC
 			go v.tccLoop()
 		case webrtc.TypeRTCPFBGoogREMB:
+			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBGoogREMB)
 			v.feedback = webrtc.TypeRTCPFBGoogREMB
 			go v.rembLoop()
 		}
@@ -436,9 +445,7 @@ func (v *VideoReceiver) tccLoop() {
 	}
 }
 
-// Stat get stat from buffers
-// func (v *VideoReceiver) stat() string {
-// 	out := ""
-// 	out += fmt.Sprintf("payload:%d | lostRate:%.2f | bandwidth:%dkbps | %s", v.buffer.GetPayloadType(), v.lostRate, v.bandwidth, v.buffer.GetStat())
-// 	return out
-// }
+// Stats get stats for video receiver
+func (v *VideoReceiver) stats() string {
+	return fmt.Sprintf("payload:%d | lostRate:%.2f | bandwidth:%dkbps | %s", v.buffer.GetPayloadType(), v.lostRate, v.bandwidth, v.buffer.stats())
+}

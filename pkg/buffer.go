@@ -14,15 +14,15 @@ const (
 	maxPktSize = 1000
 
 	// kProcessIntervalMs=20 ms
-	//https://chromium.googlesource.com/external/webrtc/+/ad34dbe934/webrtc/modules/video_coding/nack_module.cc#28
+	// https://chromium.googlesource.com/external/webrtc/+/ad34dbe934/webrtc/modules/video_coding/nack_module.cc#28
 
 	// vp8 vp9 h264 clock rate 90000Hz
 	videoClock = 90000
 
-	//1+16(FSN+BLP) https://tools.ietf.org/html/rfc2032#page-9
+	// 1+16(FSN+BLP) https://tools.ietf.org/html/rfc2032#page-9
 	maxNackLostSize = 17
 
-	//default buffer time by ms
+	// default buffer time by ms
 	defaultBufferTime = 1000
 )
 
@@ -202,10 +202,10 @@ func (b *Buffer) GetPayloadType() uint8 {
 	return b.payloadType
 }
 
-// GetStat get status from buffer
-func (b *Buffer) GetStat() string {
-	out := fmt.Sprintf("buffer:[%d, %d] | lastNackSN:%d | lostRate:%.2f |\n", b.lastClearSN, b.lastPushSN, b.lastNackSN, float64(b.lostPkt)/float64(b.receivedPkt+b.lostPkt))
-	return out
+func (b *Buffer) stats() string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return fmt.Sprintf("buffer:[%d, %d] | lastNackSN:%d | lostRate:%.2f |\n", b.lastClearSN, b.lastPushSN, b.lastNackSN, float64(b.lostPkt)/float64(b.receivedPkt+b.lostPkt))
 }
 
 // GetNackPair calc nackpair

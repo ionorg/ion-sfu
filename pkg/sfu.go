@@ -22,10 +22,16 @@ type WebRTCConfig struct {
 	ICEServers   []ICEServerConfig `mapstructure:"iceserver"`
 }
 
+// ReceiverConfig defines receiver configurations
+type ReceiverConfig struct {
+	Video VideoReceiverConfig `mapstructure:"video"`
+}
+
 // Config for base SFU
 type Config struct {
-	WebRTC WebRTCConfig `mapstructure:"webrtc"`
-	Log    log.Config   `mapstructure:"log"`
+	WebRTC   WebRTCConfig   `mapstructure:"webrtc"`
+	Log      log.Config     `mapstructure:"log"`
+	Receiver ReceiverConfig `mapstructure:"receiver"`
 }
 
 var (
@@ -34,6 +40,7 @@ var (
 		SDPSemantics: webrtc.SDPSemanticsUnifiedPlanWithFallback,
 	}
 
+	config  Config
 	setting webrtc.SettingEngine
 )
 
@@ -44,18 +51,20 @@ type SFU struct {
 }
 
 // NewSFU creates a new sfu instance
-func NewSFU(config Config) *SFU {
+func NewSFU(c Config) *SFU {
 	s := &SFU{
 		rooms: make(map[string]*Room),
 	}
 
-	log.Init(config.Log.Level)
+	config = c
+
+	log.Init(c.Log.Level)
 
 	var icePortStart, icePortEnd uint16
 
-	if len(config.WebRTC.ICEPortRange) == 2 {
-		icePortStart = config.WebRTC.ICEPortRange[0]
-		icePortEnd = config.WebRTC.ICEPortRange[1]
+	if len(c.WebRTC.ICEPortRange) == 2 {
+		icePortStart = c.WebRTC.ICEPortRange[0]
+		icePortEnd = c.WebRTC.ICEPortRange[1]
 	}
 
 	if icePortStart != 0 || icePortEnd != 0 {
@@ -65,7 +74,7 @@ func NewSFU(config Config) *SFU {
 	}
 
 	var iceServers []webrtc.ICEServer
-	for _, iceServer := range config.WebRTC.ICEServers {
+	for _, iceServer := range c.WebRTC.ICEServers {
 		s := webrtc.ICEServer{
 			URLs:       iceServer.URLs,
 			Username:   iceServer.Username,

@@ -20,6 +20,15 @@ func TestSFU(t *testing.T) {
 				Credential: "secret",
 			}},
 		},
+		Receiver: ReceiverConfig{
+			Video: VideoReceiverConfig{
+				REMBCycle:     2,
+				PLICycle:      1,
+				TCCCycle:      1,
+				MaxBandwidth:  1000,
+				MaxBufferTime: 1000,
+			},
+		},
 	})
 
 	room := s.CreateRoom("test room")

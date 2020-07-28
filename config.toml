@@ -9,7 +9,7 @@ rembfeedback = false
 minbandwidth = 100000
 maxbandwidth = 5000000
 
-[jitterbuffer]
+[receiver.video]
 # the remb cycle sending to pub, this told the pub it's bandwidth
 rembcycle = 2
 # pli cycle sending to pub, and pub will send a key frame

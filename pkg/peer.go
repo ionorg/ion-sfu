@@ -58,7 +58,7 @@ func NewPeer(offer webrtc.SessionDescription) (*Peer, error) {
 		var recv Receiver
 		switch track.Kind() {
 		case webrtc.RTPCodecTypeVideo:
-			recv = NewVideoReceiver(VideoReceiverConfig{}, track)
+			recv = NewVideoReceiver(config.Receiver.Video, track)
 		case webrtc.RTPCodecTypeAudio:
 			recv = NewAudioReceiver(track)
 		}
@@ -194,9 +194,7 @@ func (p *Peer) Subscribe(router *Router) error {
 		return err
 	}
 
-	log.Infof("before %v", p.pc.GetTransceivers())
 	s, err := p.pc.AddTrack(track)
-	log.Infof("after %v", p.pc.GetTransceivers())
 
 	if err != nil {
 		log.Errorf("Error adding send track")
@@ -267,7 +265,7 @@ func (p *Peer) stats() string {
 
 	p.routersLock.RLock()
 	for ssrc, router := range p.routers {
-		info += fmt.Sprintf("    router: %d\n", ssrc)
+		info += fmt.Sprintf("    router: %d | %s\n", ssrc, router.pub.stats())
 
 		if len(router.subs) < 6 {
 			for pid := range router.subs {
