@@ -89,6 +89,9 @@ func NewBuffer(ssrc uint32, pt uint8, o BufferOptions) *Buffer {
 
 // Push adds a RTP Packet, out of order, new packet may be arrived later
 func (b *Buffer) Push(p *rtp.Packet) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	b.receivedPkt++
 	b.totalByte += uint64(p.MarshalSize())
 
@@ -113,10 +116,7 @@ func (b *Buffer) Push(p *rtp.Packet) {
 		b.lastNackSN = p.SequenceNumber
 	}
 
-	b.mu.Lock()
 	b.pktBuffer[p.SequenceNumber] = p
-	b.mu.Unlock()
-
 	b.lastPushSN = p.SequenceNumber
 
 	// clear old packet by timestamp
