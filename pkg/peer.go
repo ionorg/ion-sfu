@@ -21,6 +21,8 @@ type Peer struct {
 	id                         string
 	pc                         *webrtc.PeerConnection
 	me                         MediaEngine
+	mu                         sync.RWMutex
+	stop                       bool
 	routers                    map[uint32]*Router
 	routersLock                sync.RWMutex
 	onCloseHandler             func()
@@ -229,6 +231,13 @@ func (p *Peer) ID() string {
 
 // Close peer
 func (p *Peer) Close() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.stop {
+		return nil
+	}
+
 	p.routersLock.Lock()
 	for _, router := range p.routers {
 		router.Close()
@@ -238,15 +247,21 @@ func (p *Peer) Close() error {
 	if p.onCloseHandler != nil {
 		p.onCloseHandler()
 	}
+	p.stop = true
 	return p.pc.Close()
 }
 
 func (p *Peer) sendRTCP(recv Receiver) {
-	// TODO: stop on close
 	for {
+		p.mu.RLock()
+		if p.stop {
+			p.mu.RUnlock()
+			return
+		}
+		p.mu.RUnlock()
+
 		pkt, err := recv.ReadRTCP()
 		if err != nil {
-			// TODO: do something
 			log.Errorf("Error reading RTCP %s", err)
 			continue
 		}
@@ -254,7 +269,6 @@ func (p *Peer) sendRTCP(recv Receiver) {
 		log.Tracef("sendRTCP %v", pkt)
 		err = p.pc.WriteRTCP([]rtcp.Packet{pkt})
 		if err != nil {
-			// TODO: do something
 			log.Errorf("Error writing RTCP %s", err)
 		}
 	}
