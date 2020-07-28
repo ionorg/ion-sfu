@@ -447,5 +447,5 @@ func (v *VideoReceiver) tccLoop() {
 
 // Stats get stats for video receiver
 func (v *VideoReceiver) stats() string {
-	return fmt.Sprintf("payload:%d | lostRate:%.2f | bandwidth:%dkbps | %s", v.buffer.GetPayloadType(), v.lostRate, v.bandwidth, v.buffer.stats())
+	return fmt.Sprintf("payload: %d | lostRate: %.2f | bandwidth: %dkbps | %s", v.buffer.GetPayloadType(), v.lostRate, v.bandwidth, v.buffer.stats())
 }

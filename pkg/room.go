@@ -89,7 +89,6 @@ func (r *Room) stats() string {
 		info += peer.stats()
 	}
 	r.peersLock.RUnlock()
-	log.Infof(info)
 
 	return info
 }

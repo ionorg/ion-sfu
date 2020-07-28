@@ -282,8 +282,8 @@ func (p *Peer) stats() string {
 		info += fmt.Sprintf("    router: %d | %s\n", ssrc, router.pub.stats())
 
 		if len(router.subs) < 6 {
-			for pid := range router.subs {
-				info += fmt.Sprintf("      sub: %s\n", pid)
+			for pid, sub := range router.subs {
+				info += fmt.Sprintf("      sub: %s | %s\n", pid, sub.stats())
 			}
 			info += "\n"
 		} else {

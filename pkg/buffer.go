@@ -205,12 +205,11 @@ func (b *Buffer) GetPayloadType() uint8 {
 func (b *Buffer) stats() string {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	return fmt.Sprintf("buffer:[%d, %d] | lastNackSN:%d | lostRate:%.2f |\n", b.lastClearSN, b.lastPushSN, b.lastNackSN, float64(b.lostPkt)/float64(b.receivedPkt+b.lostPkt))
+	return fmt.Sprintf("buffer: [%d, %d] | lastNackSN: %d", b.lastClearSN, b.lastPushSN, b.lastNackSN)
 }
 
 // GetNackPair calc nackpair
 func (b *Buffer) GetNackPair(buffer [65536]*rtp.Packet, begin, end uint16) (rtcp.NackPair, int) {
-
 	var lostPkt int
 
 	//size is <= 17

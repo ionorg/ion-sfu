@@ -1,6 +1,7 @@
 package sfu
 
 import (
+	"fmt"
 	"io"
 	"math"
 	"time"
@@ -25,6 +26,7 @@ type Sender struct {
 	rtcpCh  chan rtcp.Packet
 	useRemb bool
 	rembCh  chan *rtcp.ReceiverEstimatedMaximumBitrate
+	target  uint64
 }
 
 // NewSender creates a new send track instance
@@ -38,9 +40,11 @@ func NewSender(track *webrtc.Track, sender *webrtc.RTPSender) *Sender {
 	for _, feedback := range track.Codec().RTCPFeedback {
 		switch feedback.Type {
 		case webrtc.TypeRTCPFBGoogREMB:
+			log.Infof("Using sender feedback %s", webrtc.TypeRTCPFBGoogREMB)
 			s.useRemb = true
 			go s.rembLoop()
 		case webrtc.TypeRTCPFBTransportCC:
+			log.Infof("Using sender feedback %s", webrtc.TypeRTCPFBTransportCC)
 			// TODO
 		}
 	}
@@ -131,21 +135,19 @@ func (s *Sender) rembLoop() {
 			avg := uint64(rembTotalRate / rembCount)
 
 			_ = avg
-			target := lowest
+			s.target = lowest
 
-			if target < rembMin {
-				target = rembMin
-			} else if target > rembMax {
-				target = rembMax
+			if s.target < rembMin {
+				s.target = rembMin
+			} else if s.target > rembMax {
+				s.target = rembMax
 			}
 
 			newPkt := &rtcp.ReceiverEstimatedMaximumBitrate{
-				Bitrate:    target,
+				Bitrate:    s.target,
 				SenderSSRC: 1,
 				SSRCs:      pkt.SSRCs,
 			}
-
-			// log.Debugf("Router.rembLoop send REMB: %+v", newPkt)
 
 			s.rtcpCh <- newPkt
 
@@ -155,4 +157,8 @@ func (s *Sender) rembLoop() {
 			lowest = math.MaxUint64
 		}
 	}
+}
+
+func (s *Sender) stats() string {
+	return fmt.Sprintf("payload:%d | remb: %dkbps", s.track.PayloadType(), s.target/1000)
 }
