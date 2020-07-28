@@ -334,6 +334,11 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 					return status.Errorf(codes.Internal, "%s", err)
 				}
 
+				err = peer.SetLocalDescription(answer)
+				if err != nil {
+					return status.Errorf(codes.Internal, "%s", err)
+				}
+
 				err = stream.Send(&pb.SignalReply{
 					Payload: &pb.SignalReply_Negotiate{
 						Negotiate: &pb.SessionDescription{
