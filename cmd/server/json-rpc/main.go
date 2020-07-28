@@ -2,18 +2,22 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
-	"net/rpc"
-	"net/rpc/jsonrpc"
 	"os"
+	"time"
 
+	"github.com/gorilla/websocket"
+	sfu "github.com/pion/ion-sfu/pkg"
 	"github.com/pion/ion-sfu/pkg/log"
-	sfu "github.com/pion/ion-sfu/pkg/node"
-	"github.com/pion/webrtc/v2"
+	"github.com/pion/webrtc/v3"
+	"github.com/sourcegraph/jsonrpc2"
+	websocketjsonrpc2 "github.com/sourcegraph/jsonrpc2/websocket"
 	"github.com/spf13/viper"
-	"golang.org/x/net/websocket"
 )
 
 var (
@@ -80,59 +84,295 @@ func parse() bool {
 	return true
 }
 
+type contextKey struct {
+	name string
+}
+type peerContext struct {
+	peer *sfu.Peer
+}
+
+var peerCtxKey = &contextKey{"peer"}
+
+func forContext(ctx context.Context) *peerContext {
+	raw, _ := ctx.Value(peerCtxKey).(*peerContext)
+	return raw
+}
+
 // RPC defines the json-rpc
-type RPC struct{}
-
-// PublishRequest defines a json-rpc request to publish a stream
-type PublishRequest struct {
-	Rid   string
-	Offer webrtc.SessionDescription
+type RPC struct {
+	sfu *sfu.SFU
 }
 
-// PublishReply defines a json-rpc reply to a publish request
-type PublishReply struct {
-	Mid    string
-	Answer webrtc.SessionDescription
-}
-
-// Publish a stream to the sfu
-func (r *RPC) Publish(req *PublishRequest, resp *PublishReply) error {
-	log.Infof("Got publish request: %v", req)
-	mid, _, answer, err := sfu.Publish(req.Offer)
-	if err != nil {
-		return err
+// NewRPC ...
+func NewRPC() *RPC {
+	return &RPC{
+		sfu: sfu.NewSFU(conf),
 	}
-
-	resp.Mid = mid
-	resp.Answer = *answer
-
-	return nil
 }
 
-// SubscribeRequest defines a json-rpc request to publish a stream
-type SubscribeRequest struct {
-	Mid   string
-	Offer webrtc.SessionDescription
+// Join message sent when initializing a peer connection
+type Join struct {
+	Rid   string                    `json:"rid"`
+	Offer webrtc.SessionDescription `json:"offer"`
 }
 
-// SubscribeReply defines a json-rpc reply to a publish request
-type SubscribeReply struct {
-	Mid    string
-	Answer webrtc.SessionDescription
+// Negotiation message sent when renegotiating
+type Negotiation struct {
+	Desc webrtc.SessionDescription `json:"desc"`
 }
 
-// Subscribe a stream to the sfu
-func (r *RPC) Subscribe(req *SubscribeRequest, resp *SubscribeReply) error {
-	log.Infof("Got subscribe request: %v", req)
-	mid, _, answer, err := sfu.Subscribe(req.Mid, req.Offer)
-	if err != nil {
-		return err
+// Trickle message sent when renegotiating
+type Trickle struct {
+	Candidate webrtc.ICECandidateInit `json:"candidate"`
+}
+
+// Handle RPC call
+func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
+	p := forContext(ctx)
+
+	switch req.Method {
+	case "join":
+		if p.peer != nil {
+			log.Errorf("connect: peer already exists for connection")
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", errors.New("peer already exists")),
+			})
+			break
+		}
+
+		var join Join
+		err := json.Unmarshal(*req.Params, &join)
+		if err != nil {
+			log.Errorf("connect: error parsing offer: %v", err)
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", err),
+			})
+			break
+		}
+
+		peer, err := sfu.NewPeer(join.Offer)
+
+		if err != nil {
+			log.Errorf("connect: error creating peer: %v", err)
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", err),
+			})
+			break
+		}
+
+		log.Infof("peer %s join room %s", peer.ID(), join.Rid)
+
+		room := r.sfu.GetRoom(join.Rid)
+		if room == nil {
+			room = r.sfu.CreateRoom(join.Rid)
+		}
+		room.AddPeer(peer)
+
+		err = peer.SetRemoteDescription(join.Offer)
+		if err != nil {
+			log.Errorf("Offer error: %v", err)
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", err),
+			})
+			break
+		}
+
+		answer, err := peer.CreateAnswer()
+		if err != nil {
+			log.Errorf("Offer error: answer=%v err=%v", answer, err)
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", err),
+			})
+			break
+		}
+
+		err = peer.SetLocalDescription(answer)
+		if err != nil {
+			log.Errorf("Offer error: answer=%v err=%v", answer, err)
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", err),
+			})
+			break
+		}
+
+		// Notify user of trickle candidates
+		peer.OnICECandidate(func(c *webrtc.ICECandidate) {
+			log.Debugf("Sending ICE candidate")
+			if c == nil {
+				// Gathering done
+				return
+			}
+
+			if err := conn.Notify(ctx, "trickle", c.String()); err != nil {
+				log.Errorf("error sending trickle %s", err)
+			}
+		})
+
+		peer.OnNegotiationNeeded(func() {
+			log.Debugf("on negotiation needed called")
+			offer, err := p.peer.CreateOffer()
+			if err != nil {
+				log.Errorf("CreateOffer error: %v", err)
+				return
+			}
+
+			err = p.peer.SetLocalDescription(offer)
+			if err != nil {
+				log.Errorf("SetLocalDescription error: %v", err)
+				return
+			}
+
+			if err := conn.Notify(ctx, "offer", offer); err != nil {
+				log.Errorf("error sending offer %s", err)
+			}
+		})
+
+		p.peer = peer
+
+		_ = conn.Reply(ctx, req.ID, answer)
+
+		// Hack until renegotation is supported in pion. Force renegotation incase there are unmatched
+		// receviers (i.e. sfu has more than one sender). We just naively create server offer. It is
+		// noop if things are already matched. We can remove once https://github.com/pion/webrtc/pull/1322
+		// is merged
+		time.Sleep(1000 * time.Millisecond)
+
+		log.Debugf("on negotiation needed called")
+		offer, err := p.peer.CreateOffer()
+		if err != nil {
+			log.Errorf("CreateOffer error: %v", err)
+			return
+		}
+
+		err = p.peer.SetLocalDescription(offer)
+		if err != nil {
+			log.Errorf("SetLocalDescription error: %v", err)
+			return
+		}
+
+		if err := conn.Notify(ctx, "offer", offer); err != nil {
+			log.Errorf("error sending offer %s", err)
+		}
+
+	case "offer":
+		if p.peer == nil {
+			log.Errorf("connect: no peer exists for connection")
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", errors.New("no peer exists")),
+			})
+			break
+		}
+
+		log.Infof("peer %s offer", p.peer.ID())
+
+		var negotiation Negotiation
+		err := json.Unmarshal(*req.Params, &negotiation)
+		if err != nil {
+			log.Errorf("connect: error parsing offer: %v", err)
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", err),
+			})
+			break
+		}
+
+		// Peer exists, renegotiating existing peer
+		err = p.peer.SetRemoteDescription(negotiation.Desc)
+		if err != nil {
+			log.Errorf("Offer error: %v", err)
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", err),
+			})
+			break
+		}
+
+		answer, err := p.peer.CreateAnswer()
+		if err != nil {
+			log.Errorf("Offer error: answer=%v err=%v", answer, err)
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", err),
+			})
+			break
+		}
+
+		err = p.peer.SetLocalDescription(answer)
+		if err != nil {
+			log.Errorf("Offer error: answer=%v err=%v", answer, err)
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", err),
+			})
+			break
+		}
+
+		_ = conn.Reply(ctx, req.ID, answer)
+
+	case "answer":
+		if p.peer == nil {
+			log.Errorf("connect: no peer exists for connection")
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", errors.New("no peer exists")),
+			})
+			break
+		}
+
+		log.Infof("peer %s answer", p.peer.ID())
+
+		var negotiation Negotiation
+		err := json.Unmarshal(*req.Params, &negotiation)
+		if err != nil {
+			log.Errorf("connect: error parsing answer: %v", err)
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", err),
+			})
+			break
+		}
+
+		err = p.peer.SetRemoteDescription(negotiation.Desc)
+		if err != nil {
+			log.Errorf("error setting remote description %s", err)
+		}
+
+	case "trickle":
+		log.Debugf("trickle")
+		if p.peer == nil {
+			log.Errorf("connect: no peer exists for connection")
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", errors.New("no peer exists")),
+			})
+			break
+		}
+
+		log.Infof("peer %s trickle", p.peer.ID())
+
+		var trickle Trickle
+		err := json.Unmarshal(*req.Params, &trickle)
+		if err != nil {
+			log.Errorf("connect: error parsing candidate: %v", err)
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", err),
+			})
+			break
+		}
+
+		err = p.peer.AddICECandidate(trickle.Candidate)
+		if err != nil {
+			log.Errorf("error setting ice candidate %s", err)
+		}
 	}
-
-	resp.Mid = mid
-	resp.Answer = *answer
-
-	return nil
 }
 
 func main() {
@@ -141,22 +381,38 @@ func main() {
 		os.Exit(-1)
 	}
 
-	sfu.Init(conf)
 	log.Infof("--- Starting SFU Node ---")
-	err := rpc.Register(new(RPC))
-	if err != nil {
-		panic(err)
+	rpc := NewRPC()
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
 	}
 
-	http.Handle("/ws", websocket.Handler(serve))
+	http.Handle("/ws", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			panic(err)
+		}
+		defer c.Close()
+
+		p := &peerContext{}
+		ctx := context.WithValue(r.Context(), peerCtxKey, p)
+		jc := jsonrpc2.NewConn(ctx, websocketjsonrpc2.NewObjectStream(c), rpc)
+
+		<-jc.DisconnectNotify()
+
+		if p.peer != nil {
+			log.Infof("Closing peer")
+			p.peer.Close()
+		}
+	}))
 
 	log.Infof("Listening at %s", "localhost:7000")
-	err = http.ListenAndServe("localhost:7000", nil)
+	err := http.ListenAndServe("localhost:7000", nil)
 	if err != nil {
 		panic(err)
 	}
-}
-
-func serve(ws *websocket.Conn) {
-	jsonrpc.ServeConn(ws)
 }

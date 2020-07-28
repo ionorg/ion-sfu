@@ -1,8 +1,8 @@
-package plugins
+package sfu
 
 import (
 	"fmt"
-	"time"
+	"sync"
 
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/rtcp"
@@ -14,26 +14,16 @@ const (
 	maxPktSize = 1000
 
 	// kProcessIntervalMs=20 ms
-	//https://chromium.googlesource.com/external/webrtc/+/ad34dbe934/webrtc/modules/video_coding/nack_module.cc#28
+	// https://chromium.googlesource.com/external/webrtc/+/ad34dbe934/webrtc/modules/video_coding/nack_module.cc#28
 
 	// vp8 vp9 h264 clock rate 90000Hz
 	videoClock = 90000
 
-	//1+16(FSN+BLP) https://tools.ietf.org/html/rfc2032#page-9
+	// 1+16(FSN+BLP) https://tools.ietf.org/html/rfc2032#page-9
 	maxNackLostSize = 17
 
-	//default buffer time by ms
+	// default buffer time by ms
 	defaultBufferTime = 1000
-
-	tccExtMapID = 3
-	//64ms = 64000us = 250 << 8
-	//https://webrtc.googlesource.com/src/webrtc/+/f54860e9ef0b68e182a01edc994626d21961bc4b/modules/rtp_rtcp/source/rtcp_packet/transport_feedback.cc#41
-	baseScaleFactor = 64000
-	//https://webrtc.googlesource.com/src/webrtc/+/f54860e9ef0b68e182a01edc994626d21961bc4b/modules/rtp_rtcp/source/rtcp_packet/transport_feedback.cc#43
-	timeWrapPeriodUs = (int64(1) << 24) * baseScaleFactor
-
-	//experiment cycle
-	tccCycle = 10 * time.Millisecond
 )
 
 func tsDelta(x, y uint32) uint32 {
@@ -41,12 +31,6 @@ func tsDelta(x, y uint32) uint32 {
 		return x - y
 	}
 	return y - x
-}
-
-type rtpExtInfo struct {
-	//transport sequence num
-	TSN       uint16
-	Timestamp int64
 }
 
 // Buffer contains all packets
@@ -76,28 +60,22 @@ type Buffer struct {
 	maxBufferTS uint32
 
 	stop bool
+	mu   sync.RWMutex
 
-	feedbackPacketCount uint8
-
-	rtpExtInfoChan chan rtpExtInfo
 	// lastTCCSN      uint16
 	// bufferStartTS time.Time
 }
 
 type BufferOptions struct {
-	TCCOn      bool
 	BufferTime int
 }
 
 // NewBuffer constructs a new Buffer
-func NewBuffer(o BufferOptions) *Buffer {
+func NewBuffer(ssrc uint32, pt uint8, o BufferOptions) *Buffer {
 	b := &Buffer{
-		rtcpCh:         make(chan rtcp.Packet, maxPktSize),
-		rtpExtInfoChan: make(chan rtpExtInfo, maxPktSize),
-	}
-
-	if o.TCCOn {
-		b.calcTCCLoop()
+		ssrc:        ssrc,
+		payloadType: pt,
+		rtcpCh:      make(chan rtcp.Packet, maxPktSize),
 	}
 
 	if o.BufferTime <= 0 {
@@ -109,127 +87,11 @@ func NewBuffer(o BufferOptions) *Buffer {
 	return b
 }
 
-func (b *Buffer) calcTCCLoop() {
-	go func() {
-		t := time.NewTicker(tccCycle)
-		defer t.Stop()
-		for {
-			if b.stop {
-				return
-			}
-			<-t.C
-			b.calcTCC()
-		}
-	}()
-}
-
-func (b *Buffer) calcTCC() {
-	cap := len(b.rtpExtInfoChan)
-	if cap == 0 {
-		return
-	}
-
-	//get all rtp extension infos from channel
-	rtpExtInfo := make(map[uint16]int64)
-	for i := 0; i < cap; i++ {
-		info := <-b.rtpExtInfoChan
-		rtpExtInfo[info.TSN] = info.Timestamp
-	}
-
-	//find the min and max transport sn
-	var minTSN, maxTSN uint16
-	for tsn := range rtpExtInfo {
-
-		//init
-		if minTSN == 0 {
-			minTSN = tsn
-		}
-
-		if minTSN > tsn {
-			minTSN = tsn
-		}
-
-		if maxTSN < tsn {
-			maxTSN = tsn
-		}
-	}
-
-	//force small deta rtcp.RunLengthChunk
-	chunk := &rtcp.RunLengthChunk{
-		Type:               rtcp.TypeTCCRunLengthChunk,
-		PacketStatusSymbol: rtcp.TypeTCCPacketReceivedSmallDelta,
-		RunLength:          maxTSN - minTSN + 1,
-	}
-
-	//gather deltas
-	var recvDeltas []*rtcp.RecvDelta
-	var refTime uint32
-	var lastTS int64
-	var baseTimeTicks int64
-	for i := minTSN; i <= maxTSN; i++ {
-		ts, ok := rtpExtInfo[i]
-
-		//lost packet
-		if !ok {
-			recvDelta := &rtcp.RecvDelta{
-				Type: rtcp.TypeTCCPacketReceivedSmallDelta,
-			}
-			recvDeltas = append(recvDeltas, recvDelta)
-			continue
-		}
-
-		// init lastTS
-		if lastTS == 0 {
-			lastTS = ts
-		}
-
-		//received packet
-		if baseTimeTicks == 0 {
-			baseTimeTicks = (ts % timeWrapPeriodUs) / baseScaleFactor
-		}
-
-		var delta int64
-		if lastTS == ts {
-			delta = ts%timeWrapPeriodUs - baseTimeTicks*baseScaleFactor
-		} else {
-			delta = (ts - lastTS) % timeWrapPeriodUs
-		}
-
-		if refTime == 0 {
-			refTime = uint32(baseTimeTicks) & 0x007FFFFF
-		}
-
-		recvDelta := &rtcp.RecvDelta{
-			Type:  rtcp.TypeTCCPacketReceivedSmallDelta,
-			Delta: delta,
-		}
-		recvDeltas = append(recvDeltas, recvDelta)
-	}
-	rtcpTCC := &rtcp.TransportLayerCC{
-		Header: rtcp.Header{
-			Padding: false,
-			Count:   rtcp.FormatTCC,
-			Type:    rtcp.TypeTransportSpecificFeedback,
-			// Length:  5, //need calc
-		},
-		// SenderSSRC:         b.ssrc,
-		MediaSSRC:          b.ssrc,
-		BaseSequenceNumber: minTSN,
-		PacketStatusCount:  maxTSN - minTSN + 1,
-		ReferenceTime:      refTime,
-		FbPktCount:         b.feedbackPacketCount,
-		RecvDeltas:         recvDeltas,
-		PacketChunks:       []rtcp.PacketStatusChunk{chunk},
-	}
-	rtcpTCC.Header.Length = rtcpTCC.Len()/4 - 1
-	if !b.stop {
-		b.rtcpCh <- rtcpTCC
-		b.feedbackPacketCount++
-	}
-}
-
 // Push adds a RTP Packet, out of order, new packet may be arrived later
 func (b *Buffer) Push(p *rtp.Packet) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	b.receivedPkt++
 	b.totalByte += uint64(p.MarshalSize())
 
@@ -256,25 +118,6 @@ func (b *Buffer) Push(p *rtp.Packet) {
 
 	b.pktBuffer[p.SequenceNumber] = p
 	b.lastPushSN = p.SequenceNumber
-
-	//store arrival time
-	timestampUs := time.Now().UnixNano() / 1000
-	rtpTCC := rtp.TransportCCExtension{}
-	err := rtpTCC.Unmarshal(p.GetExtension(tccExtMapID))
-	if err == nil {
-		// if time.Now().Sub(b.bufferStartTS) > time.Second {
-
-		//only calc the packet which rtpTCC.TransportSequence > b.lastTCCSN
-		//https://webrtc.googlesource.com/src/webrtc/+/f54860e9ef0b68e182a01edc994626d21961bc4b/modules/rtp_rtcp/source/rtcp_packet/transport_feedback.cc#353
-		// if rtpTCC.TransportSequence > b.lastTCCSN {
-		b.rtpExtInfoChan <- rtpExtInfo{
-			TSN:       rtpTCC.TransportSequence,
-			Timestamp: timestampUs,
-		}
-		// b.lastTCCSN = rtpTCC.TransportSequence
-		// }
-	}
-	// }
 
 	// clear old packet by timestamp
 	b.clearOldPkt(p.Timestamp, p.SequenceNumber)
@@ -339,11 +182,6 @@ func (b *Buffer) clearOldPkt(pushPktTS uint32, pushPktSN uint16) {
 	}
 }
 
-// FindPacket find packet from buffer
-func (b *Buffer) FindPacket(sn uint16) *rtp.Packet {
-	return b.pktBuffer[sn]
-}
-
 // Stop buffer
 func (b *Buffer) Stop() {
 	b.stop = true
@@ -352,6 +190,8 @@ func (b *Buffer) Stop() {
 }
 
 func (b *Buffer) clear() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	for i := range b.pktBuffer {
 		b.pktBuffer[i] = nil
 	}
@@ -362,15 +202,14 @@ func (b *Buffer) GetPayloadType() uint8 {
 	return b.payloadType
 }
 
-// GetStat get status from buffer
-func (b *Buffer) GetStat() string {
-	out := fmt.Sprintf("buffer:[%d, %d] | lastNackSN:%d | lostRate:%.2f |\n", b.lastClearSN, b.lastPushSN, b.lastNackSN, float64(b.lostPkt)/float64(b.receivedPkt+b.lostPkt))
-	return out
+func (b *Buffer) stats() string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return fmt.Sprintf("buffer: [%d, %d] | lastNackSN: %d", b.lastClearSN, b.lastPushSN, b.lastNackSN)
 }
 
 // GetNackPair calc nackpair
 func (b *Buffer) GetNackPair(buffer [65536]*rtp.Packet, begin, end uint16) (rtcp.NackPair, int) {
-
 	var lostPkt int
 
 	//size is <= 17
@@ -404,14 +243,8 @@ func (b *Buffer) GetNackPair(buffer [65536]*rtp.Packet, begin, end uint16) (rtcp
 			lostPkt++
 		}
 	}
-	log.Tracef("NackPair begin=%v end=%v buffer=%v\n", begin, end, buffer[begin:end])
+	// log.Tracef("NackPair begin=%v end=%v buffer=%v\n", begin, end, buffer[begin:end])
 	return rtcp.NackPair{PacketID: lost, LostPackets: rtcp.PacketBitmap(blp)}, lostPkt
-}
-
-// SetSSRCPT set ssrc payloadtype
-func (b *Buffer) SetSSRCPT(ssrc uint32, pt uint8) {
-	b.ssrc = ssrc
-	b.payloadType = pt
 }
 
 // GetSSRC get ssrc

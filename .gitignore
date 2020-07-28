@@ -5,3 +5,5 @@ cover.out
 main
 .DS_Store
 .vscode
+*.code-workspace
+*debug.test

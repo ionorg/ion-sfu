@@ -1,4 +1,4 @@
-package media
+package sfu
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/pion/sdp/v2"
-	"github.com/pion/webrtc/v2"
+	"github.com/pion/webrtc/v3"
 )
 
 const (
@@ -24,10 +24,9 @@ var (
 	}
 )
 
-// Engine handles stream codecs
-type Engine struct {
+// MediaEngine handles stream codecs
+type MediaEngine struct {
 	webrtc.MediaEngine
-	mapping map[uint8]uint8
 }
 
 // PopulateFromSDP finds all codecs in sd and adds them to m, using the dynamic
@@ -36,7 +35,7 @@ type Engine struct {
 // The offerer sets the PayloadTypes for the connection.
 // PopulateFromSDP allows an answerer to properly match the PayloadTypes from the offerer.
 // A MediaEngine populated by PopulateFromSDP should be used only for a single session.
-func (e *Engine) PopulateFromSDP(sd webrtc.SessionDescription) error {
+func (e *MediaEngine) PopulateFromSDP(sd webrtc.SessionDescription) error {
 	sdp := sdp.SessionDescription{}
 	if err := sdp.Unmarshal([]byte(sd.SDP)); err != nil {
 		return err
@@ -78,44 +77,4 @@ func (e *Engine) PopulateFromSDP(sd webrtc.SessionDescription) error {
 		}
 	}
 	return nil
-}
-
-// MapFromEngine finds codec payload type mappings between two MediaEngines.
-// If a codec is supported by both media engines, a mapping is established.
-// Payload type mappings are necessary when a pub and subs payload type differ for the same codec.
-func (e *Engine) MapFromEngine(from *Engine) {
-	if e.mapping == nil {
-		e.mapping = make(map[uint8]uint8)
-	}
-
-	// Map audio codecs. We do audio/video separately due to MediaEngine api constraints.
-	for _, codec := range from.MediaEngine.GetCodecsByKind(webrtc.RTPCodecTypeAudio) {
-		to := e.GetCodecsByName(codec.Name)
-
-		if len(to) > 0 {
-			// Just take first?
-			e.mapping[codec.PayloadType] = to[0].PayloadType
-		}
-	}
-
-	// Map video codecs
-	for _, codec := range from.MediaEngine.GetCodecsByKind(webrtc.RTPCodecTypeVideo) {
-		to := e.GetCodecsByName(codec.Name)
-
-		if len(to) > 0 {
-			// Just take first?
-			e.mapping[codec.PayloadType] = to[0].PayloadType
-		}
-	}
-}
-
-// MapTo maps an incoming payload type to one supported by
-// this media engine.
-func (e *Engine) MapTo(pt uint8) (uint8, bool) {
-	if e.mapping == nil {
-		return 0, false
-	}
-
-	destType, ok := e.mapping[pt]
-	return destType, ok
 }
