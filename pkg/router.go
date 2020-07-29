@@ -6,7 +6,6 @@ import (
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/ion-sfu/pkg/util"
 	"github.com/pion/rtcp"
-	"github.com/pion/rtp"
 )
 
 // Router defines a track rtp/rtcp router
@@ -16,16 +15,14 @@ type Router struct {
 	pub      Receiver
 	pubLock  sync.RWMutex
 	subs     map[string]*Sender
-	subChans map[string]chan *rtp.Packet
 	subsLock sync.RWMutex
 }
 
 // NewRouter for routing rtp/rtcp packets
 func NewRouter(recv Receiver) *Router {
 	r := &Router{
-		pub:      recv,
-		subs:     make(map[string]*Sender),
-		subChans: make(map[string]chan *rtp.Packet),
+		pub:  recv,
+		subs: make(map[string]*Sender),
 	}
 
 	go r.start()
@@ -37,11 +34,8 @@ func NewRouter(recv Receiver) *Router {
 func (r *Router) AddSub(pid string, sub *Sender) {
 	r.subsLock.Lock()
 	r.subs[pid] = sub
-	subChan := make(chan *rtp.Packet, 1000)
-	r.subChans[pid] = subChan
 	r.subsLock.Unlock()
 
-	go r.subWriteLoop(subChan, sub)
 	go r.subFeedbackLoop(sub)
 }
 
@@ -62,7 +56,6 @@ func (r *Router) Close() {
 	r.subsLock.Lock()
 	for pid, sub := range r.subs {
 		sub.Close()
-		close(r.subChans[pid])
 		delete(r.subs, pid)
 	}
 	r.subsLock.Unlock()
@@ -95,20 +88,11 @@ func (r *Router) start() {
 
 		r.subsLock.RLock()
 		// Push to sub send queues
-		for pid := range r.subs {
-			r.subChans[pid] <- pkt
+		for _, sub := range r.subs {
+			sub.sendChan <- pkt
 		}
 		r.subsLock.RUnlock()
 	}
-}
-
-func (r *Router) subWriteLoop(ch chan *rtp.Packet, sub *Sender) {
-	for pkt := range ch {
-		if err := sub.WriteRTP(pkt); err != nil {
-			log.Errorf("wt.WriteRTP err=%v", err)
-		}
-	}
-	log.Infof("Closing sub writer")
 }
 
 // subFeedbackLoop reads rtcp packets from the sub

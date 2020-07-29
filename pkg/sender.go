@@ -21,20 +21,22 @@ type SenderConfig struct {
 
 // Sender represents a track being sent to a peer
 type Sender struct {
-	track   *webrtc.Track
-	stop    bool
-	rtcpCh  chan rtcp.Packet
-	useRemb bool
-	rembCh  chan *rtcp.ReceiverEstimatedMaximumBitrate
-	target  uint64
+	track    *webrtc.Track
+	stop     bool
+	rtcpCh   chan rtcp.Packet
+	useRemb  bool
+	rembCh   chan *rtcp.ReceiverEstimatedMaximumBitrate
+	target   uint64
+	sendChan chan *rtp.Packet
 }
 
 // NewSender creates a new send track instance
 func NewSender(track *webrtc.Track, sender *webrtc.RTPSender) *Sender {
 	s := &Sender{
-		track:  track,
-		rtcpCh: make(chan rtcp.Packet, maxSize),
-		rembCh: make(chan *rtcp.ReceiverEstimatedMaximumBitrate, maxSize),
+		track:    track,
+		rtcpCh:   make(chan rtcp.Packet, maxSize),
+		rembCh:   make(chan *rtcp.ReceiverEstimatedMaximumBitrate, maxSize),
+		sendChan: make(chan *rtp.Packet, maxSize),
 	}
 
 	for _, feedback := range track.Codec().RTCPFeedback {
@@ -50,8 +52,18 @@ func NewSender(track *webrtc.Track, sender *webrtc.RTPSender) *Sender {
 	}
 
 	go s.receiveRTCP(sender)
+	go s.sendRTP()
 
 	return s
+}
+
+func (s *Sender) sendRTP() {
+	for pkt := range s.sendChan {
+		if err := s.WriteRTP(pkt); err != nil {
+			log.Errorf("wt.WriteRTP err=%v", err)
+		}
+	}
+	log.Infof("Closing send writer")
 }
 
 // ReadRTCP read rtp packet
