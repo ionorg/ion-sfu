@@ -88,6 +88,7 @@ func (s *Sender) WriteRTP(pkt *rtp.Packet) error {
 // Close track
 func (s *Sender) Close() {
 	s.stop = true
+	close(s.sendChan)
 }
 
 func (s *Sender) receiveRTCP(sender *webrtc.RTPSender) {
