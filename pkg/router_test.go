@@ -50,7 +50,7 @@ func TestRouter(t *testing.T) {
 		assert.NoError(t, err)
 
 		subPid := "subpid"
-		sender := NewSender(subtrack, s)
+		sender := NewWebRTCSender(subtrack, s)
 		router.AddSub(subPid, sender)
 		assert.Len(t, router.subs, 1)
 		assert.Equal(t, sender, router.subs[subPid])

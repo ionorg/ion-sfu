@@ -169,7 +169,7 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 		if room == nil {
 			room = r.sfu.CreateRoom(join.Rid)
 		}
-		room.AddPeer(peer)
+		room.AddTransport(peer)
 
 		err = peer.SetRemoteDescription(join.Offer)
 		if err != nil {

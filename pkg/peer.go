@@ -175,7 +175,9 @@ func (p *Peer) OnNegotiationNeeded(f func()) {
 }
 
 // Subscribe to a router
-func (p *Peer) Subscribe(router *Router) error {
+// `renegotiate` flag is supported until pion/webrtc supports
+// OnNegotiationNeeded (https://github.com/pion/webrtc/pull/1322)
+func (p *Peer) Subscribe(router *Router, renegotiate bool) error {
 	log.Infof("Subscribing to router %v", router)
 
 	track := router.pub.Track()
@@ -203,22 +205,27 @@ func (p *Peer) Subscribe(router *Router) error {
 		return err
 	}
 
-	// Create sender track on peer we are sending track to
-	sender := NewSender(track, s)
+	// Create webrtc sender for the peer we are sending track to
+	sender := NewWebRTCSender(track, s)
 
 	// Attach sender to source
 	router.AddSub(p.id, sender)
+
+	if renegotiate && p.onNegotiationNeededHandler != nil {
+		log.Infof("debounced %s", p.id)
+		p.onNegotiationNeededHandler()
+	}
 
 	return nil
 }
 
 // AddSub adds peer as a sub
-func (p *Peer) AddSub(peer *Peer) {
+func (p *Peer) AddSub(transport Transport) {
 	p.routersLock.Lock()
 	for _, router := range p.routers {
-		err := peer.Subscribe(router)
+		err := transport.Subscribe(router, false)
 		if err != nil {
-			log.Errorf("Error subscribing peer %s to router %v", peer.id, router)
+			log.Errorf("Error subscribing transport %s to router %v", transport.ID(), router)
 		}
 	}
 	p.routersLock.Unlock()
@@ -227,6 +234,13 @@ func (p *Peer) AddSub(peer *Peer) {
 // ID of peer
 func (p *Peer) ID() string {
 	return p.id
+}
+
+// Routers returns routers for this peer
+func (p *Peer) Routers() map[uint32]*Router {
+	p.routersLock.RLock()
+	defer p.routersLock.RUnlock()
+	return p.routers
 }
 
 // Close peer

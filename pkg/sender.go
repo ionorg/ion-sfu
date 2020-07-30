@@ -12,15 +12,16 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-// SenderConfig describes configuration of a sender
-type SenderConfig struct {
-	REMBFeedback bool
-	MinBandwidth uint64
-	MaxBandwidth uint64
+// Sender defines a interface for a track receiver
+type Sender interface {
+	ReadRTCP() (rtcp.Packet, error)
+	WriteRTP(*rtp.Packet)
+	stats() string
+	Close()
 }
 
-// Sender represents a track being sent to a peer
-type Sender struct {
+// WebRTCSender represents a Sender which writes RTP to a webrtc track
+type WebRTCSender struct {
 	track    *webrtc.Track
 	stop     bool
 	rtcpCh   chan rtcp.Packet
@@ -30,9 +31,9 @@ type Sender struct {
 	sendChan chan *rtp.Packet
 }
 
-// NewSender creates a new send track instance
-func NewSender(track *webrtc.Track, sender *webrtc.RTPSender) *Sender {
-	s := &Sender{
+// NewWebRTCSender creates a new track sender instance
+func NewWebRTCSender(track *webrtc.Track, sender *webrtc.RTPSender) *WebRTCSender {
+	s := &WebRTCSender{
 		track:    track,
 		rtcpCh:   make(chan rtcp.Packet, maxSize),
 		rembCh:   make(chan *rtcp.ReceiverEstimatedMaximumBitrate, maxSize),
@@ -57,9 +58,15 @@ func NewSender(track *webrtc.Track, sender *webrtc.RTPSender) *Sender {
 	return s
 }
 
-func (s *Sender) sendRTP() {
+func (s *WebRTCSender) sendRTP() {
 	for pkt := range s.sendChan {
-		if err := s.WriteRTP(pkt); err != nil {
+		// Transform payload type
+		pt := s.track.Codec().PayloadType
+		newPkt := *pkt
+		newPkt.Header.PayloadType = pt
+		pkt = &newPkt
+
+		if err := s.track.WriteRTP(pkt); err != nil {
 			log.Errorf("wt.WriteRTP err=%v", err)
 		}
 	}
@@ -67,7 +74,7 @@ func (s *Sender) sendRTP() {
 }
 
 // ReadRTCP read rtp packet
-func (s *Sender) ReadRTCP() (rtcp.Packet, error) {
+func (s *WebRTCSender) ReadRTCP() (rtcp.Packet, error) {
 	rtcp, ok := <-s.rtcpCh
 	if !ok {
 		return nil, errChanClosed
@@ -76,22 +83,17 @@ func (s *Sender) ReadRTCP() (rtcp.Packet, error) {
 }
 
 // WriteRTP to the track
-func (s *Sender) WriteRTP(pkt *rtp.Packet) error {
-	// Transform payload type
-	pt := s.track.Codec().PayloadType
-	newPkt := *pkt
-	newPkt.Header.PayloadType = pt
-	pkt = &newPkt
-	return s.track.WriteRTP(pkt)
+func (s *WebRTCSender) WriteRTP(pkt *rtp.Packet) {
+	s.sendChan <- pkt
 }
 
 // Close track
-func (s *Sender) Close() {
+func (s *WebRTCSender) Close() {
 	s.stop = true
 	close(s.sendChan)
 }
 
-func (s *Sender) receiveRTCP(sender *webrtc.RTPSender) {
+func (s *WebRTCSender) receiveRTCP(sender *webrtc.RTPSender) {
 	for {
 		pkts, err := sender.ReadRTCP()
 		if err == io.EOF || err == io.ErrClosedPipe {
@@ -120,7 +122,7 @@ func (s *Sender) receiveRTCP(sender *webrtc.RTPSender) {
 	}
 }
 
-func (s *Sender) rembLoop() {
+func (s *WebRTCSender) rembLoop() {
 	lastRembTime := time.Now()
 	maxRembTime := 200 * time.Millisecond
 	rembMin := uint64(100000)
@@ -172,6 +174,6 @@ func (s *Sender) rembLoop() {
 	}
 }
 
-func (s *Sender) stats() string {
+func (s *WebRTCSender) stats() string {
 	return fmt.Sprintf("payload:%d | remb: %dkbps", s.track.PayloadType(), s.target/1000)
 }

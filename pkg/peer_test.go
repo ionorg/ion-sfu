@@ -155,7 +155,7 @@ func TestPeerPairRemoteBGetsOnTrack(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Subscribe to remoteA track
-		err = peerB.Subscribe(r)
+		err = peerB.Subscribe(r, false)
 		assert.NoError(t, err)
 
 		<-gatherComplete
@@ -217,7 +217,7 @@ func TestPeerPairRemoteAGetsOnTrackWhenRemoteBJoinsWithPub(t *testing.T) {
 
 	peerB.OnRouter(func(r *Router) {
 		// Subscribe to remoteA track
-		err = peerA.Subscribe(r)
+		err = peerA.Subscribe(r, false)
 		assert.NoError(t, err)
 
 		// Renegotiate

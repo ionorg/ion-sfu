@@ -14,7 +14,7 @@ type Router struct {
 	stopLock sync.RWMutex
 	pub      Receiver
 	pubLock  sync.RWMutex
-	subs     map[string]*Sender
+	subs     map[string]Sender
 	subsLock sync.RWMutex
 }
 
@@ -22,7 +22,7 @@ type Router struct {
 func NewRouter(recv Receiver) *Router {
 	r := &Router{
 		pub:  recv,
-		subs: make(map[string]*Sender),
+		subs: make(map[string]Sender),
 	}
 
 	go r.start()
@@ -31,7 +31,7 @@ func NewRouter(recv Receiver) *Router {
 }
 
 // AddSub to router
-func (r *Router) AddSub(pid string, sub *Sender) {
+func (r *Router) AddSub(pid string, sub Sender) {
 	r.subsLock.Lock()
 	r.subs[pid] = sub
 	r.subsLock.Unlock()
@@ -89,7 +89,7 @@ func (r *Router) start() {
 		r.subsLock.RLock()
 		// Push to sub send queues
 		for _, sub := range r.subs {
-			sub.sendChan <- pkt
+			sub.WriteRTP(pkt)
 		}
 		r.subsLock.RUnlock()
 	}
@@ -97,7 +97,7 @@ func (r *Router) start() {
 
 // subFeedbackLoop reads rtcp packets from the sub
 // and either handles them or forwards them to the pub.
-func (r *Router) subFeedbackLoop(sub *Sender) {
+func (r *Router) subFeedbackLoop(sub Sender) {
 	for {
 		r.stopLock.RLock()
 		if r.stop {
@@ -122,10 +122,7 @@ func (r *Router) subFeedbackLoop(sub *Sender) {
 				r.pubLock.RUnlock()
 				if bufferpkt != nil {
 					// We found the packet in the buffer, resend to sub
-					err = sub.WriteRTP(bufferpkt)
-					if err != nil {
-						log.Errorf("error writing rtp %s", err)
-					}
+					sub.WriteRTP(bufferpkt)
 					continue
 				}
 
