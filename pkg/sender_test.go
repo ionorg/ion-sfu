@@ -41,12 +41,12 @@ func signalPair(pcOffer *webrtc.PeerConnection, pcAnswer *webrtc.PeerConnection)
 	return pcOffer.SetRemoteDescription(*pcAnswer.LocalDescription())
 }
 
-func sendRTPWithSenderUntilDone(done <-chan struct{}, t *testing.T, track *webrtc.Track, sender *Sender) {
+func sendRTPWithSenderUntilDone(done <-chan struct{}, t *testing.T, track *webrtc.Track, sender Sender) {
 	for {
 		select {
 		case <-time.After(20 * time.Millisecond):
 			pkt := track.Packetizer().Packetize([]byte{0x01, 0x02, 0x03, 0x04}, 1)[0]
-			assert.NoError(t, sender.WriteRTP(pkt))
+			sender.WriteRTP(pkt)
 		case <-done:
 			return
 		}
@@ -79,7 +79,7 @@ func TestSenderRTPForwarding(t *testing.T) {
 	s, err := sfu.AddTrack(track)
 	assert.NoError(t, err)
 
-	sender := NewSender(track, s)
+	sender := NewWebRTCSender(track, s)
 	assert.NotNil(t, sender)
 
 	err = signalPair(sfu, remote)
@@ -116,7 +116,7 @@ func TestSenderRTCPForwarding(t *testing.T) {
 	s, err := sfu.AddTrack(track)
 	assert.NoError(t, err)
 
-	sender := NewSender(track, s)
+	sender := NewWebRTCSender(track, s)
 	assert.NotNil(t, sender)
 
 	err = signalPair(sfu, remote)
@@ -169,7 +169,7 @@ func TestSenderRTCPREMBForwarding(t *testing.T) {
 	s, err := sfu.AddTrack(track)
 	assert.NoError(t, err)
 
-	sender := NewSender(track, s)
+	sender := NewWebRTCSender(track, s)
 	assert.NotNil(t, sender)
 
 	err = signalPair(sfu, remote)

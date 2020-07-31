@@ -194,7 +194,7 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 			if room == nil {
 				room = s.sfu.CreateRoom(payload.Join.Rid)
 			}
-			room.AddPeer(peer)
+			room.AddTransport(peer)
 
 			err = peer.SetRemoteDescription(offer)
 			if err != nil {

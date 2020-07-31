@@ -74,10 +74,10 @@ func TestRoom(t *testing.T) {
 		onCloseFiredFunc()
 	})
 
-	room.AddPeer(peer)
+	room.AddTransport(peer)
 
-	assert.Equal(t, peer, room.peers[peer.id])
-	assert.Len(t, room.peers, 1)
+	assert.Equal(t, peer, room.transports[peer.id])
+	assert.Len(t, room.transports, 1)
 
 	stats := room.stats()
 
@@ -86,7 +86,7 @@ func TestRoom(t *testing.T) {
 	// Close peer so they are removed from room
 	peer.Close()
 
-	assert.Len(t, room.peers, 0)
+	assert.Len(t, room.transports, 0)
 
 	<-onCloseFired.Done()
 }
@@ -130,14 +130,14 @@ func TestMultiPeerRoom(t *testing.T) {
 		onNegotationNeededFiredFunc()
 	})
 
-	room.AddPeer(peerA)
+	room.AddTransport(peerA)
 
 	cacheFn := peerA.onRouterHander
 	peerA.OnRouter(func(router *Router) {
 		cacheFn(router)
 		assert.Len(t, peerA.routers, 1)
 
-		room.AddPeer(peerB)
+		room.AddTransport(peerB)
 
 		cacheFn = peerB.onRouterHander
 		peerB.OnRouter(func(router *Router) {
@@ -145,9 +145,7 @@ func TestMultiPeerRoom(t *testing.T) {
 			assert.Len(t, peerB.routers, 1)
 
 			assert.Len(t, peerA.routers[trackA.SSRC()].subs, 1)
-			assert.Equal(t, trackA.SSRC(), peerA.routers[trackA.SSRC()].subs[peerB.id].track.SSRC())
 			assert.Len(t, peerB.routers[trackB.SSRC()].subs, 1)
-			assert.Equal(t, trackB.SSRC(), peerB.routers[trackB.SSRC()].subs[peerA.id].track.SSRC())
 
 			peerA.Close()
 			assert.Len(t, peerB.routers[trackB.SSRC()].subs, 0)
@@ -275,9 +273,9 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 		}
 	})
 
-	room.AddPeer(peerA)
-	room.AddPeer(peerB)
-	room.AddPeer(peerC)
+	room.AddTransport(peerA)
+	room.AddTransport(peerB)
+	room.AddTransport(peerC)
 	<-peerAGotTracks
 	<-peerBGotTracks
 	<-peerCGotTracks
@@ -302,7 +300,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	assert.NoError(t, err)
 	room := NewRoom("room")
 
-	room.AddPeer(peerA)
+	room.AddTransport(peerA)
 	done := make(chan struct{})
 	cacheFn := peerA.onRouterHander
 	peerA.OnRouter(func(router *Router) {
@@ -321,7 +319,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 		assert.NoError(t, err)
 		gatherComplete := webrtc.GatheringCompletePromise(remoteB)
 		peerB, err := NewPeer(offer)
-		room.AddPeer(peerB)
+		room.AddTransport(peerB)
 		assert.NoError(t, err)
 		<-gatherComplete
 		err = peerB.SetRemoteDescription(*remoteB.LocalDescription())
@@ -375,7 +373,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 			assert.NoError(t, err)
 			gatherComplete := webrtc.GatheringCompletePromise(remoteC)
 			peerC, err := NewPeer(offer)
-			room.AddPeer(peerC)
+			room.AddTransport(peerC)
 			assert.NoError(t, err)
 			<-gatherComplete
 			err = peerC.SetRemoteDescription(*remoteC.LocalDescription())
