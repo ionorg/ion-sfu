@@ -52,6 +52,10 @@ func Init(level string) {
 	output.FormatMessage = func(i interface{}) string {
 		caller, file, line, _ := runtime.Caller(9)
 		fileName := filepath.Base(file)
+		if fileName == "asm_amd64.s" || fileName == "proc.go" {
+			caller, file, line, _ = runtime.Caller(8)
+			fileName = filepath.Base(file)
+		}
 		funcName := strings.TrimPrefix(filepath.Ext((runtime.FuncForPC(caller).Name())), ".")
 		return fmt.Sprintf("[%d][%s][%s] => %s", line, fileName, funcName, i)
 	}
