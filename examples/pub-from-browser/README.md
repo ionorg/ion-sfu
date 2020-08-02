@@ -13,10 +13,10 @@ go get github.com/pion/ion-sfu/examples/publish-from-browser
 ### Run publish-from-browser, with your browsers SessionDescription as stdin
 In the jsfiddle the top textarea is your browser, copy that and:
 #### Linux/macOS
-Run `echo $BROWSER_SDP | publish-from-browser`
+Run `echo $BROWSER_SDP | publish-from-browser $yourroom`
 #### Windows
 1. Paste the SessionDescription into a file.
-1. Run `publish-from-browser < my_file`
+1. Run `publish-from-browser $yourroom < my_file`
 
 ### Input publish-from-browser's SessionDescription into your browser
 Copy the text that `publish-from-browser` just emitted and copy into second text area. This needs to be done quickly to avoid an ICE timeout.

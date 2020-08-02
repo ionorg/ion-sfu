@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 
 	sfu "github.com/pion/ion-sfu/cmd/server/grpc/proto"
 	"github.com/pion/ion-sfu/examples/internal/signal"
@@ -28,24 +29,26 @@ func main() {
 	c := sfu.NewSFUClient(conn)
 
 	pubOffer := webrtc.SessionDescription{}
+	println("signal.MustReadStdin")
 	signal.Decode(signal.MustReadStdin(), &pubOffer)
 
 	if err != nil {
 		log.Fatalf("error decoding pub offer")
 	}
 
+	rid := os.Args[1]
 	ctx := context.Background()
-	stream, err := c.Publish(ctx)
+	client, err := c.Signal(ctx)
 
 	if err != nil {
 		log.Fatalf("Error publishing response: %v", err)
 	}
 
-	err = stream.Send(&sfu.PublishRequest{
-		Rid: "default",
-		Payload: &sfu.PublishRequest_Connect{
-			Connect: &sfu.Connect{
-				Description: &sfu.SessionDescription{
+	err = client.Send(&sfu.SignalRequest{
+		Payload: &sfu.SignalRequest_Join{
+			Join: &sfu.JoinRequest{
+				Rid: rid,
+				Offer: &sfu.SessionDescription{
 					Type: pubOffer.Type.String(),
 					Sdp:  []byte(pubOffer.SDP),
 				},
@@ -58,7 +61,7 @@ func main() {
 	}
 
 	for {
-		res, err := stream.Recv()
+		reply, err := client.Recv()
 		if err == io.EOF {
 			// WebRTC Transport closed
 			fmt.Println("WebRTC Transport Closed")
@@ -69,14 +72,14 @@ func main() {
 			log.Fatalf("Error receiving publish response: %v", err)
 		}
 
-		switch payload := res.Payload.(type) {
-		case *sfu.PublishReply_Connect:
+		switch payload := reply.Payload.(type) {
+		case *sfu.SignalReply_Join:
 			// Output the mid and answer in base64 so we can paste it in browser
-			fmt.Printf("\npub mid: %s", res.Mid)
+			fmt.Printf("\npid: %s", payload.Join.Pid)
 			fmt.Printf("\npub answer: %s", signal.Encode(
 				webrtc.SessionDescription{
 					Type: webrtc.SDPTypeAnswer,
-					SDP:  string(payload.Connect.Description.Sdp),
+					SDP:  string(payload.Join.Answer.Sdp),
 				}))
 		}
 	}

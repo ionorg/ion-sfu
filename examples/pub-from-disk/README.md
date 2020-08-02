@@ -16,6 +16,6 @@ go get github.com/pion/ion-sfu/examples/play-from-disk
 ### Run play-from-disk
 The `output.ivf` you created should be in the same directory as `play-from-disk`.
 
-Run `play-from-disk < my_file`
+Run `play-from-disk $yourroom < my_file`
 
 Congrats, you are now publishing video to the ion-sfu! Now start building something cool!
