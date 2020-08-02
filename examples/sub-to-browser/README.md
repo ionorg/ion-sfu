@@ -13,10 +13,10 @@ go get github.com/pion/ion-sfu/examples/sub-to-browser
 ### Run sub-to-browser, with your browsers SessionDescription as stdin
 In the jsfiddle the top textarea is your browser, copy that and:
 #### Linux/macOS
-Run `echo $BROWSER_SDP | sub-to-browser $MID`
+Run `echo $BROWSER_SDP | sub-to-browser $yourroom`
 #### Windows
 1. Paste the SessionDescription into a file.
-1. Run `sub-to-browser $MID < my_file`
+1. Run `sub-to-browser $yourroom < my_file`
 
 ### Input sub-to-browser's SessionDescription into your browser
 Copy the text that `sub-to-browser` just emitted and copy into second text area
