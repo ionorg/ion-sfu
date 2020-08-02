@@ -37,7 +37,7 @@ func showHelp() {
 	fmt.Println("      -c {config file}")
 	fmt.Println("      -cert {cert file}")
 	fmt.Println("      -key {key file}")
-	fmt.Println("      -a{listen addr}")
+	fmt.Println("      -a {listen addr}")
 	fmt.Println("      -h (show help info)")
 }
 
@@ -421,10 +421,10 @@ func main() {
 
 	var err error
 	if key != "" && cert != "" {
-		log.Infof("Listening at TLS [%s]", addr)
+		log.Infof("Listening at https://[%s]", addr)
 		err = http.ListenAndServeTLS(addr, cert, key, nil)
 	} else {
-		log.Infof("Listening at non-TLS [%s]", addr)
+		log.Infof("Listening at http://[%s]", addr)
 		err = http.ListenAndServe(addr, nil)
 	}
 	if err != nil {

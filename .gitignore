@@ -7,3 +7,4 @@ main
 .vscode
 *.code-workspace
 *debug.test
+*.pem
