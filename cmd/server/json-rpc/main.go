@@ -79,7 +79,7 @@ func parse() bool {
 	flag.StringVar(&file, "c", "config.toml", "config file")
 	flag.StringVar(&cert, "cert", "", "cert file")
 	flag.StringVar(&key, "key", "", "key file")
-	flag.StringVar(&addr, "a", "0.0.0.0:7000", "listen addr")
+	flag.StringVar(&addr, "a", ":7000", "address to use")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
 	if !load() {
