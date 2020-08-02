@@ -174,25 +174,26 @@ func main() {
 		}
 	})
 
-	offer, err := peerConnection.CreateOffer(nil)
+	pubOffer, err := peerConnection.CreateOffer(nil)
 	if err != nil {
 		log.Fatalf("Error creating offer: %v", err)
 	}
 
+	rid := os.Args[1]
 	ctx := context.Background()
-	stream, err := c.Publish(ctx)
+	client, err := c.Signal(ctx)
 
 	if err != nil {
 		log.Fatalf("Error publishing stream: %v", err)
 	}
 
-	err = stream.Send(&sfu.PublishRequest{
-		Rid: "default",
-		Payload: &sfu.PublishRequest_Connect{
-			Connect: &sfu.Connect{
-				Description: &sfu.SessionDescription{
-					Type: offer.Type.String(),
-					Sdp:  []byte(offer.SDP),
+	err = client.Send(&sfu.SignalRequest{
+		Payload: &sfu.SignalRequest_Join{
+			Join: &sfu.JoinRequest{
+				Rid: rid,
+				Offer: &sfu.SessionDescription{
+					Type: pubOffer.Type.String(),
+					Sdp:  []byte(pubOffer.SDP),
 				},
 			},
 		},
@@ -203,7 +204,7 @@ func main() {
 	}
 
 	for {
-		res, err := stream.Recv()
+		reply, err := client.Recv()
 
 		if err == io.EOF {
 			// WebRTC Transport closed
@@ -214,14 +215,13 @@ func main() {
 			log.Fatalf("Error receving publish response: %v", err)
 		}
 
-		fmt.Printf("Got answer from sfu. Starting streaming for mid %s!\n", res.Mid)
-
-		switch payload := res.Payload.(type) {
-		case *sfu.PublishReply_Connect:
+		switch payload := reply.Payload.(type) {
+		case *sfu.SignalReply_Join:
+			fmt.Printf("Got answer from sfu. Starting streaming for pid %s!\n", payload.Join.GetPid())
 			// Set the remote SessionDescription
 			if err = peerConnection.SetRemoteDescription(webrtc.SessionDescription{
 				Type: webrtc.SDPTypeAnswer,
-				SDP:  string(payload.Connect.Description.Sdp),
+				SDP:  string(payload.Join.Answer.Sdp),
 			}); err != nil {
 				panic(err)
 			}
