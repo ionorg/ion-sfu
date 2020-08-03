@@ -46,14 +46,14 @@ var (
 
 // SFU represents an sfu instance
 type SFU struct {
-	rooms    map[string]*Room
-	roomLock sync.RWMutex
+	mu       sync.RWMutex
+	sessions map[string]*Session
 }
 
 // NewSFU creates a new sfu instance
 func NewSFU(c Config) *SFU {
 	s := &SFU{
-		rooms: make(map[string]*Room),
+		sessions: make(map[string]*Session),
 	}
 
 	config = c
@@ -90,26 +90,26 @@ func NewSFU(c Config) *SFU {
 	return s
 }
 
-// CreateRoom creates a new room instance
-func (s *SFU) CreateRoom(id string) *Room {
-	room := NewRoom(id)
-	room.OnClose(func() {
-		s.roomLock.Lock()
-		delete(s.rooms, id)
-		s.roomLock.Unlock()
+// NewSession creates a new session instance
+func (s *SFU) NewSession(id string) *Session {
+	session := NewSession(id)
+	session.OnClose(func() {
+		s.mu.Lock()
+		delete(s.sessions, id)
+		s.mu.Unlock()
 	})
 
-	s.roomLock.Lock()
-	s.rooms[id] = room
-	s.roomLock.Unlock()
-	return room
+	s.mu.Lock()
+	s.sessions[id] = session
+	s.mu.Unlock()
+	return session
 }
 
-// GetRoom by id
-func (s *SFU) GetRoom(id string) *Room {
-	s.roomLock.RLock()
-	defer s.roomLock.RUnlock()
-	return s.rooms[id]
+// GetSession by id
+func (s *SFU) GetSession(id string) *Session {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.sessions[id]
 }
 
 func (s *SFU) stats() {
@@ -117,16 +117,16 @@ func (s *SFU) stats() {
 	for range t.C {
 		info := "\n----------------stats-----------------\n"
 
-		s.roomLock.RLock()
-		if len(s.rooms) == 0 {
-			s.roomLock.RUnlock()
+		s.mu.RLock()
+		if len(s.sessions) == 0 {
+			s.mu.RUnlock()
 			continue
 		}
 
-		for _, room := range s.rooms {
-			info += room.stats()
+		for _, session := range s.sessions {
+			info += session.stats()
 		}
-		s.roomLock.RUnlock()
+		s.mu.RUnlock()
 		log.Infof(info)
 	}
 }

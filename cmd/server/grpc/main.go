@@ -135,7 +135,7 @@ func main() {
 //
 // If the webrtc connection is closed, the server will close this stream.
 //
-// The client should send a message containg the room id
+// The client should send a message containg the session id
 // and one of two different payload types:
 // 1. `Connect` containing the session offer description. This
 // message must *always* be sent first.
@@ -188,13 +188,13 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 				return status.Errorf(codes.InvalidArgument, "join error %s", err)
 			}
 
-			log.Infof("peer %s join room %s", peer.ID(), payload.Join.Rid)
+			log.Infof("peer %s join session %s", peer.ID(), payload.Join.Rid)
 
-			room := s.sfu.GetRoom(payload.Join.Rid)
-			if room == nil {
-				room = s.sfu.CreateRoom(payload.Join.Rid)
+			session := s.sfu.GetSession(payload.Join.Rid)
+			if session == nil {
+				session = s.sfu.NewSession(payload.Join.Rid)
 			}
-			room.AddTransport(peer)
+			session.AddTransport(peer)
 
 			err = peer.SetRemoteDescription(offer)
 			if err != nil {

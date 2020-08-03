@@ -7,25 +7,25 @@ import (
 	"github.com/pion/ion-sfu/pkg/log"
 )
 
-// Room represents a set of transports. Transports inside a room
+// Session represents a set of transports. Transports inside a session
 // are automatically subscribed to each other.
-type Room struct {
+type Session struct {
 	id             string
 	transports     map[string]Transport
 	transportsLock sync.RWMutex
 	onCloseHandler func()
 }
 
-// NewRoom creates a new room
-func NewRoom(id string) *Room {
-	return &Room{
+// NewSession creates a new session
+func NewSession(id string) *Session {
+	return &Session{
 		id:         id,
 		transports: make(map[string]Transport),
 	}
 }
 
-// AddTransport adds a transport to the room
-func (r *Room) AddTransport(transport Transport) {
+// AddTransport adds a transport to the session
+func (r *Session) AddTransport(transport Transport) {
 	r.transportsLock.Lock()
 	defer r.transportsLock.Unlock()
 
@@ -48,14 +48,14 @@ func (r *Room) AddTransport(transport Transport) {
 			}
 		}
 
-		// Close room if no transports
+		// Close session if no transports
 		if len(r.transports) == 0 && r.onCloseHandler != nil {
 			r.onCloseHandler()
 		}
 	})
 
 	// New track router added to transport, subscribe
-	// other transports in room to it
+	// other transports in session to it
 	transport.OnRouter(func(router *Router) {
 		r.transportsLock.Lock()
 		defer r.transportsLock.Unlock()
@@ -84,13 +84,13 @@ func (r *Room) AddTransport(transport Transport) {
 	})
 }
 
-// OnClose called when room is closed
-func (r *Room) OnClose(f func()) {
+// OnClose called when session is closed
+func (r *Session) OnClose(f func()) {
 	r.onCloseHandler = f
 }
 
-func (r *Room) stats() string {
-	info := fmt.Sprintf("\nroom: %s\n", r.id)
+func (r *Session) stats() string {
+	info := fmt.Sprintf("\nsession: %s\n", r.id)
 
 	r.transportsLock.RLock()
 	for _, transport := range r.transports {
