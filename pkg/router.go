@@ -1,28 +1,28 @@
 package sfu
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/ion-sfu/pkg/util"
 	"github.com/pion/rtcp"
+	"github.com/pion/webrtc/v3"
 )
 
 // Router defines a track rtp/rtcp router
 type Router struct {
 	stop     bool
-	stopLock sync.RWMutex
-	pub      Receiver
-	pubLock  sync.RWMutex
-	subs     map[string]Sender
-	subsLock sync.RWMutex
+	mu       sync.RWMutex
+	receiver Receiver
+	senders  map[string]Sender
 }
 
 // NewRouter for routing rtp/rtcp packets
 func NewRouter(recv Receiver) *Router {
 	r := &Router{
-		pub:  recv,
-		subs: make(map[string]Sender),
+		receiver: recv,
+		senders:  make(map[string]Sender),
 	}
 
 	go r.start()
@@ -30,81 +30,82 @@ func NewRouter(recv Receiver) *Router {
 	return r
 }
 
-// AddSub to router
-func (r *Router) AddSub(pid string, sub Sender) {
-	r.subsLock.Lock()
-	r.subs[pid] = sub
-	r.subsLock.Unlock()
+// Track returns the router receiver track
+func (r *Router) Track() *webrtc.Track {
+	return r.receiver.Track()
+}
+
+// AddSender to router
+func (r *Router) AddSender(pid string, sub Sender) {
+	r.mu.Lock()
+	r.senders[pid] = sub
+	r.mu.Unlock()
 
 	go r.subFeedbackLoop(sub)
 }
 
 // DelSub to router
 func (r *Router) DelSub(pid string) {
-	r.subsLock.Lock()
-	delete(r.subs, pid)
-	r.subsLock.Unlock()
+	r.mu.Lock()
+	delete(r.senders, pid)
+	r.mu.Unlock()
 }
 
 // Close a router
 func (r *Router) Close() {
-	r.stopLock.Lock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.stop = true
-	r.stopLock.Unlock()
 
-	// Close subs
-	r.subsLock.Lock()
-	for pid, sub := range r.subs {
+	// Close senders
+	for pid, sub := range r.senders {
 		sub.Close()
-		delete(r.subs, pid)
+		delete(r.senders, pid)
 	}
-	r.subsLock.Unlock()
-	r.pubLock.Lock()
-	r.pub.Close()
-	r.pubLock.Unlock()
+	r.receiver.Close()
 }
 
 func (r *Router) start() {
 	defer util.Recover("[Router.start]")
 	for {
-		r.stopLock.RLock()
+		r.mu.RLock()
 		if r.stop {
-			r.stopLock.RUnlock()
+			r.mu.RUnlock()
 			return
 		}
-		r.stopLock.RUnlock()
 
-		// get rtp from pub
-		pkt, err := r.pub.ReadRTP()
+		// get rtp from receiver
+		pkt, err := r.receiver.ReadRTP()
 
 		if err != nil {
-			log.Errorf("r.pub.ReadRTP err=%v", err)
+			log.Errorf("r.receiver.ReadRTP err=%v", err)
+			r.mu.RUnlock()
 			continue
 		}
 
 		if pkt == nil {
+			r.mu.RUnlock()
 			continue
 		}
 
-		r.subsLock.RLock()
 		// Push to sub send queues
-		for _, sub := range r.subs {
+		for _, sub := range r.senders {
 			sub.WriteRTP(pkt)
 		}
-		r.subsLock.RUnlock()
+		r.mu.RUnlock()
 	}
 }
 
 // subFeedbackLoop reads rtcp packets from the sub
-// and either handles them or forwards them to the pub.
+// and either handles them or forwards them to the receiver.
 func (r *Router) subFeedbackLoop(sub Sender) {
 	for {
-		r.stopLock.RLock()
+		r.mu.RLock()
 		if r.stop {
-			r.stopLock.RUnlock()
+			r.mu.RUnlock()
 			return
 		}
-		r.stopLock.RUnlock()
+		r.mu.RUnlock()
 
 		pkt, err := sub.ReadRTCP()
 
@@ -117,36 +118,45 @@ func (r *Router) subFeedbackLoop(sub Sender) {
 		case *rtcp.TransportLayerNack:
 			log.Infof("Router got nack: %+v", pkt)
 			for _, pair := range pkt.Nacks {
-				r.pubLock.RLock()
-				bufferpkt := r.pub.GetPacket(pair.PacketID)
-				r.pubLock.RUnlock()
+				bufferpkt := r.receiver.GetPacket(pair.PacketID)
 				if bufferpkt != nil {
 					// We found the packet in the buffer, resend to sub
 					sub.WriteRTP(bufferpkt)
 					continue
 				}
 
-				// Packet not found, request from pub
+				// Packet not found, request from receiver
 				nack := &rtcp.TransportLayerNack{
 					//origin ssrc
 					SenderSSRC: pkt.SenderSSRC,
 					MediaSSRC:  pkt.MediaSSRC,
 					Nacks:      []rtcp.NackPair{{PacketID: pair.PacketID}},
 				}
-				r.pubLock.RLock()
-				err = r.pub.WriteRTCP(nack)
-				r.pubLock.RUnlock()
+				err = r.receiver.WriteRTCP(nack)
 				if err != nil {
 					log.Errorf("Error writing nack RTCP %s", err)
 				}
 			}
 		default:
-			r.pubLock.RLock()
-			err = r.pub.WriteRTCP(pkt)
-			r.pubLock.RUnlock()
+			err = r.receiver.WriteRTCP(pkt)
 			if err != nil {
 				log.Errorf("Error writing RTCP %s", err)
 			}
 		}
 	}
+}
+
+func (r *Router) stats() string {
+	info := fmt.Sprintf("    router: %d | %s\n", r.receiver.Track().SSRC(), r.receiver.stats())
+
+	if len(r.senders) < 6 {
+		for pid, sub := range r.senders {
+			info += fmt.Sprintf("      sender: %s | %s\n", pid, sub.stats())
+		}
+		info += "\n"
+	} else {
+		info += fmt.Sprintf("      senders: %d\n\n", len(r.senders))
+	}
+
+	return info
 }

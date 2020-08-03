@@ -25,7 +25,7 @@ func TestRouter(t *testing.T) {
 	pubsfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
 		receiver := NewVideoReceiver(VideoReceiverConfig{}, track)
 		router := NewRouter(receiver)
-		assert.Equal(t, router.pub, receiver)
+		assert.Equal(t, router.receiver, receiver)
 
 		subsfu, sub, err := newPair(webrtc.Configuration{}, api)
 		assert.NoError(t, err)
@@ -51,20 +51,20 @@ func TestRouter(t *testing.T) {
 
 		subPid := "subpid"
 		sender := NewWebRTCSender(subtrack, s)
-		router.AddSub(subPid, sender)
-		assert.Len(t, router.subs, 1)
-		assert.Equal(t, sender, router.subs[subPid])
+		router.AddSender(subPid, sender)
+		assert.Len(t, router.senders, 1)
+		assert.Equal(t, sender, router.senders[subPid])
 
 		<-ontrackFired
 
 		// test deleting sub
 		router.DelSub(subPid)
-		assert.Len(t, router.subs, 0)
+		assert.Len(t, router.senders, 0)
 
 		// add sub back to test close
-		router.AddSub(subPid, sender)
+		router.AddSender(subPid, sender)
 		router.Close()
-		assert.Len(t, router.subs, 0)
+		assert.Len(t, router.senders, 0)
 		assert.True(t, sender.stop)
 		assert.True(t, receiver.stop)
 	})

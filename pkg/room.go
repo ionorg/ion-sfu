@@ -66,9 +66,19 @@ func (r *Room) AddTransport(transport Transport) {
 			if transport.ID() == tid {
 				continue
 			}
-			err := t.Subscribe(router, true)
+			sender, err := t.NewSender(router.Track())
+
 			if err != nil {
 				log.Errorf("Error subscribing transport to router: %s", err)
+			}
+
+			// Attach sender to source
+			router.AddSender(t.ID(), sender)
+
+			// TODO: required until pion/webrtc supports OnNegotiationNeeded
+			// (https://github.com/pion/webrtc/pull/1322)
+			if t.(*Peer).onNegotiationNeededHandler != nil {
+				t.(*Peer).onNegotiationNeededHandler()
 			}
 		}
 	})

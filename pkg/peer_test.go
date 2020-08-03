@@ -79,7 +79,7 @@ func TestNewPeerCallsOnRouterWithVideoTrackRouter(t *testing.T) {
 
 	onRouterFired, onRouterFiredFunc := context.WithCancel(context.Background())
 	peer.OnRouter(func(r *Router) {
-		assert.Equal(t, track.SSRC(), r.pub.Track().SSRC())
+		assert.Equal(t, track.SSRC(), r.Track().SSRC())
 		onRouterFiredFunc()
 	})
 
@@ -106,7 +106,7 @@ func TestNewPeerCallsOnRouterWithAudioTrackRouter(t *testing.T) {
 
 	onRouterFired, onRouterFiredFunc := context.WithCancel(context.Background())
 	peer.OnRouter(func(r *Router) {
-		assert.Equal(t, track.SSRC(), r.pub.Track().SSRC())
+		assert.Equal(t, track.SSRC(), r.Track().SSRC())
 		onRouterFiredFunc()
 	})
 
@@ -155,8 +155,9 @@ func TestPeerPairRemoteBGetsOnTrack(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Subscribe to remoteA track
-		err = peerB.Subscribe(r, false)
+		sender, err := peerB.NewSender(r.Track())
 		assert.NoError(t, err)
+		r.AddSender(peerB.ID(), sender)
 
 		<-gatherComplete
 
@@ -217,8 +218,9 @@ func TestPeerPairRemoteAGetsOnTrackWhenRemoteBJoinsWithPub(t *testing.T) {
 
 	peerB.OnRouter(func(r *Router) {
 		// Subscribe to remoteA track
-		err = peerA.Subscribe(r, false)
+		sender, err := peerA.NewSender(r.Track())
 		assert.NoError(t, err)
+		r.AddSender(peerA.ID(), sender)
 
 		// Renegotiate
 		offer, err := peerA.CreateOffer()

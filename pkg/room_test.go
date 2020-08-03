@@ -144,11 +144,11 @@ func TestMultiPeerRoom(t *testing.T) {
 			cacheFn(router)
 			assert.Len(t, peerB.routers, 1)
 
-			assert.Len(t, peerA.routers[trackA.SSRC()].subs, 1)
-			assert.Len(t, peerB.routers[trackB.SSRC()].subs, 1)
+			assert.Len(t, peerA.routers[trackA.SSRC()].senders, 1)
+			assert.Len(t, peerB.routers[trackB.SSRC()].senders, 1)
 
 			peerA.Close()
-			assert.Len(t, peerB.routers[trackB.SSRC()].subs, 0)
+			assert.Len(t, peerB.routers[trackB.SSRC()].senders, 0)
 
 			peerB.Close()
 		})

@@ -24,11 +24,9 @@ type Peer struct {
 	mu                         sync.RWMutex
 	stop                       bool
 	routers                    map[uint32]*Router
-	routersLock                sync.RWMutex
 	onCloseHandler             func()
 	onNegotiationNeededHandler func()
 	onRouterHander             func(*Router)
-	onRouterHanderLock         sync.RWMutex
 }
 
 // NewPeer creates a new Peer
@@ -71,14 +69,12 @@ func NewPeer(offer webrtc.SessionDescription) (*Peer, error) {
 
 		router := NewRouter(recv)
 
-		p.routersLock.Lock()
+		p.mu.Lock()
 		p.routers[recv.Track().SSRC()] = router
-		p.routersLock.Unlock()
+		p.mu.Unlock()
 
 		log.Debugf("Create router %s %d", p.id, recv.Track().SSRC())
 
-		p.onRouterHanderLock.Lock()
-		defer p.onRouterHanderLock.Unlock()
 		if p.onRouterHander != nil {
 			p.onRouterHander(router)
 		}
@@ -151,9 +147,9 @@ func (p *Peer) OnClose(f func()) {
 
 // OnRouter handler called when a router is added
 func (p *Peer) OnRouter(f func(*Router)) {
-	p.onRouterHanderLock.Lock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.onRouterHander = f
-	p.onRouterHanderLock.Unlock()
 }
 
 // AddICECandidate to peer connection
@@ -174,61 +170,50 @@ func (p *Peer) OnNegotiationNeeded(f func()) {
 	}
 }
 
-// Subscribe to a router
-// `renegotiate` flag is supported until pion/webrtc supports
-// OnNegotiationNeeded (https://github.com/pion/webrtc/pull/1322)
-func (p *Peer) Subscribe(router *Router, renegotiate bool) error {
-	log.Infof("Subscribing to router %v", router)
-
-	track := router.pub.Track()
-	to := p.me.GetCodecsByName(track.Codec().Name)
+// NewSender for peer
+func (p *Peer) NewSender(intrack *webrtc.Track) (Sender, error) {
+	to := p.me.GetCodecsByName(intrack.Codec().Name)
 
 	if len(to) == 0 {
 		log.Errorf("Error mapping payload type")
-		return errPtNotSupported
+		return nil, errPtNotSupported
 	}
 
 	pt := to[0].PayloadType
 
-	log.Debugf("Creating track: %d %d %s %s", pt, track.SSRC(), track.ID(), track.Label())
-	track, err := p.pc.NewTrack(pt, track.SSRC(), track.ID(), track.Label())
+	log.Debugf("Creating track: %d %d %s %s", pt, intrack.SSRC(), intrack.ID(), intrack.Label())
+	outtrack, err := p.pc.NewTrack(pt, intrack.SSRC(), intrack.ID(), intrack.Label())
 
 	if err != nil {
 		log.Errorf("Error creating track")
-		return err
+		return nil, err
 	}
 
-	s, err := p.pc.AddTrack(track)
+	s, err := p.pc.AddTrack(outtrack)
 
 	if err != nil {
 		log.Errorf("Error adding send track")
-		return err
+		return nil, err
 	}
 
 	// Create webrtc sender for the peer we are sending track to
-	sender := NewWebRTCSender(track, s)
+	sender := NewWebRTCSender(outtrack, s)
 
-	// Attach sender to source
-	router.AddSub(p.id, sender)
-
-	if renegotiate && p.onNegotiationNeededHandler != nil {
-		log.Infof("debounced %s", p.id)
-		p.onNegotiationNeededHandler()
-	}
-
-	return nil
+	return sender, nil
 }
 
 // AddSub adds peer as a sub
-func (p *Peer) AddSub(transport Transport) {
-	p.routersLock.Lock()
+func (p *Peer) AddSub(t Transport) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	for _, router := range p.routers {
-		err := transport.Subscribe(router, false)
+		sender, err := t.NewSender(router.Track())
 		if err != nil {
-			log.Errorf("Error subscribing transport %s to router %v", transport.ID(), router)
+			log.Errorf("Error subscribing transport %s to router %v", t.ID(), router)
 		}
+		router.AddSender(t.ID(), sender)
 	}
-	p.routersLock.Unlock()
 }
 
 // ID of peer
@@ -238,8 +223,8 @@ func (p *Peer) ID() string {
 
 // Routers returns routers for this peer
 func (p *Peer) Routers() map[uint32]*Router {
-	p.routersLock.RLock()
-	defer p.routersLock.RUnlock()
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	return p.routers
 }
 
@@ -252,11 +237,9 @@ func (p *Peer) Close() error {
 		return nil
 	}
 
-	p.routersLock.Lock()
 	for _, router := range p.routers {
 		router.Close()
 	}
-	p.routersLock.Unlock()
 
 	if p.onCloseHandler != nil {
 		p.onCloseHandler()
@@ -289,21 +272,13 @@ func (p *Peer) sendRTCP(recv Receiver) {
 }
 
 func (p *Peer) stats() string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
 	info := fmt.Sprintf("  peer: %s\n", p.id)
-
-	p.routersLock.RLock()
-	for ssrc, router := range p.routers {
-		info += fmt.Sprintf("    router: %d | %s\n", ssrc, router.pub.stats())
-
-		if len(router.subs) < 6 {
-			for pid, sub := range router.subs {
-				info += fmt.Sprintf("      sub: %s | %s\n", pid, sub.stats())
-			}
-			info += "\n"
-		} else {
-			info += fmt.Sprintf("      subs: %d\n\n", len(router.subs))
-		}
+	for _, router := range p.routers {
+		info += router.stats()
 	}
-	p.routersLock.RUnlock()
+
 	return info
 }
