@@ -31,13 +31,13 @@ func TestSFU(t *testing.T) {
 		},
 	})
 
-	room := s.CreateRoom("test room")
-	assert.NotNil(t, room)
-	assert.Len(t, s.rooms, 1)
+	session := s.NewSession("test session")
+	assert.NotNil(t, session)
+	assert.Len(t, s.sessions, 1)
 
-	assert.Equal(t, room, s.GetRoom("test room"))
+	assert.Equal(t, session, s.GetSession("test session"))
 
-	room.onCloseHandler()
-	assert.Nil(t, s.GetRoom("test room"))
-	assert.Len(t, s.rooms, 0)
+	session.onCloseHandler()
+	assert.Nil(t, s.GetSession("test session"))
+	assert.Len(t, s.sessions, 0)
 }

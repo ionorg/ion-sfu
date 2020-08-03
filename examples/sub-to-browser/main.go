@@ -31,7 +31,7 @@ func main() {
 	subOffer := webrtc.SessionDescription{}
 	signal.Decode(signal.MustReadStdin(), &subOffer)
 
-	rid := os.Args[1]
+	sid := os.Args[1]
 
 	ctx := context.Background()
 	client, err := c.Signal(ctx)
@@ -43,7 +43,7 @@ func main() {
 	err = client.Send(&sfu.SignalRequest{
 		Payload: &sfu.SignalRequest_Join{
 			Join: &sfu.JoinRequest{
-				Rid: rid,
+				Sid: sid,
 				Offer: &sfu.SessionDescription{
 					Type: subOffer.Type.String(),
 					Sdp:  []byte(subOffer.SDP),

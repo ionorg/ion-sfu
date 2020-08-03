@@ -121,7 +121,7 @@ func NewRPC() *RPC {
 
 // Join message sent when initializing a peer connection
 type Join struct {
-	Rid   string                    `json:"rid"`
+	Sid   string                    `json:"sid"`
 	Offer webrtc.SessionDescription `json:"offer"`
 }
 
@@ -172,13 +172,13 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 			break
 		}
 
-		log.Infof("peer %s join room %s", peer.ID(), join.Rid)
+		log.Infof("peer %s join session %s", peer.ID(), join.Sid)
 
-		room := r.sfu.GetRoom(join.Rid)
-		if room == nil {
-			room = r.sfu.CreateRoom(join.Rid)
+		session := r.sfu.GetSession(join.Sid)
+		if session == nil {
+			session = r.sfu.NewSession(join.Sid)
 		}
-		room.AddTransport(peer)
+		session.AddTransport(peer)
 
 		err = peer.SetRemoteDescription(join.Offer)
 		if err != nil {
