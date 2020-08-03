@@ -97,7 +97,7 @@ type contextKey struct {
 	name string
 }
 type peerContext struct {
-	peer *sfu.Peer
+	peer *sfu.WebRTCTransport
 }
 
 var peerCtxKey = &contextKey{"peer"}
@@ -161,7 +161,7 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 			break
 		}
 
-		peer, err := sfu.NewPeer(join.Offer)
+		peer, err := sfu.NewWebRTCTransport(join.Offer)
 
 		if err != nil {
 			log.Errorf("connect: error creating peer: %v", err)

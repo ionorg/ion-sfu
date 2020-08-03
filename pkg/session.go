@@ -77,8 +77,8 @@ func (r *Session) AddTransport(transport Transport) {
 
 			// TODO: required until pion/webrtc supports OnNegotiationNeeded
 			// (https://github.com/pion/webrtc/pull/1322)
-			if t.(*Peer).onNegotiationNeededHandler != nil {
-				t.(*Peer).onNegotiationNeededHandler()
+			if t.(*WebRTCTransport).onNegotiationNeededHandler != nil {
+				t.(*WebRTCTransport).onNegotiationNeededHandler()
 			}
 		}
 	})

@@ -16,8 +16,8 @@ const (
 	statCycle = 6 * time.Second
 )
 
-// Peer represents a sfu peer connection
-type Peer struct {
+// WebRTCTransport represents a sfu peer connection
+type WebRTCTransport struct {
 	id                         string
 	pc                         *webrtc.PeerConnection
 	me                         MediaEngine
@@ -29,8 +29,8 @@ type Peer struct {
 	onRouterHander             func(*Router)
 }
 
-// NewPeer creates a new Peer
-func NewPeer(offer webrtc.SessionDescription) (*Peer, error) {
+// NewWebRTCTransport creates a new WebRTCTransport
+func NewWebRTCTransport(offer webrtc.SessionDescription) (*WebRTCTransport, error) {
 	// We make our own mediaEngine so we can place the sender's codecs in it.  This because we must use the
 	// dynamic media type from the sender in our answer. This is not required if we are the offerer
 	me := MediaEngine{}
@@ -46,7 +46,7 @@ func NewPeer(offer webrtc.SessionDescription) (*Peer, error) {
 		return nil, errPeerConnectionInitFailed
 	}
 
-	p := &Peer{
+	p := &WebRTCTransport{
 		id:      cuid.New(),
 		pc:      pc,
 		me:      me,
@@ -97,7 +97,7 @@ func NewPeer(offer webrtc.SessionDescription) (*Peer, error) {
 }
 
 // CreateOffer generates the localDescription
-func (p *Peer) CreateOffer() (webrtc.SessionDescription, error) {
+func (p *WebRTCTransport) CreateOffer() (webrtc.SessionDescription, error) {
 	offer, err := p.pc.CreateOffer(nil)
 	if err != nil {
 		log.Errorf("CreateOffer error: %v", err)
@@ -108,7 +108,7 @@ func (p *Peer) CreateOffer() (webrtc.SessionDescription, error) {
 }
 
 // SetLocalDescription sets the SessionDescription of the remote peer
-func (p *Peer) SetLocalDescription(desc webrtc.SessionDescription) error {
+func (p *WebRTCTransport) SetLocalDescription(desc webrtc.SessionDescription) error {
 	err := p.pc.SetLocalDescription(desc)
 	if err != nil {
 		log.Errorf("SetLocalDescription error: %v", err)
@@ -119,7 +119,7 @@ func (p *Peer) SetLocalDescription(desc webrtc.SessionDescription) error {
 }
 
 // CreateAnswer generates the localDescription
-func (p *Peer) CreateAnswer() (webrtc.SessionDescription, error) {
+func (p *WebRTCTransport) CreateAnswer() (webrtc.SessionDescription, error) {
 	offer, err := p.pc.CreateAnswer(nil)
 	if err != nil {
 		log.Errorf("CreateAnswer error: %v", err)
@@ -130,7 +130,7 @@ func (p *Peer) CreateAnswer() (webrtc.SessionDescription, error) {
 }
 
 // SetRemoteDescription sets the SessionDescription of the remote peer
-func (p *Peer) SetRemoteDescription(desc webrtc.SessionDescription) error {
+func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) error {
 	err := p.pc.SetRemoteDescription(desc)
 	if err != nil {
 		log.Errorf("SetRemoteDescription error: %v", err)
@@ -141,29 +141,29 @@ func (p *Peer) SetRemoteDescription(desc webrtc.SessionDescription) error {
 }
 
 // OnClose is called when the peer is closed
-func (p *Peer) OnClose(f func()) {
+func (p *WebRTCTransport) OnClose(f func()) {
 	p.onCloseHandler = f
 }
 
 // OnRouter handler called when a router is added
-func (p *Peer) OnRouter(f func(*Router)) {
+func (p *WebRTCTransport) OnRouter(f func(*Router)) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.onRouterHander = f
 }
 
 // AddICECandidate to peer connection
-func (p *Peer) AddICECandidate(candidate webrtc.ICECandidateInit) error {
+func (p *WebRTCTransport) AddICECandidate(candidate webrtc.ICECandidateInit) error {
 	return p.pc.AddICECandidate(candidate)
 }
 
 // OnICECandidate handler
-func (p *Peer) OnICECandidate(f func(c *webrtc.ICECandidate)) {
+func (p *WebRTCTransport) OnICECandidate(f func(c *webrtc.ICECandidate)) {
 	p.pc.OnICECandidate(f)
 }
 
 // OnNegotiationNeeded handler
-func (p *Peer) OnNegotiationNeeded(f func()) {
+func (p *WebRTCTransport) OnNegotiationNeeded(f func()) {
 	var debounced = util.NewDebouncer(500 * time.Millisecond)
 	p.onNegotiationNeededHandler = func() {
 		debounced(f)
@@ -171,7 +171,7 @@ func (p *Peer) OnNegotiationNeeded(f func()) {
 }
 
 // NewSender for peer
-func (p *Peer) NewSender(intrack *webrtc.Track) (Sender, error) {
+func (p *WebRTCTransport) NewSender(intrack *webrtc.Track) (Sender, error) {
 	to := p.me.GetCodecsByName(intrack.Codec().Name)
 
 	if len(to) == 0 {
@@ -203,7 +203,7 @@ func (p *Peer) NewSender(intrack *webrtc.Track) (Sender, error) {
 }
 
 // AddSub adds peer as a sub
-func (p *Peer) AddSub(t Transport) {
+func (p *WebRTCTransport) AddSub(t Transport) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -217,19 +217,19 @@ func (p *Peer) AddSub(t Transport) {
 }
 
 // ID of peer
-func (p *Peer) ID() string {
+func (p *WebRTCTransport) ID() string {
 	return p.id
 }
 
 // Routers returns routers for this peer
-func (p *Peer) Routers() map[uint32]*Router {
+func (p *WebRTCTransport) Routers() map[uint32]*Router {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.routers
 }
 
 // Close peer
-func (p *Peer) Close() error {
+func (p *WebRTCTransport) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -248,7 +248,7 @@ func (p *Peer) Close() error {
 	return p.pc.Close()
 }
 
-func (p *Peer) sendRTCP(recv Receiver) {
+func (p *WebRTCTransport) sendRTCP(recv Receiver) {
 	for {
 		p.mu.RLock()
 		if p.stop {
@@ -271,7 +271,7 @@ func (p *Peer) sendRTCP(recv Receiver) {
 	}
 }
 
-func (p *Peer) stats() string {
+func (p *WebRTCTransport) stats() string {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 

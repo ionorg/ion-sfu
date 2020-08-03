@@ -25,7 +25,7 @@ func newPair(cfg webrtc.Configuration, api *webrtc.API) (pcOffer *webrtc.PeerCon
 	return pca, pcb, nil
 }
 
-func signalPeer(remote *webrtc.PeerConnection) (*Peer, error) {
+func signalPeer(remote *webrtc.PeerConnection) (*WebRTCTransport, error) {
 	offer, err := remote.CreateOffer(nil)
 	if err != nil {
 		return nil, err
@@ -35,7 +35,7 @@ func signalPeer(remote *webrtc.PeerConnection) (*Peer, error) {
 	}
 	gatherComplete := webrtc.GatheringCompletePromise(remote)
 
-	peer, err := NewPeer(offer)
+	peer, err := NewWebRTCTransport(offer)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func TestPeerPairRemoteBGetsOnTrack(t *testing.T) {
 		assert.NoError(t, err)
 		gatherComplete := webrtc.GatheringCompletePromise(remoteB)
 
-		peerB, err := NewPeer(offer)
+		peerB, err := NewWebRTCTransport(offer)
 		assert.NoError(t, err)
 
 		// Subscribe to remoteA track
@@ -213,7 +213,7 @@ func TestPeerPairRemoteAGetsOnTrackWhenRemoteBJoinsWithPub(t *testing.T) {
 	assert.NoError(t, err)
 	gatherComplete := webrtc.GatheringCompletePromise(remoteB)
 
-	peerB, err := NewPeer(offer)
+	peerB, err := NewWebRTCTransport(offer)
 	assert.NoError(t, err)
 
 	peerB.OnRouter(func(r *Router) {
