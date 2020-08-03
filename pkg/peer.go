@@ -164,7 +164,7 @@ func (p *Peer) OnICECandidate(f func(c *webrtc.ICECandidate)) {
 
 // OnNegotiationNeeded handler
 func (p *Peer) OnNegotiationNeeded(f func()) {
-	var debounced = util.NewDebouncer(100 * time.Millisecond)
+	var debounced = util.NewDebouncer(500 * time.Millisecond)
 	p.onNegotiationNeededHandler = func() {
 		debounced(f)
 	}
