@@ -22,7 +22,7 @@ go build cmd/server/json-rpc/main.go
 Initialize a peer connection and join a session.
 ```json
 {
-    "rid": "defaultroom",
+    "sid": "defaultroom",
     "offer": {
         "type": "offer",
         "sdp": "..."

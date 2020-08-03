@@ -63,7 +63,7 @@ const join = async () => {
 
   socket.send(JSON.stringify({
     method: "join",
-    params: { rid: "test room", offer: pc.localDescription },
+    params: { sid: "test room", offer: pc.localDescription },
     id
   }))
 

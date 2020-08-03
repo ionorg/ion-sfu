@@ -188,11 +188,11 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 				return status.Errorf(codes.InvalidArgument, "join error %s", err)
 			}
 
-			log.Infof("peer %s join session %s", peer.ID(), payload.Join.Rid)
+			log.Infof("peer %s join session %s", peer.ID(), payload.Join.Sid)
 
-			session := s.sfu.GetSession(payload.Join.Rid)
+			session := s.sfu.GetSession(payload.Join.Sid)
 			if session == nil {
-				session = s.sfu.NewSession(payload.Join.Rid)
+				session = s.sfu.NewSession(payload.Join.Sid)
 			}
 			session.AddTransport(peer)
 
