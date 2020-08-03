@@ -144,7 +144,7 @@ func main() {
 // If the client closes this stream, the webrtc stream will be closed.
 func (s *server) Signal(stream pb.SFU_SignalServer) error {
 	var pid string
-	var peer *sfu.Peer
+	var peer *sfu.WebRTCTransport
 	for {
 		in, err := stream.Recv()
 
@@ -182,7 +182,7 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 				SDP:  string(payload.Join.Offer.Sdp),
 			}
 
-			peer, err = sfu.NewPeer(offer)
+			peer, err = sfu.NewWebRTCTransport(offer)
 			if err != nil {
 				log.Errorf("join error: %v", err)
 				return status.Errorf(codes.InvalidArgument, "join error %s", err)

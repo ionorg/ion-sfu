@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func createPeer(t *testing.T, api *webrtc.API) (*Peer, *webrtc.PeerConnection, *webrtc.Track, error) {
+func createPeer(t *testing.T, api *webrtc.API) (*WebRTCTransport, *webrtc.PeerConnection, *webrtc.Track, error) {
 	remote, err := api.NewPeerConnection(cfg)
 	if err != nil {
 		return nil, nil, nil, err
@@ -65,7 +65,7 @@ func TestSession(t *testing.T) {
 	err = remote.SetLocalDescription(offer)
 	assert.NoError(t, err)
 	<-gatherComplete
-	peer, err := NewPeer(*remote.LocalDescription())
+	peer, err := NewWebRTCTransport(*remote.LocalDescription())
 	assert.NoError(t, err)
 
 	session := NewSession("session")
@@ -318,7 +318,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 		err = remoteB.SetLocalDescription(offer)
 		assert.NoError(t, err)
 		gatherComplete := webrtc.GatheringCompletePromise(remoteB)
-		peerB, err := NewPeer(offer)
+		peerB, err := NewWebRTCTransport(offer)
 		session.AddTransport(peerB)
 		assert.NoError(t, err)
 		<-gatherComplete
@@ -372,7 +372,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 			err = remoteC.SetLocalDescription(offer)
 			assert.NoError(t, err)
 			gatherComplete := webrtc.GatheringCompletePromise(remoteC)
-			peerC, err := NewPeer(offer)
+			peerC, err := NewWebRTCTransport(offer)
 			session.AddTransport(peerC)
 			assert.NoError(t, err)
 			<-gatherComplete

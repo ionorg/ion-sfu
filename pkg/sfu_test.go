@@ -10,24 +10,11 @@ import (
 func TestSFU(t *testing.T) {
 	s := NewSFU(Config{
 		Log: log.Config{
-			Level: "debug",
+			Level: "error",
 		},
-		WebRTC: WebRTCConfig{
-			ICEPortRange: []uint16{5000, 5200},
-			ICEServers: []ICEServerConfig{{
-				URLs:       []string{"test"},
-				Username:   "me",
-				Credential: "secret",
-			}},
-		},
+		WebRTC: WebRTCConfig{},
 		Receiver: ReceiverConfig{
-			Video: VideoReceiverConfig{
-				REMBCycle:     2,
-				PLICycle:      1,
-				TCCCycle:      1,
-				MaxBandwidth:  1000,
-				MaxBufferTime: 1000,
-			},
+			Video: VideoReceiverConfig{},
 		},
 	})
 
