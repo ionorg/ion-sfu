@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
@@ -176,4 +177,66 @@ func (s *WebRTCSender) rembLoop() {
 
 func (s *WebRTCSender) stats() string {
 	return fmt.Sprintf("payload:%d | remb: %dkbps", s.track.PayloadType(), s.target/1000)
+}
+
+// RTPSender represents a Sender which writes RTP to a webrtc track
+type RTPSender struct {
+	track     *webrtc.Track
+	transport *RTPTransport
+	stop      bool
+	sendChan  chan *rtp.Packet
+}
+
+// NewRTPSender creates a new track sender instance
+func NewRTPSender(track *webrtc.Track, addr string) *RTPSender {
+	srcAddr := &net.UDPAddr{IP: net.IPv4zero, Port: 0}
+	dstAddr, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		log.Errorf("net.ResolveUDPAddr => %s", err.Error())
+		return nil
+	}
+	conn, err := net.DialUDP("udp", srcAddr, dstAddr)
+	if err != nil {
+		log.Errorf("net.DialUDP => %s", err.Error())
+		return nil
+	}
+	t := NewRTPTransport(conn)
+	log.Infof("NewOutRTPTransport %s", addr)
+
+	s := &RTPSender{
+		track:     track,
+		transport: t,
+		sendChan:  make(chan *rtp.Packet, maxSize),
+	}
+
+	go s.sendRTP()
+
+	return s
+}
+
+func (s *RTPSender) sendRTP() {
+	for pkt := range s.sendChan {
+		s.WriteRTP(pkt)
+	}
+	log.Infof("Closing send writer")
+}
+
+// ReadRTCP read rtp packet
+func (s *RTPSender) ReadRTCP() (rtcp.Packet, error) {
+	return nil, nil
+}
+
+// WriteRTP to the track
+func (s *RTPSender) WriteRTP(pkt *rtp.Packet) {
+	s.sendChan <- pkt
+}
+
+// Close track
+func (s *RTPSender) Close() {
+	s.stop = true
+	close(s.sendChan)
+}
+
+func (s *RTPSender) stats() string {
+	return fmt.Sprintf("payload:%d | addr: %s", s.track.PayloadType(), s.transport.RemoteAddr())
 }
