@@ -43,16 +43,16 @@ type Receiver interface {
 	stats() string
 }
 
-// AudioReceiver receives a audio track
-type AudioReceiver struct {
+// WebRTCAudioReceiver receives a audio track
+type WebRTCAudioReceiver struct {
 	track *webrtc.Track
 	stop  bool
 	rtpCh chan *rtp.Packet
 }
 
-// NewAudioReceiver creates a new audio track receiver
-func NewAudioReceiver(track *webrtc.Track) *AudioReceiver {
-	a := &AudioReceiver{
+// NewWebRTCAudioReceiver creates a new audio track receiver
+func NewWebRTCAudioReceiver(track *webrtc.Track) *WebRTCAudioReceiver {
+	a := &WebRTCAudioReceiver{
 		track: track,
 		rtpCh: make(chan *rtp.Packet, maxSize),
 	}
@@ -61,7 +61,7 @@ func NewAudioReceiver(track *webrtc.Track) *AudioReceiver {
 }
 
 // ReadRTP read rtp packet
-func (a *AudioReceiver) ReadRTP() (*rtp.Packet, error) {
+func (a *WebRTCAudioReceiver) ReadRTP() (*rtp.Packet, error) {
 	if a.stop {
 		return nil, errReceiverClosed
 	}
@@ -69,37 +69,37 @@ func (a *AudioReceiver) ReadRTP() (*rtp.Packet, error) {
 }
 
 // ReadRTCP read rtcp packet
-func (a *AudioReceiver) ReadRTCP() (rtcp.Packet, error) {
+func (a *WebRTCAudioReceiver) ReadRTCP() (rtcp.Packet, error) {
 	return nil, errMethodNotSupported
 }
 
 // WriteRTCP write rtcp packet
-func (a *AudioReceiver) WriteRTCP(pkt rtcp.Packet) error {
+func (a *WebRTCAudioReceiver) WriteRTCP(pkt rtcp.Packet) error {
 	return errMethodNotSupported
 }
 
 // Track returns receiver track
-func (a *AudioReceiver) Track() *webrtc.Track {
+func (a *WebRTCAudioReceiver) Track() *webrtc.Track {
 	return a.track
 }
 
 // GetPacket returns nil since audio isn't buffered (uses fec)
-func (a *AudioReceiver) GetPacket(sn uint16) *rtp.Packet {
+func (a *WebRTCAudioReceiver) GetPacket(sn uint16) *rtp.Packet {
 	return nil
 }
 
 // Close track
-func (a *AudioReceiver) Close() {
+func (a *WebRTCAudioReceiver) Close() {
 	a.stop = true
 }
 
 // Stats get stats for video receiver
-func (a *AudioReceiver) stats() string {
+func (a *WebRTCAudioReceiver) stats() string {
 	return fmt.Sprintf("payload:%d", a.track.PayloadType())
 }
 
-// VideoReceiver receives a video track
-type VideoReceiver struct {
+// WebRTCVideoReceiver receives a video track
+type WebRTCVideoReceiver struct {
 	buffer         *Buffer
 	track          *webrtc.Track
 	bandwidth      uint64
@@ -117,8 +117,8 @@ type VideoReceiver struct {
 	feedback     string
 }
 
-// VideoReceiverConfig .
-type VideoReceiverConfig struct {
+// WebRTCVideoReceiverConfig .
+type WebRTCVideoReceiverConfig struct {
 	REMBCycle     int `mapstructure:"rembcycle"`
 	PLICycle      int `mapstructure:"plicycle"`
 	TCCCycle      int `mapstructure:"tcccycle"`
@@ -126,9 +126,9 @@ type VideoReceiverConfig struct {
 	MaxBufferTime int `mapstructure:"maxbuffertime"`
 }
 
-// NewVideoReceiver creates a new video track receiver
-func NewVideoReceiver(config VideoReceiverConfig, track *webrtc.Track) *VideoReceiver {
-	v := &VideoReceiver{
+// NewWebRTCVideoReceiver creates a new video track receiver
+func NewWebRTCVideoReceiver(config WebRTCVideoReceiverConfig, track *webrtc.Track) *WebRTCVideoReceiver {
+	v := &WebRTCVideoReceiver{
 		buffer: NewBuffer(track.SSRC(), track.PayloadType(), BufferOptions{
 			BufferTime: config.MaxBufferTime,
 		}),
@@ -163,7 +163,7 @@ func NewVideoReceiver(config VideoReceiverConfig, track *webrtc.Track) *VideoRec
 }
 
 // ReadRTP read rtp packets
-func (v *VideoReceiver) ReadRTP() (*rtp.Packet, error) {
+func (v *WebRTCVideoReceiver) ReadRTP() (*rtp.Packet, error) {
 	rtp, ok := <-v.rtpCh
 	if !ok {
 		return nil, errChanClosed
@@ -172,7 +172,7 @@ func (v *VideoReceiver) ReadRTP() (*rtp.Packet, error) {
 }
 
 // ReadRTCP read rtcp packets
-func (v *VideoReceiver) ReadRTCP() (rtcp.Packet, error) {
+func (v *WebRTCVideoReceiver) ReadRTCP() (rtcp.Packet, error) {
 	rtcp, ok := <-v.rtcpCh
 	if !ok {
 		return nil, errChanClosed
@@ -181,23 +181,23 @@ func (v *VideoReceiver) ReadRTCP() (rtcp.Packet, error) {
 }
 
 // WriteRTCP write rtcp packet
-func (v *VideoReceiver) WriteRTCP(pkt rtcp.Packet) error {
+func (v *WebRTCVideoReceiver) WriteRTCP(pkt rtcp.Packet) error {
 	v.rtcpCh <- pkt
 	return nil
 }
 
 // Track returns receiver track
-func (v *VideoReceiver) Track() *webrtc.Track {
+func (v *WebRTCVideoReceiver) Track() *webrtc.Track {
 	return v.track
 }
 
 // GetPacket get a buffered packet if we have one
-func (v *VideoReceiver) GetPacket(sn uint16) *rtp.Packet {
+func (v *WebRTCVideoReceiver) GetPacket(sn uint16) *rtp.Packet {
 	return v.buffer.GetPacket(sn)
 }
 
 // Close track
-func (v *VideoReceiver) Close() {
+func (v *WebRTCVideoReceiver) Close() {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	if v.stop {
@@ -208,7 +208,7 @@ func (v *VideoReceiver) Close() {
 }
 
 // receiveRTP receive all incoming tracks' rtp and sent to one channel
-func (v *VideoReceiver) receiveRTP() {
+func (v *WebRTCVideoReceiver) receiveRTP() {
 	for {
 		v.mu.RLock()
 		if v.stop {
@@ -255,7 +255,7 @@ func (v *VideoReceiver) receiveRTP() {
 	}
 }
 
-func (v *VideoReceiver) pliLoop() {
+func (v *WebRTCVideoReceiver) pliLoop() {
 	for {
 		v.mu.RLock()
 		if v.stop {
@@ -276,7 +276,7 @@ func (v *VideoReceiver) pliLoop() {
 	}
 }
 
-func (v *VideoReceiver) bufferRtcpLoop() {
+func (v *WebRTCVideoReceiver) bufferRtcpLoop() {
 	for pkt := range v.buffer.GetRTCPChan() {
 		v.mu.RLock()
 		if v.stop {
@@ -287,7 +287,7 @@ func (v *VideoReceiver) bufferRtcpLoop() {
 	}
 }
 
-func (v *VideoReceiver) rembLoop() {
+func (v *WebRTCVideoReceiver) rembLoop() {
 	for {
 		v.mu.RLock()
 		if v.stop {
@@ -330,7 +330,7 @@ func (v *VideoReceiver) rembLoop() {
 	}
 }
 
-func (v *VideoReceiver) tccLoop() {
+func (v *WebRTCVideoReceiver) tccLoop() {
 	feedbackPacketCount := uint8(0)
 	t := time.NewTicker(time.Duration(v.tccCycle) * time.Second)
 	defer t.Stop()
@@ -446,6 +446,6 @@ func (v *VideoReceiver) tccLoop() {
 }
 
 // Stats get stats for video receiver
-func (v *VideoReceiver) stats() string {
+func (v *WebRTCVideoReceiver) stats() string {
 	return fmt.Sprintf("payload: %d | lostRate: %.2f | bandwidth: %dkbps | %s", v.buffer.GetPayloadType(), v.lostRate, v.bandwidth, v.buffer.stats())
 }

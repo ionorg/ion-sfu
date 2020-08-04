@@ -24,7 +24,7 @@ func sendRTPUntilDone(done <-chan struct{}, t *testing.T, tracks []*webrtc.Track
 	}
 }
 
-func TestAudioReceiverRTPForwarding(t *testing.T) {
+func TestWebRTCAudioReceiverRTPForwarding(t *testing.T) {
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -38,7 +38,7 @@ func TestAudioReceiverRTPForwarding(t *testing.T) {
 
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
 	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
-		receiver := NewAudioReceiver(track)
+		receiver := NewWebRTCAudioReceiver(track)
 		assert.Equal(t, track, receiver.Track())
 
 		rtcp, err := receiver.ReadRTCP()
@@ -68,7 +68,7 @@ func TestAudioReceiverRTPForwarding(t *testing.T) {
 	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
 }
 
-func TestVideoReceiverRTPForwarding(t *testing.T) {
+func TestWebRTCVideoReceiverRTPForwarding(t *testing.T) {
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -82,7 +82,7 @@ func TestVideoReceiverRTPForwarding(t *testing.T) {
 
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
 	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
-		receiver := NewVideoReceiver(VideoReceiverConfig{}, track)
+		receiver := NewWebRTCVideoReceiver(WebRTCVideoReceiverConfig{}, track)
 		assert.Equal(t, track, receiver.Track())
 
 		out, err := receiver.ReadRTP()

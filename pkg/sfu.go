@@ -24,7 +24,7 @@ type WebRTCConfig struct {
 
 // ReceiverConfig defines receiver configurations
 type ReceiverConfig struct {
-	Video VideoReceiverConfig `mapstructure:"video"`
+	Video WebRTCVideoReceiverConfig `mapstructure:"video"`
 }
 
 // Config for base SFU
