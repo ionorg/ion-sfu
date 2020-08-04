@@ -1,11 +1,11 @@
-package muxrtp
+package relay
 
 import (
 	"fmt"
 	"sync"
 
-	"github.com/pion/ion-sfu/pkg/rtpengine/packetio"
 	"github.com/pion/rtcp"
+	"github.com/pion/transport/packetio"
 )
 
 // Limit the buffer size to 100KB
@@ -32,22 +32,6 @@ func (r *ReadStreamRTCP) write(buf []byte) (n int, err error) {
 func newReadStreamRTCP() readStream {
 	return &ReadStreamRTCP{}
 }
-
-// ReadRTCP reads and decrypts full RTCP packet and its header from the nextConn
-// func (r *ReadStreamRTCP) ReadRTCP(buf []byte) (int, *rtcp.Header, error) {
-// n, err := r.Read(buf)
-// if err != nil {
-// return 0, nil, err
-// }
-
-// header := &rtcp.Header{}
-// err = header.Unmarshal(buf[:n])
-// if err != nil {
-// return 0, nil, err
-// }
-
-// return n, header, nil
-// }
 
 // ReadRTCP reads full RTCP packet
 func (r *ReadStreamRTCP) ReadRTCP(buf []byte) ([]rtcp.Packet, error) {

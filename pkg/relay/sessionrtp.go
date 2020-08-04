@@ -1,4 +1,4 @@
-package muxrtp
+package relay
 
 import (
 	"errors"
@@ -13,11 +13,13 @@ var (
 	ErrSessionRTPClosed = errors.New("SessionRTP has been closed")
 )
 
+// SessionRTP represents an rtp session
 type SessionRTP struct {
 	session
 	writeStream *WriteStreamRTP
 }
 
+// NewSessionRTP creates a RTP session using conn as the underlying transport.
 func NewSessionRTP(conn net.Conn) (*SessionRTP, error) {
 	s := &SessionRTP{
 		session: session{
@@ -36,12 +38,6 @@ func NewSessionRTP(conn net.Conn) (*SessionRTP, error) {
 	}
 	return s, nil
 }
-
-// Start initializes and allows reading/writing to begin
-// func (s *SessionRTP) Start(nextConn net.Conn) error {
-// s.session.nextConn = nextConn
-// return s.session.start(s)
-// }
 
 // OpenWriteStream returns the global write stream for the Session
 func (s *SessionRTP) OpenWriteStream() (*WriteStreamRTP, error) {

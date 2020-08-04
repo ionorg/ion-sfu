@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
+	"github.com/pion/ion-sfu/pkg/relay"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
@@ -448,4 +449,75 @@ func (v *WebRTCVideoReceiver) tccLoop() {
 // Stats get stats for video receiver
 func (v *WebRTCVideoReceiver) stats() string {
 	return fmt.Sprintf("payload: %d | lostRate: %.2f | bandwidth: %dkbps | %s", v.buffer.GetPayloadType(), v.lostRate, v.bandwidth, v.buffer.stats())
+}
+
+// RTPReceiver receives a audio track
+type RTPReceiver struct {
+	track  *webrtc.Track
+	stream *relay.ReadStreamRTP
+	stop   bool
+	rtpCh  chan *rtp.Packet
+}
+
+// NewRTPReceiver creates a new track receiver
+func NewRTPReceiver(stream *relay.ReadStreamRTP) *RTPReceiver {
+	r := &RTPReceiver{
+		stream: stream,
+		rtpCh:  make(chan *rtp.Packet, maxSize),
+	}
+
+	return r
+}
+
+// ReadRTP read rtp packet
+func (r *RTPReceiver) ReadRTP() (*rtp.Packet, error) {
+	if r.stop {
+		return nil, errReceiverClosed
+	}
+	buf := make([]byte, receiveMTU)
+	_, pkt, err := r.stream.ReadRTP(buf)
+	return pkt, err
+}
+
+// ReadRTCP read rtcp packet
+func (r *RTPReceiver) ReadRTCP() (rtcp.Packet, error) {
+	return nil, errMethodNotSupported
+}
+
+// WriteRTCP write rtcp packet
+func (r *RTPReceiver) WriteRTCP(pkt rtcp.Packet) error {
+	// bin, err := pkt.Marshal()
+	// if err != nil {
+	// 	return err
+	// }
+	// writeStream, err := r.rtcpSession.OpenWriteStream()
+	// if err != nil {
+	// 	return err
+	// }
+	// _, err = writeStream.WriteRawRTCP(bin)
+	// if err != nil {
+	// 	return err
+	// }
+	// return err
+	return nil
+}
+
+// Track returns receiver track
+func (r *RTPReceiver) Track() Track {
+	return r.track
+}
+
+// GetPacket returns nil since audio isn't buffered (uses fec)
+func (r *RTPReceiver) GetPacket(sn uint16) *rtp.Packet {
+	return nil
+}
+
+// Close track
+func (r *RTPReceiver) Close() {
+	r.stop = true
+}
+
+// Stats get stats for video receiver
+func (r *RTPReceiver) stats() string {
+	return fmt.Sprintf("payload:%d", r.track.PayloadType())
 }

@@ -93,7 +93,7 @@ func MatchRTP(buf []byte) bool {
 	return MatchRTPOrRTCP(buf) && !isRTCP(buf)
 }
 
-// MatchSRTCP is a MatchFunc that only matches SRTCP and not SRTP
+// MatchRTCP is a MatchFunc that only matches SRTCP and not SRTP
 func MatchRTCP(buf []byte) bool {
 	return MatchRTPOrRTCP(buf) && isRTCP(buf)
 }

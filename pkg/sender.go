@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"net"
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
@@ -179,33 +178,22 @@ func (s *WebRTCSender) stats() string {
 	return fmt.Sprintf("payload:%d | remb: %dkbps", s.track.PayloadType(), s.target/1000)
 }
 
-// RTPSender represents a Sender which writes RTP to a webrtc track
-type RTPSender struct {
-	track     *webrtc.Track
-	transport *RTPTransport
+// RelaySender represents a Sender which writes RTP to a webrtc track
+type RelaySender struct {
+	track     Track
+	transport *RelayTransport
 	stop      bool
+	rtcpCh    chan rtcp.Packet
 	sendChan  chan *rtp.Packet
 }
 
-// NewRTPSender creates a new track sender instance
-func NewRTPSender(track *webrtc.Track, addr string) *RTPSender {
-	srcAddr := &net.UDPAddr{IP: net.IPv4zero, Port: 0}
-	dstAddr, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		log.Errorf("net.ResolveUDPAddr => %s", err.Error())
-		return nil
-	}
-	conn, err := net.DialUDP("udp", srcAddr, dstAddr)
-	if err != nil {
-		log.Errorf("net.DialUDP => %s", err.Error())
-		return nil
-	}
-	t := NewRTPTransport(conn)
-	log.Infof("NewOutRTPTransport %s", addr)
+// NewRelaySender creates a new track sender instance
+func NewRelaySender(track Track, transport *RelayTransport) *RelaySender {
 
-	s := &RTPSender{
+	s := &RelaySender{
 		track:     track,
-		transport: t,
+		transport: transport,
+		rtcpCh:    make(chan rtcp.Packet, maxSize),
 		sendChan:  make(chan *rtp.Packet, maxSize),
 	}
 
@@ -214,29 +202,80 @@ func NewRTPSender(track *webrtc.Track, addr string) *RTPSender {
 	return s
 }
 
-func (s *RTPSender) sendRTP() {
+func (s *RelaySender) sendRTP() {
 	for pkt := range s.sendChan {
-		s.WriteRTP(pkt)
+		log.Debugf("RelayTransport.WriteRTP rtp=%v", pkt)
+		writeStream, err := s.transport.getRTPSession().OpenWriteStream()
+		if err != nil {
+			log.Errorf("write error %+v", err)
+			continue
+		}
+
+		_, err = writeStream.WriteRTP(&pkt.Header, pkt.Payload)
+
+		if err != nil {
+			log.Errorf("writeStream.WriteRTP => %s", err.Error())
+		}
 	}
 	log.Infof("Closing send writer")
 }
 
+// rtp sub receive rtcp
+// func (s *RelaySender) receiveRTCP() {
+// 	for {
+// 		if s.stop {
+// 			break
+// 		}
+// 		readStream, ssrc, err := s.rtcpSession.AcceptStream()
+// 		if err == relay.ErrSessionRTCPClosed {
+// 			return
+// 		} else if err != nil {
+// 			log.Warnf("Failed to accept RTCP %v ", err)
+// 			return
+// 		}
+
+// 		go func() {
+// 			rtcpBuf := make([]byte, receiveMTU)
+// 			for {
+// 				if s.stop {
+// 					return
+// 				}
+// 				rtcps, err := readStream.ReadRTCP(rtcpBuf)
+// 				if err != nil {
+// 					log.Warnf("Failed to read rtcp %v %d ", err, ssrc)
+// 					return
+// 				}
+// 				log.Debugf("got RTCPs: %+v ", rtcps)
+// 				for _, pkt := range rtcps {
+// 					switch pkt.(type) {
+// 					case *rtcp.PictureLossIndication:
+// 						log.Debugf("got pli, not need send key frame!")
+// 					case *rtcp.TransportLayerNack:
+// 						log.Debugf("rtptransport got nack: %+v", pkt)
+// 						s.rtcpCh <- pkt
+// 					}
+// 				}
+// 			}
+// 		}()
+// 	}
+// }
+
 // ReadRTCP read rtp packet
-func (s *RTPSender) ReadRTCP() (rtcp.Packet, error) {
+func (s *RelaySender) ReadRTCP() (rtcp.Packet, error) {
 	return nil, nil
 }
 
 // WriteRTP to the track
-func (s *RTPSender) WriteRTP(pkt *rtp.Packet) {
+func (s *RelaySender) WriteRTP(pkt *rtp.Packet) {
 	s.sendChan <- pkt
 }
 
 // Close track
-func (s *RTPSender) Close() {
+func (s *RelaySender) Close() {
 	s.stop = true
 	close(s.sendChan)
 }
 
-func (s *RTPSender) stats() string {
-	return fmt.Sprintf("payload:%d | addr: %s", s.track.PayloadType(), s.transport.RemoteAddr())
+func (s *RelaySender) stats() string {
+	return fmt.Sprintf("payload:%d", s.track.PayloadType())
 }

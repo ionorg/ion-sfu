@@ -1,11 +1,11 @@
-package muxrtp
+package relay
 
 import (
 	"fmt"
 	"sync"
 
-	"github.com/pion/ion-sfu/pkg/rtpengine/packetio"
 	"github.com/pion/rtp"
+	"github.com/pion/transport/packetio"
 )
 
 // Limit the buffer size to 1MB

@@ -1,4 +1,4 @@
-package muxrtp
+package relay
 
 import (
 	"io"

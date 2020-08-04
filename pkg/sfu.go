@@ -47,12 +47,14 @@ var (
 // SFU represents an sfu instance
 type SFU struct {
 	mu       sync.RWMutex
+	rtp      *RelayServer
 	sessions map[uint32]*Session
 }
 
 // NewSFU creates a new sfu instance
 func NewSFU(c Config) *SFU {
 	s := &SFU{
+		rtp:      NewRelayServer(5555),
 		sessions: make(map[uint32]*Session),
 	}
 
@@ -85,9 +87,16 @@ func NewSFU(c Config) *SFU {
 
 	cfg.ICEServers = iceServers
 
+	go s.acceptRTP()
 	go s.stats()
 
 	return s
+}
+
+func (s *SFU) acceptRTP() {
+	for {
+		s.rtp.Accept()
+	}
 }
 
 // NewSession creates a new session instance

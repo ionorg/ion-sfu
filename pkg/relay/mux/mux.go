@@ -4,7 +4,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/pion/ion-sfu/pkg/rtpengine/packetio"
+	"github.com/pion/transport/packetio"
 )
 
 // The maximum amount of data that can be buffered before returning errors.

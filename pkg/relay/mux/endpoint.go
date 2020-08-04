@@ -4,7 +4,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/pion/ion-sfu/pkg/rtpengine/packetio"
+	"github.com/pion/transport/packetio"
 )
 
 // Endpoint implements net.Conn. It is used to read muxed packets.

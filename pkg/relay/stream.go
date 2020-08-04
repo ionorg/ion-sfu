@@ -1,4 +1,4 @@
-package muxrtp
+package relay
 
 type readStream interface {
 	init(child streamSession, ssrc uint32) error

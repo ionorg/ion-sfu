@@ -1,4 +1,4 @@
-package muxrtp
+package relay
 
 import (
 	"errors"
@@ -13,6 +13,7 @@ var (
 	ErrSessionRTCPClosed = errors.New("SessionRTCP has been closed")
 )
 
+// SessionRTCP represents an RTCP session.
 type SessionRTCP struct {
 	session
 	writeStream *WriteStreamRTCP
@@ -79,11 +80,6 @@ func (s *SessionRTCP) write(buf []byte) (int, error) {
 	if _, ok := <-s.session.started; ok {
 		return 0, fmt.Errorf("started channel used incorrectly, should only be closed")
 	}
-	// p := rtcp.RawPacket(buf)
-	// bin, err := p.Marshal()
-	// if err != nil {
-	// return 0, err
-	// }
 
 	return s.session.nextConn.Write(buf)
 }
