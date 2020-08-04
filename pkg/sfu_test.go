@@ -14,7 +14,7 @@ func TestSFU(t *testing.T) {
 		},
 		WebRTC: WebRTCConfig{},
 		Receiver: ReceiverConfig{
-			Video: VideoReceiverConfig{},
+			Video: WebRTCVideoReceiverConfig{},
 		},
 	})
 

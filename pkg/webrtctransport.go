@@ -58,9 +58,9 @@ func NewWebRTCTransport(offer webrtc.SessionDescription) (*WebRTCTransport, erro
 		var recv Receiver
 		switch track.Kind() {
 		case webrtc.RTPCodecTypeVideo:
-			recv = NewVideoReceiver(config.Receiver.Video, track)
+			recv = NewWebRTCVideoReceiver(config.Receiver.Video, track)
 		case webrtc.RTPCodecTypeAudio:
-			recv = NewAudioReceiver(track)
+			recv = NewWebRTCAudioReceiver(track)
 		}
 
 		if recv.Track().Kind() == webrtc.RTPCodecTypeVideo {
