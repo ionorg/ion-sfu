@@ -34,7 +34,7 @@ type rtpExtInfo struct {
 
 // Receiver defines a interface for a track receiver
 type Receiver interface {
-	Track() *webrtc.Track
+	Track() Track
 	GetPacket(sn uint16) *rtp.Packet
 	ReadRTP() (*rtp.Packet, error)
 	ReadRTCP() (rtcp.Packet, error)
@@ -79,7 +79,7 @@ func (a *WebRTCAudioReceiver) WriteRTCP(pkt rtcp.Packet) error {
 }
 
 // Track returns receiver track
-func (a *WebRTCAudioReceiver) Track() *webrtc.Track {
+func (a *WebRTCAudioReceiver) Track() Track {
 	return a.track
 }
 
@@ -187,7 +187,7 @@ func (v *WebRTCVideoReceiver) WriteRTCP(pkt rtcp.Packet) error {
 }
 
 // Track returns receiver track
-func (v *WebRTCVideoReceiver) Track() *webrtc.Track {
+func (v *WebRTCVideoReceiver) Track() Track {
 	return v.track
 }
 
