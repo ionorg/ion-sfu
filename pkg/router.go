@@ -7,7 +7,6 @@ import (
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/ion-sfu/pkg/util"
 	"github.com/pion/rtcp"
-	"github.com/pion/webrtc/v3"
 )
 
 // Router defines a track rtp/rtcp router
@@ -31,7 +30,7 @@ func NewRouter(recv Receiver) *Router {
 }
 
 // Track returns the router receiver track
-func (r *Router) Track() *webrtc.Track {
+func (r *Router) Track() Track {
 	return r.receiver.Track()
 }
 

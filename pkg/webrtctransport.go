@@ -171,7 +171,7 @@ func (p *WebRTCTransport) OnNegotiationNeeded(f func()) {
 }
 
 // NewSender for peer
-func (p *WebRTCTransport) NewSender(intrack *webrtc.Track) (Sender, error) {
+func (p *WebRTCTransport) NewSender(intrack Track) (Sender, error) {
 	to := p.me.GetCodecsByName(intrack.Codec().Name)
 
 	if len(to) == 0 {
