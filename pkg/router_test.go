@@ -24,7 +24,7 @@ func TestRouter(t *testing.T) {
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
 	pubsfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
 		receiver := NewWebRTCVideoReceiver(WebRTCVideoReceiverConfig{}, track)
-		router := NewRouter(receiver)
+		router := NewRouter("id", receiver)
 		assert.Equal(t, router.receiver, receiver)
 
 		subsfu, sub, err := newPair(webrtc.Configuration{}, api)

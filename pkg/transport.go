@@ -4,10 +4,9 @@ package sfu
 // that media can be sent over
 type Transport interface {
 	ID() string
+	GetRouter(uint32) *Router
 	Routers() map[uint32]*Router
 	AddSub(transport Transport)
 	NewSender(Track) (Sender, error)
-	OnClose(f func())
-	OnRouter(f func(router *Router))
 	stats() string
 }

@@ -29,59 +29,63 @@ func (r *Session) AddTransport(transport Transport) {
 	r.transportsLock.Lock()
 	defer r.transportsLock.Unlock()
 
-	// Subscribe new transport to existing transports
+	r.transports[transport.ID()] = transport
+}
+
+// RemoveTransport removes a transport for the session
+func (r *Session) RemoveTransport(tid string) {
+	r.transportsLock.Lock()
+	defer r.transportsLock.Unlock()
+
+	delete(r.transports, tid)
+	// Remove transport subs from pubs
 	for _, t := range r.transports {
-		t.AddSub(transport)
+		for _, router := range t.Routers() {
+			router.DelSub(tid)
+		}
 	}
 
-	r.transports[transport.ID()] = transport
+	// Close session if no transports
+	if len(r.transports) == 0 && r.onCloseHandler != nil {
+		r.onCloseHandler()
+	}
+}
 
-	transport.OnClose(func() {
-		r.transportsLock.Lock()
-		defer r.transportsLock.Unlock()
+// AddRouter adds a router to existing transports
+func (r *Session) AddRouter(router *Router) {
+	r.transportsLock.Lock()
+	defer r.transportsLock.Unlock()
 
-		delete(r.transports, transport.ID())
-		// Remove transport subs from pubs
-		for _, t := range r.transports {
-			for _, router := range t.Routers() {
-				router.DelSub(transport.ID())
-			}
+	for tid, t := range r.transports {
+		// Don't sub to self
+		if router.tid == tid {
+			continue
 		}
 
-		// Close session if no transports
-		if len(r.transports) == 0 && r.onCloseHandler != nil {
-			r.onCloseHandler()
+		log.Infof("AddRouter ssrc %d to %s", router.Track().SSRC(), tid)
+
+		sender, err := t.NewSender(router.Track())
+
+		if err != nil {
+			log.Errorf("Error subscribing transport to router: %s", err)
 		}
-	})
 
-	// New track router added to transport, subscribe
-	// other transports in session to it
-	transport.OnRouter(func(router *Router) {
-		r.transportsLock.Lock()
-		defer r.transportsLock.Unlock()
+		// Attach sender to source
+		router.AddSender(tid, sender)
 
-		log.Debugf("on router %v", router)
-		for tid, t := range r.transports {
-			// Don't sub to self
-			if transport.ID() == tid {
-				continue
-			}
-			sender, err := t.NewSender(router.Track())
-
-			if err != nil {
-				log.Errorf("Error subscribing transport to router: %s", err)
-			}
-
-			// Attach sender to source
-			router.AddSender(t.ID(), sender)
-
-			// TODO: required until pion/webrtc supports OnNegotiationNeeded
-			// (https://github.com/pion/webrtc/pull/1322)
-			if t.(*WebRTCTransport).onNegotiationNeededHandler != nil {
-				t.(*WebRTCTransport).onNegotiationNeededHandler()
-			}
+		// TODO: required until pion/webrtc supports OnNegotiationNeeded
+		// (https://github.com/pion/webrtc/pull/1322)
+		if t.(*WebRTCTransport).onNegotiationNeededHandler != nil {
+			t.(*WebRTCTransport).onNegotiationNeededHandler()
 		}
-	})
+	}
+}
+
+// Transports returns transports in this session
+func (r *Session) Transports() map[string]Transport {
+	r.transportsLock.RLock()
+	defer r.transportsLock.RUnlock()
+	return r.transports
 }
 
 // OnClose called when session is closed

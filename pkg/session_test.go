@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func createPeer(t *testing.T, api *webrtc.API) (*WebRTCTransport, *webrtc.PeerConnection, *webrtc.Track, error) {
+func createPeer(t *testing.T, session *Session, api *webrtc.API) (*WebRTCTransport, *webrtc.PeerConnection, *webrtc.Track, error) {
 	remote, err := api.NewPeerConnection(cfg)
 	if err != nil {
 		return nil, nil, nil, err
@@ -28,7 +28,7 @@ func createPeer(t *testing.T, api *webrtc.API) (*WebRTCTransport, *webrtc.PeerCo
 	}
 
 	// Setup remote <-> peer for a
-	peer, err := signalPeer(remote)
+	peer, err := signalPeer(session, remote)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -65,10 +65,11 @@ func TestSession(t *testing.T) {
 	err = remote.SetLocalDescription(offer)
 	assert.NoError(t, err)
 	<-gatherComplete
-	peer, err := NewWebRTCTransport(*remote.LocalDescription())
-	assert.NoError(t, err)
 
 	session := NewSession("session")
+	peer, err := NewWebRTCTransport(session, *remote.LocalDescription())
+	assert.NoError(t, err)
+
 	onCloseFired, onCloseFiredFunc := context.WithCancel(context.Background())
 	session.OnClose(func() {
 		onCloseFiredFunc()
@@ -104,8 +105,10 @@ func TestMultiPeerSession(t *testing.T) {
 	_, err = remoteA.AddTrack(trackA)
 	assert.NoError(t, err)
 
+	session := NewSession("session")
+
 	// Setup remote <-> peer for a
-	peerA, err := signalPeer(remoteA)
+	peerA, err := signalPeer(session, remoteA)
 	assert.NoError(t, err)
 
 	// Add a pub track for remote B
@@ -115,10 +118,8 @@ func TestMultiPeerSession(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Setup remote <-> peer for b
-	peerB, err := signalPeer(remoteB)
+	peerB, err := signalPeer(session, remoteB)
 	assert.NoError(t, err)
-
-	session := NewSession("session")
 
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
 	session.OnClose(func() {
@@ -132,48 +133,43 @@ func TestMultiPeerSession(t *testing.T) {
 
 	session.AddTransport(peerA)
 
-	cacheFn := peerA.onRouterHander
-	peerA.OnRouter(func(router *Router) {
-		cacheFn(router)
-		assert.Len(t, peerA.routers, 1)
+	trackADone := waitForRouter(peerA, trackA.SSRC())
+	sendRTPUntilDone(trackADone, t, []*webrtc.Track{trackA})
 
-		session.AddTransport(peerB)
+	assert.Len(t, peerA.Routers(), 1)
 
-		cacheFn = peerB.onRouterHander
-		peerB.OnRouter(func(router *Router) {
-			cacheFn(router)
-			assert.Len(t, peerB.routers, 1)
+	session.AddTransport(peerB)
 
-			assert.Len(t, peerA.routers[trackA.SSRC()].senders, 1)
-			assert.Len(t, peerB.routers[trackB.SSRC()].senders, 1)
+	trackBDone := waitForRouter(peerB, trackB.SSRC())
+	sendRTPUntilDone(trackBDone, t, []*webrtc.Track{trackB})
 
-			peerA.Close()
-			assert.Len(t, peerB.routers[trackB.SSRC()].senders, 0)
+	assert.Len(t, peerB.Routers(), 1)
 
-			peerB.Close()
-		})
+	assert.Len(t, peerA.GetRouter(trackA.SSRC()).senders, 1)
+	assert.Len(t, peerB.GetRouter(trackB.SSRC()).senders, 1)
 
-		sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{trackB})
-	})
+	peerA.Close()
+	assert.Len(t, peerB.GetRouter(trackB.SSRC()).senders, 0)
 
-	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{trackA})
+	peerB.Close()
+
 	<-onNegotationNeededFired.Done()
+	<-onReadRTPFired.Done()
 }
 
 func Test3PeerConcurrrentJoin(t *testing.T) {
+	session := NewSession("session")
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
-	peerA, _, trackA, err := createPeer(t, api)
+	peerA, _, trackA, err := createPeer(t, session, api)
 	assert.NoError(t, err)
 
-	peerB, _, trackB, err := createPeer(t, api)
+	peerB, _, trackB, err := createPeer(t, session, api)
 	assert.NoError(t, err)
 
-	peerC, _, trackC, err := createPeer(t, api)
+	peerC, _, trackC, err := createPeer(t, session, api)
 	assert.NoError(t, err)
-
-	session := NewSession("session")
 
 	peerAGotTracks := make(chan bool)
 	peerA.OnNegotiationNeeded(func() {
@@ -295,128 +291,119 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	_, err = remoteA.AddTrack(trackA)
 	assert.NoError(t, err)
 
-	// Setup remote <-> peer for a
-	peerA, err := signalPeer(remoteA)
-	assert.NoError(t, err)
 	session := NewSession("session")
 
+	// Setup remote <-> peer for a
+	peerA, err := signalPeer(session, remoteA)
+	assert.NoError(t, err)
+
 	session.AddTransport(peerA)
-	done := make(chan struct{})
-	cacheFn := peerA.onRouterHander
-	peerA.OnRouter(func(router *Router) {
-		cacheFn(router)
 
-		remoteB, err := api.NewPeerConnection(cfg)
-		assert.NoError(t, err)
-		// Add a pub track for remote B
-		trackB, err := remoteB.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
-		assert.NoError(t, err)
-		_, err = remoteB.AddTrack(trackB)
-		assert.NoError(t, err)
-		offer, err := remoteB.CreateOffer(nil)
-		assert.NoError(t, err)
-		err = remoteB.SetLocalDescription(offer)
-		assert.NoError(t, err)
-		gatherComplete := webrtc.GatheringCompletePromise(remoteB)
-		peerB, err := NewWebRTCTransport(offer)
-		session.AddTransport(peerB)
-		assert.NoError(t, err)
-		<-gatherComplete
-		err = peerB.SetRemoteDescription(*remoteB.LocalDescription())
-		assert.NoError(t, err)
-		answer, err := peerB.CreateAnswer()
-		assert.NoError(t, err)
-		err = peerB.SetLocalDescription(answer)
-		assert.NoError(t, err)
-		err = remoteB.SetRemoteDescription(*peerB.pc.LocalDescription())
-		assert.NoError(t, err)
+	trackADone := waitForRouter(peerA, trackA.SSRC())
+	sendRTPUntilDone(trackADone, t, []*webrtc.Track{trackA})
 
-		desc := sdp.SessionDescription{}
-		err = desc.Unmarshal([]byte(peerB.pc.LocalDescription().SDP))
-		assert.NoError(t, err)
+	remoteB, err := api.NewPeerConnection(cfg)
+	assert.NoError(t, err)
+	// Add a pub track for remote B
+	trackB, err := remoteB.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+	_, err = remoteB.AddTrack(trackB)
+	assert.NoError(t, err)
+	offer, err := remoteB.CreateOffer(nil)
+	assert.NoError(t, err)
+	err = remoteB.SetLocalDescription(offer)
+	assert.NoError(t, err)
+	gatherComplete := webrtc.GatheringCompletePromise(remoteB)
+	peerB, err := NewWebRTCTransport(session, offer)
+	session.AddTransport(peerB)
+	assert.NoError(t, err)
+	<-gatherComplete
+	err = peerB.SetRemoteDescription(*remoteB.LocalDescription())
+	assert.NoError(t, err)
+	answer, err := peerB.CreateAnswer()
+	assert.NoError(t, err)
+	err = peerB.SetLocalDescription(answer)
+	assert.NoError(t, err)
+	err = remoteB.SetRemoteDescription(*peerB.pc.LocalDescription())
+	assert.NoError(t, err)
 
-		trackASeen := false
-		for _, md := range desc.MediaDescriptions {
-			for _, attr := range md.Attributes {
-				switch attr.Key {
-				case sdp.AttrKeySSRC:
-					split := strings.Split(attr.Value, " ")
-					ssrc, err := strconv.ParseUint(split[0], 10, 32)
-					assert.NoError(t, err)
-					if uint32(ssrc) == trackA.SSRC() {
-						trackASeen = true
-					}
+	desc := sdp.SessionDescription{}
+	err = desc.Unmarshal([]byte(peerB.pc.LocalDescription().SDP))
+	assert.NoError(t, err)
+
+	trackASeen := false
+	for _, md := range desc.MediaDescriptions {
+		for _, attr := range md.Attributes {
+			switch attr.Key {
+			case sdp.AttrKeySSRC:
+				split := strings.Split(attr.Value, " ")
+				ssrc, err := strconv.ParseUint(split[0], 10, 32)
+				assert.NoError(t, err)
+				if uint32(ssrc) == trackA.SSRC() {
+					trackASeen = true
 				}
 			}
 		}
+	}
 
-		assert.True(t, trackASeen)
+	assert.True(t, trackASeen)
 
-		cacheFn := peerB.onRouterHander
-		peerB.OnRouter(func(router *Router) {
-			cacheFn(router)
+	trackBDone := waitForRouter(peerB, trackB.SSRC())
+	sendRTPUntilDone(trackBDone, t, []*webrtc.Track{trackB})
 
-			remoteC, err := api.NewPeerConnection(cfg)
-			assert.NoError(t, err)
-			// Add transceiver to match number of recv tracks
-			_, err = remoteC.AddTransceiverFromTrack(trackB)
-			assert.NoError(t, err)
+	remoteC, err := api.NewPeerConnection(cfg)
+	assert.NoError(t, err)
+	// Add transceiver to match number of recv tracks
+	_, err = remoteC.AddTransceiverFromTrack(trackB)
+	assert.NoError(t, err)
 
-			// Add a pub track for remote B
-			trackC, err := remoteC.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
-			assert.NoError(t, err)
-			_, err = remoteC.AddTrack(trackC)
-			assert.NoError(t, err)
-			offer, err := remoteC.CreateOffer(nil)
-			assert.NoError(t, err)
-			err = remoteC.SetLocalDescription(offer)
-			assert.NoError(t, err)
-			gatherComplete := webrtc.GatheringCompletePromise(remoteC)
-			peerC, err := NewWebRTCTransport(offer)
-			session.AddTransport(peerC)
-			assert.NoError(t, err)
-			<-gatherComplete
-			err = peerC.SetRemoteDescription(*remoteC.LocalDescription())
-			assert.NoError(t, err)
-			log.Infof("create answer")
-			answer, err := peerC.CreateAnswer()
-			assert.NoError(t, err)
-			err = peerC.SetLocalDescription(answer)
-			assert.NoError(t, err)
-			err = remoteC.SetRemoteDescription(*peerC.pc.LocalDescription())
-			assert.NoError(t, err)
+	// Add a pub track for remote B
+	trackC, err := remoteC.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+	_, err = remoteC.AddTrack(trackC)
+	assert.NoError(t, err)
+	offer, err = remoteC.CreateOffer(nil)
+	assert.NoError(t, err)
+	err = remoteC.SetLocalDescription(offer)
+	assert.NoError(t, err)
+	gatherComplete = webrtc.GatheringCompletePromise(remoteC)
+	peerC, err := NewWebRTCTransport(session, offer)
+	session.AddTransport(peerC)
+	assert.NoError(t, err)
+	<-gatherComplete
+	err = peerC.SetRemoteDescription(*remoteC.LocalDescription())
+	assert.NoError(t, err)
+	log.Infof("create answer")
+	answer, err = peerC.CreateAnswer()
+	assert.NoError(t, err)
+	err = peerC.SetLocalDescription(answer)
+	assert.NoError(t, err)
+	err = remoteC.SetRemoteDescription(*peerC.pc.LocalDescription())
+	assert.NoError(t, err)
 
-			desc := sdp.SessionDescription{}
-			err = desc.Unmarshal([]byte(peerC.pc.LocalDescription().SDP))
-			assert.NoError(t, err)
+	desc = sdp.SessionDescription{}
+	err = desc.Unmarshal([]byte(peerC.pc.LocalDescription().SDP))
+	assert.NoError(t, err)
 
-			trackASeen := false
-			trackBSeen := false
-			for _, md := range desc.MediaDescriptions {
-				for _, attr := range md.Attributes {
-					switch attr.Key {
-					case sdp.AttrKeySSRC:
-						split := strings.Split(attr.Value, " ")
-						ssrc, err := strconv.ParseUint(split[0], 10, 32)
-						assert.NoError(t, err)
-						if uint32(ssrc) == trackA.SSRC() {
-							trackASeen = true
-						} else if uint32(ssrc) == trackB.SSRC() {
-							trackBSeen = true
-						}
-						log.Infof("%v", ssrc)
-					}
+	trackASeen = false
+	trackBSeen := false
+	for _, md := range desc.MediaDescriptions {
+		for _, attr := range md.Attributes {
+			switch attr.Key {
+			case sdp.AttrKeySSRC:
+				split := strings.Split(attr.Value, " ")
+				ssrc, err := strconv.ParseUint(split[0], 10, 32)
+				assert.NoError(t, err)
+				if uint32(ssrc) == trackA.SSRC() {
+					trackASeen = true
+				} else if uint32(ssrc) == trackB.SSRC() {
+					trackBSeen = true
 				}
+				log.Infof("%v", ssrc)
 			}
+		}
+	}
 
-			assert.True(t, trackASeen)
-			assert.True(t, trackBSeen)
-
-			close(done)
-		})
-
-		sendRTPUntilDone(done, t, []*webrtc.Track{trackB})
-	})
-
-	sendRTPUntilDone(done, t, []*webrtc.Track{trackA})
+	assert.True(t, trackASeen)
+	assert.True(t, trackBSeen)
 }
