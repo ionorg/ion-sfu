@@ -74,3 +74,56 @@ func TestRouter(t *testing.T) {
 
 	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
 }
+
+func TestRouterPartialReadCanClose(t *testing.T) {
+	me := webrtc.MediaEngine{}
+	me.RegisterDefaultCodecs()
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+	pubsfu, pub, err := newPair(webrtc.Configuration{}, api)
+	assert.NoError(t, err)
+
+	track, err := pub.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+	_, err = pub.AddTrack(track)
+	assert.NoError(t, err)
+
+	subClosed := make(chan bool)
+	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
+	pubsfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
+		receiver := NewWebRTCVideoReceiver(WebRTCVideoReceiverConfig{}, track)
+		router := NewRouter(receiver)
+		subsfu, sub, err := newPair(webrtc.Configuration{}, api)
+		assert.NoError(t, err)
+
+		sub.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
+			onReadRTPFiredFunc()
+		})
+
+		subtrack, err := subsfu.NewTrack(webrtc.DefaultPayloadTypeVP8, track.SSRC(), "video", "pion")
+		assert.NoError(t, err)
+
+		s, err := subsfu.AddTrack(subtrack)
+		assert.NoError(t, err)
+
+		err = signalPair(subsfu, sub)
+		assert.NoError(t, err)
+
+		subPid := "subpid"
+		sender := NewWebRTCSender(subtrack, s)
+		router.AddSender(subPid, sender)
+
+		<-onReadRTPFired.Done()
+		router.Close()
+		assert.True(t, sender.stop)
+		assert.True(t, receiver.stop)
+
+		close(subClosed)
+	})
+
+	err = signalPair(pub, pubsfu)
+	assert.NoError(t, err)
+
+	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
+
+	<-subClosed
+}

@@ -7,11 +7,12 @@ import (
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/ion-sfu/pkg/util"
 	"github.com/pion/rtcp"
+	"github.com/pion/rtp"
 )
 
 // Router defines a track rtp/rtcp router
 type Router struct {
-	stop     bool
+	stop     chan bool
 	mu       sync.RWMutex
 	receiver Receiver
 	senders  map[string]Sender
@@ -21,6 +22,7 @@ type Router struct {
 func NewRouter(recv Receiver) *Router {
 	r := &Router{
 		receiver: recv,
+		stop:     make(chan bool, 1),
 		senders:  make(map[string]Sender),
 	}
 
@@ -52,9 +54,9 @@ func (r *Router) DelSub(pid string) {
 
 // Close a router
 func (r *Router) Close() {
+	r.stop <- true
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.stop = true
 
 	// Close senders
 	for pid, sub := range r.senders {
@@ -68,18 +70,35 @@ func (r *Router) start() {
 	defer util.Recover("[Router.start]")
 	for {
 		r.mu.RLock()
-		if r.stop {
+		if len(r.stop) > 0 {
 			r.mu.RUnlock()
 			return
 		}
 
-		// get rtp from receiver
-		pkt, err := r.receiver.ReadRTP()
+		pktCh := make(chan *rtp.Packet, 1)
+		errCh := make(chan error, 1)
 
-		if err != nil {
+		go func() {
+			// get rtp from receiver
+			pkt, err := r.receiver.ReadRTP()
+
+			if err != nil {
+				errCh <- err
+			} else {
+				pktCh <- pkt
+			}
+		}()
+
+		var pkt *rtp.Packet
+
+		select {
+		case pkt = <-pktCh:
+		case err := <-errCh:
 			log.Errorf("r.receiver.ReadRTP err=%v", err)
+		case <-r.stop:
+			log.Infof("r.receiver.ReadRTP aborted")
 			r.mu.RUnlock()
-			continue
+			return
 		}
 
 		if pkt == nil {
@@ -100,7 +119,7 @@ func (r *Router) start() {
 func (r *Router) subFeedbackLoop(sub Sender) {
 	for {
 		r.mu.RLock()
-		if r.stop {
+		if len(r.stop) > 0 {
 			r.mu.RUnlock()
 			return
 		}
