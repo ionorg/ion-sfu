@@ -72,22 +72,20 @@ func (r *Router) start() {
 			r.mu.RUnlock()
 			return
 		}
+		r.mu.RUnlock()
 
-		// get rtp from receiver
 		pkt, err := r.receiver.ReadRTP()
 
 		if err != nil {
 			log.Errorf("r.receiver.ReadRTP err=%v", err)
-			r.mu.RUnlock()
 			continue
 		}
-
 		if pkt == nil {
-			r.mu.RUnlock()
 			continue
 		}
 
 		// Push to sub send queues
+		r.mu.RLock()
 		for _, sub := range r.senders {
 			sub.WriteRTP(pkt)
 		}
