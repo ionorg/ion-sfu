@@ -253,3 +253,20 @@ func TestPeerPairRemoteAGetsOnTrackWhenRemoteBJoinsWithPub(t *testing.T) {
 
 	sendRTPUntilDone(remoteAOnTrackFired.Done(), t, []*webrtc.Track{trackA, trackB})
 }
+
+func TestPeerCallsOnClose(t *testing.T) {
+	me := webrtc.MediaEngine{}
+	me.RegisterDefaultCodecs()
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+	remote, err := api.NewPeerConnection(webrtc.Configuration{})
+	assert.NoError(t, err)
+	peer, err := signalPeer(remote)
+	assert.NoError(t, err)
+
+	onCloseFired, onCloseFiredFunc := context.WithCancel(context.Background())
+
+	peer.OnClose(onCloseFiredFunc)
+	peer.Close()
+
+	<-onCloseFired.Done()
+}
