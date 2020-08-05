@@ -202,20 +202,6 @@ func (p *WebRTCTransport) NewSender(intrack Track) (Sender, error) {
 	return sender, nil
 }
 
-// AddSub adds peer as a sub
-func (p *WebRTCTransport) AddSub(t Transport) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	for _, router := range p.routers {
-		sender, err := t.NewSender(router.Track())
-		if err != nil {
-			log.Errorf("Error subscribing transport %s to router %v", t.ID(), router)
-		}
-		router.AddSender(t.ID(), sender)
-	}
-}
-
 // ID of peer
 func (p *WebRTCTransport) ID() string {
 	return p.id

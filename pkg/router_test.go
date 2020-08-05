@@ -63,6 +63,7 @@ func TestRouter(t *testing.T) {
 
 		// add sub back to test close
 		router.AddSender(subPid, sender)
+		assert.Contains(t, router.stats(), "router:")
 		router.Close()
 		assert.Len(t, router.senders, 0)
 		assert.True(t, sender.stop)
@@ -91,7 +92,7 @@ func TestRouterPartialReadCanClose(t *testing.T) {
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
 	pubsfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
 		receiver := NewWebRTCVideoReceiver(WebRTCVideoReceiverConfig{}, track)
-		router := NewRouter(receiver)
+		router := NewRouter("id", receiver)
 		subsfu, sub, err := newPair(webrtc.Configuration{}, api)
 		assert.NoError(t, err)
 

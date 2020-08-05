@@ -6,7 +6,6 @@ type Transport interface {
 	ID() string
 	GetRouter(uint32) *Router
 	Routers() map[uint32]*Router
-	AddSub(transport Transport)
 	NewSender(Track) (Sender, error)
 	stats() string
 }

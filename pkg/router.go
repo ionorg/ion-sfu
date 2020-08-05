@@ -87,7 +87,6 @@ func (r *Router) start() {
 			continue
 		}
 
-		r.mu.RLock()
 		// Push to sub send queues
 		r.mu.RLock()
 		for _, sub := range r.senders {

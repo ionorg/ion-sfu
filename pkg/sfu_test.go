@@ -1,23 +1,36 @@
 package sfu
 
-// func TestSFU(t *testing.T) {
-// 	s := NewSFU(Config{
-// 		Log: log.Config{
-// 			Level: "error",
-// 		},
-// 		WebRTC: WebRTCConfig{},
-// 		Receiver: ReceiverConfig{
-// 			Video: WebRTCVideoReceiverConfig{},
-// 		},
-// 	})
+import (
+	"testing"
 
-// 	session := s.NewSession("test session")
-// 	assert.NotNil(t, session)
-// 	assert.Len(t, s.sessions, 1)
+	"github.com/pion/ion-sfu/pkg/log"
+	"github.com/pion/webrtc/v3"
+	"github.com/stretchr/testify/assert"
+)
 
-// 	assert.Equal(t, session, s.GetSession("test session"))
+func TestSFU(t *testing.T) {
+	s := NewSFU(Config{
+		Log: log.Config{
+			Level: "error",
+		},
+		WebRTC: WebRTCConfig{},
+		Receiver: ReceiverConfig{
+			Video: WebRTCVideoReceiverConfig{},
+		},
+	})
 
-// 	session.onCloseHandler()
-// 	assert.Nil(t, s.GetSession("test session"))
-// 	assert.Len(t, s.sessions, 0)
-// }
+	me := webrtc.MediaEngine{}
+	me.RegisterDefaultCodecs()
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+	remote, err := api.NewPeerConnection(cfg)
+	assert.NoError(t, err)
+
+	offer, err := remote.CreateOffer(nil)
+	assert.NoError(t, err)
+	err = remote.SetLocalDescription(offer)
+	assert.NoError(t, err)
+
+	transport, err := s.NewWebRTCTransport("test session", offer)
+	assert.NotNil(t, transport)
+	assert.NoError(t, err)
+}
