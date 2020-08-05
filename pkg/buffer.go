@@ -83,7 +83,7 @@ func NewBuffer(ssrc uint32, pt uint8, o BufferOptions) *Buffer {
 	}
 	b.maxBufferTS = uint32(o.BufferTime) * videoClock / 1000
 	// b.bufferStartTS = time.Now()
-	log.Infof("NewBuffer BufferOptions=%v", o)
+	log.Debugf("NewBuffer BufferOptions=%v", o)
 	return b
 }
 

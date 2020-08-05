@@ -161,7 +161,7 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 			break
 		}
 
-		peer, err := sfu.NewWebRTCTransport(join.Offer)
+		peer, err := r.sfu.NewWebRTCTransport(join.Sid, join.Offer)
 
 		if err != nil {
 			log.Errorf("connect: error creating peer: %v", err)
@@ -173,12 +173,6 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 		}
 
 		log.Infof("peer %s join session %s", peer.ID(), join.Sid)
-
-		session := r.sfu.GetSession(join.Sid)
-		if session == nil {
-			session = r.sfu.NewSession(join.Sid)
-		}
-		session.AddTransport(peer)
 
 		err = peer.SetRemoteDescription(join.Offer)
 		if err != nil {

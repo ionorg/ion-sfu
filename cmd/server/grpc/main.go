@@ -182,19 +182,13 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 				SDP:  string(payload.Join.Offer.Sdp),
 			}
 
-			peer, err = sfu.NewWebRTCTransport(offer)
+			peer, err = s.sfu.NewWebRTCTransport(payload.Join.Sid, offer)
 			if err != nil {
 				log.Errorf("join error: %v", err)
 				return status.Errorf(codes.InvalidArgument, "join error %s", err)
 			}
 
 			log.Infof("peer %s join session %s", peer.ID(), payload.Join.Sid)
-
-			session := s.sfu.GetSession(payload.Join.Sid)
-			if session == nil {
-				session = s.sfu.NewSession(payload.Join.Sid)
-			}
-			session.AddTransport(peer)
 
 			err = peer.SetRemoteDescription(offer)
 			if err != nil {

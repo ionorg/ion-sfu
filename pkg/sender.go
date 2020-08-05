@@ -43,11 +43,11 @@ func NewWebRTCSender(track Track, sender *webrtc.RTPSender) *WebRTCSender {
 	for _, feedback := range track.Codec().RTCPFeedback {
 		switch feedback.Type {
 		case webrtc.TypeRTCPFBGoogREMB:
-			log.Infof("Using sender feedback %s", webrtc.TypeRTCPFBGoogREMB)
+			log.Debugf("Using sender feedback %s", webrtc.TypeRTCPFBGoogREMB)
 			s.useRemb = true
 			go s.rembLoop()
 		case webrtc.TypeRTCPFBTransportCC:
-			log.Infof("Using sender feedback %s", webrtc.TypeRTCPFBTransportCC)
+			log.Debugf("Using sender feedback %s", webrtc.TypeRTCPFBTransportCC)
 			// TODO
 		}
 	}

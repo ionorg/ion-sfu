@@ -11,6 +11,7 @@ import (
 
 // Router defines a track rtp/rtcp router
 type Router struct {
+	tid      string
 	stop     bool
 	mu       sync.RWMutex
 	receiver Receiver
@@ -18,8 +19,9 @@ type Router struct {
 }
 
 // NewRouter for routing rtp/rtcp packets
-func NewRouter(recv Receiver) *Router {
+func NewRouter(tid string, recv Receiver) *Router {
 	r := &Router{
+		tid:      tid,
 		receiver: recv,
 		senders:  make(map[string]Sender),
 	}
@@ -52,6 +54,7 @@ func (r *Router) DelSub(pid string) {
 
 // Close a router
 func (r *Router) Close() {
+	log.Debugf("Router close")
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.stop = true

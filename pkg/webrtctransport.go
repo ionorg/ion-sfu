@@ -23,14 +23,13 @@ type WebRTCTransport struct {
 	me                         MediaEngine
 	mu                         sync.RWMutex
 	stop                       bool
+	session                    *Session
 	routers                    map[uint32]*Router
-	onCloseHandler             func()
 	onNegotiationNeededHandler func()
-	onRouterHander             func(*Router)
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport
-func NewWebRTCTransport(offer webrtc.SessionDescription) (*WebRTCTransport, error) {
+func NewWebRTCTransport(session *Session, offer webrtc.SessionDescription) (*WebRTCTransport, error) {
 	// We make our own mediaEngine so we can place the sender's codecs in it.  This because we must use the
 	// dynamic media type from the sender in our answer. This is not required if we are the offerer
 	me := MediaEngine{}
@@ -50,7 +49,23 @@ func NewWebRTCTransport(offer webrtc.SessionDescription) (*WebRTCTransport, erro
 		id:      cuid.New(),
 		pc:      pc,
 		me:      me,
+		session: session,
 		routers: make(map[uint32]*Router),
+	}
+
+	session.AddTransport(p)
+
+	// Subscribe to existing transports
+	for _, t := range session.Transports() {
+		log.Infof("transport %s", t.ID())
+		for _, router := range t.Routers() {
+			sender, err := p.NewSender(router.Track())
+			log.Infof("Init add router ssrc %d to %s", router.Track().SSRC(), p.id)
+			if err != nil {
+				log.Errorf("Error subscribing to router %v", router)
+			}
+			router.AddSender(p.id, sender)
+		}
 	}
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
@@ -67,28 +82,25 @@ func NewWebRTCTransport(offer webrtc.SessionDescription) (*WebRTCTransport, erro
 			go p.sendRTCP(recv)
 		}
 
-		router := NewRouter(recv)
+		router := NewRouter(p.id, recv)
+		log.Debugf("Created router %s %d", p.id, recv.Track().SSRC())
+
+		p.session.AddRouter(router)
 
 		p.mu.Lock()
 		p.routers[recv.Track().SSRC()] = router
 		p.mu.Unlock()
-
-		log.Debugf("Create router %s %d", p.id, recv.Track().SSRC())
-
-		if p.onRouterHander != nil {
-			p.onRouterHander(router)
-		}
 	})
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
-		log.Infof("ice connection state: %s", connectionState)
+		log.Debugf("ice connection state: %s", connectionState)
 		switch connectionState {
 		case webrtc.ICEConnectionStateDisconnected:
-			log.Infof("webrtc ice disconnected for peer: %s", p.id)
+			log.Debugf("webrtc ice disconnected for peer: %s", p.id)
 		case webrtc.ICEConnectionStateFailed:
 			fallthrough
 		case webrtc.ICEConnectionStateClosed:
-			log.Infof("webrtc ice closed for peer: %s", p.id)
+			log.Debugf("webrtc ice closed for peer: %s", p.id)
 			p.Close()
 		}
 	})
@@ -138,18 +150,6 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 	}
 
 	return nil
-}
-
-// OnClose is called when the peer is closed
-func (p *WebRTCTransport) OnClose(f func()) {
-	p.onCloseHandler = f
-}
-
-// OnRouter handler called when a router is added
-func (p *WebRTCTransport) OnRouter(f func(*Router)) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.onRouterHander = f
 }
 
 // AddICECandidate to peer connection
@@ -202,20 +202,6 @@ func (p *WebRTCTransport) NewSender(intrack Track) (Sender, error) {
 	return sender, nil
 }
 
-// AddSub adds peer as a sub
-func (p *WebRTCTransport) AddSub(t Transport) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	for _, router := range p.routers {
-		sender, err := t.NewSender(router.Track())
-		if err != nil {
-			log.Errorf("Error subscribing transport %s to router %v", t.ID(), router)
-		}
-		router.AddSender(t.ID(), sender)
-	}
-}
-
 // ID of peer
 func (p *WebRTCTransport) ID() string {
 	return p.id
@@ -226,6 +212,13 @@ func (p *WebRTCTransport) Routers() map[uint32]*Router {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.routers
+}
+
+// GetRouter returns router with ssrc
+func (p *WebRTCTransport) GetRouter(ssrc uint32) *Router {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.routers[ssrc]
 }
 
 // Close peer
@@ -241,9 +234,7 @@ func (p *WebRTCTransport) Close() error {
 		router.Close()
 	}
 
-	if p.onCloseHandler != nil {
-		p.onCloseHandler()
-	}
+	p.session.RemoveTransport(p.id)
 	p.stop = true
 	return p.pc.Close()
 }

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/pion/ion-sfu/pkg/log"
+	"github.com/pion/webrtc/v3"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -18,13 +19,18 @@ func TestSFU(t *testing.T) {
 		},
 	})
 
-	session := s.NewSession("test session")
-	assert.NotNil(t, session)
-	assert.Len(t, s.sessions, 1)
+	me := webrtc.MediaEngine{}
+	me.RegisterDefaultCodecs()
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+	remote, err := api.NewPeerConnection(cfg)
+	assert.NoError(t, err)
 
-	assert.Equal(t, session, s.GetSession("test session"))
+	offer, err := remote.CreateOffer(nil)
+	assert.NoError(t, err)
+	err = remote.SetLocalDescription(offer)
+	assert.NoError(t, err)
 
-	session.onCloseHandler()
-	assert.Nil(t, s.GetSession("test session"))
-	assert.Len(t, s.sessions, 0)
+	transport, err := s.NewWebRTCTransport("test session", offer)
+	assert.NotNil(t, transport)
+	assert.NoError(t, err)
 }
