@@ -454,13 +454,13 @@ func (v *WebRTCVideoReceiver) stats() string {
 // RTPReceiver receives a audio track
 type RTPReceiver struct {
 	track  *webrtc.Track
-	stream *relay.ReadStreamRTP
+	stream *relay.ReadStreamRelayRTP
 	stop   bool
 	rtpCh  chan *rtp.Packet
 }
 
-// NewRTPReceiver creates a new track receiver
-func NewRTPReceiver(stream *relay.ReadStreamRTP) *RTPReceiver {
+// NewRelayReceiver creates a new track receiver
+func NewRelayReceiver(stream *relay.ReadStreamRelayRTP) *RTPReceiver {
 	r := &RTPReceiver{
 		stream: stream,
 		rtpCh:  make(chan *rtp.Packet, maxSize),
@@ -475,8 +475,8 @@ func (r *RTPReceiver) ReadRTP() (*rtp.Packet, error) {
 		return nil, errReceiverClosed
 	}
 	buf := make([]byte, receiveMTU)
-	_, pkt, err := r.stream.ReadRTP(buf)
-	return pkt, err
+	_, pkt, err := r.stream.ReadRelayRTP(buf)
+	return pkt.RTP, err
 }
 
 // ReadRTCP read rtcp packet

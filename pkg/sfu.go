@@ -139,6 +139,26 @@ func (s *SFU) NewWebRTCTransport(sid uint32, offer webrtc.SessionDescription) (*
 	return t, nil
 }
 
+// NewRelayTransport creates a new RelayTransport that can be used to relay RTP/RTPC between nodes
+func (s *SFU) NewRelayTransport(sid, addr string) (*RelayTransport, error) {
+	session := s.getSession(sid)
+
+	if session == nil {
+		session = s.newSession(sid)
+	}
+
+	conn := NewRelayClient(addr)
+
+	t, err := NewRelayTransport(conn)
+	if err != nil {
+		return nil, err
+	}
+
+	session.AddTransport(t)
+
+	return t, nil
+}
+
 func (s *SFU) stats() {
 	t := time.NewTicker(statCycle)
 	for range t.C {

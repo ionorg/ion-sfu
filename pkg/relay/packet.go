@@ -2,8 +2,13 @@ package relay
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
+)
+
+var (
+	errInvalidHeader = errors.New("relay: invalid header")
 )
 
 /*
@@ -128,3 +133,29 @@ func (p *Packet) MarshalTo(buf []byte) (n int, err error) {
 func (p *Packet) MarshalSize() int {
 	return p.Header.MarshalSize() + len(p.Payload)
 }
+
+// Unmarshal takes an entire udp datagram (which may consist of multiple relay packets) and
+// returns the unmarshaled packets it contains.
+// func Unmarshal(rawData []byte) ([]Packet, error) {
+// 	var packets []Packet
+// 	for len(rawData) != 0 {
+// 		p := Packet{}
+// 		p.Unmarshal(rawData)
+
+// 		if err != nil {
+// 			return nil, err
+// 		}
+
+// 		packets = append(packets, p)
+// 		rawData = rawData[processed:]
+// 	}
+
+// 	switch len(packets) {
+// 	// Empty packet
+// 	case 0:
+// 		return nil, errInvalidHeader
+// 	// Multiple Packets
+// 	default:
+// 		return packets, nil
+// 	}
+// }

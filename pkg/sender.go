@@ -189,7 +189,6 @@ type RelaySender struct {
 
 // NewRelaySender creates a new track sender instance
 func NewRelaySender(track Track, transport *RelayTransport) *RelaySender {
-
 	s := &RelaySender{
 		track:     track,
 		transport: transport,
@@ -211,7 +210,7 @@ func (s *RelaySender) sendRTP() {
 			continue
 		}
 
-		_, err = writeStream.WriteRTP(&pkt.Header, pkt.Payload)
+		_, err = writeStream.WriteRelayRTP(&pkt.Header, pkt.Payload)
 
 		if err != nil {
 			log.Errorf("writeStream.WriteRTP => %s", err.Error())

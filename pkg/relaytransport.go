@@ -33,10 +33,11 @@ type RelayTransport struct {
 	mux          *mux.Mux
 	stop         bool
 	routers      map[uint32]*Router
+	session      *Session
 }
 
 // NewRelayTransport create a RelayTransport by net.Conn
-func NewRelayTransport(conn net.Conn) *RelayTransport {
+func NewRelayTransport(conn net.Conn) (*RelayTransport, error) {
 	m := mux.NewMux(mux.Config{
 		Conn:       conn,
 		BufferSize: receiveMTU,
@@ -52,21 +53,21 @@ func NewRelayTransport(conn net.Conn) *RelayTransport {
 	}
 
 	var err error
-	t.rtpSession, err = relay.NewSessionRTP(t.rtpEndpoint)
+	t.rtpSession, err = relay.NewSessionRelayRTP(t.rtpEndpoint)
 	if err != nil {
-		log.Errorf("relay.NewSessionRTP => %s", err.Error())
-		return nil
+		log.Errorf("relay.NewSessionRelayRTP => %s", err.Error())
+		return nil, err
 	}
 
 	t.rtcpSession, err = relay.NewSessionRTCP(t.rtcpEndpoint)
 	if err != nil {
 		log.Errorf("relay.NewSessionRTCP => %s", err.Error())
-		return nil
+		return nil, err
 	}
 
-	go t.acceptStreams()
+	// go t.acceptStreams()
 
-	return t
+	return t, nil
 }
 
 // NewSender for peer
@@ -124,41 +125,44 @@ func (t *RelayTransport) getRTPSession() *relay.SessionRTP {
 // }
 
 // ReceiveRTP receive rtp
-func (t *RelayTransport) acceptStreams() {
-	for {
-		if t.stop {
-			break
-		}
-		// stream, ssrc, err := t.rtpSession.AcceptStream()
-		// if err == relay.ErrSessionRTPClosed {
-		// 	t.Close()
-		// 	return
-		// } else if err != nil {
-		// 	log.Warnf("Failed to accept stream %v ", err)
-		// 	continue
-		// }
+// func (t *RelayTransport) acceptStreams() {
+// 	for {
+// 		if t.stop {
+// 			break
+// 		}
 
-		// go func() {
-		// 	for {
-		// 		if t.stop {
-		// 			return
-		// 		}
-		// 		rtpBuf := make([]byte, receiveMTU)
-		// 		_, pkt, err := stream.ReadRTP(rtpBuf)
-		// 		if err != nil {
-		// 			log.Warnf("Failed to read rtp %v %d ", err, ssrc)
-		// 			//for non-blocking ReadRTP()
-		// 			t.rtpCh <- nil
-		// 			continue
-		// 		}
+// 		stream, err := t.rtpSession.AcceptStream()
+// 		if err == relay.ErrSessionRTPClosed {
+// 			t.Close()
+// 			return
+// 		} else if err != nil {
+// 			log.Warnf("Failed to accept stream %v ", err)
+// 			continue
+// 		}
 
-		// 		log.Debugf("RelayTransport.acceptStreams pkt=%v", pkt)
+// 		sessionID := stream.GetSessionID()
 
-		// 		t.rtpCh <- pkt
-		// 	}
-		// }()
-	}
-}
+// go func() {
+// 	for {
+// 		if t.stop {
+// 			return
+// 		}
+// 		rtpBuf := make([]byte, receiveMTU)
+// 		_, pkt, err := stream.ReadRTP(rtpBuf)
+// 		if err != nil {
+// 			log.Warnf("Failed to read rtp %v %d ", err, ssrc)
+// 			//for non-blocking ReadRTP()
+// 			t.rtpCh <- nil
+// 			continue
+// 		}
+
+// 		log.Debugf("RelayTransport.acceptStreams pkt=%v", pkt)
+
+// 		t.rtpCh <- pkt
+// 	}
+// }()
+// 	}
+// }
 
 func (t *RelayTransport) stats() string {
 	return ""

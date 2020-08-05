@@ -18,8 +18,9 @@ type ReadStreamRTCP struct {
 	isInited bool
 	isClosed chan bool
 
-	session *SessionRTCP
-	ssrc    uint32
+	session   *SessionRTCP
+	sessionID uint32
+	ssrc      uint32
 
 	buffer *packetio.Buffer
 }
@@ -78,7 +79,7 @@ func (r *ReadStreamRTCP) Close() error {
 	}
 }
 
-func (r *ReadStreamRTCP) init(child streamSession, ssrc uint32) error {
+func (r *ReadStreamRTCP) init(child streamSession, sessionID uint32, ssrc uint32) error {
 	sessionRTCP, ok := child.(*SessionRTCP)
 
 	r.mu.Lock()
@@ -90,6 +91,7 @@ func (r *ReadStreamRTCP) init(child streamSession, ssrc uint32) error {
 	}
 
 	r.session = sessionRTCP
+	r.sessionID = sessionID
 	r.ssrc = ssrc
 	r.isInited = true
 	r.isClosed = make(chan bool)
@@ -103,6 +105,11 @@ func (r *ReadStreamRTCP) init(child streamSession, ssrc uint32) error {
 
 // GetSSRC returns the SSRC we are demuxing for
 func (r *ReadStreamRTCP) GetSSRC() uint32 {
+	return r.ssrc
+}
+
+// GetSessionID returns the SessionID we are demuxing for
+func (r *ReadStreamRTCP) GetSessionID() uint32 {
 	return r.ssrc
 }
 
