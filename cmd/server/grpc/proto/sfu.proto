@@ -25,7 +25,7 @@ message SignalReply {
 }
 
 message JoinRequest {
-    string sid = 1;
+    uint32 sid = 1;
     SessionDescription offer = 2;
 }
 
