@@ -212,7 +212,7 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 				return
 			}
 
-			if err := conn.Notify(ctx, "trickle", c.String()); err != nil {
+			if err := conn.Notify(ctx, "trickle", c.ToJSON()); err != nil {
 				log.Errorf("error sending trickle %s", err)
 			}
 		})
