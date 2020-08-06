@@ -31,7 +31,7 @@ type session struct {
 	nextConn net.Conn
 }
 
-func (s *session) getOrCreateReadStream(sessionID uint32, ssrc uint32, child streamSession, proto func() readStream) (readStream, bool) {
+func (s *session) getOrCreateReadStream(id uint32, child streamSession, proto func() readStream) (readStream, bool) {
 	s.readStreamsLock.Lock()
 	defer s.readStreamsLock.Unlock()
 
@@ -39,7 +39,7 @@ func (s *session) getOrCreateReadStream(sessionID uint32, ssrc uint32, child str
 		return nil, false
 	}
 
-	r, ok := s.readStreams[ssrc]
+	r, ok := s.readStreams[id]
 	if ok {
 		return r, false
 	}
@@ -47,15 +47,15 @@ func (s *session) getOrCreateReadStream(sessionID uint32, ssrc uint32, child str
 	// Create the readStream.
 	r = proto()
 
-	if err := r.init(child, sessionID, ssrc); err != nil {
+	if err := r.init(child, id); err != nil {
 		return nil, false
 	}
 
-	s.readStreams[ssrc] = r
+	s.readStreams[id] = r
 	return r, true
 }
 
-func (s *session) removeReadStream(ssrc uint32) {
+func (s *session) removeReadStream(id uint32) {
 	s.readStreamsLock.Lock()
 	defer s.readStreamsLock.Unlock()
 
@@ -63,7 +63,7 @@ func (s *session) removeReadStream(ssrc uint32) {
 		return
 	}
 
-	delete(s.readStreams, ssrc)
+	delete(s.readStreams, id)
 }
 
 func (s *session) close() error {

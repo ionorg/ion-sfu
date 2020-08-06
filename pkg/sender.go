@@ -210,7 +210,7 @@ func (s *RelaySender) sendRTP() {
 			continue
 		}
 
-		_, err = writeStream.WriteRelayRTP(&pkt.Header, pkt.Payload)
+		_, err = writeStream.WriteRTP(&pkt.Header, pkt.Payload)
 
 		if err != nil {
 			log.Errorf("writeStream.WriteRTP => %s", err.Error())

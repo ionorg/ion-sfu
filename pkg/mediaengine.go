@@ -78,3 +78,40 @@ func (e *MediaEngine) PopulateFromSDP(sd webrtc.SessionDescription) error {
 	}
 	return nil
 }
+
+// RelayMediaEngine represents codecs supported by sfu relay.
+// Codecs and payload types are normalized during relay.
+type RelayMediaEngine struct {
+	codecs []*webrtc.RTPCodec
+}
+
+// NewRelayMediaEngine intializes a new RelayMediaEngine with supported codecs
+func NewRelayMediaEngine() *RelayMediaEngine {
+	m := &RelayMediaEngine{}
+	m.RegisterCodec(webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000))
+	m.RegisterCodec(webrtc.NewRTPPCMUCodec(webrtc.DefaultPayloadTypePCMU, 8000))
+	m.RegisterCodec(webrtc.NewRTPPCMACodec(webrtc.DefaultPayloadTypePCMA, 8000))
+	m.RegisterCodec(webrtc.NewRTPG722Codec(webrtc.DefaultPayloadTypeG722, 8000))
+
+	// Video Codecs in descending order of preference
+	m.RegisterCodec(webrtc.NewRTPVP8Codec(webrtc.DefaultPayloadTypeVP8, 90000))
+	m.RegisterCodec(webrtc.NewRTPVP9Codec(webrtc.DefaultPayloadTypeVP9, 90000))
+	m.RegisterCodec(webrtc.NewRTPH264Codec(webrtc.DefaultPayloadTypeH264, 90000))
+
+	return m
+}
+
+// RegisterCodec adds codec to m.
+func (m *RelayMediaEngine) RegisterCodec(codec *webrtc.RTPCodec) uint8 {
+	m.codecs = append(m.codecs, codec)
+	return codec.PayloadType
+}
+
+func (m *RelayMediaEngine) getCodec(payloadType uint8) (*webrtc.RTPCodec, error) {
+	for _, codec := range m.codecs {
+		if codec.PayloadType == payloadType {
+			return codec, nil
+		}
+	}
+	return nil, webrtc.ErrCodecNotFound
+}

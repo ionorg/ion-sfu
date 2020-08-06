@@ -7,6 +7,7 @@ import (
 	"github.com/pion/webrtc/v3"
 
 	"github.com/pion/ion-sfu/pkg/log"
+	"github.com/pion/ion-sfu/pkg/relay"
 )
 
 // ICEServerConfig defines parameters for ice servers
@@ -46,15 +47,16 @@ var (
 
 // SFU represents an sfu instance
 type SFU struct {
+	stop     bool
 	mu       sync.RWMutex
-	rtp      *RelayServer
+	relay    *relay.Server
 	sessions map[uint32]*Session
 }
 
 // NewSFU creates a new sfu instance
 func NewSFU(c Config) *SFU {
 	s := &SFU{
-		rtp:      NewRelayServer(5555),
+		relay:    relay.NewServer(5555),
 		sessions: make(map[uint32]*Session),
 	}
 
@@ -87,16 +89,40 @@ func NewSFU(c Config) *SFU {
 
 	cfg.ICEServers = iceServers
 
-	go s.acceptRTP()
+	go s.acceptRelay()
 	go s.stats()
 
 	return s
 }
 
-func (s *SFU) acceptRTP() {
+func (s *SFU) acceptRelay() {
 	for {
-		s.rtp.Accept()
+		if s.stop {
+			break
+		}
+
+		sessionmux := s.relay.AcceptRelay()
+
+		stream, err := sessionmux.AcceptTransport()
+		if err == relay.ErrSessionRTPClosed {
+			continue
+		} else if err != nil {
+			log.Warnf("Failed to accept stream %v ", err)
+			continue
+		}
+
+		sessionID := stream.ID()
+		session := s.getSession(sessionID)
+		if session == nil {
+			session = s.newSession(sessionID)
+		}
+
+		NewRelayTransport(session, stream)
 	}
+}
+
+func (s *SFU) acceptTransport() {
+
 }
 
 // NewSession creates a new session instance
@@ -139,22 +165,21 @@ func (s *SFU) NewWebRTCTransport(sid uint32, offer webrtc.SessionDescription) (*
 	return t, nil
 }
 
-// NewRelayTransport creates a new RelayTransport that can be used to relay RTP/RTPC between nodes
-func (s *SFU) NewRelayTransport(sid, addr string) (*RelayTransport, error) {
+// NewRelayTransport creates a new RelayTransport that can be
+// used to relay RTP/RTPC between nodes
+func (s *SFU) NewRelayTransport(sid uint32, addr string) (*RelayTransport, error) {
 	session := s.getSession(sid)
 
 	if session == nil {
 		session = s.newSession(sid)
 	}
 
-	conn := NewRelayClient(addr)
+	conn := relay.NewClient(addr)
 
-	t, err := NewRelayTransport(conn)
+	t, err := NewRelayTransport(session, conn)
 	if err != nil {
 		return nil, err
 	}
-
-	session.AddTransport(t)
 
 	return t, nil
 }

@@ -46,8 +46,8 @@ func (s *SessionRTCP) OpenWriteStream() (*WriteStreamRTCP, error) {
 
 // OpenReadStream opens a read stream for the given SSRC, it can be used
 // if you want a certain SSRC, but don't want to wait for AcceptStream
-func (s *SessionRTCP) OpenReadStream(SessionID uint32, SSRC uint32) (*ReadStreamRTCP, error) {
-	r, _ := s.session.getOrCreateReadStream(SessionID, SSRC, s, newReadStreamRTCP)
+func (s *SessionRTCP) OpenReadStream(SSRC uint32) (*ReadStreamRTCP, error) {
+	r, _ := s.session.getOrCreateReadStream(SSRC, s, newReadStreamRTCP)
 
 	if readStream, ok := r.(*ReadStreamRTCP); ok {
 		return readStream, nil
@@ -67,7 +67,7 @@ func (s *SessionRTCP) AcceptStream() (*ReadStreamRTCP, uint32, error) {
 		return nil, 0, fmt.Errorf("newStream was found, but failed type assertion")
 	}
 
-	return readStream, stream.GetSSRC(), nil
+	return readStream, stream.ID(), nil
 }
 
 // Close ends the session
@@ -109,7 +109,7 @@ func (s *SessionRTCP) handle(buf []byte) error {
 	}
 
 	for _, ssrc := range destinationSSRC(pkt) {
-		r, isNew := s.session.getOrCreateReadStream(0, ssrc, s, newReadStreamRTCP)
+		r, isNew := s.session.getOrCreateReadStream(ssrc, s, newReadStreamRTCP)
 		if r == nil {
 			return nil // Session has been closed
 		} else if isNew {

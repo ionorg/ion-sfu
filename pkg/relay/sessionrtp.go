@@ -16,11 +16,11 @@ var (
 // SessionRTP represents an rtp session
 type SessionRTP struct {
 	session
-	writeStream *WriteStreamRelayRTP
+	writeStream *WriteStreamRTP
 }
 
-// NewSessionRelayRTP creates a RTP session using conn as the underlying transport.
-func NewSessionRelayRTP(conn net.Conn) (*SessionRTP, error) {
+// NewSessionRTP creates a RTP session using conn as the underlying transport.
+func NewSessionRTP(conn net.Conn) (*SessionRTP, error) {
 	s := &SessionRTP{
 		session: session{
 			nextConn:    conn,
@@ -30,7 +30,7 @@ func NewSessionRelayRTP(conn net.Conn) (*SessionRTP, error) {
 			closed:      make(chan interface{}),
 		},
 	}
-	s.writeStream = &WriteStreamRelayRTP{s}
+	s.writeStream = &WriteStreamRTP{s}
 
 	err := s.session.start(s)
 	if err != nil {
@@ -40,16 +40,16 @@ func NewSessionRelayRTP(conn net.Conn) (*SessionRTP, error) {
 }
 
 // OpenWriteStream returns the global write stream for the Session
-func (s *SessionRTP) OpenWriteStream() (*WriteStreamRelayRTP, error) {
+func (s *SessionRTP) OpenWriteStream() (*WriteStreamRTP, error) {
 	return s.writeStream, nil
 }
 
 // OpenReadStream opens a read stream for the given SSRC, it can be used
 // if you want a certain SSRC, but don't want to wait for AcceptStream
-func (s *SessionRTP) OpenReadStream(SessionID uint32, SSRC uint32) (*ReadStreamRelayRTP, error) {
-	r, _ := s.session.getOrCreateReadStream(SessionID, SSRC, s, newReadStreamRelayRTP)
+func (s *SessionRTP) OpenReadStream(SSRC uint32) (*ReadStreamRTP, error) {
+	r, _ := s.session.getOrCreateReadStream(SSRC, s, newReadStreamRTP)
 
-	if readStream, ok := r.(*ReadStreamRelayRTP); ok {
+	if readStream, ok := r.(*ReadStreamRTP); ok {
 		return readStream, nil
 	}
 
@@ -57,13 +57,13 @@ func (s *SessionRTP) OpenReadStream(SessionID uint32, SSRC uint32) (*ReadStreamR
 }
 
 // AcceptStream returns a stream to handle RTCP for a single SSRC
-func (s *SessionRTP) AcceptStream() (*ReadStreamRelayRTP, error) {
+func (s *SessionRTP) AcceptStream() (*ReadStreamRTP, error) {
 	stream, ok := <-s.newStream
 	if !ok {
 		return nil, ErrSessionRTPClosed
 	}
 
-	readStream, ok := stream.(*ReadStreamRelayRTP)
+	readStream, ok := stream.(*ReadStreamRTP)
 	if !ok {
 		return nil, fmt.Errorf("newStream was found, but failed type assertion")
 	}
@@ -77,23 +77,16 @@ func (s *SessionRTP) Close() error {
 }
 
 func (s *SessionRTP) write(b []byte) (int, error) {
-	relay := &Packet{}
-	err := relay.Unmarshal(b)
-	if err != nil {
-		return 0, nil
-	}
-
 	rtp := &rtp.Packet{}
-
-	err = rtp.Unmarshal(relay.Payload)
+	err := rtp.Unmarshal(b)
 	if err != nil {
 		return 0, nil
 	}
 
-	return s.writeRelayRTP(&relay.Header, &rtp.Header, rtp.Payload)
+	return s.writeRTP(&rtp.Header, rtp.Payload)
 }
 
-func (s *SessionRTP) writeRelayRTP(rh *Header, header *rtp.Header, payload []byte) (int, error) {
+func (s *SessionRTP) writeRTP(header *rtp.Header, payload []byte) (int, error) {
 	if _, ok := <-s.session.started; ok {
 		return 0, fmt.Errorf("started channel used incorrectly, should only be closed")
 	}
@@ -104,38 +97,29 @@ func (s *SessionRTP) writeRelayRTP(rh *Header, header *rtp.Header, payload []byt
 		return 0, err
 	}
 
-	relay := Packet{Header: *rh, Payload: bin}
-	bin, err = relay.Marshal()
-	if err != nil {
-		return 0, err
-	}
-
 	return s.session.nextConn.Write(bin)
 }
 
 func (s *SessionRTP) handle(buf []byte) error {
-	// Unmarshal relay packet
-	p := &Packet{}
-	if err := p.Unmarshal(buf); err != nil {
-		return err
-	}
-
 	// Unmarshal rtp header for relay payload
 	h := &rtp.Header{}
-	if err := h.Unmarshal(p.Payload); err != nil {
+	if err := h.Unmarshal(buf); err != nil {
 		return err
 	}
 
-	r, isNew := s.session.getOrCreateReadStream(p.SessionID, h.SSRC, s, newReadStreamRelayRTP)
+	r, isNew := s.session.getOrCreateReadStream(h.SSRC, s, newReadStreamRTP)
 	if r == nil {
 		return nil // Session has been closed
-	} else if isNew {
-		s.session.newStream <- r // Notify AcceptStream
 	}
 
-	readStream, ok := r.(*ReadStreamRelayRTP)
+	readStream, ok := r.(*ReadStreamRTP)
 	if !ok {
 		return fmt.Errorf("failed to get/create ReadStreamSRTP")
+	}
+
+	if isNew {
+		readStream.payloadType = h.PayloadType
+		s.session.newStream <- readStream // Notify AcceptStream
 	}
 
 	_, err := readStream.write(buf)
