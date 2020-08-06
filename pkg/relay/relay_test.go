@@ -1,29 +1,58 @@
 package relay
 
 import (
+	"context"
 	"testing"
+	"time"
+
+	"github.com/pion/ion-sfu/pkg/relay/mux"
+	"github.com/stretchr/testify/assert"
 )
 
+func sendRelayUntilDone(done <-chan struct{}, t *testing.T, stream *WriteStreamRelay) {
+	for {
+		select {
+		case <-time.After(20 * time.Millisecond):
+			pkt := &Packet{
+				Header: Header{
+					Version:   1,
+					SessionID: 2,
+				},
+				Payload: []byte{0x01, 0x02, 0x03, 0x04},
+			}
+			_, err := stream.WriteRelay(pkt)
+			assert.NoError(t, err)
+		case <-done:
+			return
+		}
+	}
+}
+
 func TestClientServer(t *testing.T) {
-	// server := NewServer(5556)
-	// client := NewClient("localhost:5556")
+	server := NewServer(5556)
+	assert.NotNil(t, server)
+	client := NewClient("localhost:5556")
+	assert.NotNil(t, client)
 
-	// remote := sfu.NewRelayTransport(client)
+	m := mux.NewMux(mux.Config{
+		Conn:       client,
+		BufferSize: receiveMTU,
+	})
 
-	// track, err := webrtc.NewTrack(webrtc.DefaultPayloadTypeH264, 1, "1", "1", webrtc.NewRTPH264Codec(webrtc.DefaultPayloadTypeH264, 90000))
-	// assert.NoError(t, err)
-	// sender, err := remote.NewSender(track)
-	// assert.NoError(t, err)
+	endpoint := m.NewEndpoint(mux.MatchAll)
+	session, err := NewSessionRelay(endpoint)
+	assert.NoError(t, err)
 
-	// onAccept, onAcceptFunc := context.WithCancel(context.Background())
-	// go func() {
-	// 	server.Accept()
-	// 	onAcceptFunc()
-	// }()
+	onAccept, onAcceptFunc := context.WithCancel(context.Background())
+	go func() {
+		server.AcceptRelay()
+		onAcceptFunc()
+	}()
 
-	// remote.stats()
+	stream, err := session.OpenWriteStream()
+	assert.NoError(t, err)
 
-	// sendRTPWithSenderUntilDone(onAccept.Done(), t, track, sender)
-	// server.Close()
-	// client.Close()
+	sendRelayUntilDone(onAccept.Done(), t, stream)
+	server.Close()
+	client.Close()
 }

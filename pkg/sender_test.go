@@ -3,9 +3,11 @@ package sfu
 import (
 	"context"
 	"math/rand"
+	"net"
 	"testing"
 	"time"
 
+	"github.com/pion/ion-sfu/pkg/relay"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
@@ -53,7 +55,7 @@ func sendRTPWithSenderUntilDone(done <-chan struct{}, t *testing.T, track *webrt
 	}
 }
 
-func TestSenderRTPForwarding(t *testing.T) {
+func TestWebRTCSenderRTPForwarding(t *testing.T) {
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -99,7 +101,7 @@ func sendRTCPUntilDone(done <-chan struct{}, t *testing.T, pc *webrtc.PeerConnec
 	}
 }
 
-func TestSenderRTCPForwarding(t *testing.T) {
+func TestWebRTCSenderRTCPForwarding(t *testing.T) {
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -138,16 +140,10 @@ func TestSenderRTCPForwarding(t *testing.T) {
 		}
 	}()
 
-	// pkt := &rtcp.ReceiverEstimatedMaximumBitrate{
-	// 	SenderSSRC: track.SSRC(),
-	// 	Bitrate:    1000,
-	// 	SSRCs:      []uint32{track.SSRC()},
-	// }
-
 	sendRTCPUntilDone(onReadRTCPFired.Done(), t, remote, pkt)
 }
 
-func TestSenderRTCPREMBForwarding(t *testing.T) {
+func TestWebRTCSenderRTCPREMBForwarding(t *testing.T) {
 	rtcpfb = []webrtc.RTCPFeedback{
 		{Type: webrtc.TypeRTCPFBGoogREMB},
 	}
@@ -199,4 +195,35 @@ func TestSenderRTCPREMBForwarding(t *testing.T) {
 	}
 
 	sendRTCPUntilDone(onReadRTCPFired.Done(), t, remote, pkt)
+}
+
+func TestRelaySender(t *testing.T) {
+	aPipe, bPipe := net.Pipe()
+	session, err := relay.NewSessionRTP(aPipe)
+	assert.NoError(t, err)
+
+	writeStream, err := session.OpenWriteStream()
+	assert.NoError(t, err)
+
+	track, err := webrtc.NewTrack(webrtc.DefaultPayloadTypeOpus, rand.Uint32(), "audio", "pion", webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000))
+	assert.NoError(t, err)
+
+	sender := NewRelaySender(track, writeStream)
+
+	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
+	go func() {
+		buf := make([]byte, len(rawPkt))
+		_, err := bPipe.Read(buf)
+		assert.NoError(t, err)
+		onReadRTPFiredFunc()
+	}()
+
+	sendRTPWithSenderUntilDone(onReadRTPFired.Done(), t, track, sender)
+
+	assert.Contains(t, sender.stats(), "payload:")
+
+	sender.Close()
+
+	// Should not reclose chan
+	sender.Close()
 }

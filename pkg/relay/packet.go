@@ -2,22 +2,17 @@ package relay
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
-)
-
-var (
-	errInvalidHeader = errors.New("relay: invalid header")
 )
 
 /*
  *  0                   1                   2                   3
  *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
  * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- * | V | M |                   reserved                            |
+ * | V |                       reserved                            |
  * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- * |                        conference id                          |
+ * |                         session id                            |
  * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  */
 
@@ -36,11 +31,9 @@ type Packet struct {
 }
 
 const (
-	headerLength   = 2
-	versionShift   = 6
-	versionMask    = 0x3
-	mediaTypeShift = 4
-	mediaTypeMask  = 0x3
+	headerLength = 2
+	versionShift = 6
+	versionMask  = 0x3
 )
 
 // Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
@@ -50,7 +43,6 @@ func (h *Header) Unmarshal(rawPacket []byte) error {
 	}
 
 	h.Version = rawPacket[0] >> versionShift & versionMask
-	h.MediaType = rawPacket[0] >> mediaTypeShift & mediaTypeMask
 	h.SessionID = binary.BigEndian.Uint32(rawPacket[4:8])
 
 	return nil
@@ -67,17 +59,6 @@ func (p *Packet) Unmarshal(rawPacket []byte) error {
 	return nil
 }
 
-// // Marshal serializes the header into bytes.
-// func (h *Header) Marshal() (buf []byte, err error) {
-// 	buf = make([]byte, h.MarshalSize())
-// 	n, err := h.MarshalTo(buf)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return buf[:n], nil
-// }
-
 // MarshalTo serializes the header and writes to the buffer.
 func (h *Header) MarshalTo(buf []byte) (n int, err error) {
 	size := h.MarshalSize()
@@ -85,9 +66,8 @@ func (h *Header) MarshalTo(buf []byte) (n int, err error) {
 		return 0, io.ErrShortBuffer
 	}
 
-	// The first byte contains the version and media type
+	// The first byte contains the version
 	buf[0] = (h.Version << versionShift)
-	buf[0] |= 1 << mediaTypeShift
 
 	binary.BigEndian.PutUint32(buf[4:8], h.SessionID)
 
@@ -133,29 +113,3 @@ func (p *Packet) MarshalTo(buf []byte) (n int, err error) {
 func (p *Packet) MarshalSize() int {
 	return p.Header.MarshalSize() + len(p.Payload)
 }
-
-// Unmarshal takes an entire udp datagram (which may consist of multiple relay packets) and
-// returns the unmarshaled packets it contains.
-// func Unmarshal(rawData []byte) ([]Packet, error) {
-// 	var packets []Packet
-// 	for len(rawData) != 0 {
-// 		p := Packet{}
-// 		p.Unmarshal(rawData)
-
-// 		if err != nil {
-// 			return nil, err
-// 		}
-
-// 		packets = append(packets, p)
-// 		rawData = rawData[processed:]
-// 	}
-
-// 	switch len(packets) {
-// 	// Empty packet
-// 	case 0:
-// 		return nil, errInvalidHeader
-// 	// Multiple Packets
-// 	default:
-// 		return packets, nil
-// 	}
-// }

@@ -23,17 +23,15 @@ type RelayTransportConfig struct {
 
 // RelayTransport ..
 type RelayTransport struct {
-	id           string
-	me           *RelayMediaEngine
-	mu           sync.RWMutex
-	rtpSession   *relay.SessionRTP
-	rtcpSession  *relay.SessionRTCP
-	rtpEndpoint  *mux.Endpoint
-	rtcpEndpoint *mux.Endpoint
-	mux          *mux.Mux
-	stop         bool
-	session      *Session
-	routers      map[uint32]*Router
+	id          string
+	me          *RelayMediaEngine
+	mu          sync.RWMutex
+	rtpSession  *relay.SessionRTP
+	rtpEndpoint *mux.Endpoint
+	mux         *mux.Mux
+	stop        bool
+	session     *Session
+	routers     map[uint32]*Router
 }
 
 // NewRelayTransport create a RelayTransport by net.Conn
@@ -43,104 +41,110 @@ func NewRelayTransport(session *Session, conn net.Conn) (*RelayTransport, error)
 		BufferSize: receiveMTU,
 	})
 
-	t := &RelayTransport{
-		id:           cuid.New(),
-		me:           NewRelayMediaEngine(),
-		session:      session,
-		routers:      make(map[uint32]*Router),
-		mux:          m,
-		rtpEndpoint:  m.NewEndpoint(mux.MatchRTP),
-		rtcpEndpoint: m.NewEndpoint(mux.MatchRTCP),
+	r := &RelayTransport{
+		id:          cuid.New(),
+		me:          NewRelayMediaEngine(),
+		session:     session,
+		routers:     make(map[uint32]*Router),
+		mux:         m,
+		rtpEndpoint: m.NewEndpoint(mux.MatchRTP),
 	}
 
-	session.AddTransport(t)
+	session.AddTransport(r)
 
 	var err error
-	t.rtpSession, err = relay.NewSessionRTP(t.rtpEndpoint)
+	r.rtpSession, err = relay.NewSessionRTP(r.rtpEndpoint)
 	if err != nil {
 		log.Errorf("relay.NewSessionRTP => %s", err.Error())
 		return nil, err
 	}
 
-	t.rtcpSession, err = relay.NewSessionRTCP(t.rtcpEndpoint)
-	if err != nil {
-		log.Errorf("relay.NewSessionRTCP => %s", err.Error())
-		return nil, err
+	// Subscribe to existing transports
+	for _, t := range session.Transports() {
+		log.Infof("transport %s", t.ID())
+		for _, router := range t.Routers() {
+			sender, err := r.NewSender(router.Track())
+			log.Infof("Init add router ssrc %d to %s", router.Track().SSRC(), r.id)
+			if err != nil {
+				log.Errorf("Error subscribing to router %v", router)
+			}
+			router.AddSender(r.id, sender)
+		}
 	}
 
-	// go t.acceptStreams()
+	go r.acceptRTP()
 
-	return t, nil
+	return r, nil
 }
 
 // NewSender for peer
-func (t *RelayTransport) NewSender(track Track) (Sender, error) {
-	return NewRelaySender(track, t), nil
+func (r *RelayTransport) NewSender(track Track) (Sender, error) {
+	stream, err := r.getRTPSession().OpenWriteStream()
+	if err != nil {
+		log.Errorf("Error opening write stream: %s", err)
+		return nil, err
+	}
+	return NewRelaySender(track, stream), nil
 }
 
 // ID return id
-func (t *RelayTransport) ID() string {
-	return t.id
+func (r *RelayTransport) ID() string {
+	return r.id
 }
 
 // Routers returns routers for this peer
-func (t *RelayTransport) Routers() map[uint32]*Router {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.routers
+func (r *RelayTransport) Routers() map[uint32]*Router {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.routers
 }
 
 // GetRouter returns router with ssrc
-func (t *RelayTransport) GetRouter(ssrc uint32) *Router {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.routers[ssrc]
+func (r *RelayTransport) GetRouter(ssrc uint32) *Router {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.routers[ssrc]
 }
 
 // Close release all
-func (t *RelayTransport) Close() {
-	if t.stop {
+func (r *RelayTransport) Close() {
+	if r.stop {
 		return
 	}
 	log.Infof("RelayTransport.Close()")
-	t.stop = true
-	t.rtpSession.Close()
-	t.rtcpSession.Close()
-	t.rtpEndpoint.Close()
-	t.rtcpEndpoint.Close()
-	t.mux.Close()
+	r.stop = true
+	r.rtpSession.Close()
+	r.rtpEndpoint.Close()
+	r.mux.Close()
 }
 
-func (t *RelayTransport) getRTPSession() *relay.SessionRTP {
-	return t.rtpSession
+func (r *RelayTransport) getRTPSession() *relay.SessionRTP {
+	return r.rtpSession
 }
-
-// func (t *RelayTransport) getRTCPSession() *relay.SessionRTCP {
-// 	return t.rtcpSession
-// }
 
 // ReceiveRTP receive rtp
-func (t *RelayTransport) acceptRTP() {
+func (r *RelayTransport) acceptRTP() {
 	for {
-		if t.stop {
+		if r.stop {
 			break
 		}
 
-		stream, err := t.rtpSession.AcceptStream()
+		stream, err := r.rtpSession.AcceptStream()
 		if err == relay.ErrSessionRTPClosed {
-			t.Close()
+			r.Close()
 			return
 		} else if err != nil {
 			log.Warnf("Failed to accept stream %v ", err)
 			continue
 		}
 
-		codec, err := t.me.getCodec(stream.PayloadType())
+		codec, err := r.me.getCodec(stream.PayloadType())
 		if err != nil {
 			log.Errorf("Relay codec not supported: %s", err)
 			continue
 		}
 
+		// TODO: Use originating track MediaStream ID
 		track, err := webrtc.NewTrack(stream.PayloadType(), stream.ID(), cuid.New(), "relay", codec)
 		if err != nil {
 			log.Errorf("Relay error creating track: %s", err)
@@ -148,17 +152,17 @@ func (t *RelayTransport) acceptRTP() {
 		}
 
 		recv := NewRelayReceiver(track, stream)
-		router := NewRouter(t.id, recv)
-		log.Debugf("Created router %s %d", t.id, recv.Track().SSRC())
+		router := NewRouter(r.id, recv)
+		log.Debugf("Created router %s %d", r.id, recv.Track().SSRC())
 
-		t.session.AddRouter(router)
+		r.session.AddRouter(router)
 
-		t.mu.Lock()
-		t.routers[recv.Track().SSRC()] = router
-		t.mu.Unlock()
+		r.mu.Lock()
+		r.routers[recv.Track().SSRC()] = router
+		r.mu.Unlock()
 	}
 }
 
-func (t *RelayTransport) stats() string {
+func (r *RelayTransport) stats() string {
 	return ""
 }

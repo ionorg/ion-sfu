@@ -86,6 +86,7 @@ func (s *SessionRelay) write(b []byte) (int, error) {
 	return s.writeRelay(pkt)
 }
 
+// WriteRelay writes a relay packet to the connection
 func (s *SessionRelay) writeRelay(pkt *Packet) (int, error) {
 	if _, ok := <-s.session.started; ok {
 		return 0, fmt.Errorf("started channel used incorrectly, should only be closed")

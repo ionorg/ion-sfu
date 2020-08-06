@@ -70,7 +70,7 @@ func (r *ReadStreamRTP) Read(buf []byte) (int, error) {
 	return r.buffer.Read(buf)
 }
 
-// ReadRTP reads and decrypts full RTP packet and its header from the nextConn
+// ReadRTP reads a full RTP packet and its header from the nextConn
 func (r *ReadStreamRTP) ReadRTP(buf []byte) (int, *rtp.Packet, error) {
 	n, err := r.Read(buf)
 	if err != nil {
@@ -126,6 +126,6 @@ type WriteStreamRTP struct {
 }
 
 // WriteRTP writes a relay packet to the connection
-func (w *WriteStreamRTP) WriteRTP(header *rtp.Header, payload []byte) (int, error) {
-	return w.session.writeRTP(header, payload)
+func (w *WriteStreamRTP) WriteRTP(pkt *rtp.Packet) (int, error) {
+	return w.session.writeRTP(pkt)
 }

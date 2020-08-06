@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/pion/transport/test"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestStressDuplex(t *testing.T) {
@@ -37,6 +38,12 @@ func stressDuplex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	assert.Equal(t, ca.LocalAddr(), cb.RemoteAddr())
+	assert.Equal(t, cb.LocalAddr(), ca.RemoteAddr())
+
+	ca.Close()
+	cb.Close()
 }
 
 func pipeMemory() (*Endpoint, net.Conn, func(*testing.T)) {

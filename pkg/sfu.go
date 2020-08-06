@@ -117,12 +117,11 @@ func (s *SFU) acceptRelay() {
 			session = s.newSession(sessionID)
 		}
 
-		NewRelayTransport(session, stream)
+		_, err = NewRelayTransport(session, stream)
+		if err != nil {
+			log.Errorf("Error creating RelayTransport: %s", err)
+		}
 	}
-}
-
-func (s *SFU) acceptTransport() {
-
 }
 
 // NewSession creates a new session instance
@@ -165,8 +164,7 @@ func (s *SFU) NewWebRTCTransport(sid uint32, offer webrtc.SessionDescription) (*
 	return t, nil
 }
 
-// NewRelayTransport creates a new RelayTransport that can be
-// used to relay RTP/RTPC between nodes
+// NewRelayTransport creates a new RelayTransport that can be used to relay streams between nodes
 func (s *SFU) NewRelayTransport(sid uint32, addr string) (*RelayTransport, error) {
 	session := s.getSession(sid)
 

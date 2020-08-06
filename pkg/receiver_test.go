@@ -3,9 +3,11 @@ package sfu
 import (
 	"context"
 	"math/rand"
+	"net"
 	"testing"
 	"time"
 
+	"github.com/pion/ion-sfu/pkg/relay"
 	"github.com/pion/webrtc/v3"
 	"github.com/pion/webrtc/v3/pkg/media"
 	"github.com/stretchr/testify/assert"
@@ -104,4 +106,47 @@ func TestWebRTCVideoReceiverRTPForwarding(t *testing.T) {
 	assert.NoError(t, err)
 
 	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
+}
+
+func sendRTPToPipeUntilDone(done <-chan struct{}, t *testing.T, track *webrtc.Track, conn net.Conn) {
+	for {
+		select {
+		case <-time.After(20 * time.Millisecond):
+			pkt := track.Packetizer().Packetize([]byte{0x01, 0x02, 0x03, 0x04}, 1)[0]
+			buf, err := pkt.Marshal()
+			assert.NoError(t, err)
+			conn.Write(buf)
+		case <-done:
+			return
+		}
+	}
+}
+
+func TestRelayReceiverRTPForwarding(t *testing.T) {
+	aPipe, bPipe := net.Pipe()
+	session, err := relay.NewSessionRTP(aPipe)
+	assert.NoError(t, err)
+
+	ssrc := uint32(5000)
+	readStream, err := session.OpenReadStream(ssrc)
+	assert.NoError(t, err)
+
+	track, err := webrtc.NewTrack(webrtc.DefaultPayloadTypeOpus, ssrc, "audio", "pion", webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000))
+	assert.NoError(t, err)
+
+	receiver := NewRelayReceiver(track, readStream)
+
+	onReadFired, onReadFiredFunc := context.WithCancel(context.Background())
+	go func() {
+		_, err := receiver.ReadRTP()
+		assert.NoError(t, err)
+		onReadFiredFunc()
+	}()
+
+	sendRTPToPipeUntilDone(onReadFired.Done(), t, track, bPipe)
+
+	assert.Equal(t, track, receiver.Track())
+	assert.Nil(t, receiver.GetPacket(0))
+	assert.Contains(t, receiver.stats(), "payload")
+	receiver.Close()
 }

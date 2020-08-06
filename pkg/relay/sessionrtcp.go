@@ -56,18 +56,18 @@ func (s *SessionRTCP) OpenReadStream(SSRC uint32) (*ReadStreamRTCP, error) {
 }
 
 // AcceptStream returns a stream to handle RTCP for a single SSRC
-func (s *SessionRTCP) AcceptStream() (*ReadStreamRTCP, uint32, error) {
+func (s *SessionRTCP) AcceptStream() (*ReadStreamRTCP, error) {
 	stream, ok := <-s.newStream
 	if !ok {
-		return nil, 0, ErrSessionRTCPClosed
+		return nil, ErrSessionRTCPClosed
 	}
 
 	readStream, ok := stream.(*ReadStreamRTCP)
 	if !ok {
-		return nil, 0, fmt.Errorf("newStream was found, but failed type assertion")
+		return nil, fmt.Errorf("newStream was found, but failed type assertion")
 	}
 
-	return readStream, stream.ID(), nil
+	return readStream, nil
 }
 
 // Close ends the session

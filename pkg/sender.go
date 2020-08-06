@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
+	"github.com/pion/ion-sfu/pkg/relay"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
@@ -180,20 +181,20 @@ func (s *WebRTCSender) stats() string {
 
 // RelaySender represents a Sender which writes RTP to a webrtc track
 type RelaySender struct {
-	track     Track
-	transport *RelayTransport
-	stop      bool
-	rtcpCh    chan rtcp.Packet
-	sendChan  chan *rtp.Packet
+	track    Track
+	stream   *relay.WriteStreamRTP
+	stop     bool
+	rtcpCh   chan rtcp.Packet
+	sendChan chan *rtp.Packet
 }
 
 // NewRelaySender creates a new track sender instance
-func NewRelaySender(track Track, transport *RelayTransport) *RelaySender {
+func NewRelaySender(track Track, stream *relay.WriteStreamRTP) *RelaySender {
 	s := &RelaySender{
-		track:     track,
-		transport: transport,
-		rtcpCh:    make(chan rtcp.Packet, maxSize),
-		sendChan:  make(chan *rtp.Packet, maxSize),
+		track:    track,
+		stream:   stream,
+		rtcpCh:   make(chan rtcp.Packet, maxSize),
+		sendChan: make(chan *rtp.Packet, maxSize),
 	}
 
 	go s.sendRTP()
@@ -204,13 +205,8 @@ func NewRelaySender(track Track, transport *RelayTransport) *RelaySender {
 func (s *RelaySender) sendRTP() {
 	for pkt := range s.sendChan {
 		log.Debugf("RelayTransport.WriteRTP rtp=%v", pkt)
-		writeStream, err := s.transport.getRTPSession().OpenWriteStream()
-		if err != nil {
-			log.Errorf("write error %+v", err)
-			continue
-		}
 
-		_, err = writeStream.WriteRTP(&pkt.Header, pkt.Payload)
+		_, err := s.stream.WriteRTP(pkt)
 
 		if err != nil {
 			log.Errorf("writeStream.WriteRTP => %s", err.Error())
@@ -271,10 +267,13 @@ func (s *RelaySender) WriteRTP(pkt *rtp.Packet) {
 
 // Close track
 func (s *RelaySender) Close() {
+	if s.stop {
+		return
+	}
 	s.stop = true
 	close(s.sendChan)
 }
 
 func (s *RelaySender) stats() string {
-	return fmt.Sprintf("payload:%d", s.track.PayloadType())
+	return fmt.Sprintf("payload: %d", s.track.PayloadType())
 }

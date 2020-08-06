@@ -34,7 +34,6 @@ func NewClient(addr string) net.Conn {
 
 // ServerSessionMux represents a stream session demuxer
 type ServerSessionMux struct {
-	stop     bool
 	ch       chan *ReadStreamRelay
 	session  *SessionRelay
 	endpoint *mux.Endpoint
@@ -65,14 +64,6 @@ func NewServerSessionMux(conn net.Conn) (*ServerSessionMux, error) {
 // AcceptTransport new ReadStreamRelays
 func (r *ServerSessionMux) AcceptTransport() (*ReadStreamRelay, error) {
 	return r.session.AcceptStream()
-}
-
-func (r *ServerSessionMux) close() {
-	if r.stop {
-		return
-	}
-	r.stop = true
-	close(r.ch)
 }
 
 // Server represents an RTP UDP Server

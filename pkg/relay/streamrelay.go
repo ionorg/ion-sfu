@@ -65,7 +65,7 @@ func (r *ReadStreamRelay) Write(buf []byte) (n int, err error) {
 	return n, err
 }
 
-// Read reads and decrypts full RTP packet from the nextConn
+// Read reads packet from the nextConn without the relay header
 func (r *ReadStreamRelay) Read(buf []byte) (int, error) {
 	return r.buffer.Read(buf)
 }
@@ -145,7 +145,7 @@ type WriteStreamRelay struct {
 	session *SessionRelay
 }
 
-// WriteRelayRTP writes a relay packet to the connection
-func (w *WriteStreamRelay) WriteRelayRTP(pkt *Packet) (int, error) {
+// WriteRelay writes a relay packet to the connection
+func (w *WriteStreamRelay) WriteRelay(pkt *Packet) (int, error) {
 	return w.session.writeRelay(pkt)
 }

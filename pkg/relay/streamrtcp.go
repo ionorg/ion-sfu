@@ -111,21 +111,6 @@ type WriteStreamRTCP struct {
 	session *SessionRTCP
 }
 
-// WriteRTCP writes a RTCP header and its payload to the nextConn
-func (w *WriteStreamRTCP) WriteRTCP(header *rtcp.Header, payload []byte) (int, error) {
-	headerRaw, err := header.Marshal()
-	if err != nil {
-		return 0, err
-	}
-
-	return w.session.write(append(headerRaw, payload...))
-}
-
-// WriteRawRTCP writes a RTCP header and its payload to the nextConn
-func (w *WriteStreamRTCP) WriteRawRTCP(data []byte) (int, error) {
-	return w.session.write(data)
-}
-
 // Write encrypts and writes a full RTCP packets to the nextConn
 func (w *WriteStreamRTCP) Write(b []byte) (int, error) {
 	return w.session.write(b)
