@@ -188,7 +188,7 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 				return status.Errorf(codes.InvalidArgument, "join error %s", err)
 			}
 
-			log.Infof("peer %s join session %s", peer.ID(), payload.Join.Sid)
+			log.Infof("peer %s join session %d", peer.ID(), payload.Join.Sid)
 
 			err = peer.SetRemoteDescription(offer)
 			if err != nil {

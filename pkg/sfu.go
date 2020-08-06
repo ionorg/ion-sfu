@@ -47,13 +47,13 @@ var (
 // SFU represents an sfu instance
 type SFU struct {
 	mu       sync.RWMutex
-	sessions map[string]*Session
+	sessions map[uint32]*Session
 }
 
 // NewSFU creates a new sfu instance
 func NewSFU(c Config) *SFU {
 	s := &SFU{
-		sessions: make(map[string]*Session),
+		sessions: make(map[uint32]*Session),
 	}
 
 	config = c
@@ -91,7 +91,7 @@ func NewSFU(c Config) *SFU {
 }
 
 // NewSession creates a new session instance
-func (s *SFU) newSession(id string) *Session {
+func (s *SFU) newSession(id uint32) *Session {
 	session := NewSession(id)
 	session.OnClose(func() {
 		s.mu.Lock()
@@ -106,14 +106,14 @@ func (s *SFU) newSession(id string) *Session {
 }
 
 // GetSession by id
-func (s *SFU) getSession(id string) *Session {
+func (s *SFU) getSession(id uint32) *Session {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.sessions[id]
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport that is a member of a session
-func (s *SFU) NewWebRTCTransport(sid string, offer webrtc.SessionDescription) (*WebRTCTransport, error) {
+func (s *SFU) NewWebRTCTransport(sid uint32, offer webrtc.SessionDescription) (*WebRTCTransport, error) {
 	session := s.getSession(sid)
 
 	if session == nil {

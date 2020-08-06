@@ -66,7 +66,7 @@ func TestSession(t *testing.T) {
 	assert.NoError(t, err)
 	<-gatherComplete
 
-	session := NewSession("session")
+	session := NewSession(1)
 	peer, err := NewWebRTCTransport(session, *remote.LocalDescription())
 	assert.NoError(t, err)
 
@@ -105,7 +105,7 @@ func TestMultiPeerSession(t *testing.T) {
 	_, err = remoteA.AddTrack(trackA)
 	assert.NoError(t, err)
 
-	session := NewSession("session")
+	session := NewSession(1)
 
 	// Setup remote <-> peer for a
 	peerA, err := signalPeer(session, remoteA)
@@ -158,7 +158,7 @@ func TestMultiPeerSession(t *testing.T) {
 }
 
 func Test3PeerConcurrrentJoin(t *testing.T) {
-	session := NewSession("session")
+	session := NewSession(1)
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -291,7 +291,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	_, err = remoteA.AddTrack(trackA)
 	assert.NoError(t, err)
 
-	session := NewSession("session")
+	session := NewSession(1)
 
 	// Setup remote <-> peer for a
 	peerA, err := signalPeer(session, remoteA)
