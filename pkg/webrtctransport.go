@@ -170,6 +170,16 @@ func (p *WebRTCTransport) OnNegotiationNeeded(f func()) {
 	}
 }
 
+// OnTrack handler
+func (p *WebRTCTransport) OnTrack(f func(*webrtc.Track, *webrtc.RTPReceiver)) {
+	p.pc.OnTrack(f)
+}
+
+// OnConnectionStateChange handler
+func (p *WebRTCTransport) OnConnectionStateChange(f func(webrtc.PeerConnectionState)) {
+	p.pc.OnConnectionStateChange(f)
+}
+
 // NewSender for peer
 func (p *WebRTCTransport) NewSender(intrack Track) (Sender, error) {
 	to := p.me.GetCodecsByName(intrack.Codec().Name)
