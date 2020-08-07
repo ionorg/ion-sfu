@@ -248,3 +248,76 @@ func TestPeerPairRemoteAGetsOnTrackWhenRemoteBJoinsWithPub(t *testing.T) {
 
 	sendRTPUntilDone(remoteAOnTrackFired.Done(), t, []*webrtc.Track{trackA, trackB})
 }
+
+func TestEventHandlers(t *testing.T) {
+	me := webrtc.MediaEngine{}
+	me.RegisterDefaultCodecs()
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+	remoteA, remoteB, err := newPair(webrtc.Configuration{}, api)
+	assert.NoError(t, err)
+
+	// Add a pub track for remote A
+	trackA, err := remoteA.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+	_, err = remoteA.AddTrack(trackA)
+	assert.NoError(t, err)
+
+	session := NewSession(1)
+
+	// Setup remote <-> peer for a
+	peerA, err := signalPeer(session, remoteA)
+	assert.NoError(t, err)
+
+	peerAOnTrackFired, peerAOnTrackFiredFunc := context.WithCancel(context.Background())
+	peerAConnectedFired, peerAConnectedFiredFunc := context.WithCancel(context.Background())
+	peerA.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
+		peerAOnTrackFiredFunc()
+	})
+	peerA.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+		if state == webrtc.PeerConnectionStateConnected {
+			peerAConnectedFiredFunc()
+		}
+	})
+
+	// Add a pub track for remote B
+	trackB, err := remoteB.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+	_, err = remoteB.AddTrack(trackB)
+	assert.NoError(t, err)
+
+	trackADone := waitForRouter(peerA, trackA.SSRC())
+	sendRTPUntilDone(trackADone, t, []*webrtc.Track{trackA})
+
+	// Subscribe b to a
+	offer, err := remoteB.CreateOffer(nil)
+	assert.NoError(t, err)
+
+	err = remoteB.SetLocalDescription(offer)
+	assert.NoError(t, err)
+	gatherComplete := webrtc.GatheringCompletePromise(remoteB)
+
+	peerB, err := NewWebRTCTransport(session, offer)
+	assert.NoError(t, err)
+
+	// Subscribe to remoteA track
+	sender, err := peerB.NewSender(trackA)
+	assert.NoError(t, err)
+	router := peerA.GetRouter(trackA.SSRC())
+	assert.NotNil(t, router)
+	router.AddSender(peerB.ID(), sender)
+
+	<-gatherComplete
+
+	// Finish signaling
+	err = peerB.SetRemoteDescription(*remoteB.LocalDescription())
+	assert.NoError(t, err)
+	answer, err := peerB.CreateAnswer()
+	assert.NoError(t, err)
+	err = peerB.SetLocalDescription(answer)
+	assert.NoError(t, err)
+	err = remoteB.SetRemoteDescription(*peerB.pc.LocalDescription())
+	assert.NoError(t, err)
+
+	sendRTPUntilDone(peerAOnTrackFired.Done(), t, []*webrtc.Track{trackB})
+	<-peerAConnectedFired.Done()
+}
