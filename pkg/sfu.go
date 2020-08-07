@@ -23,6 +23,11 @@ type WebRTCConfig struct {
 	ICEServers   []ICEServerConfig `mapstructure:"iceserver"`
 }
 
+// RelayConfig server configuration
+type RelayConfig struct {
+	Port int `mapstructure:"port"`
+}
+
 // ReceiverConfig defines receiver configurations
 type ReceiverConfig struct {
 	Video WebRTCVideoReceiverConfig `mapstructure:"video"`
@@ -33,6 +38,7 @@ type Config struct {
 	WebRTC   WebRTCConfig   `mapstructure:"webrtc"`
 	Log      log.Config     `mapstructure:"log"`
 	Receiver ReceiverConfig `mapstructure:"receiver"`
+	Relay    RelayConfig    `mapstructure:"relay"`
 }
 
 var (
@@ -56,7 +62,6 @@ type SFU struct {
 // NewSFU creates a new sfu instance
 func NewSFU(c Config) *SFU {
 	s := &SFU{
-		relay:    relay.NewServer(5555),
 		sessions: make(map[uint32]*Session),
 	}
 
@@ -89,7 +94,12 @@ func NewSFU(c Config) *SFU {
 
 	cfg.ICEServers = iceServers
 
-	go s.acceptRelay()
+	if c.Relay.Port != 0 {
+		log.Infof("Relay server listening at %d", c.Relay.Port)
+		s.relay = relay.NewServer(c.Relay.Port)
+		go s.acceptRelay()
+	}
+
 	go s.stats()
 
 	return s
@@ -101,23 +111,15 @@ func (s *SFU) acceptRelay() {
 			break
 		}
 
-		sessionmux := s.relay.AcceptRelay()
+		conn := s.relay.AcceptSession()
 
-		stream, err := sessionmux.AcceptTransport()
-		if err == relay.ErrSessionRTPClosed {
-			continue
-		} else if err != nil {
-			log.Warnf("Failed to accept stream %v ", err)
-			continue
-		}
-
-		sessionID := stream.ID()
+		sessionID := conn.ID
 		session := s.getSession(sessionID)
 		if session == nil {
 			session = s.newSession(sessionID)
 		}
 
-		_, err = NewRelayTransport(session, stream)
+		_, err := NewRelayTransport(session, conn)
 		if err != nil {
 			log.Errorf("Error creating RelayTransport: %s", err)
 		}
@@ -172,7 +174,7 @@ func (s *SFU) NewRelayTransport(sid uint32, addr string) (*RelayTransport, error
 		session = s.newSession(sid)
 	}
 
-	conn := relay.NewClient(addr)
+	conn := relay.NewClient(sid, addr)
 
 	t, err := NewRelayTransport(session, conn)
 	if err != nil {
@@ -180,6 +182,11 @@ func (s *SFU) NewRelayTransport(sid uint32, addr string) (*RelayTransport, error
 	}
 
 	return t, nil
+}
+
+// Close shutsdown the sfu instance
+func (s *SFU) Close() {
+	s.relay.Close()
 }
 
 func (s *SFU) stats() {

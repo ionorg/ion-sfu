@@ -1,7 +1,7 @@
 package sfu
 
 import (
-	"net"
+	"fmt"
 	"sync"
 
 	"github.com/lucsky/cuid"
@@ -24,18 +24,18 @@ type RelayTransportConfig struct {
 // RelayTransport ..
 type RelayTransport struct {
 	id          string
+	conn        *relay.SessionConn
 	me          *RelayMediaEngine
 	mu          sync.RWMutex
 	rtpSession  *relay.SessionRTP
 	rtpEndpoint *mux.Endpoint
 	mux         *mux.Mux
-	stop        bool
 	session     *Session
 	routers     map[uint32]*Router
 }
 
 // NewRelayTransport create a RelayTransport by net.Conn
-func NewRelayTransport(session *Session, conn net.Conn) (*RelayTransport, error) {
+func NewRelayTransport(session *Session, conn *relay.SessionConn) (*RelayTransport, error) {
 	m := mux.NewMux(mux.Config{
 		Conn:       conn,
 		BufferSize: receiveMTU,
@@ -43,6 +43,7 @@ func NewRelayTransport(session *Session, conn net.Conn) (*RelayTransport, error)
 
 	r := &RelayTransport{
 		id:          cuid.New(),
+		conn:        conn,
 		me:          NewRelayMediaEngine(),
 		session:     session,
 		routers:     make(map[uint32]*Router),
@@ -77,14 +78,9 @@ func NewRelayTransport(session *Session, conn net.Conn) (*RelayTransport, error)
 	return r, nil
 }
 
-// NewSender for peer
+// NewSender for relaying a track
 func (r *RelayTransport) NewSender(track Track) (Sender, error) {
-	stream, err := r.getRTPSession().OpenWriteStream()
-	if err != nil {
-		log.Errorf("Error opening write stream: %s", err)
-		return nil, err
-	}
-	return NewRelaySender(track, stream), nil
+	return NewRelaySender(track, r.conn), nil
 }
 
 // ID return id
@@ -108,31 +104,17 @@ func (r *RelayTransport) GetRouter(ssrc uint32) *Router {
 
 // Close release all
 func (r *RelayTransport) Close() {
-	if r.stop {
-		return
-	}
 	log.Infof("RelayTransport.Close()")
-	r.stop = true
 	r.rtpSession.Close()
 	r.rtpEndpoint.Close()
-	r.mux.Close()
-}
-
-func (r *RelayTransport) getRTPSession() *relay.SessionRTP {
-	return r.rtpSession
 }
 
 // ReceiveRTP receive rtp
 func (r *RelayTransport) acceptRTP() {
 	for {
-		if r.stop {
-			break
-		}
-
 		stream, err := r.rtpSession.AcceptStream()
 		if err == relay.ErrSessionRTPClosed {
-			r.Close()
-			return
+			break
 		} else if err != nil {
 			log.Warnf("Failed to accept stream %v ", err)
 			continue
@@ -164,5 +146,13 @@ func (r *RelayTransport) acceptRTP() {
 }
 
 func (r *RelayTransport) stats() string {
-	return ""
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	info := fmt.Sprintf("  relay: %s remote: %s\n", r.id, r.rtpEndpoint.RemoteAddr())
+	for _, router := range r.routers {
+		info += router.stats()
+	}
+
+	return info
 }

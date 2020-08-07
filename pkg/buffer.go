@@ -92,6 +92,10 @@ func (b *Buffer) Push(p *rtp.Packet) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	if b.stop {
+		return
+	}
+
 	b.receivedPkt++
 	b.totalByte += uint64(p.MarshalSize())
 

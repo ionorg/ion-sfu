@@ -73,9 +73,10 @@ func (r *Session) AddRouter(router *Router) {
 		// Attach sender to source
 		router.AddSender(tid, sender)
 
+		wt, ok := t.(*WebRTCTransport)
 		// TODO: required until pion/webrtc supports OnNegotiationNeeded
 		// (https://github.com/pion/webrtc/pull/1322)
-		if t.(*WebRTCTransport).onNegotiationNeededHandler != nil {
+		if ok && wt.onNegotiationNeededHandler != nil {
 			t.(*WebRTCTransport).onNegotiationNeededHandler()
 		}
 	}

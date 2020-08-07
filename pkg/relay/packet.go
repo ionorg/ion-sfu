@@ -31,7 +31,7 @@ type Packet struct {
 }
 
 const (
-	headerLength = 2
+	headerLength = 8
 	versionShift = 6
 	versionMask  = 0x3
 )

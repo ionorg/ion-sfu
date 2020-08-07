@@ -115,7 +115,8 @@ func sendRTPToPipeUntilDone(done <-chan struct{}, t *testing.T, track *webrtc.Tr
 			pkt := track.Packetizer().Packetize([]byte{0x01, 0x02, 0x03, 0x04}, 1)[0]
 			buf, err := pkt.Marshal()
 			assert.NoError(t, err)
-			conn.Write(buf)
+			_, err = conn.Write(buf)
+			assert.NoError(t, err)
 		case <-done:
 			return
 		}

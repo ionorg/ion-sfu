@@ -181,18 +181,18 @@ func (s *WebRTCSender) stats() string {
 
 // RelaySender represents a Sender which writes RTP to a webrtc track
 type RelaySender struct {
+	conn     *relay.SessionConn
 	track    Track
-	stream   *relay.WriteStreamRTP
 	stop     bool
 	rtcpCh   chan rtcp.Packet
 	sendChan chan *rtp.Packet
 }
 
 // NewRelaySender creates a new track sender instance
-func NewRelaySender(track Track, stream *relay.WriteStreamRTP) *RelaySender {
+func NewRelaySender(track Track, conn *relay.SessionConn) *RelaySender {
 	s := &RelaySender{
+		conn:     conn,
 		track:    track,
-		stream:   stream,
 		rtcpCh:   make(chan rtcp.Packet, maxSize),
 		sendChan: make(chan *rtp.Packet, maxSize),
 	}
@@ -206,10 +206,14 @@ func (s *RelaySender) sendRTP() {
 	for pkt := range s.sendChan {
 		log.Debugf("RelayTransport.WriteRTP rtp=%v", pkt)
 
-		_, err := s.stream.WriteRTP(pkt)
-
+		bin, err := pkt.Marshal()
 		if err != nil {
-			log.Errorf("writeStream.WriteRTP => %s", err.Error())
+			log.Errorf("pkt.Marshal => %s", err.Error())
+		}
+
+		_, err = s.conn.Write(bin)
+		if err != nil {
+			log.Errorf("conn.Write => %s", err.Error())
 		}
 	}
 	log.Infof("Closing send writer")

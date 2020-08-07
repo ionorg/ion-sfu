@@ -63,3 +63,15 @@ func TestPopulateFromSDP(t *testing.T) {
 	assertCodecWithPayloadType(webrtc.H264, 115)
 	assertCodecWithPayloadType(webrtc.VP9, 135)
 }
+
+func TestRelayMediaEngine(t *testing.T) {
+	me := NewRelayMediaEngine()
+
+	vp8, err := me.getCodec(webrtc.DefaultPayloadTypeVP8)
+	assert.NoError(t, err)
+	assert.Equal(t, "VP8", vp8.Name)
+
+	none, err := me.getCodec(1)
+	assert.Error(t, err)
+	assert.Nil(t, none)
+}

@@ -199,16 +199,11 @@ func TestWebRTCSenderRTCPREMBForwarding(t *testing.T) {
 
 func TestRelaySender(t *testing.T) {
 	aPipe, bPipe := net.Pipe()
-	session, err := relay.NewSessionRTP(aPipe)
-	assert.NoError(t, err)
-
-	writeStream, err := session.OpenWriteStream()
-	assert.NoError(t, err)
 
 	track, err := webrtc.NewTrack(webrtc.DefaultPayloadTypeOpus, rand.Uint32(), "audio", "pion", webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000))
 	assert.NoError(t, err)
 
-	sender := NewRelaySender(track, writeStream)
+	sender := NewRelaySender(track, &relay.SessionConn{Conn: aPipe, ID: 1})
 
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
 	go func() {

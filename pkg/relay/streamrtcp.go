@@ -11,7 +11,7 @@ import (
 // Limit the buffer size to 100KB
 const rtcpBufferSize = 100 * 1000
 
-// ReadStreamRTCP handles decryption for a single RTCP SSRC
+// ReadStreamRTCP handles reading for a single RTCP SSRC
 type ReadStreamRTCP struct {
 	mu sync.Mutex
 
@@ -43,7 +43,7 @@ func (r *ReadStreamRTCP) ReadRTCP(buf []byte) ([]rtcp.Packet, error) {
 	return rtcp.Unmarshal(buf[:n])
 }
 
-// Read reads and decrypts full RTCP packet from the nextConn
+// Read reads full RTCP packet from the nextConn
 func (r *ReadStreamRTCP) Read(b []byte) (int, error) {
 	n, err := r.buffer.Read(b)
 
@@ -106,12 +106,12 @@ func (r *ReadStreamRTCP) ID() uint32 {
 	return r.ssrc
 }
 
-// WriteStreamRTCP is stream for a single Session that is used to encrypt RTCP
+// WriteStreamRTCP is stream for a single Session that is used to write RTCP
 type WriteStreamRTCP struct {
 	session *SessionRTCP
 }
 
-// Write encrypts and writes a full RTCP packets to the nextConn
+// Write a full RTCP packets to the nextConn
 func (w *WriteStreamRTCP) Write(b []byte) (int, error) {
 	return w.session.write(b)
 }
