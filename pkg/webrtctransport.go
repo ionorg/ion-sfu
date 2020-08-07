@@ -164,8 +164,6 @@ func (p *WebRTCTransport) AddICECandidate(candidate webrtc.ICECandidateInit) err
 
 // OnICECandidate handler
 func (p *WebRTCTransport) OnICECandidate(f func(c *webrtc.ICECandidate)) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
 	p.pc.OnICECandidate(f)
 }
 
@@ -188,8 +186,6 @@ func (p *WebRTCTransport) OnTrack(f func(*webrtc.Track, *webrtc.RTPReceiver)) {
 
 // OnConnectionStateChange handler
 func (p *WebRTCTransport) OnConnectionStateChange(f func(webrtc.PeerConnectionState)) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
 	p.pc.OnConnectionStateChange(f)
 }
 
