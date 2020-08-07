@@ -164,11 +164,15 @@ func (p *WebRTCTransport) AddICECandidate(candidate webrtc.ICECandidateInit) err
 
 // OnICECandidate handler
 func (p *WebRTCTransport) OnICECandidate(f func(c *webrtc.ICECandidate)) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.pc.OnICECandidate(f)
 }
 
 // OnNegotiationNeeded handler
 func (p *WebRTCTransport) OnNegotiationNeeded(f func()) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	var debounced = util.NewDebouncer(500 * time.Millisecond)
 	p.onNegotiationNeededHandler = func() {
 		debounced(f)
@@ -177,11 +181,15 @@ func (p *WebRTCTransport) OnNegotiationNeeded(f func()) {
 
 // OnTrack handler
 func (p *WebRTCTransport) OnTrack(f func(*webrtc.Track, *webrtc.RTPReceiver)) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.onTrackHandler = f
 }
 
 // OnConnectionStateChange handler
 func (p *WebRTCTransport) OnConnectionStateChange(f func(webrtc.PeerConnectionState)) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.pc.OnConnectionStateChange(f)
 }
 
