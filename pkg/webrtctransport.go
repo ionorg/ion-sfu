@@ -90,11 +90,11 @@ func NewWebRTCTransport(session *Session, offer webrtc.SessionDescription) (*Web
 
 		p.mu.Lock()
 		p.routers[recv.Track().SSRC()] = router
-		p.mu.Unlock()
 
 		if p.onTrackHandler != nil {
 			p.onTrackHandler(track, receiver)
 		}
+		p.mu.Unlock()
 	})
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
