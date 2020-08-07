@@ -26,6 +26,7 @@ type WebRTCTransport struct {
 	session                    *Session
 	routers                    map[uint32]*Router
 	onNegotiationNeededHandler func()
+	onTrackHandler             func(*webrtc.Track, *webrtc.RTPReceiver)
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport
@@ -90,6 +91,10 @@ func NewWebRTCTransport(session *Session, offer webrtc.SessionDescription) (*Web
 		p.mu.Lock()
 		p.routers[recv.Track().SSRC()] = router
 		p.mu.Unlock()
+
+		if p.onTrackHandler != nil {
+			p.onTrackHandler(track, receiver)
+		}
 	})
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
@@ -172,7 +177,7 @@ func (p *WebRTCTransport) OnNegotiationNeeded(f func()) {
 
 // OnTrack handler
 func (p *WebRTCTransport) OnTrack(f func(*webrtc.Track, *webrtc.RTPReceiver)) {
-	p.pc.OnTrack(f)
+	p.onTrackHandler = f
 }
 
 // OnConnectionStateChange handler
