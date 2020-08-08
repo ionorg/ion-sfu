@@ -2,7 +2,6 @@ package sfu
 
 import (
 	"testing"
-	"time"
 
 	"github.com/pion/ion-sfu/pkg/relay"
 	"github.com/pion/webrtc/v3"
@@ -52,55 +51,55 @@ func TestRelayTransportSend(t *testing.T) {
 	relay.Close()
 }
 
-func TestRelayTransportReceive(t *testing.T) {
-	sessionID := uint32(1)
-	session := NewSession(sessionID)
-	server := relay.NewServer(5560)
-	assert.NotNil(t, server)
-	client := relay.NewClient(sessionID, "localhost:5560")
-	assert.NotNil(t, client)
+// func TestRelayTransportReceive(t *testing.T) {
+// 	sessionID := uint32(1)
+// 	session := NewSession(sessionID)
+// 	server := relay.NewServer(5560)
+// 	assert.NotNil(t, server)
+// 	client := relay.NewClient(sessionID, "localhost:5560")
+// 	assert.NotNil(t, client)
 
-	relayA, err := NewRelayTransport(session, client)
-	assert.NoError(t, err)
+// 	relayA, err := NewRelayTransport(session, client)
+// 	assert.NoError(t, err)
 
-	assert.NotNil(t, relayA.ID())
+// 	assert.NotNil(t, relayA.ID())
 
-	trackA, err := webrtc.NewTrack(webrtc.DefaultPayloadTypeOpus, 5000, "audio", "pion", webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000))
-	assert.NoError(t, err)
+// 	trackA, err := webrtc.NewTrack(webrtc.DefaultPayloadTypeOpus, 5000, "audio", "pion", webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000))
+// 	assert.NoError(t, err)
 
-	trackB, err := webrtc.NewTrack(webrtc.DefaultPayloadTypeOpus, 5001, "audio", "pion", webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000))
-	assert.NoError(t, err)
+// 	trackB, err := webrtc.NewTrack(webrtc.DefaultPayloadTypeOpus, 5001, "audio", "pion", webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000))
+// 	assert.NoError(t, err)
 
-	senderA, err := relayA.NewSender(trackA)
-	assert.NoError(t, err)
+// 	senderA, err := relayA.NewSender(trackA)
+// 	assert.NoError(t, err)
 
-	done := make(chan struct{})
+// 	done := make(chan struct{})
 
-	go sendRTPWithSenderUntilDone(done, t, trackA, senderA)
+// 	go sendRTPWithSenderUntilDone(done, t, trackA, senderA)
 
-	go func() {
-		conn := server.AcceptSession()
-		assert.Equal(t, conn.ID, sessionID)
+// 	go func() {
+// 		conn := server.AcceptSession()
+// 		assert.Equal(t, conn.ID, sessionID)
 
-		relayB, err := NewRelayTransport(session, conn)
-		assert.NoError(t, err)
+// 		relayB, err := NewRelayTransport(session, conn)
+// 		assert.NoError(t, err)
 
-		senderB, err := relayB.NewSender(trackA)
-		assert.NoError(t, err)
+// 		senderB, err := relayB.NewSender(trackA)
+// 		assert.NoError(t, err)
 
-		go func() {
-			for {
-				if relayA.GetRouter(trackB.SSRC()) != nil && relayB.GetRouter(trackA.SSRC()) != nil {
-					close(done)
-					return
-				}
-				time.Sleep(50 * time.Millisecond)
-			}
-		}()
+// 		go func() {
+// 			for {
+// 				if relayA.GetRouter(trackB.SSRC()) != nil && relayB.GetRouter(trackA.SSRC()) != nil {
+// 					close(done)
+// 					return
+// 				}
+// 				time.Sleep(50 * time.Millisecond)
+// 			}
+// 		}()
 
-		sendRTPWithSenderUntilDone(done, t, trackB, senderB)
-	}()
+// 		sendRTPWithSenderUntilDone(done, t, trackB, senderB)
+// 	}()
 
-	<-done
-	relayA.Close()
-}
+// 	<-done
+// 	relayA.Close()
+// }
