@@ -8,3 +8,4 @@ main
 *.code-workspace
 *debug.test
 *.pem
+bin/
