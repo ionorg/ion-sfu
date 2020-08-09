@@ -64,6 +64,7 @@ func NewWebRTCTransport(session *Session, offer webrtc.SessionDescription) (*Web
 			log.Infof("Init add router ssrc %d to %s", router.Track().SSRC(), p.id)
 			if err != nil {
 				log.Errorf("Error subscribing to router %v", router)
+				continue
 			}
 			router.AddSender(p.id, sender)
 		}

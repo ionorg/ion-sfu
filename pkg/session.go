@@ -68,6 +68,7 @@ func (r *Session) AddRouter(router *Router) {
 
 		if err != nil {
 			log.Errorf("Error subscribing transport to router: %s", err)
+			continue
 		}
 
 		// Attach sender to source
