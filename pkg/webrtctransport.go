@@ -71,7 +71,7 @@ func NewWebRTCTransport(session *Session, offer webrtc.SessionDescription) (*Web
 	}
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
-		log.Debugf("Peer %s got remote track %v", p.id, track)
+		log.Debugf("Peer %s got remote track id: %s ssrc: %d", p.id, track.ID(), track.SSRC())
 		var recv Receiver
 		switch track.Kind() {
 		case webrtc.RTPCodecTypeVideo:

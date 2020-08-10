@@ -174,10 +174,17 @@ func main() {
 		}
 	})
 
-	pubOffer, err := peerConnection.CreateOffer(nil)
+	gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
+	offer, err := peerConnection.CreateOffer(nil)
 	if err != nil {
 		log.Fatalf("Error creating offer: %v", err)
 	}
+
+	if err = peerConnection.SetLocalDescription(offer); err != nil {
+		log.Fatalf("Error setting local description: %v", err)
+	}
+
+	<-gatherComplete
 
 	sid := os.Args[1]
 	ctx := context.Background()
@@ -192,8 +199,8 @@ func main() {
 			Join: &sfu.JoinRequest{
 				Sid: sid,
 				Offer: &sfu.SessionDescription{
-					Type: pubOffer.Type.String(),
-					Sdp:  []byte(pubOffer.SDP),
+					Type: offer.Type.String(),
+					Sdp:  []byte(peerConnection.LocalDescription().SDP),
 				},
 			},
 		},
