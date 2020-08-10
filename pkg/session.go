@@ -10,14 +10,14 @@ import (
 // Session represents a set of transports. Transports inside a session
 // are automatically subscribed to each other.
 type Session struct {
-	id             uint32
+	id             string
 	transports     map[string]Transport
 	transportsLock sync.RWMutex
 	onCloseHandler func()
 }
 
 // NewSession creates a new session
-func NewSession(id uint32) *Session {
+func NewSession(id string) *Session {
 	return &Session{
 		id:         id,
 		transports: make(map[string]Transport),
@@ -94,7 +94,7 @@ func (r *Session) OnClose(f func()) {
 }
 
 func (r *Session) stats() string {
-	info := fmt.Sprintf("\nsession: %d\n", r.id)
+	info := fmt.Sprintf("\nsession: %s\n", r.id)
 
 	r.transportsLock.RLock()
 	for _, transport := range r.transports {

@@ -121,7 +121,7 @@ func NewRPC() *RPC {
 
 // Join message sent when initializing a peer connection
 type Join struct {
-	Sid   uint32                    `json:"sid"`
+	Sid   string                    `json:"sid"`
 	Offer webrtc.SessionDescription `json:"offer"`
 }
 
@@ -172,7 +172,7 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 			break
 		}
 
-		log.Infof("peer %s join session %d", peer.ID(), join.Sid)
+		log.Infof("peer %s join session %s", peer.ID(), join.Sid)
 
 		err = peer.SetRemoteDescription(join.Offer)
 		if err != nil {

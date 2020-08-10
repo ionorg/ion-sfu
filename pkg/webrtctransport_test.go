@@ -88,7 +88,7 @@ func TestNewPeerCallsOnRouterWithVideoTrackRouter(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Create sfu peer for remote A and complete signaling
-	session := NewSession(1)
+	session := NewSession("session")
 	peer, err := signalPeer(session, remote)
 	assert.NoError(t, err)
 	assert.Equal(t, peer.id, peer.ID())
@@ -111,7 +111,7 @@ func TestNewPeerCallsOnRouterWithAudioTrackRouter(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Create sfu peer for remote A and complete signaling
-	session := NewSession(1)
+	session := NewSession("session")
 	peer, err := signalPeer(session, remote)
 	assert.NoError(t, err)
 	assert.Equal(t, peer.id, peer.ID())
@@ -133,7 +133,7 @@ func TestPeerPairRemoteBGetsOnTrack(t *testing.T) {
 	_, err = remoteA.AddTrack(trackA)
 	assert.NoError(t, err)
 
-	session := NewSession(1)
+	session := NewSession("session")
 
 	// Setup remote <-> peer for a
 	peerA, err := signalPeer(session, remoteA)
@@ -195,7 +195,7 @@ func TestPeerPairRemoteAGetsOnTrackWhenRemoteBJoinsWithPub(t *testing.T) {
 	_, err = remoteA.AddTrack(trackA)
 	assert.NoError(t, err)
 
-	session := NewSession(1)
+	session := NewSession("session")
 
 	// Setup remote <-> peer for a
 	peerA, err := signalPeer(session, remoteA)
