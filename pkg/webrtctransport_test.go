@@ -262,7 +262,7 @@ func TestEventHandlers(t *testing.T) {
 	_, err = remoteA.AddTrack(trackA)
 	assert.NoError(t, err)
 
-	session := NewSession(1)
+	session := NewSession("session")
 
 	// Setup remote <-> peer for a
 	peerA, err := signalPeer(session, remoteA)
@@ -320,4 +320,74 @@ func TestEventHandlers(t *testing.T) {
 
 	sendRTPUntilDone(peerAOnTrackFired.Done(), t, []*webrtc.Track{trackB})
 	<-peerAConnectedFired.Done()
+}
+
+func TestPeerBWithAudioOnlyWhenPeerAHasAudioAndVideo(t *testing.T) {
+	// Create peer A with audio and video
+	meA := webrtc.MediaEngine{}
+	meA.RegisterCodec(webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000))
+	meA.RegisterCodec(webrtc.NewRTPVP8Codec(webrtc.DefaultPayloadTypeVP8, 90000))
+	apiA := webrtc.NewAPI(webrtc.WithMediaEngine(meA))
+
+	remoteA, err := apiA.NewPeerConnection(webrtc.Configuration{})
+	assert.NoError(t, err)
+
+	// Add a pub audio track for remote A
+	trackAAudio, err := remoteA.NewTrack(webrtc.DefaultPayloadTypeOpus, rand.Uint32(), "audio", "pion")
+	assert.NoError(t, err)
+	_, err = remoteA.AddTrack(trackAAudio)
+	assert.NoError(t, err)
+
+	// Add a pub video track for remote A
+	trackAVideo, err := remoteA.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+	_, err = remoteA.AddTrack(trackAVideo)
+	assert.NoError(t, err)
+
+	session := NewSession("session")
+
+	// Setup remote <-> peer for a
+	peerA, err := signalPeer(session, remoteA)
+	assert.NoError(t, err)
+
+	onTrackAAudio := waitForRouter(peerA, trackAAudio.SSRC())
+	sendRTPUntilDone(onTrackAAudio, t, []*webrtc.Track{trackAAudio})
+
+	onTrackAVideo := waitForRouter(peerA, trackAVideo.SSRC())
+	sendRTPUntilDone(onTrackAVideo, t, []*webrtc.Track{trackAVideo})
+
+	// Create peer B with only audio
+	meB := webrtc.MediaEngine{}
+	meB.RegisterCodec(webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000))
+	apiB := webrtc.NewAPI(webrtc.WithMediaEngine(meB))
+
+	remoteB, err := apiB.NewPeerConnection(webrtc.Configuration{})
+	assert.NoError(t, err)
+
+	// Add a pub audio track for remote B
+	trackBAudio, err := remoteB.NewTrack(webrtc.DefaultPayloadTypeOpus, rand.Uint32(), "audio", "pion")
+	assert.NoError(t, err)
+	_, err = remoteB.AddTrack(trackBAudio)
+	assert.NoError(t, err)
+
+	peerB, err := signalPeer(session, remoteB)
+	assert.NoError(t, err)
+
+	onTrackBAudio := waitForRouter(peerB, trackBAudio.SSRC())
+	sendRTPUntilDone(onTrackBAudio, t, []*webrtc.Track{trackBAudio})
+
+	// peer B should have peer A audio
+	trackAAudioRouter := peerA.GetRouter(trackAAudio.SSRC())
+	trackAAudioSenderForPeerB := trackAAudioRouter.senders[peerB.id]
+	assert.NotNil(t, trackAAudioSenderForPeerB)
+
+	// peer B should not have peer A video
+	trackAVideoRouter := peerA.GetRouter(trackAVideo.SSRC())
+	trackAVideoSenderForPeerB := trackAVideoRouter.senders[peerB.id]
+	assert.Nil(t, trackAVideoSenderForPeerB)
+
+	// peer A should have peer B audio
+	trackBAudioRouter := peerB.GetRouter(trackBAudio.SSRC())
+	trackBAudioSenderForPeerA := trackBAudioRouter.senders[peerA.id]
+	assert.NotNil(t, trackBAudioSenderForPeerA)
 }
