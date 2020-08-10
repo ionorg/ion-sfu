@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
@@ -22,12 +23,14 @@ type Sender interface {
 
 // WebRTCSender represents a Sender which writes RTP to a webrtc track
 type WebRTCSender struct {
+	mu       sync.RWMutex
 	track    Track
 	stop     bool
 	rtcpCh   chan rtcp.Packet
 	useRemb  bool
 	rembCh   chan *rtcp.ReceiverEstimatedMaximumBitrate
 	target   uint64
+	last     uint16
 	sendChan chan *rtp.Packet
 }
 
@@ -59,6 +62,8 @@ func NewWebRTCSender(track Track, sender *webrtc.RTPSender) *WebRTCSender {
 }
 
 func (s *WebRTCSender) sendRTP() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for pkt := range s.sendChan {
 		// Transform payload type
 		pt := s.track.Codec().PayloadType
@@ -69,6 +74,7 @@ func (s *WebRTCSender) sendRTP() {
 		if err := s.track.WriteRTP(pkt); err != nil {
 			log.Errorf("wt.WriteRTP err=%v", err)
 		}
+		s.last = pkt.SequenceNumber
 	}
 	log.Infof("Closing send writer")
 }
@@ -175,5 +181,7 @@ func (s *WebRTCSender) rembLoop() {
 }
 
 func (s *WebRTCSender) stats() string {
-	return fmt.Sprintf("payload:%d | remb: %dkbps", s.track.PayloadType(), s.target/1000)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return fmt.Sprintf("payload: %d | remb: %dkbps | pkt: %d", s.track.PayloadType(), s.target/1000, s.last)
 }

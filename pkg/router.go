@@ -116,7 +116,7 @@ func (r *Router) subFeedbackLoop(sub Sender) {
 
 		switch pkt := pkt.(type) {
 		case *rtcp.TransportLayerNack:
-			log.Infof("Router got nack: %+v", pkt)
+			log.Debugf("Router got nack: %+v", pkt)
 			for _, pair := range pkt.Nacks {
 				bufferpkt := r.receiver.GetPacket(pair.PacketID)
 				if bufferpkt != nil {
@@ -147,7 +147,7 @@ func (r *Router) subFeedbackLoop(sub Sender) {
 }
 
 func (r *Router) stats() string {
-	info := fmt.Sprintf("    router: %d | %s\n", r.receiver.Track().SSRC(), r.receiver.stats())
+	info := fmt.Sprintf("    router ssrc: %d | %s\n", r.receiver.Track().SSRC(), r.receiver.stats())
 
 	if len(r.senders) < 6 {
 		for pid, sub := range r.senders {
