@@ -262,7 +262,7 @@ func TestEventHandlers(t *testing.T) {
 	_, err = remoteA.AddTrack(trackA)
 	assert.NoError(t, err)
 
-	session := NewSession(1)
+	session := NewSession("session")
 
 	// Setup remote <-> peer for a
 	peerA, err := signalPeer(session, remoteA)
@@ -344,7 +344,7 @@ func TestPeerBWithAudioOnlyWhenPeerAHasAudioAndVideo(t *testing.T) {
 	_, err = remoteA.AddTrack(trackAVideo)
 	assert.NoError(t, err)
 
-	session := NewSession(1)
+	session := NewSession("session")
 
 	// Setup remote <-> peer for a
 	peerA, err := signalPeer(session, remoteA)
