@@ -191,7 +191,7 @@ func (p *WebRTCTransport) OnConnectionStateChange(f func(webrtc.PeerConnectionSt
 }
 
 // NewSender for peer
-func (p *WebRTCTransport) NewSender(intrack Track) (Sender, error) {
+func (p *WebRTCTransport) NewSender(intrack *webrtc.Track) (Sender, error) {
 	to := p.me.GetCodecsByName(intrack.Codec().Name)
 
 	if len(to) == 0 {
