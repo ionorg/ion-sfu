@@ -381,10 +381,10 @@ func TestPeerBWithAudioOnlyWhenPeerAHasAudioAndVideo(t *testing.T) {
 	trackAAudioSenderForPeerB := trackAAudioRouter.senders[peerB.id]
 	assert.NotNil(t, trackAAudioSenderForPeerB)
 
-	// peer B should not have peer A video
+	// peer B should have peer A video
 	trackAVideoRouter := peerA.GetRouter(trackAVideo.SSRC())
 	trackAVideoSenderForPeerB := trackAVideoRouter.senders[peerB.id]
-	assert.Nil(t, trackAVideoSenderForPeerB)
+	assert.NotNil(t, trackAVideoSenderForPeerB)
 
 	// peer A should have peer B audio
 	trackBAudioRouter := peerB.GetRouter(trackBAudio.SSRC())

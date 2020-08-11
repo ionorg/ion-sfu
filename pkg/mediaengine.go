@@ -76,5 +76,27 @@ func (e *MediaEngine) PopulateFromSDP(sd webrtc.SessionDescription) error {
 			e.RegisterCodec(codec)
 		}
 	}
+
+	// Use defaults for codecs not provided in sdp
+	if len(e.GetCodecsByName(webrtc.Opus)) == 0 {
+		codec := webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000)
+		e.RegisterCodec(codec)
+	}
+
+	if len(e.GetCodecsByName(webrtc.VP8)) == 0 {
+		codec := webrtc.NewRTPVP8CodecExt(webrtc.DefaultPayloadTypeVP8, 90000, rtcpfb, "")
+		e.RegisterCodec(codec)
+	}
+
+	if len(e.GetCodecsByName(webrtc.VP9)) == 0 {
+		codec := webrtc.NewRTPVP9CodecExt(webrtc.DefaultPayloadTypeVP9, 90000, rtcpfb, "")
+		e.RegisterCodec(codec)
+	}
+
+	if len(e.GetCodecsByName(webrtc.H264)) == 0 {
+		codec := webrtc.NewRTPH264CodecExt(webrtc.DefaultPayloadTypeH264, 90000, rtcpfb, "")
+		e.RegisterCodec(codec)
+	}
+
 	return nil
 }

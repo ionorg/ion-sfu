@@ -24,7 +24,7 @@ type Sender interface {
 // WebRTCSender represents a Sender which writes RTP to a webrtc track
 type WebRTCSender struct {
 	mu       sync.RWMutex
-	track    Track
+	track    *webrtc.Track
 	stop     bool
 	rtcpCh   chan rtcp.Packet
 	useRemb  bool
@@ -35,7 +35,7 @@ type WebRTCSender struct {
 }
 
 // NewWebRTCSender creates a new track sender instance
-func NewWebRTCSender(track Track, sender *webrtc.RTPSender) *WebRTCSender {
+func NewWebRTCSender(track *webrtc.Track, sender *webrtc.RTPSender) *WebRTCSender {
 	s := &WebRTCSender{
 		track:    track,
 		rtcpCh:   make(chan rtcp.Packet, maxSize),
