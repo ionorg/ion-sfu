@@ -10,10 +10,13 @@ go_deps:
 clean:
 	rm -rf bin
 
-nodes: go_deps
+build_grpc: go_deps
 	go build -o bin/sfu $(GO_LDFLAGS) ./cmd/server/grpc/main.go
 
-test: nodes
+build_jsonrpc: go_deps
+	go build -o bin/sfu $(GO_LDFLAGS) ./cmd/server/json-rpc/main.go
+
+test: go_deps
 	go test \
 		-coverprofile=cover.out -covermode=atomic \
 		-v -race ${GO_TESTPKGS}
