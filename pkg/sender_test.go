@@ -86,6 +86,14 @@ func TestSenderRTPForwarding(t *testing.T) {
 	assert.NoError(t, err)
 
 	sendRTPWithSenderUntilDone(onReadRTPFired.Done(), t, track, sender)
+
+	assert.Contains(t, sender.stats(), "payload")
+
+	sender.Close()
+	sender.Close()
+
+	_, err = sender.ReadRTCP()
+	assert.Error(t, err)
 }
 
 func sendRTCPUntilDone(done <-chan struct{}, t *testing.T, pc *webrtc.PeerConnection, pkt rtcp.Packet) {

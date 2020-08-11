@@ -1,7 +1,3 @@
-[grpc]
-# internet ip
-port = ":50051"
-
 [router]
 # pass bandwidth feeback to pub
 rembfeedback = false

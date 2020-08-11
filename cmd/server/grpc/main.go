@@ -35,6 +35,7 @@ type Config struct {
 var (
 	conf      = Config{}
 	file      string
+	addr      string
 	errNoPeer = errors.New("no peer exists")
 )
 
@@ -50,6 +51,7 @@ const (
 func showHelp() {
 	fmt.Printf("Usage:%s {params}\n", os.Args[0])
 	fmt.Println("      -c {config file}")
+	fmt.Println("      -a {listen addr}")
 	fmt.Println("      -h (show help info)")
 }
 
@@ -89,6 +91,7 @@ func load() bool {
 
 func parse() bool {
 	flag.StringVar(&file, "c", "config.toml", "config file")
+	flag.StringVar(&addr, "a", ":50051", "address to use")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
 	if !load() {
@@ -109,11 +112,11 @@ func main() {
 	}
 
 	log.Infof("--- Starting SFU Node ---")
-	lis, err := net.Listen("tcp", conf.GRPC.Port)
+	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Panicf("failed to listen: %v", err)
 	}
-	log.Infof("SFU Listening at %s", conf.GRPC.Port)
+	log.Infof("SFU Listening at %s", addr)
 	s := grpc.NewServer()
 	pb.RegisterSFUServer(s, &server{
 		sfu: sfu.NewSFU(conf.Config),

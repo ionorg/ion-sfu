@@ -30,7 +30,6 @@ type WebRTCSender struct {
 	useRemb  bool
 	rembCh   chan *rtcp.ReceiverEstimatedMaximumBitrate
 	target   uint64
-	last     uint16
 	sendChan chan *rtp.Packet
 }
 
@@ -62,9 +61,14 @@ func NewWebRTCSender(track *webrtc.Track, sender *webrtc.RTPSender) *WebRTCSende
 }
 
 func (s *WebRTCSender) sendRTP() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	for pkt := range s.sendChan {
+		s.mu.RLock()
+		stop := s.stop
+		s.mu.RUnlock()
+		if stop {
+			break
+		}
+
 		// Transform payload type
 		pt := s.track.Codec().PayloadType
 		newPkt := *pkt
@@ -74,9 +78,7 @@ func (s *WebRTCSender) sendRTP() {
 		if err := s.track.WriteRTP(pkt); err != nil {
 			log.Errorf("wt.WriteRTP err=%v", err)
 		}
-		s.last = pkt.SequenceNumber
 	}
-	log.Infof("Closing send writer")
 }
 
 // ReadRTCP read rtp packet
@@ -95,8 +97,14 @@ func (s *WebRTCSender) WriteRTP(pkt *rtp.Packet) {
 
 // Close track
 func (s *WebRTCSender) Close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.stop {
+		return
+	}
 	s.stop = true
 	close(s.sendChan)
+	close(s.rtcpCh)
 }
 
 func (s *WebRTCSender) receiveRTCP(sender *webrtc.RTPSender) {
@@ -110,7 +118,10 @@ func (s *WebRTCSender) receiveRTCP(sender *webrtc.RTPSender) {
 			log.Errorf("rtcp err => %v", err)
 		}
 
-		if s.stop {
+		s.mu.RLock()
+		stop := s.stop
+		s.mu.RUnlock()
+		if stop {
 			return
 		}
 
@@ -143,6 +154,13 @@ func (s *WebRTCSender) rembLoop() {
 	var rembCount, rembTotalRate uint64
 
 	for pkt := range s.rembCh {
+		s.mu.RLock()
+		stop := s.stop
+		s.mu.RUnlock()
+		if stop {
+			break
+		}
+
 		// Update stats
 		rembCount++
 		rembTotalRate += pkt.Bitrate
@@ -181,7 +199,5 @@ func (s *WebRTCSender) rembLoop() {
 }
 
 func (s *WebRTCSender) stats() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return fmt.Sprintf("payload: %d | remb: %dkbps | pkt: %d", s.track.PayloadType(), s.target/1000, s.last)
+	return fmt.Sprintf("payload: %d | remb: %dkbps", s.track.PayloadType(), s.target/1000)
 }
