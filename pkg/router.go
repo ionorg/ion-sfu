@@ -116,7 +116,7 @@ func (r *Router) subFeedbackLoop(sub Sender) {
 
 		switch pkt := pkt.(type) {
 		case *rtcp.TransportLayerNack:
-			log.Debugf("Router got nack: %+v", pkt)
+			log.Tracef("Router got nack: %+v", pkt)
 			for _, pair := range pkt.Nacks {
 				bufferpkt := r.receiver.GetPacket(pair.PacketID)
 				if bufferpkt != nil {

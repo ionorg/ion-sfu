@@ -173,7 +173,7 @@ func (b *Buffer) clearOldPkt(pushPktTS uint32, pushPktSN uint16) {
 			}
 		}
 		if skipCount > 0 {
-			log.Infof("b.pktBuffer nil count : %d", skipCount)
+			log.Tracef("b.pktBuffer nil count : %d", skipCount)
 		}
 		if pushPktSN == maxSN-1 {
 			b.lastClearSN = 0
