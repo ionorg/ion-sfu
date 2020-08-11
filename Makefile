@@ -1,8 +1,6 @@
 GO_LDFLAGS = -ldflags "-s -w"
 GO_VERSION = 1.14
 GO_TESTPKGS:=$(shell go list ./... | grep -v cmd | grep -v examples)
-TEST_UID:=$(shell id -u)
-TEST_GID:=$(shell id -g)
 
 all: nodes
 
