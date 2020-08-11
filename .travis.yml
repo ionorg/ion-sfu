@@ -29,21 +29,8 @@ _lint_job: &lint_job
 _build_job: &build_job
   env: CACHE_NAME=build
   script:
-    - go build ./cmd/server/grpc/main.go
-
-_build_sfu_docker_job: &build_sfu_docker_job
-  env: CACHE_NAME=build_sfu_docker
-  script:
-    - docker build --tag pionwebrtc/ion-sfu:latest .
-  before_deploy:
-    - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-    - docker tag pionwebrtc/ion-sfu:latest pionwebrtc/ion-sfu:"$TRAVIS_TAG"
-  deploy:
-    provider: script
-    script: docker push pionwebrtc/ion-sfu:"$TRAVIS_TAG"
-    # script: docker push pionwebrtc/ion-sfu:latest && docker push pionwebrtc/ion-sfu:"$TRAVIS_TAG"
-    on:
-      tags: true
+    - make build_grpc
+    - make build_jsonrpc
 
 _test_job: &test_job
   env: CACHE_NAME=test
@@ -54,6 +41,34 @@ _test_job: &test_job
     - if [ -n "${TEST_HOOK}" ]; then ${TEST_HOOK}; fi
   after_success:
     - travis_retry bash <(curl -s https://codecov.io/bash) -c -F go
+
+_build_grpc_docker_job: &build_grpc_docker_job
+  env: CACHE_NAME=build_grpc_docker
+  script:
+    - docker build --tag pionwebrtc/ion-sfu:latest-grpc -f cmd/server/grpc/Dockerfile .
+  before_deploy:
+    - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+    - docker tag pionwebrtc/ion-sfu:latest-grpc pionwebrtc/ion-sfu:"$TRAVIS_TAG"-grpc
+  deploy:
+    provider: script
+    script: docker push pionwebrtc/ion-sfu:"$TRAVIS_TAG"-grpc
+    # script: docker push pionwebrtc/ion-sfu:latest && docker push pionwebrtc/ion-sfu:"$TRAVIS_TAG"
+    on:
+      tags: true
+
+_build_jsonrpc_docker_job: &build_jsonrpc_docker_job
+  env: CACHE_NAME=build_jsonrpc_docker
+  script:
+    - docker build --tag pionwebrtc/ion-sfu:latest-jsonrpc -f cmd/server/json-rpc/Dockerfile .
+  before_deploy:
+    - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+    - docker tag pionwebrtc/ion-sfu:latest-jsonrpc pionwebrtc/ion-sfu:"$TRAVIS_TAG"-jsonrpc
+  deploy:
+    provider: script
+    script: docker push pionwebrtc/ion-sfu:"$TRAVIS_TAG"-jsonrpc
+    # script: docker push pionwebrtc/ion-sfu:latest && docker push pionwebrtc/ion-sfu:"$TRAVIS_TAG"
+    on:
+      tags: true
 
 jobs:
   include:
@@ -77,8 +92,11 @@ jobs:
       name: Test 1.14
       go: 1.14
       if: branch = master OR tag IS present
-    - <<: *build_sfu_docker_job
-      name: Build sfu docker
+    - <<: *build_grpc_docker_job
+      name: Build grpc docker
+      if: branch = master OR tag IS present
+    - <<: *build_jsonrpc_docker_job
+      name: Build json-rpc docker
       if: branch = master OR tag IS present
 
 notifications:

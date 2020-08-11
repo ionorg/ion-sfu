@@ -14,13 +14,13 @@
 </p>
 <br>
 
-Ion-sfu is a high performance WebRTC SFU microservice implemented in Go. It can be called directly or through a gRPC or json-rpc interface.
+Ion-sfu is a high performance WebRTC SFU microservice implemented in Go. It can be called directly or through a [gRPC](cmd/server/grpc) or [json-rpc](cmd/server/json-rpc) interface.
 
 ## Getting Started
 
-### Running the server
+### Running the grpc server
 
-If you have a local golang environment already setup, simply do
+If you have a local golang environment already setup, simply run
 
 ```
 go build ./cmd/server/grpc/main.go && ./main -c config.toml
@@ -29,8 +29,7 @@ go build ./cmd/server/grpc/main.go && ./main -c config.toml
 If you prefer a containerized environment, you can use the included Docker image
 
 ```
-docker build -t pion/ion-sfu .
-docker run -p 50051:50051 -p 5000-5020:5000-5020/udp pion/ion-sfu:latest
+docker run -p 50051:50051 -p 5000-5020:5000-5020/udp pion/ion-sfu:v1.0.0-grpc
 ```
 
 ### Interacting with the server
