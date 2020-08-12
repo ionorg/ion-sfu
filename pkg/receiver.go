@@ -47,14 +47,12 @@ type Receiver interface {
 type WebRTCAudioReceiver struct {
 	track *webrtc.Track
 	stop  bool
-	rtpCh chan *rtp.Packet
 }
 
 // NewWebRTCAudioReceiver creates a new audio track receiver
 func NewWebRTCAudioReceiver(track *webrtc.Track) *WebRTCAudioReceiver {
 	a := &WebRTCAudioReceiver{
 		track: track,
-		rtpCh: make(chan *rtp.Packet, maxSize),
 	}
 
 	return a
@@ -95,7 +93,7 @@ func (a *WebRTCAudioReceiver) Close() {
 
 // Stats get stats for video receiver
 func (a *WebRTCAudioReceiver) stats() string {
-	return fmt.Sprintf("payload:%d", a.track.PayloadType())
+	return fmt.Sprintf("payload: %d", a.track.PayloadType())
 }
 
 // WebRTCVideoReceiver receives a video track
