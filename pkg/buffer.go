@@ -131,7 +131,7 @@ func (b *Buffer) Push(p *rtp.Packet) {
 		// calc [lastNackSN, lastpush-8] if has keyframe
 		nackPair, lostPkt := b.GetNackPair(b.pktBuffer, b.lastNackSN, b.lastPushSN)
 		b.lastNackSN = b.lastPushSN
-		// log.Infof("b.lastNackSN=%v, b.lastPushSN=%v, lostPkt=%v, nackPair=%v", b.lastNackSN, b.lastPushSN, lostPkt, nackPair)
+		log.Tracef("b.lastNackSN=%v, b.lastPushSN=%v, lostPkt=%v, nackPair=%v", b.lastNackSN, b.lastPushSN, lostPkt, nackPair)
 		if lostPkt > 0 {
 			b.lostPkt += lostPkt
 			nack := &rtcp.TransportLayerNack{
@@ -151,7 +151,7 @@ func (b *Buffer) Push(p *rtp.Packet) {
 func (b *Buffer) clearOldPkt(pushPktTS uint32, pushPktSN uint16) {
 	clearTS := b.lastClearTS
 	clearSN := b.lastClearSN
-	// log.Infof("clearOldPkt pushPktTS=%d pushPktSN=%d     clearTS=%d  clearSN=%d ", pushPktTS, pushPktSN, clearTS, clearSN)
+	log.Tracef("clearOldPkt pushPktTS=%d pushPktSN=%d     clearTS=%d  clearSN=%d ", pushPktTS, pushPktSN, clearTS, clearSN)
 	if tsDelta(pushPktTS, clearTS) >= b.maxBufferTS {
 		//pushPktSN will loop from 0 to 65535
 		if pushPktSN == 0 {

@@ -172,7 +172,7 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 		switch payload := in.Payload.(type) {
 		case *pb.SignalRequest_Join:
 			var answer webrtc.SessionDescription
-			log.Infof("signal->negotiate called: %v", payload.Join)
+			log.Infof("signal->join called:\n%v", string(payload.Join.Offer.Sdp))
 
 			if peer != nil {
 				// already joined
