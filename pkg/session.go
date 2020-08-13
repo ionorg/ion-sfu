@@ -12,7 +12,7 @@ import (
 type Session struct {
 	id             string
 	transports     map[string]Transport
-	transportsLock sync.RWMutex
+	mu             sync.RWMutex
 	onCloseHandler func()
 }
 
@@ -26,16 +26,16 @@ func NewSession(id string) *Session {
 
 // AddTransport adds a transport to the session
 func (r *Session) AddTransport(transport Transport) {
-	r.transportsLock.Lock()
-	defer r.transportsLock.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	r.transports[transport.ID()] = transport
 }
 
 // RemoveTransport removes a transport for the session
 func (r *Session) RemoveTransport(tid string) {
-	r.transportsLock.Lock()
-	defer r.transportsLock.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	delete(r.transports, tid)
 	// Remove transport subs from pubs
@@ -53,8 +53,8 @@ func (r *Session) RemoveTransport(tid string) {
 
 // AddRouter adds a router to existing transports
 func (r *Session) AddRouter(router *Router) {
-	r.transportsLock.Lock()
-	defer r.transportsLock.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	for tid, t := range r.transports {
 		// Don't sub to self
@@ -84,8 +84,8 @@ func (r *Session) AddRouter(router *Router) {
 
 // Transports returns transports in this session
 func (r *Session) Transports() map[string]Transport {
-	r.transportsLock.RLock()
-	defer r.transportsLock.RUnlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return r.transports
 }
 
@@ -97,11 +97,11 @@ func (r *Session) OnClose(f func()) {
 func (r *Session) stats() string {
 	info := fmt.Sprintf("\nsession: %s\n", r.id)
 
-	r.transportsLock.RLock()
+	r.mu.RLock()
 	for _, transport := range r.transports {
 		info += transport.stats()
 	}
-	r.transportsLock.RUnlock()
+	r.mu.RUnlock()
 
 	return info
 }

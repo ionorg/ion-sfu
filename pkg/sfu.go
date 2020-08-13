@@ -127,8 +127,6 @@ func (s *SFU) NewWebRTCTransport(sid string, offer webrtc.SessionDescription) (*
 		return nil, err
 	}
 
-	session.AddTransport(t)
-
 	return t, nil
 }
 
