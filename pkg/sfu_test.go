@@ -22,7 +22,7 @@ func TestSFU(t *testing.T) {
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
-	remote, err := api.NewPeerConnection(cfg)
+	remote, err := api.NewPeerConnection(conf.configuration)
 	assert.NoError(t, err)
 
 	offer, err := remote.CreateOffer(nil)

@@ -14,7 +14,7 @@ import (
 )
 
 func createPeer(t *testing.T, session *Session, api *webrtc.API) (*WebRTCTransport, *webrtc.PeerConnection, *webrtc.Track, error) {
-	remote, err := api.NewPeerConnection(cfg)
+	remote, err := api.NewPeerConnection(conf.configuration)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -67,7 +67,7 @@ func TestSession(t *testing.T) {
 	<-gatherComplete
 
 	session := NewSession("session")
-	peer, err := NewWebRTCTransport(session, *remote.LocalDescription())
+	peer, err := NewWebRTCTransport(session, *remote.LocalDescription(), conf)
 	assert.NoError(t, err)
 
 	onCloseFired, onCloseFiredFunc := context.WithCancel(context.Background())
@@ -282,7 +282,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
 
-	remoteA, err := api.NewPeerConnection(cfg)
+	remoteA, err := api.NewPeerConnection(conf.configuration)
 	assert.NoError(t, err)
 
 	// Add a pub track for remote A
@@ -302,7 +302,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	trackADone := waitForRouter(peerA, trackA.SSRC())
 	sendRTPUntilDone(trackADone, t, []*webrtc.Track{trackA})
 
-	remoteB, err := api.NewPeerConnection(cfg)
+	remoteB, err := api.NewPeerConnection(conf.configuration)
 	assert.NoError(t, err)
 	// Add a pub track for remote B
 	trackB, err := remoteB.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
@@ -314,7 +314,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	err = remoteB.SetLocalDescription(offer)
 	assert.NoError(t, err)
 	gatherComplete := webrtc.GatheringCompletePromise(remoteB)
-	peerB, err := NewWebRTCTransport(session, offer)
+	peerB, err := NewWebRTCTransport(session, offer, conf)
 	session.AddTransport(peerB)
 	assert.NoError(t, err)
 	<-gatherComplete
@@ -351,7 +351,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	trackBDone := waitForRouter(peerB, trackB.SSRC())
 	sendRTPUntilDone(trackBDone, t, []*webrtc.Track{trackB})
 
-	remoteC, err := api.NewPeerConnection(cfg)
+	remoteC, err := api.NewPeerConnection(conf.configuration)
 	assert.NoError(t, err)
 	// Add transceiver to match number of recv tracks
 	_, err = remoteC.AddTransceiverFromTrack(trackB)
@@ -367,7 +367,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	err = remoteC.SetLocalDescription(offer)
 	assert.NoError(t, err)
 	gatherComplete = webrtc.GatheringCompletePromise(remoteC)
-	peerC, err := NewWebRTCTransport(session, offer)
+	peerC, err := NewWebRTCTransport(session, offer, conf)
 	session.AddTransport(peerC)
 	assert.NoError(t, err)
 	<-gatherComplete
