@@ -18,7 +18,6 @@ maxbandwidth = 1000
 maxbuffertime = 1000
 
 [webrtc]
-
 # Range of ports that ion accepts WebRTC traffic on
 # Format: [min, max]   and max - min >= 100
 # portrange = [50000, 60000]
@@ -29,5 +28,6 @@ maxbuffertime = 1000
 # urls = ["turn:turn.awsome.org:3478"]
 # username = "awsome"
 # credential = "awsome"
+
 [log]
 level = "debug"
