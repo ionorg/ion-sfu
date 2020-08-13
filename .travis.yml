@@ -42,6 +42,20 @@ _test_job: &test_job
   after_success:
     - travis_retry bash <(curl -s https://codecov.io/bash) -c -F go
 
+_build_devel_docker_job: &build_devel_docker_job
+  env: CACHE_NAME=build_devel_docker
+  script:
+    - docker build --tag pionwebrtc/ion-sfu:latest-devel .
+  before_deploy:
+    - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+    - docker tag pionwebrtc/ion-sfu:latest-devel pionwebrtc/ion-sfu:"$TRAVIS_TAG"-devel
+  deploy:
+    provider: script
+    script: docker push pionwebrtc/ion-sfu:"$TRAVIS_TAG"-devel
+    # script: docker push pionwebrtc/ion-sfu:latest && docker push pionwebrtc/ion-sfu:"$TRAVIS_TAG"
+    on:
+      tags: true
+
 _build_grpc_docker_job: &build_grpc_docker_job
   env: CACHE_NAME=build_grpc_docker
   script:
@@ -91,6 +105,9 @@ jobs:
     - <<: *test_job
       name: Test 1.14
       go: 1.14
+      if: branch = master OR tag IS present
+    - <<: *build_devel_docker_job
+      name: Build development docker
       if: branch = master OR tag IS present
     - <<: *build_grpc_docker_job
       name: Build grpc docker
