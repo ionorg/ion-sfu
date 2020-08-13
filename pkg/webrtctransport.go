@@ -16,6 +16,12 @@ const (
 	statCycle = 6 * time.Second
 )
 
+// WebRTCTransportConfig represents configuration options
+type WebRTCTransportConfig struct {
+	configuration webrtc.Configuration
+	setting       webrtc.SettingEngine
+}
+
 // WebRTCTransport represents a sfu peer connection
 type WebRTCTransport struct {
 	id                         string
@@ -30,7 +36,7 @@ type WebRTCTransport struct {
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport
-func NewWebRTCTransport(session *Session, offer webrtc.SessionDescription) (*WebRTCTransport, error) {
+func NewWebRTCTransport(session *Session, offer webrtc.SessionDescription, cfg WebRTCTransportConfig) (*WebRTCTransport, error) {
 	// We make our own mediaEngine so we can place the sender's codecs in it.  This because we must use the
 	// dynamic media type from the sender in our answer. This is not required if we are the offerer
 	me := MediaEngine{}
@@ -38,8 +44,8 @@ func NewWebRTCTransport(session *Session, offer webrtc.SessionDescription) (*Web
 		return nil, errSdpParseFailed
 	}
 
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine), webrtc.WithSettingEngine(setting))
-	pc, err := api.NewPeerConnection(cfg)
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine), webrtc.WithSettingEngine(cfg.setting))
+	pc, err := api.NewPeerConnection(cfg.configuration)
 
 	if err != nil {
 		log.Errorf("NewPeer error: %v", err)

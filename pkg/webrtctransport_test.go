@@ -10,6 +10,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var conf = WebRTCTransportConfig{
+	configuration: webrtc.Configuration{
+		SDPSemantics: webrtc.SDPSemanticsUnifiedPlan,
+	},
+	setting: webrtc.SettingEngine{},
+}
+
 // newPair creates two new peer connections (an offerer and an answerer) using
 // the api.
 func newPair(cfg webrtc.Configuration, api *webrtc.API) (pcOffer *webrtc.PeerConnection, pcAnswer *webrtc.PeerConnection, err error) {
@@ -36,7 +43,7 @@ func signalPeer(session *Session, remote *webrtc.PeerConnection) (*WebRTCTranspo
 	}
 	gatherComplete := webrtc.GatheringCompletePromise(remote)
 
-	peer, err := NewWebRTCTransport(session, offer)
+	peer, err := NewWebRTCTransport(session, offer, conf)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +163,7 @@ func TestPeerPairRemoteBGetsOnTrack(t *testing.T) {
 	assert.NoError(t, err)
 	gatherComplete := webrtc.GatheringCompletePromise(remoteB)
 
-	peerB, err := NewWebRTCTransport(session, offer)
+	peerB, err := NewWebRTCTransport(session, offer, conf)
 	assert.NoError(t, err)
 
 	// Subscribe to remoteA track
@@ -296,7 +303,7 @@ func TestEventHandlers(t *testing.T) {
 	assert.NoError(t, err)
 	gatherComplete := webrtc.GatheringCompletePromise(remoteB)
 
-	peerB, err := NewWebRTCTransport(session, offer)
+	peerB, err := NewWebRTCTransport(session, offer, conf)
 	assert.NoError(t, err)
 
 	// Subscribe to remoteA track

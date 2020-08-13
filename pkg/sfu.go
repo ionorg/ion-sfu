@@ -35,24 +35,26 @@ type Config struct {
 }
 
 var (
-	// only support unified plan
-	cfg = webrtc.Configuration{
-		SDPSemantics: webrtc.SDPSemanticsUnifiedPlanWithFallback,
-	}
-
-	config  Config
-	setting webrtc.SettingEngine
+	config Config
 )
 
 // SFU represents an sfu instance
 type SFU struct {
+	webrtc   WebRTCTransportConfig
 	mu       sync.RWMutex
 	sessions map[string]*Session
 }
 
 // NewSFU creates a new sfu instance
 func NewSFU(c Config) *SFU {
+	w := WebRTCTransportConfig{
+		configuration: webrtc.Configuration{
+			SDPSemantics: webrtc.SDPSemanticsUnifiedPlan,
+		},
+		setting: webrtc.SettingEngine{},
+	}
 	s := &SFU{
+		webrtc:   w,
 		sessions: make(map[string]*Session),
 	}
 
@@ -68,7 +70,7 @@ func NewSFU(c Config) *SFU {
 	}
 
 	if icePortStart != 0 || icePortEnd != 0 {
-		if err := setting.SetEphemeralUDPPortRange(icePortStart, icePortEnd); err != nil {
+		if err := s.webrtc.setting.SetEphemeralUDPPortRange(icePortStart, icePortEnd); err != nil {
 			panic(err)
 		}
 	}
@@ -83,7 +85,7 @@ func NewSFU(c Config) *SFU {
 		iceServers = append(iceServers, s)
 	}
 
-	cfg.ICEServers = iceServers
+	s.webrtc.configuration.ICEServers = iceServers
 
 	go s.stats()
 
@@ -120,7 +122,7 @@ func (s *SFU) NewWebRTCTransport(sid string, offer webrtc.SessionDescription) (*
 		session = s.newSession(sid)
 	}
 
-	t, err := NewWebRTCTransport(session, offer)
+	t, err := NewWebRTCTransport(session, offer, s.webrtc)
 	if err != nil {
 		return nil, err
 	}
