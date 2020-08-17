@@ -74,7 +74,7 @@ func NewWebRTCTransport(session *Session, offer webrtc.SessionDescription, cfg W
 	// Add transport to the session
 	session.AddTransport(p)
 
-	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
+	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver, streams []*webrtc.Stream) {
 		log.Debugf("Peer %s got remote track id: %s ssrc: %d", p.id, track.ID(), track.SSRC())
 		var recv Receiver
 		switch track.Kind() {
@@ -92,6 +92,17 @@ func NewWebRTCTransport(session *Session, offer webrtc.SessionDescription, cfg W
 		log.Debugf("Created router %s %d", p.id, recv.Track().SSRC())
 
 		p.session.AddRouter(router)
+
+		streams[0].OnRemoveTrack(func(track *webrtc.Track) {
+			p.mu.Lock()
+			defer p.mu.Unlock()
+			r := p.routers[track.SSRC()]
+
+			if r != nil {
+				r.Close()
+				delete(p.routers, track.SSRC())
+			}
+		})
 
 		p.mu.Lock()
 		p.routers[recv.Track().SSRC()] = router

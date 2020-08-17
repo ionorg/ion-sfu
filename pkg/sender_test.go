@@ -65,7 +65,7 @@ func TestSenderRTPForwarding(t *testing.T) {
 	assert.NoError(t, err)
 
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
-	remote.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
+	remote.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver, _ []*webrtc.Stream) {
 		out, err := track.ReadRTP()
 		assert.NoError(t, err)
 

@@ -67,6 +67,35 @@ func signalPeer(session *Session, remote *webrtc.PeerConnection) (*WebRTCTranspo
 	return peer, nil
 }
 
+func renegotiate(offerer *webrtc.PeerConnection, answerer *WebRTCTransport) error {
+	offer, err := offerer.CreateOffer(nil)
+	if err != nil {
+		return err
+	}
+	if err = offerer.SetLocalDescription(offer); err != nil {
+		return err
+	}
+	gatherComplete := webrtc.GatheringCompletePromise(offerer)
+	<-gatherComplete
+
+	if err = answerer.SetRemoteDescription(*offerer.LocalDescription()); err != nil {
+		return err
+	}
+
+	answer, err := answerer.CreateAnswer()
+	if err != nil {
+		return err
+	}
+	if err = answerer.SetLocalDescription(answer); err != nil {
+		return err
+	}
+	err = offerer.SetRemoteDescription(answer)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func waitForRouter(transport Transport, ssrc uint32) chan struct{} {
 	done := make(chan struct{})
 	go func() {
@@ -218,7 +247,7 @@ func TestPeerPairRemoteAGetsOnTrackWhenRemoteBJoinsWithPub(t *testing.T) {
 	assert.NoError(t, err)
 
 	remoteAOnTrackFired, remoteAOnTrackFiredFunc := context.WithCancel(context.Background())
-	remoteA.OnTrack(func(*webrtc.Track, *webrtc.RTPReceiver) {
+	remoteA.OnTrack(func(*webrtc.Track, *webrtc.RTPReceiver, []*webrtc.Stream) {
 		remoteAOnTrackFiredFunc()
 	})
 
@@ -397,4 +426,39 @@ func TestPeerBWithAudioOnlyWhenPeerAHasAudioAndVideo(t *testing.T) {
 	trackBAudioRouter := peerB.GetRouter(trackBAudio.SSRC())
 	trackBAudioSenderForPeerA := trackBAudioRouter.senders[peerA.id]
 	assert.NotNil(t, trackBAudioSenderForPeerA)
+}
+
+func TestPeerRemovesRouterWhenRemoteRemovesTrack(t *testing.T) {
+	me := webrtc.MediaEngine{}
+	me.RegisterDefaultCodecs()
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+	remote, err := api.NewPeerConnection(webrtc.Configuration{})
+	assert.NoError(t, err)
+
+	track, err := remote.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+
+	sender, err := remote.AddTrack(track)
+	assert.NotNil(t, sender)
+	assert.NoError(t, err)
+
+	// Create sfu peer for remote A and complete signaling
+	session := NewSession("session")
+	peer, err := signalPeer(session, remote)
+	assert.NoError(t, err)
+	assert.Equal(t, peer.id, peer.ID())
+
+	done := waitForRouter(peer, track.SSRC())
+	sendRTPUntilDone(done, t, []*webrtc.Track{track})
+
+	router := peer.GetRouter(track.SSRC())
+	assert.NotNil(t, router)
+
+	err = remote.RemoveTrack(sender)
+	assert.NoError(t, err)
+	err = renegotiate(remote, peer)
+	assert.NoError(t, err)
+
+	router = peer.GetRouter(track.SSRC())
+	assert.Nil(t, router)
 }
