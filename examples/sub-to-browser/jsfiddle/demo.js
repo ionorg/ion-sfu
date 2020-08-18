@@ -16,7 +16,7 @@ pc.createOffer().then(d => pc.setLocalDescription(d)).catch(log)
 
 pc.oniceconnectionstatechange = e => log(pc.iceConnectionState)
 pc.onicecandidate = event => {
-  if (event.candidate === null) {
+  if (event.candidate !== null) {
     document.getElementById('localSessionDescription').value = btoa(JSON.stringify(pc.localDescription))
   }
 }

@@ -8,7 +8,7 @@ go get github.com/pion/ion-sfu/examples/publish-from-browser
 ```
 
 ### Open publish-from-browser example page
-[jsfiddle.net](https://jsfiddle.net/j3yhron4/) you should see two text-areas and a 'Start Session' button.
+[jsfiddle.net](https://jsfiddle.net/y1b32pom/) you should see two text-areas and a 'Start Session' button.
 
 ### Run publish-from-browser, with your browsers SessionDescription as stdin
 In the jsfiddle the top textarea is your browser, copy that and:
