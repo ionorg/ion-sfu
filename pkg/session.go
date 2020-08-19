@@ -11,8 +11,9 @@ import (
 // are automatically subscribed to each other.
 type Session struct {
 	id             string
-	mu             sync.RWMutex
 	transports     map[string]Transport
+	broadcasts     map[string]chan interface{}
+	mu             sync.RWMutex
 	onCloseHandler func()
 }
 
@@ -21,6 +22,7 @@ func NewSession(id string) *Session {
 	return &Session{
 		id:         id,
 		transports: make(map[string]Transport),
+		broadcasts: make(map[string]chan interface{}),
 	}
 }
 
@@ -30,6 +32,36 @@ func (r *Session) AddTransport(transport Transport) {
 	defer r.mu.Unlock()
 
 	r.transports[transport.ID()] = transport
+}
+
+// AddWebsocket adds a websocket connection to the session
+func (r *Session) AddBroadcast(id string, broadcast chan interface{}) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.broadcasts[id] = broadcast
+}
+
+// AddWebsocket adds a websocket connection to the session
+func (r *Session) RemoveBroadcast(id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.broadcasts, id)
+}
+
+// Broadcast broadcasts a signal message to all websockets connected to the session
+func (r *Session) Broadcast(msg interface{}) error {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, ch := range r.broadcasts {
+		select {
+		case ch <- msg:
+			log.Debugf("Wrote broadcast: %#v", msg)
+		}
+	}
+
+	return nil
 }
 
 // RemoveTransport removes a transport for the session

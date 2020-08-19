@@ -97,7 +97,8 @@ type contextKey struct {
 	name string
 }
 type peerContext struct {
-	peer *sfu.WebRTCTransport
+	peer    *sfu.WebRTCTransport
+	session *sfu.Session
 }
 
 var peerCtxKey = &contextKey{"peer"}
@@ -172,7 +173,7 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 			break
 		}
 
-		peer, err := r.sfu.NewWebRTCTransport(join.Sid, me)
+		session, peer, err := r.sfu.NewWebRTCTransport(join.Sid, me)
 
 		if err != nil {
 			log.Errorf("connect: error creating peer: %v", err)
@@ -248,6 +249,24 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 		})
 
 		p.peer = peer
+		p.session = session
+
+		listen := make(chan interface{})
+		session.AddBroadcast(peer.ID(), listen)
+
+		stop := conn.DisconnectNotify()
+		go func() {
+			log.Debugf("Starting broadcast listener")
+			select {
+			case msg := <-listen:
+				log.Debugf("peer %v got broadcast %#v", peer.ID(), msg)
+				if err := conn.Notify(ctx, "broadcast", msg); err != nil {
+				}
+			case <-stop:
+				session.RemoveBroadcast(peer.ID())
+				return
+			}
+		}()
 
 		_ = conn.Reply(ctx, req.ID, answer)
 
@@ -363,7 +382,27 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 		if err != nil {
 			log.Errorf("error setting ice candidate %s", err)
 		}
+	case "broadcast":
+		if p.peer == nil {
+			log.Errorf("connect: no peer exists for connection")
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", errors.New("no peer exists")),
+			})
+			break
+		}
+		if p.session == nil {
+			log.Errorf("connect: no session exists for connection")
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", errors.New("no session exists")),
+			})
+			break
+		}
+
+		p.session.Broadcast(*req.Params)
 	}
+
 }
 
 func main() {
