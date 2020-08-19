@@ -15,11 +15,21 @@ pc.addTransceiver("video", { direction: 'recvonly' });
 pc.createOffer().then(d => pc.setLocalDescription(d)).catch(log)
 
 pc.oniceconnectionstatechange = e => log(pc.iceConnectionState)
-pc.onicecandidate = event => {
-  if (event.candidate !== null) {
+
+var timer;
+var showSDP = () => {
     document.getElementById('localSessionDescription').value = btoa(JSON.stringify(pc.localDescription))
+}
+pc.onicecandidate = event => {
+  clearTimeout(timer);
+  if (event.candidate === null) {
+    showSDP()
+  } else {
+    // avoid waiting too long for null, chrome > 30ms, firefox > 10ms
+    timer = setTimeout(showSDP, 1000);
   }
 }
+
 pc.ontrack = function (event) {
 	if (event.track.kind === "video") {
     var el = document.createElement(event.track.kind)

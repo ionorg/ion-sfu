@@ -8,7 +8,7 @@ go get github.com/pion/ion-sfu/examples/sub-to-browser
 ```
 
 ### Open sub-to-browser example page
-[jsfiddle.net](https://jsfiddle.net/7kcuxgd5/) you should see two text-areas and a 'Start Session' button.
+[jsfiddle.net](https://jsfiddle.net/eyncgpqa/) you should see two text-areas and a 'Start Session' button.
 
 ### Run sub-to-browser, with your browsers SessionDescription as stdin
 In the jsfiddle the top textarea is your browser, copy that and:

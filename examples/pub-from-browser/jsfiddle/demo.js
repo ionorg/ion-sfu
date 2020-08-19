@@ -18,7 +18,8 @@ navigator.mediaDevices.getUserMedia({ video: true, audio: true })
     el.muted = true
     document.getElementById('localVideos').appendChild(el)
 
-    pc.addStream(stream)
+    //pc.addStream(stream)  // deprecated, and safari not supported
+    stream.getTracks().forEach(track => pc.addTrack(track, stream))
     pc.createOffer({
       offerToReceiveVideo: false,
       offerToReceiveAudio: false,
@@ -26,9 +27,18 @@ navigator.mediaDevices.getUserMedia({ video: true, audio: true })
   }).catch(log)
 
 pc.oniceconnectionstatechange = e => log(pc.iceConnectionState)
-pc.onicecandidate = event => {
-  if (event.candidate !== null) {
+
+var timer;
+var showSDP = () => {
     document.getElementById('localSessionDescription').value = btoa(JSON.stringify(pc.localDescription))
+}
+pc.onicecandidate = event => {
+  clearTimeout(timer);
+  if (event.candidate === null) {
+    showSDP()
+  } else {
+    // avoid waiting too long for null, chrome > 30ms, firefox > 10ms
+    timer = setTimeout(showSDP, 1000);
   }
 }
 
