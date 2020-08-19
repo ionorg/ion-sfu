@@ -11,8 +11,8 @@ import (
 // are automatically subscribed to each other.
 type Session struct {
 	id             string
-	transports     map[string]Transport
 	mu             sync.RWMutex
+	transports     map[string]Transport
 	onCloseHandler func()
 }
 
@@ -51,7 +51,7 @@ func (r *Session) RemoveTransport(tid string) {
 	}
 }
 
-// AddRouter adds a router to existing transports
+// AddRouter adds a router to transports
 func (r *Session) AddRouter(router *Router) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

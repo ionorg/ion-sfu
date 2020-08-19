@@ -23,14 +23,15 @@ type Sender interface {
 
 // WebRTCSender represents a Sender which writes RTP to a webrtc track
 type WebRTCSender struct {
-	mu       sync.RWMutex
-	track    *webrtc.Track
-	stop     bool
-	rtcpCh   chan rtcp.Packet
-	useRemb  bool
-	rembCh   chan *rtcp.ReceiverEstimatedMaximumBitrate
-	target   uint64
-	sendChan chan *rtp.Packet
+	mu             sync.RWMutex
+	onCloseHandler func()
+	track          *webrtc.Track
+	stop           bool
+	rtcpCh         chan rtcp.Packet
+	useRemb        bool
+	rembCh         chan *rtcp.ReceiverEstimatedMaximumBitrate
+	target         uint64
+	sendChan       chan *rtp.Packet
 }
 
 // NewWebRTCSender creates a new track sender instance
@@ -95,6 +96,11 @@ func (s *WebRTCSender) WriteRTP(pkt *rtp.Packet) {
 	s.sendChan <- pkt
 }
 
+// OnClose is called when the sender is closed
+func (s *WebRTCSender) OnClose(f func()) {
+	s.onCloseHandler = f
+}
+
 // Close track
 func (s *WebRTCSender) Close() {
 	s.mu.Lock()
@@ -105,6 +111,10 @@ func (s *WebRTCSender) Close() {
 	s.stop = true
 	close(s.sendChan)
 	close(s.rtcpCh)
+
+	if s.onCloseHandler != nil {
+		s.onCloseHandler()
+	}
 }
 
 func (s *WebRTCSender) receiveRTCP(sender *webrtc.RTPSender) {
