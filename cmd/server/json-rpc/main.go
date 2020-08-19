@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/gorilla/websocket"
 	sfu "github.com/pion/ion-sfu/pkg"
@@ -239,29 +238,6 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 		p.peer = peer
 
 		_ = conn.Reply(ctx, req.ID, answer)
-
-		// Hack until renegotation is supported in pion. Force renegotation incase there are unmatched
-		// receviers (i.e. sfu has more than one sender). We just naively create server offer. It is
-		// noop if things are already matched. We can remove once https://github.com/pion/webrtc/pull/1322
-		// is merged
-		time.Sleep(1000 * time.Millisecond)
-
-		log.Debugf("on negotiation needed called")
-		offer, err := p.peer.CreateOffer()
-		if err != nil {
-			log.Errorf("CreateOffer error: %v", err)
-			return
-		}
-
-		err = p.peer.SetLocalDescription(offer)
-		if err != nil {
-			log.Errorf("SetLocalDescription error: %v", err)
-			return
-		}
-
-		if err := conn.Notify(ctx, "offer", offer); err != nil {
-			log.Errorf("error sending offer %s", err)
-		}
 
 	case "offer":
 		if p.peer == nil {

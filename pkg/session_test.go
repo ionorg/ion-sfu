@@ -158,6 +158,7 @@ func TestMultiPeerSession(t *testing.T) {
 }
 
 func Test3PeerConcurrrentJoin(t *testing.T) {
+	log.Init("info")
 	session := NewSession("session")
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
@@ -191,8 +192,10 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 					ssrc, err := strconv.ParseUint(split[0], 10, 32)
 					assert.NoError(t, err)
 					if uint32(ssrc) == trackB.SSRC() {
+						log.Infof("OnNegotiationNeeded A Track B")
 						trackBSeen = true
 					} else if uint32(ssrc) == trackC.SSRC() {
+						log.Infof("OnNegotiationNeeded A Track C")
 						trackCSeen = true
 					}
 				}
@@ -224,8 +227,10 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 					ssrc, err := strconv.ParseUint(split[0], 10, 32)
 					assert.NoError(t, err)
 					if uint32(ssrc) == trackA.SSRC() {
+						log.Infof("OnNegotiationNeeded B Track A")
 						trackASeen = true
 					} else if uint32(ssrc) == trackC.SSRC() {
+						log.Infof("OnNegotiationNeeded B Track C")
 						trackCSeen = true
 					}
 				}
@@ -239,6 +244,7 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 
 	peerCGotTracks := make(chan bool)
 	peerC.OnNegotiationNeeded(func() {
+		log.Infof("OnNegotiationNeeded C called")
 		offer, err := peerC.CreateOffer()
 		assert.NoError(t, err)
 
@@ -249,6 +255,7 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 		trackASeen := false
 		trackBSeen := false
 		for _, md := range desc.MediaDescriptions {
+			log.Infof("%v", md)
 			for _, attr := range md.Attributes {
 				switch attr.Key {
 				case sdp.AttrKeySSRC:
@@ -256,8 +263,10 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 					ssrc, err := strconv.ParseUint(split[0], 10, 32)
 					assert.NoError(t, err)
 					if uint32(ssrc) == trackA.SSRC() {
+						log.Infof("OnNegotiationNeeded C Track A")
 						trackASeen = true
 					} else if uint32(ssrc) == trackB.SSRC() {
+						log.Infof("OnNegotiationNeeded C Track B")
 						trackBSeen = true
 					}
 				}

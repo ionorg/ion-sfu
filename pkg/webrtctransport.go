@@ -7,7 +7,6 @@ import (
 
 	"github.com/lucsky/cuid"
 	"github.com/pion/ion-sfu/pkg/log"
-	"github.com/pion/ion-sfu/pkg/util"
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 )
@@ -24,15 +23,14 @@ type WebRTCTransportConfig struct {
 
 // WebRTCTransport represents a sfu peer connection
 type WebRTCTransport struct {
-	id                         string
-	pc                         *webrtc.PeerConnection
-	me                         MediaEngine
-	mu                         sync.RWMutex
-	stop                       bool
-	session                    *Session
-	routers                    map[uint32]*Router
-	onNegotiationNeededHandler func()
-	onTrackHandler             func(*webrtc.Track, *webrtc.RTPReceiver)
+	id             string
+	pc             *webrtc.PeerConnection
+	me             MediaEngine
+	mu             sync.RWMutex
+	stop           bool
+	session        *Session
+	routers        map[uint32]*Router
+	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport
@@ -176,12 +174,7 @@ func (p *WebRTCTransport) OnICECandidate(f func(c *webrtc.ICECandidate)) {
 
 // OnNegotiationNeeded handler
 func (p *WebRTCTransport) OnNegotiationNeeded(f func()) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	var debounced = util.NewDebouncer(500 * time.Millisecond)
-	p.onNegotiationNeededHandler = func() {
-		debounced(f)
-	}
+	p.pc.OnNegotiationNeeded(f)
 }
 
 // OnTrack handler
