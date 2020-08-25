@@ -11,13 +11,12 @@ import (
 	"os"
 
 	"github.com/gorilla/websocket"
+	sfu "github.com/pion/ion-sfu/pkg"
+	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/webrtc/v3"
 	"github.com/sourcegraph/jsonrpc2"
 	websocketjsonrpc2 "github.com/sourcegraph/jsonrpc2/websocket"
 	"github.com/spf13/viper"
-
-	sfu "github.com/pion/ion-sfu/pkg"
-	"github.com/pion/ion-sfu/pkg/log"
 )
 
 var (
@@ -134,6 +133,12 @@ type Negotiation struct {
 // Trickle message sent when renegotiating
 type Trickle struct {
 	Candidate webrtc.ICECandidateInit `json:"candidate"`
+}
+
+// TrackMeta message sent to attach metadata to a track id
+type TrackMeta struct {
+	Tid        string                 `json:"tid"`
+	Properties map[string]interface{} `json:"properties"`
 }
 
 // Handle RPC call
@@ -257,14 +262,16 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 		stop := conn.DisconnectNotify()
 		go func() {
 			log.Debugf("Starting broadcast listener")
-			select {
-			case msg := <-listen:
-				log.Debugf("peer %v got broadcast %#v", peer.ID(), msg)
-				if err := conn.Notify(ctx, "broadcast", msg); err != nil {
+			for {
+				select {
+				case msg := <-listen:
+					log.Debugf("peer %v got broadcast %#v", peer.ID(), msg)
+					if err := conn.Notify(ctx, "broadcast", msg); err != nil {
+					}
+				case <-stop:
+					session.RemoveBroadcast(peer.ID())
+					return
 				}
-			case <-stop:
-				session.RemoveBroadcast(peer.ID())
-				return
 			}
 		}()
 
@@ -382,6 +389,38 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 		if err != nil {
 			log.Errorf("error setting ice candidate %s", err)
 		}
+	case "track_meta":
+		if p.peer == nil {
+			log.Errorf("connect: no peer exists for connection")
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", errors.New("no peer exists")),
+			})
+			break
+		}
+		if p.session == nil {
+			log.Errorf("connect: no session exists for connection")
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", errors.New("no session exists")),
+			})
+			break
+		}
+
+		var meta TrackMeta
+		err := json.Unmarshal(*req.Params, &meta)
+		if err != nil {
+			log.Errorf("connect: error parsing candidate: %v", err)
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", err),
+			})
+			break
+		}
+
+		p.session.UpdateTrackMeta(meta.Tid, meta.Properties)
+		_ = conn.Reply(ctx, req.ID, nil)
+
 	case "broadcast":
 		if p.peer == nil {
 			log.Errorf("connect: no peer exists for connection")

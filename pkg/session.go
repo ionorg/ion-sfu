@@ -15,6 +15,7 @@ type Session struct {
 	broadcasts     map[string]chan interface{}
 	mu             sync.RWMutex
 	onCloseHandler func()
+	trackMeta      map[string]interface{}
 }
 
 // NewSession creates a new session
@@ -23,6 +24,7 @@ func NewSession(id string) *Session {
 		id:         id,
 		transports: make(map[string]Transport),
 		broadcasts: make(map[string]chan interface{}),
+		trackMeta:  make(map[string]interface{}),
 	}
 }
 
@@ -42,6 +44,14 @@ func (r *Session) AddBroadcast(id string, broadcast chan interface{}) {
 	r.broadcasts[id] = broadcast
 }
 
+func (r *Session) UpdateTrackMeta(id string, meta interface{}) {
+	r.mu.Lock()
+	r.trackMeta[id] = meta
+	r.mu.Unlock()
+
+	r.Broadcast(r.trackMeta)
+}
+
 // AddWebsocket adds a websocket connection to the session
 func (r *Session) RemoveBroadcast(id string) {
 	r.mu.Lock()
@@ -54,10 +64,13 @@ func (r *Session) Broadcast(msg interface{}) error {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	for _, ch := range r.broadcasts {
+	for id, ch := range r.broadcasts {
 		select {
 		case ch <- msg:
 			log.Debugf("Wrote broadcast: %#v", msg)
+		default:
+			log.Debugf("couldn't write to channel, removing %v", id)
+			delete(r.broadcasts, id)
 		}
 	}
 
