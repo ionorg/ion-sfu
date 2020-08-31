@@ -189,6 +189,11 @@ func (p *WebRTCTransport) OnConnectionStateChange(f func(webrtc.PeerConnectionSt
 	p.pc.OnConnectionStateChange(f)
 }
 
+// OnDataChannel handler
+func (p *WebRTCTransport) OnDataChannel(f func(*webrtc.DataChannel)) {
+	p.pc.OnDataChannel(f)
+}
+
 // NewSender for peer
 func (p *WebRTCTransport) NewSender(intrack *webrtc.Track) (Sender, error) {
 	to := p.me.GetCodecsByName(intrack.Codec().Name)
