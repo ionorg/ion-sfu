@@ -11,12 +11,13 @@ import (
 	"os"
 
 	"github.com/gorilla/websocket"
-	sfu "github.com/pion/ion-sfu/pkg"
-	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/webrtc/v3"
 	"github.com/sourcegraph/jsonrpc2"
 	websocketjsonrpc2 "github.com/sourcegraph/jsonrpc2/websocket"
 	"github.com/spf13/viper"
+
+	sfu "github.com/pion/ion-sfu/pkg"
+	"github.com/pion/ion-sfu/pkg/log"
 )
 
 var (
@@ -160,7 +161,18 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 			break
 		}
 
-		peer, err := r.sfu.NewWebRTCTransport(join.Sid, join.Offer)
+		me := sfu.MediaEngine{}
+		err = me.PopulateFromSDP(join.Offer)
+		if err != nil {
+			log.Errorf("connect: error creating peer: %v", err)
+			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    500,
+				Message: fmt.Sprintf("%s", err),
+			})
+			break
+		}
+
+		peer, err := r.sfu.NewWebRTCTransport(join.Sid, me)
 
 		if err != nil {
 			log.Errorf("connect: error creating peer: %v", err)

@@ -34,14 +34,7 @@ type WebRTCTransport struct {
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport
-func NewWebRTCTransport(session *Session, offer webrtc.SessionDescription, cfg WebRTCTransportConfig) (*WebRTCTransport, error) {
-	// We make our own mediaEngine so we can place the sender's codecs in it.  This because we must use the
-	// dynamic media type from the sender in our answer. This is not required if we are the offerer
-	me := MediaEngine{}
-	if err := me.PopulateFromSDP(offer); err != nil {
-		return nil, errSdpParseFailed
-	}
-
+func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportConfig) (*WebRTCTransport, error) {
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine), webrtc.WithSettingEngine(cfg.setting))
 	pc, err := api.NewPeerConnection(cfg.configuration)
 
