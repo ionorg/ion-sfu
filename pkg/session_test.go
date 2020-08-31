@@ -418,7 +418,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	assert.NoError(t, err)
 	offer, err = remoteC.CreateOffer(nil)
 	assert.NoError(t, err)
-	err = remoteB.SetLocalDescription(offer)
+	err = remoteC.SetLocalDescription(offer)
 	assert.NoError(t, err)
 	gatherComplete = webrtc.GatheringCompletePromise(remoteC)
 	engine = MediaEngine{}
