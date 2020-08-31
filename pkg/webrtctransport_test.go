@@ -271,12 +271,17 @@ func TestEventHandlers(t *testing.T) {
 
 	session := NewSession("session")
 
+	// Add a datachannel for remote A
+	_, err = remoteA.CreateDataChannel("foo", nil)
+	assert.NoError(t, err)
+
 	// Setup remote <-> peer for a
 	peerA, err := signalPeer(session, remoteA)
 	assert.NoError(t, err)
 
 	peerAOnTrackFired, peerAOnTrackFiredFunc := context.WithCancel(context.Background())
 	peerAConnectedFired, peerAConnectedFiredFunc := context.WithCancel(context.Background())
+	peerAOnDataChannelFired, peerAOnDataChannelFiredFunc := context.WithCancel(context.Background())
 	peerA.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 		peerAOnTrackFiredFunc()
 	})
@@ -284,6 +289,10 @@ func TestEventHandlers(t *testing.T) {
 		if state == webrtc.PeerConnectionStateConnected {
 			peerAConnectedFiredFunc()
 		}
+	})
+
+	peerA.OnDataChannel(func(channel *webrtc.DataChannel) {
+		peerAOnDataChannelFiredFunc()
 	})
 
 	// Add a pub track for remote B
@@ -327,6 +336,7 @@ func TestEventHandlers(t *testing.T) {
 
 	sendRTPUntilDone(peerAOnTrackFired.Done(), t, []*webrtc.Track{trackB})
 	<-peerAConnectedFired.Done()
+	<-peerAOnDataChannelFired.Done()
 }
 
 func TestPeerBWithAudioOnlyWhenPeerAHasAudioAndVideo(t *testing.T) {
