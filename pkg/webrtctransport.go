@@ -187,6 +187,11 @@ func (p *WebRTCTransport) OnDataChannel(f func(*webrtc.DataChannel)) {
 	p.pc.OnDataChannel(f)
 }
 
+// AddTransceiverFromKind adds RtpTransceiver on WebRTC Transport
+func (p *WebRTCTransport) AddTransceiverFromKind(kind webrtc.RTPCodecType, init ...webrtc.RtpTransceiverInit) (*webrtc.RTPTransceiver, error) {
+	return p.pc.AddTransceiverFromKind(kind, init...)
+}
+
 // NewSender for peer
 func (p *WebRTCTransport) NewSender(intrack *webrtc.Track) (Sender, error) {
 	to := p.me.GetCodecsByName(intrack.Codec().Name)
