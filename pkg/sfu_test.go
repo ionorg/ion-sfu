@@ -30,7 +30,11 @@ func TestSFU(t *testing.T) {
 	err = remote.SetLocalDescription(offer)
 	assert.NoError(t, err)
 
-	transport, err := s.NewWebRTCTransport("test session", offer)
+	engine := MediaEngine{}
+	err = engine.PopulateFromSDP(offer)
+	assert.NoError(t, err)
+
+	transport, err := s.NewWebRTCTransport("test session", engine)
 	assert.NotNil(t, transport)
 	assert.NoError(t, err)
 }

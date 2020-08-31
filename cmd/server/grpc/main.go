@@ -184,7 +184,14 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 				SDP:  string(payload.Join.Offer.Sdp),
 			}
 
-			peer, err = s.sfu.NewWebRTCTransport(payload.Join.Sid, offer)
+			me := sfu.MediaEngine{}
+			err := me.PopulateFromSDP(offer)
+			if err != nil {
+				log.Errorf("join error: %v", err)
+				return status.Errorf(codes.InvalidArgument, "join error %s", err)
+			}
+
+			peer, err = s.sfu.NewWebRTCTransport(payload.Join.Sid, me)
 			if err != nil {
 				log.Errorf("join error: %v", err)
 				return status.Errorf(codes.InvalidArgument, "join error %s", err)
@@ -198,7 +205,7 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 				return status.Errorf(codes.Internal, "join error %s", err)
 			}
 
-			answer, err := peer.CreateAnswer()
+			answer, err = peer.CreateAnswer()
 			if err != nil {
 				log.Errorf("join error: %v", err)
 				return status.Errorf(codes.Internal, "join error %s", err)

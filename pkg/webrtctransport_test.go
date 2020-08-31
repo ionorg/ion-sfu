@@ -43,7 +43,13 @@ func signalPeer(session *Session, remote *webrtc.PeerConnection) (*WebRTCTranspo
 	}
 	gatherComplete := webrtc.GatheringCompletePromise(remote)
 
-	peer, err := NewWebRTCTransport(session, offer, conf)
+	engine := MediaEngine{}
+	err = engine.PopulateFromSDP(offer)
+	if err != nil {
+		return nil, err
+	}
+
+	peer, err := NewWebRTCTransport(session, engine, conf)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +169,11 @@ func TestPeerPairRemoteBGetsOnTrack(t *testing.T) {
 	assert.NoError(t, err)
 	gatherComplete := webrtc.GatheringCompletePromise(remoteB)
 
-	peerB, err := NewWebRTCTransport(session, offer, conf)
+	engine := MediaEngine{}
+	err = engine.PopulateFromSDP(offer)
+	assert.NoError(t, err)
+
+	peerB, err := NewWebRTCTransport(session, engine, conf)
 	assert.NoError(t, err)
 
 	// Subscribe to remoteA track
@@ -312,7 +322,11 @@ func TestEventHandlers(t *testing.T) {
 	assert.NoError(t, err)
 	gatherComplete := webrtc.GatheringCompletePromise(remoteB)
 
-	peerB, err := NewWebRTCTransport(session, offer, conf)
+	engine := MediaEngine{}
+	err = engine.PopulateFromSDP(offer)
+	assert.NoError(t, err)
+
+	peerB, err := NewWebRTCTransport(session, engine, conf)
 	assert.NoError(t, err)
 
 	// Subscribe to remoteA track

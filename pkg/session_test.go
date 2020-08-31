@@ -67,7 +67,12 @@ func TestSession(t *testing.T) {
 	<-gatherComplete
 
 	session := NewSession("session")
-	peer, err := NewWebRTCTransport(session, *remote.LocalDescription(), conf)
+
+	engine := MediaEngine{}
+	err = engine.PopulateFromSDP(*remote.LocalDescription())
+	assert.NoError(t, err)
+
+	peer, err := NewWebRTCTransport(session, engine, conf)
 	assert.NoError(t, err)
 
 	onCloseFired, onCloseFiredFunc := context.WithCancel(context.Background())
@@ -359,8 +364,11 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	assert.NoError(t, err)
 	err = remoteB.SetLocalDescription(offer)
 	assert.NoError(t, err)
+	engine := MediaEngine{}
+	err = engine.PopulateFromSDP(offer)
+	assert.NoError(t, err)
 	gatherComplete := webrtc.GatheringCompletePromise(remoteB)
-	peerB, err := NewWebRTCTransport(session, offer, conf)
+	peerB, err := NewWebRTCTransport(session, engine, conf)
 	session.AddTransport(peerB)
 	assert.NoError(t, err)
 	<-gatherComplete
@@ -413,7 +421,10 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	err = remoteC.SetLocalDescription(offer)
 	assert.NoError(t, err)
 	gatherComplete = webrtc.GatheringCompletePromise(remoteC)
-	peerC, err := NewWebRTCTransport(session, offer, conf)
+	engine = MediaEngine{}
+	err = engine.PopulateFromSDP(offer)
+	assert.NoError(t, err)
+	peerC, err := NewWebRTCTransport(session, engine, conf)
 	session.AddTransport(peerC)
 	assert.NoError(t, err)
 	<-gatherComplete
