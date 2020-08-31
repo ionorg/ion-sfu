@@ -218,6 +218,7 @@ func (v *WebRTCVideoReceiver) receiveRTP() {
 		log.Tracef("got packet %v", pkt)
 		if err != nil {
 			if err == io.EOF {
+				// Track closed
 				return
 			}
 			log.Errorf("rtp err => %v", err)

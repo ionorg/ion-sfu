@@ -67,7 +67,7 @@ func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportCon
 	// Add transport to the session
 	session.AddTransport(p)
 
-	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
+	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver, streams []*webrtc.Stream) {
 		log.Debugf("Peer %s got remote track id: %s ssrc: %d", p.id, track.ID(), track.SSRC())
 		var recv Receiver
 		switch track.Kind() {
@@ -85,6 +85,17 @@ func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportCon
 		log.Debugf("Created router %s %d", p.id, recv.Track().SSRC())
 
 		p.session.AddRouter(router)
+
+		streams[0].OnRemoveTrack(func(track *webrtc.Track) {
+			p.mu.Lock()
+			defer p.mu.Unlock()
+			r := p.routers[track.SSRC()]
+
+			if r != nil {
+				r.Close()
+				delete(p.routers, track.SSRC())
+			}
+		})
 
 		p.mu.Lock()
 		p.routers[recv.Track().SSRC()] = router
@@ -220,6 +231,13 @@ func (p *WebRTCTransport) NewSender(intrack *webrtc.Track) (Sender, error) {
 
 	// Create webrtc sender for the peer we are sending track to
 	sender := NewWebRTCSender(outtrack, s)
+
+	sender.OnClose(func() {
+		err = p.pc.RemoveTrack(s)
+		if err != nil {
+			log.Errorf("Error closing sender: %s", err)
+		}
+	})
 
 	return sender, nil
 }
