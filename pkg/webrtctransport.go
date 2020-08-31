@@ -58,11 +58,8 @@ func NewWebRTCTransport(session *Session, offer webrtc.SessionDescription, cfg W
 		routers: make(map[uint32]*Router),
 	}
 
-	session.AddTransport(p)
-
 	// Subscribe to existing transports
 	for _, t := range session.Transports() {
-		log.Infof("transport %s", t.ID())
 		for _, router := range t.Routers() {
 			sender, err := p.NewSender(router.Track())
 			log.Infof("Init add router ssrc %d to %s", router.Track().SSRC(), p.id)
@@ -73,6 +70,9 @@ func NewWebRTCTransport(session *Session, offer webrtc.SessionDescription, cfg W
 			router.AddSender(p.id, sender)
 		}
 	}
+
+	// Add transport to the session
+	session.AddTransport(p)
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 		log.Debugf("Peer %s got remote track id: %s ssrc: %d", p.id, track.ID(), track.SSRC())

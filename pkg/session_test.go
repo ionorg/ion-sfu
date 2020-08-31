@@ -158,23 +158,21 @@ func TestMultiPeerSession(t *testing.T) {
 }
 
 func Test3PeerConcurrrentJoin(t *testing.T) {
-	log.Init("info")
 	session := NewSession("session")
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
-	peerA, _, trackA, err := createPeer(t, session, api)
+	peerA, remoteA, trackA, err := createPeer(t, session, api)
 	assert.NoError(t, err)
 
-	peerB, _, trackB, err := createPeer(t, session, api)
+	peerB, remoteB, trackB, err := createPeer(t, session, api)
 	assert.NoError(t, err)
 
-	peerC, _, trackC, err := createPeer(t, session, api)
+	peerC, remoteC, trackC, err := createPeer(t, session, api)
 	assert.NoError(t, err)
 
 	peerAGotTracks := make(chan bool)
 	peerA.OnNegotiationNeeded(func() {
-		log.Infof("OnNegotiationNeeded A called")
 		offer, err := peerA.CreateOffer()
 		assert.NoError(t, err)
 
@@ -191,11 +189,9 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 					split := strings.Split(attr.Value, " ")
 					ssrc, err := strconv.ParseUint(split[0], 10, 32)
 					assert.NoError(t, err)
-					if uint32(ssrc) == trackB.SSRC() {
-						log.Infof("OnNegotiationNeeded A Track B")
+					if !trackBSeen && uint32(ssrc) == trackB.SSRC() {
 						trackBSeen = true
-					} else if uint32(ssrc) == trackC.SSRC() {
-						log.Infof("OnNegotiationNeeded A Track C")
+					} else if !trackCSeen && uint32(ssrc) == trackC.SSRC() {
 						trackCSeen = true
 					}
 				}
@@ -205,11 +201,26 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 		if trackBSeen && trackCSeen {
 			close(peerAGotTracks)
 		}
+
+		err = peerA.SetLocalDescription(offer)
+		assert.NoError(t, err)
+		gatherComplete := webrtc.GatheringCompletePromise(peerA.pc)
+
+		<-gatherComplete
+
+		err = remoteA.SetRemoteDescription(*peerA.pc.LocalDescription())
+		assert.NoError(t, err)
+
+		answer, err := remoteA.CreateAnswer(nil)
+		assert.NoError(t, err)
+		err = remoteA.SetLocalDescription(answer)
+		assert.NoError(t, err)
+		err = peerA.SetRemoteDescription(answer)
+		assert.NoError(t, err)
 	})
 
 	peerBGotTracks := make(chan bool)
 	peerB.OnNegotiationNeeded(func() {
-		log.Infof("OnNegotiationNeeded B called")
 		offer, err := peerB.CreateOffer()
 		assert.NoError(t, err)
 
@@ -226,11 +237,9 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 					split := strings.Split(attr.Value, " ")
 					ssrc, err := strconv.ParseUint(split[0], 10, 32)
 					assert.NoError(t, err)
-					if uint32(ssrc) == trackA.SSRC() {
-						log.Infof("OnNegotiationNeeded B Track A")
+					if !trackASeen && uint32(ssrc) == trackA.SSRC() {
 						trackASeen = true
-					} else if uint32(ssrc) == trackC.SSRC() {
-						log.Infof("OnNegotiationNeeded B Track C")
+					} else if !trackCSeen && uint32(ssrc) == trackC.SSRC() {
 						trackCSeen = true
 					}
 				}
@@ -240,11 +249,26 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 		if trackASeen && trackCSeen {
 			close(peerBGotTracks)
 		}
+
+		err = peerB.SetLocalDescription(offer)
+		assert.NoError(t, err)
+		gatherComplete := webrtc.GatheringCompletePromise(peerB.pc)
+
+		<-gatherComplete
+
+		err = remoteB.SetRemoteDescription(*peerB.pc.LocalDescription())
+		assert.NoError(t, err)
+
+		answer, err := remoteB.CreateAnswer(nil)
+		assert.NoError(t, err)
+		err = remoteB.SetLocalDescription(answer)
+		assert.NoError(t, err)
+		err = peerB.SetRemoteDescription(answer)
+		assert.NoError(t, err)
 	})
 
 	peerCGotTracks := make(chan bool)
 	peerC.OnNegotiationNeeded(func() {
-		log.Infof("OnNegotiationNeeded C called")
 		offer, err := peerC.CreateOffer()
 		assert.NoError(t, err)
 
@@ -255,18 +279,15 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 		trackASeen := false
 		trackBSeen := false
 		for _, md := range desc.MediaDescriptions {
-			log.Infof("%v", md)
 			for _, attr := range md.Attributes {
 				switch attr.Key {
 				case sdp.AttrKeySSRC:
 					split := strings.Split(attr.Value, " ")
 					ssrc, err := strconv.ParseUint(split[0], 10, 32)
 					assert.NoError(t, err)
-					if uint32(ssrc) == trackA.SSRC() {
-						log.Infof("OnNegotiationNeeded C Track A")
+					if !trackASeen && uint32(ssrc) == trackA.SSRC() {
 						trackASeen = true
-					} else if uint32(ssrc) == trackB.SSRC() {
-						log.Infof("OnNegotiationNeeded C Track B")
+					} else if !trackBSeen && uint32(ssrc) == trackB.SSRC() {
 						trackBSeen = true
 					}
 				}
@@ -276,6 +297,22 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 		if trackASeen && trackBSeen {
 			close(peerCGotTracks)
 		}
+
+		err = peerC.SetLocalDescription(offer)
+		assert.NoError(t, err)
+		gatherComplete := webrtc.GatheringCompletePromise(peerC.pc)
+
+		<-gatherComplete
+
+		err = remoteC.SetRemoteDescription(*peerC.pc.LocalDescription())
+		assert.NoError(t, err)
+
+		answer, err := remoteC.CreateAnswer(nil)
+		assert.NoError(t, err)
+		err = remoteC.SetLocalDescription(answer)
+		assert.NoError(t, err)
+		err = peerC.SetRemoteDescription(answer)
+		assert.NoError(t, err)
 	})
 
 	session.AddTransport(peerA)
