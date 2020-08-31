@@ -7,7 +7,6 @@ import (
 
 	"github.com/lucsky/cuid"
 	"github.com/pion/ion-sfu/pkg/log"
-	"github.com/pion/ion-sfu/pkg/util"
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 )
@@ -24,15 +23,14 @@ type WebRTCTransportConfig struct {
 
 // WebRTCTransport represents a sfu peer connection
 type WebRTCTransport struct {
-	id                         string
-	pc                         *webrtc.PeerConnection
-	me                         MediaEngine
-	mu                         sync.RWMutex
-	stop                       bool
-	session                    *Session
-	routers                    map[uint32]*Router
-	onNegotiationNeededHandler func()
-	onTrackHandler             func(*webrtc.Track, *webrtc.RTPReceiver)
+	id             string
+	pc             *webrtc.PeerConnection
+	me             MediaEngine
+	mu             sync.RWMutex
+	stop           bool
+	session        *Session
+	routers        map[uint32]*Router
+	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport
@@ -60,11 +58,8 @@ func NewWebRTCTransport(session *Session, offer webrtc.SessionDescription, cfg W
 		routers: make(map[uint32]*Router),
 	}
 
-	session.AddTransport(p)
-
 	// Subscribe to existing transports
 	for _, t := range session.Transports() {
-		log.Infof("transport %s", t.ID())
 		for _, router := range t.Routers() {
 			sender, err := p.NewSender(router.Track())
 			log.Infof("Init add router ssrc %d to %s", router.Track().SSRC(), p.id)
@@ -75,6 +70,9 @@ func NewWebRTCTransport(session *Session, offer webrtc.SessionDescription, cfg W
 			router.AddSender(p.id, sender)
 		}
 	}
+
+	// Add transport to the session
+	session.AddTransport(p)
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 		log.Debugf("Peer %s got remote track id: %s ssrc: %d", p.id, track.ID(), track.SSRC())
@@ -176,12 +174,7 @@ func (p *WebRTCTransport) OnICECandidate(f func(c *webrtc.ICECandidate)) {
 
 // OnNegotiationNeeded handler
 func (p *WebRTCTransport) OnNegotiationNeeded(f func()) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	var debounced = util.NewDebouncer(500 * time.Millisecond)
-	p.onNegotiationNeededHandler = func() {
-		debounced(f)
-	}
+	p.pc.OnNegotiationNeeded(f)
 }
 
 // OnTrack handler

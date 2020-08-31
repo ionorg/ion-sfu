@@ -9,7 +9,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"time"
 
 	sfu "github.com/pion/ion-sfu/pkg"
 	"github.com/pion/ion-sfu/pkg/log"
@@ -277,36 +276,6 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 			if err != nil {
 				log.Errorf("error sending join response %s", err)
 				return status.Errorf(codes.Internal, "join error %s", err)
-			}
-
-			// Hack until renegotation is supported in pion. Force renegotation incase there are unmatched
-			// receviers (i.e. sfu has more than one sender). We just naively create server offer. It is
-			// noop if things are already matched. We can remove once https://github.com/pion/webrtc/pull/1322
-			// is merged
-			time.Sleep(1000 * time.Millisecond)
-
-			offer, err = peer.CreateOffer()
-			if err != nil {
-				log.Errorf("CreateOffer error: %v", err)
-				return status.Errorf(codes.Internal, "join error %s", err)
-			}
-
-			err = peer.SetLocalDescription(offer)
-			if err != nil {
-				log.Errorf("SetLocalDescription error: %v", err)
-				return status.Errorf(codes.Internal, "join error %s", err)
-			}
-
-			err = stream.Send(&pb.SignalReply{
-				Payload: &pb.SignalReply_Negotiate{
-					Negotiate: &pb.SessionDescription{
-						Type: offer.Type.String(),
-						Sdp:  []byte(offer.SDP),
-					},
-				},
-			})
-			if err != nil {
-				return status.Errorf(codes.Internal, "%s", err)
 			}
 
 		case *pb.SignalRequest_Negotiate:
