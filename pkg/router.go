@@ -148,7 +148,7 @@ func (r *Router) subFeedbackLoop(sub Sender) {
 }
 
 func (r *Router) stats() string {
-	info := fmt.Sprintf("    track router id: %s ssrc: %d | %s\n", r.receiver.Track().ID(), r.receiver.Track().SSRC(), r.receiver.stats())
+	info := fmt.Sprintf("    track id: %s label: %s ssrc: %d | %s\n", r.receiver.Track().ID(), r.receiver.Track().Label(), r.receiver.Track().SSRC(), r.receiver.stats())
 
 	if len(r.senders) < 6 {
 		for pid, sub := range r.senders {
