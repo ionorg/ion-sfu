@@ -87,7 +87,9 @@ func NewSFU(c Config) *SFU {
 
 	s.webrtc.configuration.ICEServers = iceServers
 
-	go s.stats()
+	if c.Log.Stats {
+		go s.stats()
+	}
 
 	return s
 }
