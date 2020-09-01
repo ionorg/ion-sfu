@@ -23,6 +23,7 @@ const (
 // Config defines parameters for the logger
 type Config struct {
 	Level string `mapstructure:"level"`
+	Stats bool   `mapstructure:"stats"`
 }
 
 // Init initializes the package logger.

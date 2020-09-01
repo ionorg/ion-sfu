@@ -29,5 +29,7 @@ maxbuffertime = 1000
 # username = "awsome"
 # credential = "awsome"
 
+
 [log]
+stats = true
 level = "debug"

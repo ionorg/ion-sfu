@@ -3,11 +3,9 @@ module github.com/pion/ion-sfu
 go 1.13
 
 require (
-	github.com/alangpierce/go-forceexport v0.0.0-20160317203124-8f1d6941cd75 // indirect
 	github.com/golang/protobuf v1.4.2
 	github.com/gorilla/websocket v1.4.2
 	github.com/lucsky/cuid v1.0.2
-	github.com/marten-seemann/chacha20 v0.2.0 // indirect
 	github.com/pion/rtcp v1.2.3
 	github.com/pion/rtp v1.6.0
 	github.com/pion/sdp/v2 v2.4.0
