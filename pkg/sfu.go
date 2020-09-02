@@ -99,13 +99,13 @@ func (s *SFU) newSession(id string) *Session {
 	session := NewSession(id)
 	session.OnClose(func() {
 		s.mu.Lock()
+		defer s.mu.Unlock()
 		delete(s.sessions, id)
-		s.mu.Unlock()
 	})
 
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.sessions[id] = session
-	s.mu.Unlock()
 	return session
 }
 
@@ -138,15 +138,16 @@ func (s *SFU) stats() {
 		info := "\n----------------stats-----------------\n"
 
 		s.mu.RLock()
-		if len(s.sessions) == 0 {
-			s.mu.RUnlock()
+		sessions := s.sessions
+		s.mu.RUnlock()
+
+		if len(sessions) == 0 {
 			continue
 		}
 
-		for _, session := range s.sessions {
+		for _, session := range sessions {
 			info += session.stats()
 		}
-		s.mu.RUnlock()
 		log.Infof(info)
 	}
 }

@@ -2,6 +2,7 @@ package sfu
 
 import (
 	"fmt"
+	"io"
 	"sync"
 
 	"github.com/pion/ion-sfu/pkg/log"
@@ -111,7 +112,10 @@ func (r *Router) subFeedbackLoop(sub Sender) {
 		pkt, err := sub.ReadRTCP()
 
 		if err != nil {
-			log.Errorf("sub nil rtcp packet")
+			if err == io.EOF {
+				return
+			}
+			log.Errorf("read rtcp err %s", err)
 			return
 		}
 

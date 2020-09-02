@@ -164,7 +164,7 @@ func NewWebRTCVideoReceiver(config WebRTCVideoReceiverConfig, track *webrtc.Trac
 func (v *WebRTCVideoReceiver) ReadRTP() (*rtp.Packet, error) {
 	rtp, ok := <-v.rtpCh
 	if !ok {
-		return nil, errChanClosed
+		return nil, io.EOF
 	}
 	return rtp, nil
 }
@@ -173,7 +173,7 @@ func (v *WebRTCVideoReceiver) ReadRTP() (*rtp.Packet, error) {
 func (v *WebRTCVideoReceiver) ReadRTCP() (rtcp.Packet, error) {
 	rtcp, ok := <-v.rtcpCh
 	if !ok {
-		return nil, errChanClosed
+		return nil, io.EOF
 	}
 	return rtcp, nil
 }

@@ -241,7 +241,7 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 			})
 
 			peer.OnNegotiationNeeded(func() {
-				log.Debugf("on negotiation needed called")
+				log.Debugf("on negotiation needed called for pc %s", peer.ID())
 				offer, err := peer.CreateOffer()
 				if err != nil {
 					log.Errorf("CreateOffer error: %v", err)

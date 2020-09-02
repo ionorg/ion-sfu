@@ -86,7 +86,7 @@ func (s *WebRTCSender) sendRTP() {
 func (s *WebRTCSender) ReadRTCP() (rtcp.Packet, error) {
 	rtcp, ok := <-s.rtcpCh
 	if !ok {
-		return nil, errChanClosed
+		return nil, io.EOF
 	}
 	return rtcp, nil
 }
