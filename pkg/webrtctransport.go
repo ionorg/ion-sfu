@@ -166,6 +166,11 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 	return nil
 }
 
+// LocalDescription returns the peer connection LocalDescription
+func (p *WebRTCTransport) LocalDescription() *webrtc.SessionDescription {
+	return p.pc.LocalDescription()
+}
+
 // AddICECandidate to peer connection
 func (p *WebRTCTransport) AddICECandidate(candidate webrtc.ICECandidateInit) error {
 	return p.pc.AddICECandidate(candidate)
