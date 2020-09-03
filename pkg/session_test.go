@@ -9,6 +9,7 @@ import (
 
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/sdp/v2"
+	"github.com/pion/transport/test"
 	"github.com/pion/webrtc/v3"
 	"github.com/stretchr/testify/assert"
 )
@@ -45,6 +46,9 @@ func createPeer(t *testing.T, session *Session, api *webrtc.API) (*WebRTCTranspo
 }
 
 func TestSession(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -94,9 +98,15 @@ func TestSession(t *testing.T) {
 	assert.Len(t, session.transports, 0)
 
 	<-onCloseFired.Done()
+
+	remote.Close()
+	peer.Close()
 }
 
 func TestMultiPeerSession(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -159,9 +169,15 @@ func TestMultiPeerSession(t *testing.T) {
 
 	<-onNegotationNeededFired.Done()
 	<-onReadRTPFired.Done()
+
+	remoteA.Close()
+	remoteB.Close()
 }
 
 func Test3PeerConcurrrentJoin(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
 	session := NewSession("session")
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
@@ -322,9 +338,19 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 	<-peerAGotTracks
 	<-peerBGotTracks
 	<-peerCGotTracks
+
+	peerA.Close()
+	remoteA.Close()
+	peerB.Close()
+	remoteB.Close()
+	peerC.Close()
+	remoteC.Close()
 }
 
 func Test3PeerStaggerJoin(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -457,9 +483,19 @@ func Test3PeerStaggerJoin(t *testing.T) {
 
 	assert.True(t, trackASeen)
 	assert.True(t, trackBSeen)
+
+	peerA.Close()
+	remoteA.Close()
+	peerB.Close()
+	remoteB.Close()
+	peerC.Close()
+	remoteC.Close()
 }
 
 func TestPeerBWithAudioAndVideoWhenPeerAHasAudioOnly(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
 	// Create peer A with only audio
 	meA := webrtc.MediaEngine{}
 	meA.RegisterCodec(webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000))
@@ -527,4 +563,9 @@ func TestPeerBWithAudioAndVideoWhenPeerAHasAudioOnly(t *testing.T) {
 	trackAVideoRouter := peerB.GetRouter(trackBVideo.SSRC())
 	trackAVideoSenderForPeerB := trackAVideoRouter.senders[peerA.id]
 	assert.NotNil(t, trackAVideoSenderForPeerB)
+
+	peerA.Close()
+	remoteA.Close()
+	peerB.Close()
+	remoteB.Close()
 }
