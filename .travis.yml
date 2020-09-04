@@ -10,18 +10,6 @@ cache:
   directories:
     - ${HOME}/.cache/go-build
     - ${GOPATH}/pkg/mod
-  npm: true
-  yarn: true
-
-_test_job: &test_job
-  env: CACHE_NAME=test
-  before_install:
-    - if [ -f .github/.ci.conf ]; then . .github/.ci.conf; fi
-  script:
-    - make test
-    - if [ -n "${TEST_HOOK}" ]; then ${TEST_HOOK}; fi
-  after_success:
-    - travis_retry bash <(curl -s https://codecov.io/bash) -c -F go
 
 _build_devel_docker_job: &build_devel_docker_job
   env: CACHE_NAME=build_devel_docker
@@ -67,10 +55,6 @@ _build_jsonrpc_docker_job: &build_jsonrpc_docker_job
 
 jobs:
   include:
-    - <<: *test_job
-      name: Test 1.15
-      go: 1.15
-      if: branch = master OR tag IS present
     - <<: *build_devel_docker_job
       name: Build development docker
       if: branch = master OR tag IS present
