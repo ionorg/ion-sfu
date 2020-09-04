@@ -3,7 +3,7 @@
   Ion SFU
   <br>
 </h1>
-<h4 align="center">Go implementation of a WebRTC SFU</h4>
+<h4 align="center">Go implementation of a WebRTC Selective Forwarding Unit</h4>
 <p align="center">
   <a href="https://pion.ly/slack"><img src="https://img.shields.io/badge/join-us%20on%20slack-gray.svg?longCache=true&logo=slack&colorB=brightgreen" alt="Slack Widget"></a>
   <a href="https://travis-ci.com/pion/ion-sfu"><img src="https://travis-ci.com/pion/ion-sfu.svg?branch=master" alt="Build Status"></a>
@@ -14,7 +14,7 @@
 </p>
 <br>
 
-`ion-sfu` is a simple, flexible, high performance WebRTC SFU microservice implemented in Go. It can be called directly or through a [gRPC](cmd/server/grpc) or [json-rpc](cmd/server/json-rpc) interface.
+A [selective forwarding unit](https://webrtcglossary.com/sfu/) is a video routing service which allows webrtc sessions to scale more efficiently. This package provides a simple, flexible, high performance Go implementation of a WebRTC SFU. It can be called directly or through a [gRPC](cmd/server/grpc) or [json-rpc](cmd/server/json-rpc) interface.
 
 ## Getting Started
 
