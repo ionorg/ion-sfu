@@ -1,0 +1,24 @@
+name: jsonrpc docker
+on:
+  push:
+    tags:
+      - '*'
+jobs:
+  build:
+    name: build and push
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v2
+    
+      - name: build
+        run: docker build --tag pionwebrtc/ion-sfu:latest-jsonrpc -f cmd/server/jsonrpc/Dockerfile .
+
+      - name: login
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: tag
+        run: docker tag pionwebrtc/ion-sfu:latest-jsonrpc pionwebrtc/ion-sfu:"${{ github.event.release.tag_name }}"-jsonrpc
+
+      - name: push
+        run: docker push pionwebrtc/ion-sfu:"${{ github.event.release.tag_name }}"-jsonrpc
