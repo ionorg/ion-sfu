@@ -282,8 +282,7 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 		trackBSeen := false
 		for _, md := range desc.MediaDescriptions {
 			for _, attr := range md.Attributes {
-				switch attr.Key {
-				case sdp.AttrKeySSRC:
+				if attr.Key == sdp.AttrKeySSRC {
 					split := strings.Split(attr.Value, " ")
 					ssrc, err := strconv.ParseUint(split[0], 10, 32)
 					assert.NoError(t, err)
@@ -385,8 +384,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	trackASeen := false
 	for _, md := range desc.MediaDescriptions {
 		for _, attr := range md.Attributes {
-			switch attr.Key {
-			case sdp.AttrKeySSRC:
+			if attr.Key == sdp.AttrKeySSRC {
 				split := strings.Split(attr.Value, " ")
 				ssrc, err := strconv.ParseUint(split[0], 10, 32)
 				assert.NoError(t, err)
@@ -443,8 +441,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	trackBSeen := false
 	for _, md := range desc.MediaDescriptions {
 		for _, attr := range md.Attributes {
-			switch attr.Key {
-			case sdp.AttrKeySSRC:
+			if attr.Key == sdp.AttrKeySSRC {
 				split := strings.Split(attr.Value, " ")
 				ssrc, err := strconv.ParseUint(split[0], 10, 32)
 				assert.NoError(t, err)
