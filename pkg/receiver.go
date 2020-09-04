@@ -303,11 +303,12 @@ func (v *WebRTCVideoReceiver) rembLoop() {
 		// only calc video recently
 		v.lostRate, v.bandwidth = v.buffer.GetLostRateBandwidth(uint64(v.rembCycle))
 		var bw uint64
-		if v.lostRate == 0 && v.bandwidth == 0 {
+		switch {
+		case v.lostRate == 0 && v.bandwidth == 0:
 			bw = uint64(v.maxBandwidth)
-		} else if v.lostRate >= 0 && v.lostRate < 0.1 {
+		case v.lostRate >= 0 && v.lostRate < 0.1:
 			bw = uint64(v.bandwidth * 2)
-		} else {
+		default:
 			bw = uint64(float64(v.bandwidth) * (1 - v.lostRate))
 		}
 

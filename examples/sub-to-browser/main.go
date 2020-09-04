@@ -67,8 +67,7 @@ func main() {
 			log.Fatalf("Error receving publish response: %v", err)
 		}
 
-		switch payload := reply.Payload.(type) {
-		case *sfu.SignalReply_Join:
+		if payload, ok := reply.Payload.(*sfu.SignalReply_Join); ok {
 			// Output the mid and answer in base64 so we can paste it in browser
 			fmt.Printf("\npid: %s", payload.Join.Pid)
 			fmt.Printf("\nsub answer: %s", signal.Encode(

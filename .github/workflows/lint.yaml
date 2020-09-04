@@ -1,0 +1,16 @@
+name: lint all
+on: push
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          version: v1.29
+          args: --enable "gofmt,golint,scopelint,gocritic"

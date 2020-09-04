@@ -1,0 +1,11 @@
+name: build json-rpc
+on: push
+jobs:
+  build:
+    name: build json-rpc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: build json-rpc
+        run: make build_jsonrpc

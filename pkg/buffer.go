@@ -239,7 +239,7 @@ func (b *Buffer) GetNackPair(buffer [65536]*rtp.Packet, begin, end uint16) (rtcp
 	for i := lost; i < end; i++ {
 		//calc from next lost packet
 		if i > lost && buffer[i] == nil {
-			blp = blp | (1 << (i - lost - 1))
+			blp |= (1 << (i - lost - 1))
 			lostPkt++
 		}
 	}
