@@ -1,0 +1,24 @@
+name: build json-rpc
+on: push
+jobs:
+  build:
+    name: build json-rpc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions/setup-go@v1
+        with:
+          go-version: '1.15'
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
+
+      - name: build json-rpc
+        run: make build_jsonrpc
+        

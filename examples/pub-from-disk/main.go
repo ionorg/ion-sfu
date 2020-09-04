@@ -222,8 +222,7 @@ func main() {
 			log.Fatalf("Error receving publish response: %v", err)
 		}
 
-		switch payload := reply.Payload.(type) {
-		case *sfu.SignalReply_Join:
+		if payload, ok := reply.Payload.(*sfu.SignalReply_Join); ok {
 			fmt.Printf("Got answer from sfu. Starting streaming for pid %s!\n", payload.Join.GetPid())
 			// Set the remote SessionDescription
 			if err = peerConnection.SetRemoteDescription(webrtc.SessionDescription{

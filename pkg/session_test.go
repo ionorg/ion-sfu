@@ -35,8 +35,7 @@ func createPeer(t *testing.T, session *Session, api *webrtc.API) (*WebRTCTranspo
 
 	remoteCloseFired, remoteCloseFiredFunc := context.WithCancel(context.Background())
 	remote.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
-		switch connectionState {
-		case webrtc.ICEConnectionStateClosed:
+		if connectionState == webrtc.ICEConnectionStateClosed {
 			remoteCloseFiredFunc()
 		}
 	})
@@ -189,8 +188,7 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 		trackCSeen := false
 		for _, md := range desc.MediaDescriptions {
 			for _, attr := range md.Attributes {
-				switch attr.Key {
-				case sdp.AttrKeySSRC:
+				if attr.Key == sdp.AttrKeySSRC {
 					split := strings.Split(attr.Value, " ")
 					ssrc, err := strconv.ParseUint(split[0], 10, 32)
 					assert.NoError(t, err)
@@ -237,8 +235,7 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 		trackCSeen := false
 		for _, md := range desc.MediaDescriptions {
 			for _, attr := range md.Attributes {
-				switch attr.Key {
-				case sdp.AttrKeySSRC:
+				if attr.Key == sdp.AttrKeySSRC {
 					split := strings.Split(attr.Value, " ")
 					ssrc, err := strconv.ParseUint(split[0], 10, 32)
 					assert.NoError(t, err)
