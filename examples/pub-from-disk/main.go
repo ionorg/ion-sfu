@@ -219,7 +219,7 @@ func main() {
 		}
 
 		if err != nil {
-			log.Fatalf("Error receving publish response: %v", err)
+			log.Fatalf("Error receiving publish response: %v", err)
 		}
 
 		switch payload := reply.Payload.(type) {

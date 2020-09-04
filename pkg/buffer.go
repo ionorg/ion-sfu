@@ -66,6 +66,7 @@ type Buffer struct {
 	// bufferStartTS time.Time
 }
 
+// BufferOptions provides configuration options for the buffer
 type BufferOptions struct {
 	BufferTime int
 }
