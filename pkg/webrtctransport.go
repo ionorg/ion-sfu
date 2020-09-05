@@ -1,13 +1,15 @@
 package sfu
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
 	"github.com/lucsky/cuid"
 	"github.com/pion/ion-sfu/pkg/log"
-	"github.com/pion/rtcp"
+	"github.com/pion/rtcp"rcfgrcfg
 	"github.com/pion/webrtc/v3"
 )
 
@@ -24,10 +26,11 @@ type WebRTCTransportConfig struct {
 // WebRTCTransport represents a sfu peer connection
 type WebRTCTransport struct {
 	id             string
+	ctx            context.Context
+	cancel         context.CancelFunc
 	pc             *webrtc.PeerConnection
 	me             MediaEngine
 	mu             sync.RWMutex
-	stop           bool
 	session        *Session
 	routers        map[uint32]*Router
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
@@ -43,8 +46,11 @@ func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportCon
 		return nil, errPeerConnectionInitFailed
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	p := &WebRTCTransport{
 		id:      cuid.New(),
+		ctx:     ctx,
+		cancel:  cancel,
 		pc:      pc,
 		me:      me,
 		session: session,
@@ -72,7 +78,7 @@ func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportCon
 		var recv Receiver
 		switch track.Kind() {
 		case webrtc.RTPCodecTypeVideo:
-			recv = NewWebRTCVideoReceiver(rcfg, track)
+			recv = NewWebRTCVideoReceiver(ctx, rcfg, track)
 		case webrtc.RTPCodecTypeAudio:
 			recv = NewWebRTCAudioReceiver(track)
 		}
@@ -235,7 +241,7 @@ func (p *WebRTCTransport) NewSender(intrack *webrtc.Track) (Sender, error) {
 	}
 
 	// Create webrtc sender for the peer we are sending track to
-	sender := NewWebRTCSender(outtrack, s)
+	sender := NewWebRTCSender(p.ctx, outtrack, s)
 
 	sender.OnClose(func() {
 		err = p.pc.RemoveTrack(s)
@@ -271,29 +277,22 @@ func (p *WebRTCTransport) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.stop {
-		return nil
-	}
-
 	for _, router := range p.routers {
 		router.Close()
 	}
 
 	p.session.RemoveTransport(p.id)
-	p.stop = true
+	p.cancel()
 	return p.pc.Close()
 }
 
 func (p *WebRTCTransport) sendRTCP(recv Receiver) {
 	for {
-		p.mu.RLock()
-		if p.stop {
-			p.mu.RUnlock()
+		pkt, err := recv.ReadRTCP()
+		if err == io.ErrClosedPipe {
 			return
 		}
-		p.mu.RUnlock()
 
-		pkt, err := recv.ReadRTCP()
 		if err != nil {
 			log.Errorf("Error reading RTCP %s", err)
 			continue

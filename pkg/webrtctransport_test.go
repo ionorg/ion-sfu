@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pion/transport/test"
 	"github.com/pion/webrtc/v3"
 	"github.com/stretchr/testify/assert"
 )
@@ -117,6 +118,9 @@ func waitForRouter(transport Transport, ssrc uint32) chan struct{} {
 }
 
 func TestNewPeerCallsOnRouterWithVideoTrackRouter(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -137,9 +141,15 @@ func TestNewPeerCallsOnRouterWithVideoTrackRouter(t *testing.T) {
 
 	done := waitForRouter(peer, track.SSRC())
 	sendRTPUntilDone(done, t, []*webrtc.Track{track})
+
+	remote.Close()
+	peer.Close()
 }
 
 func TestNewPeerCallsOnRouterWithAudioTrackRouter(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -160,9 +170,15 @@ func TestNewPeerCallsOnRouterWithAudioTrackRouter(t *testing.T) {
 
 	done := waitForRouter(peer, track.SSRC())
 	sendRTPUntilDone(done, t, []*webrtc.Track{track})
+
+	remote.Close()
+	peer.Close()
 }
 
 func TestPeerPairRemoteBGetsOnTrack(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -226,9 +242,17 @@ func TestPeerPairRemoteBGetsOnTrack(t *testing.T) {
 
 	trackBDone := waitForRouter(peerB, trackB.SSRC())
 	sendRTPUntilDone(trackBDone, t, []*webrtc.Track{trackB})
+
+	remoteA.Close()
+	remoteB.Close()
+	peerA.Close()
+	peerB.Close()
 }
 
 func TestPeerPairRemoteAGetsOnTrackWhenRemoteBJoinsWithPub(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -293,9 +317,17 @@ func TestPeerPairRemoteAGetsOnTrackWhenRemoteBJoinsWithPub(t *testing.T) {
 	assert.NoError(t, err)
 
 	sendRTPUntilDone(remoteAOnTrackFired.Done(), t, []*webrtc.Track{trackA, trackB})
+
+	remoteA.Close()
+	remoteB.Close()
+	peerA.Close()
+	peerB.Close()
 }
 
 func TestEventHandlers(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -380,9 +412,17 @@ func TestEventHandlers(t *testing.T) {
 	sendRTPUntilDone(peerAOnTrackFired.Done(), t, []*webrtc.Track{trackB})
 	<-peerAConnectedFired.Done()
 	<-peerAOnDataChannelFired.Done()
+
+	remoteA.Close()
+	remoteB.Close()
+	peerA.Close()
+	peerB.Close()
 }
 
 func TestPeerBWithAudioOnlyWhenPeerAHasAudioAndVideo(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
 	// Create peer A with audio and video
 	meA := webrtc.MediaEngine{}
 	meA.RegisterCodec(webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000))
@@ -450,9 +490,17 @@ func TestPeerBWithAudioOnlyWhenPeerAHasAudioAndVideo(t *testing.T) {
 	trackBAudioRouter := peerB.GetRouter(trackBAudio.SSRC())
 	trackBAudioSenderForPeerA := trackBAudioRouter.senders[peerA.id]
 	assert.NotNil(t, trackBAudioSenderForPeerA)
+
+	remoteA.Close()
+	remoteB.Close()
+	peerA.Close()
+	peerB.Close()
 }
 
 func TestPeerRemovesRouterWhenRemoteRemovesTrack(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -485,4 +533,7 @@ func TestPeerRemovesRouterWhenRemoteRemovesTrack(t *testing.T) {
 
 	router = peer.GetRouter(track.SSRC())
 	assert.Nil(t, router)
+
+	remote.Close()
+	peer.Close()
 }

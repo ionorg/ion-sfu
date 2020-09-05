@@ -259,6 +259,8 @@ func (b *Buffer) GetRTCPChan() chan rtcp.Packet {
 
 // GetLostRateBandwidth calc lostRate and bandwidth by cycle
 func (b *Buffer) GetLostRateBandwidth(cycle uint64) (float64, uint64) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 	lostRate := float64(b.lostPkt) / float64(b.receivedPkt+b.lostPkt)
 	byteRate := b.totalByte / cycle
 	log.Tracef("Buffer.CalcLostRateByteRate b.receivedPkt=%d b.lostPkt=%d   lostRate=%v byteRate=%v", b.receivedPkt, b.lostPkt, lostRate, byteRate)

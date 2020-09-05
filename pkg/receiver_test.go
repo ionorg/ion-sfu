@@ -2,10 +2,12 @@ package sfu
 
 import (
 	"context"
+	"io"
 	"math/rand"
 	"testing"
 	"time"
 
+	"github.com/pion/transport/test"
 	"github.com/pion/webrtc/v3"
 	"github.com/pion/webrtc/v3/pkg/media"
 	"github.com/stretchr/testify/assert"
@@ -25,6 +27,9 @@ func sendRTPUntilDone(done <-chan struct{}, t *testing.T, tracks []*webrtc.Track
 }
 
 func TestWebRTCAudioReceiverRTPForwarding(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -55,20 +60,26 @@ func TestWebRTCAudioReceiverRTPForwarding(t *testing.T) {
 
 		receiver.Close()
 
+		onReadRTPFiredFunc()
+
 		out, err = receiver.ReadRTP()
 		assert.Nil(t, out)
-		assert.Equal(t, errReceiverClosed, err)
-
-		onReadRTPFiredFunc()
+		assert.Equal(t, io.EOF, err)
 	})
 
 	err = signalPair(remote, sfu)
 	assert.NoError(t, err)
 
 	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
+
+	sfu.Close()
+	remote.Close()
 }
 
 func TestWebRTCVideoReceiverRTPForwarding(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -82,7 +93,8 @@ func TestWebRTCVideoReceiverRTPForwarding(t *testing.T) {
 
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
 	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver, _ []*webrtc.Stream) {
-		receiver := NewWebRTCVideoReceiver(WebRTCVideoReceiverConfig{}, track)
+		ctx := context.Background()
+		receiver := NewWebRTCVideoReceiver(ctx, WebRTCVideoReceiverConfig{}, track)
 		assert.Equal(t, track, receiver.Track())
 
 		out, err := receiver.ReadRTP()
@@ -98,10 +110,15 @@ func TestWebRTCVideoReceiverRTPForwarding(t *testing.T) {
 		assert.Nil(t, buf)
 
 		onReadRTPFiredFunc()
+
+		receiver.Close()
 	})
 
 	err = signalPair(remote, sfu)
 	assert.NoError(t, err)
 
 	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
+
+	sfu.Close()
+	remote.Close()
 }
