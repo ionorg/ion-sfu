@@ -33,7 +33,7 @@ func newPair(cfg webrtc.Configuration, api *webrtc.API) (pcOffer *webrtc.PeerCon
 	return pca, pcb, nil
 }
 
-func signalPeer(session *Session, remote *webrtc.PeerConnection) (*WebRTCTransport, error) {
+func signalPeer(session *Session, remote *webrtc.PeerConnection, rcfg WebRTCVideoReceiverConfig) (*WebRTCTransport, error) {
 	offer, err := remote.CreateOffer(nil)
 	if err != nil {
 		return nil, err
@@ -49,7 +49,7 @@ func signalPeer(session *Session, remote *webrtc.PeerConnection) (*WebRTCTranspo
 		return nil, err
 	}
 
-	peer, err := NewWebRTCTransport(session, engine, conf)
+	peer, err := NewWebRTCTransport(session, engine, conf, rcfg)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func TestNewPeerCallsOnRouterWithVideoTrackRouter(t *testing.T) {
 
 	// Create sfu peer for remote A and complete signaling
 	session := NewSession("session")
-	peer, err := signalPeer(session, remote)
+	peer, err := signalPeer(session, remote, config.Receiver.Video)
 	assert.NoError(t, err)
 	assert.Equal(t, peer.id, peer.ID())
 
@@ -154,7 +154,7 @@ func TestNewPeerCallsOnRouterWithAudioTrackRouter(t *testing.T) {
 
 	// Create sfu peer for remote A and complete signaling
 	session := NewSession("session")
-	peer, err := signalPeer(session, remote)
+	peer, err := signalPeer(session, remote, config.Receiver.Video)
 	assert.NoError(t, err)
 	assert.Equal(t, peer.id, peer.ID())
 
@@ -178,7 +178,7 @@ func TestPeerPairRemoteBGetsOnTrack(t *testing.T) {
 	session := NewSession("session")
 
 	// Setup remote <-> peer for a
-	peerA, err := signalPeer(session, remoteA)
+	peerA, err := signalPeer(session, remoteA, config.Receiver.Video)
 	assert.NoError(t, err)
 
 	// Add a pub track for remote B
@@ -202,7 +202,7 @@ func TestPeerPairRemoteBGetsOnTrack(t *testing.T) {
 	err = engine.PopulateFromSDP(offer)
 	assert.NoError(t, err)
 
-	peerB, err := NewWebRTCTransport(session, engine, conf)
+	peerB, err := NewWebRTCTransport(session, engine, conf, config.Receiver.Video)
 	assert.NoError(t, err)
 
 	// Subscribe to remoteA track
@@ -244,7 +244,7 @@ func TestPeerPairRemoteAGetsOnTrackWhenRemoteBJoinsWithPub(t *testing.T) {
 	session := NewSession("session")
 
 	// Setup remote <-> peer for a
-	peerA, err := signalPeer(session, remoteA)
+	peerA, err := signalPeer(session, remoteA, config.Receiver.Video)
 	assert.NoError(t, err)
 
 	onTrackA := waitForRouter(peerA, trackA.SSRC())
@@ -262,7 +262,7 @@ func TestPeerPairRemoteAGetsOnTrackWhenRemoteBJoinsWithPub(t *testing.T) {
 	})
 
 	// Setup remote <-> peer for a
-	peerB, err := signalPeer(session, remoteB)
+	peerB, err := signalPeer(session, remoteB, config.Receiver.Video)
 	assert.NoError(t, err)
 
 	onTrackB := waitForRouter(peerB, trackB.SSRC())
@@ -315,7 +315,7 @@ func TestEventHandlers(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Setup remote <-> peer for a
-	peerA, err := signalPeer(session, remoteA)
+	peerA, err := signalPeer(session, remoteA, config.Receiver.Video)
 	assert.NoError(t, err)
 
 	peerAOnTrackFired, peerAOnTrackFiredFunc := context.WithCancel(context.Background())
@@ -355,7 +355,7 @@ func TestEventHandlers(t *testing.T) {
 	err = engine.PopulateFromSDP(offer)
 	assert.NoError(t, err)
 
-	peerB, err := NewWebRTCTransport(session, engine, conf)
+	peerB, err := NewWebRTCTransport(session, engine, conf, config.Receiver.Video)
 	assert.NoError(t, err)
 
 	// Subscribe to remoteA track
@@ -407,7 +407,7 @@ func TestPeerBWithAudioOnlyWhenPeerAHasAudioAndVideo(t *testing.T) {
 	session := NewSession("session")
 
 	// Setup remote <-> peer for a
-	peerA, err := signalPeer(session, remoteA)
+	peerA, err := signalPeer(session, remoteA, config.Receiver.Video)
 	assert.NoError(t, err)
 
 	onTrackAAudio := waitForRouter(peerA, trackAAudio.SSRC())
@@ -430,7 +430,7 @@ func TestPeerBWithAudioOnlyWhenPeerAHasAudioAndVideo(t *testing.T) {
 	_, err = remoteB.AddTrack(trackBAudio)
 	assert.NoError(t, err)
 
-	peerB, err := signalPeer(session, remoteB)
+	peerB, err := signalPeer(session, remoteB, config.Receiver.Video)
 	assert.NoError(t, err)
 
 	onTrackBAudio := waitForRouter(peerB, trackBAudio.SSRC())
@@ -468,7 +468,7 @@ func TestPeerRemovesRouterWhenRemoteRemovesTrack(t *testing.T) {
 
 	// Create sfu peer for remote A and complete signaling
 	session := NewSession("session")
-	peer, err := signalPeer(session, remote)
+	peer, err := signalPeer(session, remote, config.Receiver.Video)
 	assert.NoError(t, err)
 	assert.Equal(t, peer.id, peer.ID())
 

@@ -34,7 +34,7 @@ type WebRTCTransport struct {
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport
-func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportConfig) (*WebRTCTransport, error) {
+func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportConfig, rcfg WebRTCVideoReceiverConfig) (*WebRTCTransport, error) {
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine), webrtc.WithSettingEngine(cfg.setting))
 	pc, err := api.NewPeerConnection(cfg.configuration)
 
@@ -72,7 +72,7 @@ func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportCon
 		var recv Receiver
 		switch track.Kind() {
 		case webrtc.RTPCodecTypeVideo:
-			recv = NewWebRTCVideoReceiver(config.Receiver.Video, track)
+			recv = NewWebRTCVideoReceiver(rcfg, track)
 		case webrtc.RTPCodecTypeAudio:
 			recv = NewWebRTCAudioReceiver(track)
 		}

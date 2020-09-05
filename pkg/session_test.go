@@ -28,7 +28,7 @@ func createPeer(t *testing.T, session *Session, api *webrtc.API) (*WebRTCTranspo
 	}
 
 	// Setup remote <-> peer for a
-	peer, err := signalPeer(session, remote)
+	peer, err := signalPeer(session, remote, config.Receiver.Video)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -72,7 +72,7 @@ func TestSession(t *testing.T) {
 	err = engine.PopulateFromSDP(*remote.LocalDescription())
 	assert.NoError(t, err)
 
-	peer, err := NewWebRTCTransport(session, engine, conf)
+	peer, err := NewWebRTCTransport(session, engine, conf, config.Receiver.Video)
 	assert.NoError(t, err)
 
 	onCloseFired, onCloseFiredFunc := context.WithCancel(context.Background())
@@ -113,7 +113,7 @@ func TestMultiPeerSession(t *testing.T) {
 	session := NewSession("session")
 
 	// Setup remote <-> peer for a
-	peerA, err := signalPeer(session, remoteA)
+	peerA, err := signalPeer(session, remoteA, WebRTCVideoReceiverConfig{REMBCycle: 1})
 	assert.NoError(t, err)
 
 	// Add a pub track for remote B
@@ -123,7 +123,7 @@ func TestMultiPeerSession(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Setup remote <-> peer for b
-	peerB, err := signalPeer(session, remoteB)
+	peerB, err := signalPeer(session, remoteB, WebRTCVideoReceiverConfig{REMBCycle: 2})
 	assert.NoError(t, err)
 
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
@@ -345,7 +345,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	session := NewSession("session")
 
 	// Setup remote <-> peer for a
-	peerA, err := signalPeer(session, remoteA)
+	peerA, err := signalPeer(session, remoteA, WebRTCVideoReceiverConfig{REMBCycle: 1})
 	assert.NoError(t, err)
 
 	session.AddTransport(peerA)
@@ -368,7 +368,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	err = engine.PopulateFromSDP(offer)
 	assert.NoError(t, err)
 	gatherComplete := webrtc.GatheringCompletePromise(remoteB)
-	peerB, err := NewWebRTCTransport(session, engine, conf)
+	peerB, err := NewWebRTCTransport(session, engine, conf, config.Receiver.Video)
 	session.AddTransport(peerB)
 	assert.NoError(t, err)
 	<-gatherComplete
@@ -424,7 +424,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	engine = MediaEngine{}
 	err = engine.PopulateFromSDP(offer)
 	assert.NoError(t, err)
-	peerC, err := NewWebRTCTransport(session, engine, conf)
+	peerC, err := NewWebRTCTransport(session, engine, conf, config.Receiver.Video)
 	session.AddTransport(peerC)
 	assert.NoError(t, err)
 	<-gatherComplete
@@ -483,7 +483,7 @@ func TestPeerBWithAudioAndVideoWhenPeerAHasAudioOnly(t *testing.T) {
 	session := NewSession("session")
 
 	// Setup remote <-> peer for a
-	peerA, err := signalPeer(session, remoteA)
+	peerA, err := signalPeer(session, remoteA, config.Receiver.Video)
 	assert.NoError(t, err)
 
 	onTrackAAudio := waitForRouter(peerA, trackAAudio.SSRC())
@@ -510,7 +510,7 @@ func TestPeerBWithAudioAndVideoWhenPeerAHasAudioOnly(t *testing.T) {
 	_, err = remoteB.AddTrack(trackBVideo)
 	assert.NoError(t, err)
 
-	peerB, err := signalPeer(session, remoteB)
+	peerB, err := signalPeer(session, remoteB, config.Receiver.Video)
 	assert.NoError(t, err)
 
 	onTrackBAudio := waitForRouter(peerB, trackBAudio.SSRC())

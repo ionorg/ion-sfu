@@ -124,7 +124,7 @@ func (s *SFU) NewWebRTCTransport(sid string, me MediaEngine) (*WebRTCTransport, 
 		session = s.newSession(sid)
 	}
 
-	t, err := NewWebRTCTransport(session, me, s.webrtc)
+	t, err := NewWebRTCTransport(session, me, s.webrtc, config.Receiver.Video)
 	if err != nil {
 		return nil, err
 	}
