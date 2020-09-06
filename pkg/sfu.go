@@ -56,12 +56,6 @@ func NewSFU(c Config) *SFU {
 		setting:  webrtc.SettingEngine{},
 		receiver: c.Receiver,
 	}
-	s := &SFU{
-		ctx:      ctx,
-		cancel:   cancel,
-		webrtc:   w,
-		sessions: make(map[string]*Session),
-	}
 
 	log.Init(c.Log.Level)
 
@@ -73,7 +67,7 @@ func NewSFU(c Config) *SFU {
 	}
 
 	if icePortStart != 0 || icePortEnd != 0 {
-		if err := s.webrtc.setting.SetEphemeralUDPPortRange(icePortStart, icePortEnd); err != nil {
+		if err := w.setting.SetEphemeralUDPPortRange(icePortStart, icePortEnd); err != nil {
 			panic(err)
 		}
 	}
@@ -88,9 +82,10 @@ func NewSFU(c Config) *SFU {
 		iceServers = append(iceServers, s)
 	}
 
-	s.webrtc.configuration.ICEServers = iceServers
+	w.configuration.ICEServers = iceServers
+
+	// Configure bandwidth estimation support
 	if c.Receiver.Video.TCCCycle > 0 {
-		//important: only add when cycle > 0
 		rtcpfb = append(rtcpfb, webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBTransportCC})
 		transportCCURL, _ := url.Parse(sdp.TransportCCURI)
 		exts := []sdp.ExtMap{
@@ -99,10 +94,18 @@ func NewSFU(c Config) *SFU {
 				URI:   transportCCURL,
 			},
 		}
-		s.webrtc.setting.AddSDPExtensions(webrtc.SDPSectionVideo, exts)
+		w.setting.AddSDPExtensions(webrtc.SDPSectionVideo, exts)
 	}
+
 	if c.Receiver.Video.REMBCycle > 0 {
 		rtcpfb = append(rtcpfb, webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBGoogREMB})
+	}
+
+	s := &SFU{
+		ctx:      ctx,
+		cancel:   cancel,
+		webrtc:   w,
+		sessions: make(map[string]*Session),
 	}
 
 	if c.Log.Stats {

@@ -14,8 +14,8 @@ import (
 
 const (
 	// bandwidth range(kbps)
-	minBandwidth = 200
-	maxSize      = 1024
+	// minBandwidth = 200
+	maxSize = 1024
 
 	// tcc stuff
 	tccExtMapID = 3
@@ -103,8 +103,6 @@ type WebRTCVideoReceiver struct {
 	rtpExtInfoChan chan rtpExtInfo
 
 	pliCycle     int
-	rembCycle    int
-	tccCycle     int
 	maxBandwidth int
 	feedback     string
 }
@@ -123,19 +121,9 @@ type WebRTCVideoReceiverConfig struct {
 func NewWebRTCVideoReceiver(ctx context.Context, config WebRTCVideoReceiverConfig, track *webrtc.Track) *WebRTCVideoReceiver {
 	ctx, cancel := context.WithCancel(ctx)
 
-	rembCycle := config.REMBCycle
-	if rembCycle == 0 {
-		rembCycle = 1
-	}
-
 	pliCycle := config.PLICycle
 	if pliCycle == 0 {
 		pliCycle = 1
-	}
-
-	tccCycle := config.TCCCycle
-	if tccCycle == 0 {
-		tccCycle = 1
 	}
 
 	v := &WebRTCVideoReceiver{
@@ -148,9 +136,7 @@ func NewWebRTCVideoReceiver(ctx context.Context, config WebRTCVideoReceiverConfi
 		rtpCh:          make(chan *rtp.Packet, maxSize),
 		rtcpCh:         make(chan rtcp.Packet, maxSize),
 		rtpExtInfoChan: make(chan rtpExtInfo, maxSize),
-		rembCycle:      rembCycle,
 		pliCycle:       pliCycle,
-		tccCycle:       tccCycle,
 		maxBandwidth:   config.MaxBandwidth,
 	}
 
@@ -159,11 +145,11 @@ func NewWebRTCVideoReceiver(ctx context.Context, config WebRTCVideoReceiverConfi
 		case webrtc.TypeRTCPFBTransportCC:
 			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBTransportCC)
 			v.feedback = webrtc.TypeRTCPFBTransportCC
-			go v.tccLoop()
+			go v.tccLoop(config.TCCCycle)
 		case webrtc.TypeRTCPFBGoogREMB:
 			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBGoogREMB)
 			v.feedback = webrtc.TypeRTCPFBGoogREMB
-			go v.rembLoop()
+			go v.rembLoop(config.REMBCycle)
 		}
 	}
 
@@ -233,8 +219,8 @@ func (v *WebRTCVideoReceiver) receiveRTP() {
 
 		v.buffer.Push(pkt)
 
-		if v.tccCycle > 0 {
-			//store arrival time
+		if v.feedback == webrtc.TypeRTCPFBTransportCC {
+			// store arrival time
 			timestampUs := time.Now().UnixNano() / 1000
 			rtpTCC := rtp.TransportCCExtension{}
 			err = rtpTCC.Unmarshal(pkt.GetExtension(tccExtMapID))
@@ -288,13 +274,13 @@ func (v *WebRTCVideoReceiver) bufferRtcpLoop() {
 	}
 }
 
-func (v *WebRTCVideoReceiver) rembLoop() {
-	t := time.NewTicker(time.Duration(v.rembCycle) * time.Second)
+func (v *WebRTCVideoReceiver) rembLoop(cycle int) {
+	t := time.NewTicker(time.Duration(cycle) * time.Second)
 	for {
 		select {
 		case <-t.C:
 			// only calc video recently
-			v.lostRate, v.bandwidth = v.buffer.GetLostRateBandwidth(uint64(v.rembCycle))
+			v.lostRate, v.bandwidth = v.buffer.GetLostRateBandwidth(uint64(cycle))
 			var bw uint64
 			switch {
 			case v.lostRate == 0 && v.bandwidth == 0:
@@ -323,9 +309,9 @@ func (v *WebRTCVideoReceiver) rembLoop() {
 	}
 }
 
-func (v *WebRTCVideoReceiver) tccLoop() {
+func (v *WebRTCVideoReceiver) tccLoop(cycle int) {
 	feedbackPacketCount := uint8(0)
-	t := time.NewTicker(time.Duration(v.tccCycle) * time.Millisecond)
+	t := time.NewTicker(time.Duration(cycle) * time.Millisecond)
 	for {
 		select {
 		case <-t.C:

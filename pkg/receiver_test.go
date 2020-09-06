@@ -152,7 +152,9 @@ func TestWebRTCVideoReceiver_rembLoop(t *testing.T) {
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
 	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver, _ []*webrtc.Stream) {
 		assert.NoError(t, err)
-		videoConfig := WebRTCVideoReceiverConfig{}
+		videoConfig := WebRTCVideoReceiverConfig{
+			REMBCycle: 1,
+		}
 
 		videoReceiver := NewWebRTCVideoReceiver(context.Background(), videoConfig, track)
 		assert.NotNil(t, videoReceiver)

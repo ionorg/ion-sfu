@@ -11,7 +11,7 @@ rembcycle = 2
 # pli cycle sending to pub, and pub will send a key frame
 plicycle = 1
 # transport-cc cycle in (ms) (experiment feature)
-tcccycle = 10
+tcccycle = 0
 # this limit the remb bandwidth
 maxbandwidth = 1000
 # max buffer time by ms
