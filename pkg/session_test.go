@@ -2,13 +2,14 @@ package sfu
 
 import (
 	"context"
+	"fmt"
+	"github.com/pion/sdp/v2"
 	"math/rand"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/pion/ion-sfu/pkg/log"
-	"github.com/pion/sdp/v2"
 	"github.com/pion/transport/test"
 	"github.com/pion/webrtc/v3"
 	"github.com/stretchr/testify/assert"
@@ -242,6 +243,7 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 	peerB.OnNegotiationNeeded(func() {
 		offer, err := peerB.CreateOffer()
 		assert.NoError(t, err)
+		fmt.Println("Printing -------")
 
 		desc := sdp.SessionDescription{}
 		err = desc.Unmarshal([]byte(offer.SDP))

@@ -15,7 +15,7 @@ require (
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20200429184054-15c2290dcb37
 	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.6.1
-	google.golang.org/genproto v0.0.0-20200305110556-506484158171 // indirect
+	golang.org/x/blog v0.0.0-20200811215826-3841cf6a3ea0 // indirect
 	google.golang.org/grpc v1.27.1
 	google.golang.org/protobuf v1.23.0
 	gopkg.in/ini.v1 v1.51.1 // indirect

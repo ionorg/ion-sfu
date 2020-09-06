@@ -2,13 +2,12 @@ package sfu
 
 import (
 	"context"
-	"math/rand"
-	"testing"
-	"time"
-
 	"github.com/pion/transport/test"
 	"github.com/pion/webrtc/v3"
 	"github.com/stretchr/testify/assert"
+	"math/rand"
+	"testing"
+	"time"
 )
 
 var conf = WebRTCTransportConfig{
