@@ -16,11 +16,9 @@ const (
 
 var (
 	rtcpfb = []webrtc.RTCPFeedback{
-		{Type: webrtc.TypeRTCPFBGoogREMB},
 		{Type: webrtc.TypeRTCPFBCCM},
 		{Type: webrtc.TypeRTCPFBNACK},
 		{Type: "nack pli"},
-		// {Type: webrtc.TypeRTCPFBTransportCC},
 	}
 )
 

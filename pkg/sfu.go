@@ -2,9 +2,11 @@ package sfu
 
 import (
 	"context"
+	"net/url"
 	"sync"
 	"time"
 
+	"github.com/pion/sdp/v2"
 	"github.com/pion/webrtc/v3"
 
 	"github.com/pion/ion-sfu/pkg/log"
@@ -87,6 +89,21 @@ func NewSFU(c Config) *SFU {
 	}
 
 	s.webrtc.configuration.ICEServers = iceServers
+	if c.Receiver.Video.TCCCycle > 0 {
+		//important: only add when cycle > 0
+		rtcpfb = append(rtcpfb, webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBTransportCC})
+		transportCCURL, _ := url.Parse(sdp.TransportCCURI)
+		exts := []sdp.ExtMap{
+			{
+				Value: 3,
+				URI:   transportCCURL,
+			},
+		}
+		s.webrtc.setting.AddSDPExtensions(webrtc.SDPSectionVideo, exts)
+	}
+	if c.Receiver.Video.REMBCycle > 0 {
+		rtcpfb = append(rtcpfb, webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBGoogREMB})
+	}
 
 	if c.Log.Stats {
 		go s.stats()
