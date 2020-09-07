@@ -133,11 +133,11 @@ func main() {
 // and one of two different payload types:
 // 1. `Connect` containing the session answer description. This
 // message is *always* returned first.
-// 2. `Trickle` containg candidate information for Trickle ICE.
+// 2. `Trickle` containing candidate information for Trickle ICE.
 //
 // If the webrtc connection is closed, the server will close this stream.
 //
-// The client should send a message containg the session id
+// The client should send a message containing the session id
 // and one of two different payload types:
 // 1. `Connect` containing the session offer description. This
 // message must *always* be sent first.
