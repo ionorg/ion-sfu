@@ -16,7 +16,7 @@ navigator.mediaDevices.getUserMedia({ video: true, audio: true })
     el.autoplay = true
     el.controls = true
     el.muted = true
-    document.getElementById('localVideos').appendChild(el)
+    document.getElementById('remoteVideos').appendChild(el)
 
     pc.addStream(stream)
     pc.createOffer({
