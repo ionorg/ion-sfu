@@ -60,26 +60,20 @@ func TestRouter(t *testing.T) {
 		router.AddSender(subPid, sender)
 		assert.Len(t, router.senders, 1)
 		assert.Equal(t, sender, router.senders[subPid])
+		assert.Contains(t, router.stats(), "track id:")
 
 		<-ontrackFired
 
-		// test deleting sub
-		router.DelSub(subPid)
-		assert.Len(t, router.senders, 0)
-		<-sender.ctx.Done()
-
-		// add sub back to test close
-		sender = NewWebRTCSender(ctx, subtrack, s)
-		router.AddSender(subPid, sender)
-		// assert.Contains(t, router.stats(), "router:")
+		sub.Close()
 		router.Close()
+		router.mu.RLock()
 		assert.Len(t, router.senders, 0)
+		router.mu.RUnlock()
 		<-sender.ctx.Done()
 		<-receiver.ctx.Done()
 		close(done)
 
 		subsfu.Close()
-		sub.Close()
 	})
 
 	err = signalPair(pub, pubsfu)

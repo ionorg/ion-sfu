@@ -275,11 +275,11 @@ func (p *WebRTCTransport) GetRouter(ssrc uint32) *Router {
 // Close peer
 func (p *WebRTCTransport) Close() error {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	for _, router := range p.routers {
+	for rid, router := range p.routers {
 		router.Close()
+		delete(p.routers, rid)
 	}
+	p.mu.Unlock()
 
 	p.session.RemoveTransport(p.id)
 	p.cancel()

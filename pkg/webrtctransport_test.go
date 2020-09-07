@@ -2,12 +2,13 @@ package sfu
 
 import (
 	"context"
-	"github.com/pion/transport/test"
-	"github.com/pion/webrtc/v3"
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/pion/transport/test"
+	"github.com/pion/webrtc/v3"
+	"github.com/stretchr/testify/assert"
 )
 
 var conf = WebRTCTransportConfig{
@@ -241,6 +242,8 @@ func TestPeerPairRemoteBGetsOnTrack(t *testing.T) {
 
 	trackBDone := waitForRouter(peerB, trackB.SSRC())
 	sendRTPUntilDone(trackBDone, t, []*webrtc.Track{trackB})
+
+	<-trackBDone
 
 	remoteA.Close()
 	remoteB.Close()

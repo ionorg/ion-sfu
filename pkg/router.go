@@ -42,16 +42,18 @@ func (r *Router) AddSender(pid string, sub Sender) {
 	r.senders[pid] = sub
 	r.mu.Unlock()
 
-	go r.subFeedbackLoop(sub)
+	go r.subFeedbackLoop(pid, sub)
 }
 
 // DelSub to router
-func (r *Router) DelSub(pid string) {
-	r.mu.Lock()
-	r.senders[pid].Close()
-	delete(r.senders, pid)
-	r.mu.Unlock()
-}
+// func (r *Router) DelSub(pid string) {
+// 	r.mu.Lock()
+// 	if r.senders[pid] != nil {
+// 		r.senders[pid].Close()
+// 		delete(r.senders, pid)
+// 	}
+// 	r.mu.Unlock()
+// }
 
 // Close a router
 func (r *Router) Close() {
@@ -91,7 +93,13 @@ func (r *Router) start() {
 
 // subFeedbackLoop reads rtcp packets from the sub
 // and either handles them or forwards them to the receiver.
-func (r *Router) subFeedbackLoop(sub Sender) {
+func (r *Router) subFeedbackLoop(pid string, sub Sender) {
+	defer func() {
+		r.mu.Lock()
+		delete(r.senders, pid)
+		r.mu.Unlock()
+	}()
+
 	for {
 		pkt, err := sub.ReadRTCP()
 		if err == io.ErrClosedPipe {

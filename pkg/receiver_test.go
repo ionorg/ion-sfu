@@ -2,12 +2,13 @@ package sfu
 
 import (
 	"context"
-	"github.com/pion/rtcp"
-	"github.com/pion/rtp/codecs"
 	"io"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/pion/rtcp"
+	"github.com/pion/rtp/codecs"
 
 	"github.com/pion/transport/test"
 	"github.com/pion/webrtc/v3"
@@ -20,7 +21,11 @@ func sendRTPUntilDone(done <-chan struct{}, t *testing.T, tracks []*webrtc.Track
 		select {
 		case <-time.After(20 * time.Millisecond):
 			for _, track := range tracks {
-				assert.NoError(t, track.WriteSample(media.Sample{Data: []byte{0x01, 0x02, 0x03, 0x04}, Samples: 1}))
+				err := track.WriteSample(media.Sample{Data: []byte{0x01, 0x02, 0x03, 0x04}, Samples: 1})
+				if err == io.ErrClosedPipe {
+					return
+				}
+				assert.NoError(t, err)
 			}
 		case <-done:
 			return
@@ -153,8 +158,7 @@ func TestWebRTCVideoReceiver_rembLoop(t *testing.T) {
 		videoReceiver := NewWebRTCVideoReceiver(context.Background(), videoConfig, track)
 		assert.NotNil(t, videoReceiver)
 
-
-		rtcpPacket := <- videoReceiver.rtcpCh
+		rtcpPacket := <-videoReceiver.rtcpCh
 
 		assert.NotNil(t, rtcpPacket)
 		err = rtcpPacket.Unmarshal([]byte{1})
@@ -176,17 +180,12 @@ func TestWebRTCVideoReceiver_rembLoop(t *testing.T) {
 		videoReceiver.Close()
 	})
 
-
 	err = signalPair(remote, sfu)
 	assert.NoError(t, err)
-
 
 	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
 
 	assert.NoError(t, sfu.Close())
 	assert.NoError(t, remote.Close())
 
-
-
 }
-

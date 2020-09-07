@@ -1,14 +1,15 @@
 package sfu
 
 import (
+	"strings"
+	"testing"
+
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/stretchr/testify/assert"
-	"strings"
-	"testing"
 )
 
-func CreateTestPacket (pktStamp *SequenceNumberAndTimeStamp) *rtp.Packet {
+func CreateTestPacket(pktStamp *SequenceNumberAndTimeStamp) *rtp.Packet {
 	if pktStamp == nil {
 		return &rtp.Packet{
 			Header:  rtp.Header{},
@@ -18,9 +19,9 @@ func CreateTestPacket (pktStamp *SequenceNumberAndTimeStamp) *rtp.Packet {
 	}
 
 	return &rtp.Packet{
-		Header:  rtp.Header{
+		Header: rtp.Header{
 			SequenceNumber: pktStamp.SequenceNumber,
-			Timestamp: pktStamp.Timestamp,
+			Timestamp:      pktStamp.Timestamp,
 		},
 		Raw:     []byte{1, 2, 3},
 		Payload: []byte{1, 2, 3},
@@ -29,11 +30,12 @@ func CreateTestPacket (pktStamp *SequenceNumberAndTimeStamp) *rtp.Packet {
 
 type SequenceNumberAndTimeStamp struct {
 	SequenceNumber uint16
-	Timestamp uint32
+	Timestamp      uint32
 }
 
-func CreateTestListPackets (SnsAndTSs []SequenceNumberAndTimeStamp) ( packetList []*rtp.Packet) {
-	for _, item := range SnsAndTSs {
+func CreateTestListPackets(snsAndTSs []SequenceNumberAndTimeStamp) (packetList []*rtp.Packet) {
+	for _, item := range snsAndTSs {
+		item := item
 		packetList = append(packetList, CreateTestPacket(&item))
 	}
 
@@ -41,7 +43,6 @@ func CreateTestListPackets (SnsAndTSs []SequenceNumberAndTimeStamp) ( packetList
 }
 
 func TestBufferWithDefaultBufferTime(t *testing.T) {
-
 	buffer := NewBuffer(1, 1, BufferOptions{})
 	defer buffer.Stop()
 
@@ -49,12 +50,12 @@ func TestBufferWithDefaultBufferTime(t *testing.T) {
 
 	buffer.Push(pkt)
 	assert.Equal(t, cap(buffer.GetRTCPChan()), 1000)
-	assert.Equal(t, buffer.GetPayloadType(),  uint8(1))
-	assert.Equal(t, buffer.GetSSRC(), uint32(1) )
+	assert.Equal(t, buffer.GetPayloadType(), uint8(1))
+	assert.Equal(t, buffer.GetSSRC(), uint32(1))
 
 	receivedPkt := buffer.GetPacket(0)
 
-    assert.Equal(t, receivedPkt, pkt)
+	assert.Equal(t, receivedPkt, pkt)
 
 	assert.Nil(t, buffer.GetPacket(1))
 	expectedStatString := []string{"buffer", "lastNackSN"}
@@ -77,43 +78,43 @@ func TestBufferWithBufferTimeAndZeroSSRC(t *testing.T) {
 	pktsSnsAndTs := []SequenceNumberAndTimeStamp{
 		{
 			SequenceNumber: 11,
-			Timestamp: 123,
+			Timestamp:      123,
 		},
 		{
 			SequenceNumber: 12,
-			Timestamp: 124,
+			Timestamp:      124,
 		},
 		{
 			SequenceNumber: 14,
-			Timestamp: 200,
+			Timestamp:      200,
 		},
 		{
 			SequenceNumber: 15,
-			Timestamp: 200,
+			Timestamp:      200,
 		},
 		{
 			SequenceNumber: 15,
-			Timestamp: 400,
+			Timestamp:      400,
 		},
 	}
 
-	 packets := CreateTestListPackets(pktsSnsAndTs)
+	packets := CreateTestListPackets(pktsSnsAndTs)
 
-	 for _, packet := range packets {
-	 	buffer.Push(packet)
-	 }
+	for _, packet := range packets {
+		buffer.Push(packet)
+	}
 
-	nackPair, lostPkt := buffer.GetNackPair(buffer.pktBuffer, 0, 1 )
+	nackPair, lostPkt := buffer.GetNackPair(buffer.pktBuffer, 0, 1)
 	assert.Equal(t, 1, lostPkt)
 	assert.Equal(t, rtcp.NackPair{}, nackPair)
 
-	nackPair, lostPkt = buffer.GetNackPair(buffer.pktBuffer, 0, 25 )
+	nackPair, lostPkt = buffer.GetNackPair(buffer.pktBuffer, 0, 25)
 	assert.Equal(t, 0, lostPkt)
 	assert.Equal(t, rtcp.NackPair{}, nackPair)
 
-	nackPair, lostPkt = buffer.GetNackPair(buffer.pktBuffer, 10, 12 )
+	nackPair, lostPkt = buffer.GetNackPair(buffer.pktBuffer, 10, 12)
 	assert.Equal(t, 1, lostPkt)
-    assert.Equal(t, uint16(10), nackPair.PacketID)
+	assert.Equal(t, uint16(10), nackPair.PacketID)
 
 	lostRate, byteRate := buffer.GetLostRateBandwidth(uint64(12))
 
@@ -123,7 +124,6 @@ func TestBufferWithBufferTimeAndZeroSSRC(t *testing.T) {
 	buffer.clearOldPkt(9999, 13)
 	buffer.clearOldPkt(99999, 14)
 	buffer.clearOldPkt(1200, 17)
-
 
 	buffer.clear()
 	for _, entry := range pktsSnsAndTs {
@@ -143,22 +143,23 @@ func TestBuffer_tsDelta(t *testing.T) {
 	}{
 		{
 			name: "When x is greater than y",
-			args:args{
+			args: args{
 				x: 6,
 				y: 1,
 			},
 			want: uint32(5),
 		},
 		{
-					name: "When y is greater than x",
-					args: args{
-						x: 3,
-						y: 9,
-					},
-					want: uint32(6),
+			name: "When y is greater than x",
+			args: args{
+				x: 3,
+				y: 9,
+			},
+			want: uint32(6),
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			got := tsDelta(tt.args.x, tt.args.y)
 			assert.Equal(t, got, tt.want)
