@@ -116,6 +116,7 @@ type WebRTCVideoReceiverConfig struct {
 	TCCCycle      int `mapstructure:"tcccycle"`
 	MaxBandwidth  int `mapstructure:"maxbandwidth"`
 	MaxBufferTime int `mapstructure:"maxbuffertime"`
+	ReceiveRTPCycle int `mapstructure:"rtpcycle"`
 }
 
 // NewWebRTCVideoReceiver creates a new video track receiver
@@ -153,7 +154,8 @@ func NewWebRTCVideoReceiver(ctx context.Context, config WebRTCVideoReceiverConfi
 		maxBandwidth:   config.MaxBandwidth,
 	}
 
-	for _, feedback := range track.Codec().RTCPFeedback {
+	feedbacks := track.Codec().RTCPFeedback
+	for _, feedback := range feedbacks {
 		switch feedback.Type {
 		case webrtc.TypeRTCPFBTransportCC:
 			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBTransportCC)
@@ -218,47 +220,48 @@ func (v *WebRTCVideoReceiver) Close() {
 
 // receiveRTP receive all incoming tracks' rtp and sent to one channel
 func (v *WebRTCVideoReceiver) receiveRTP() {
+	//t := time.NewTicker(time.Duration(v.rtpCycle) * time.Second)
 	for {
-		pkt, err := v.track.ReadRTP()
+			  pkt, err := v.track.ReadRTP()
 
-		if err == io.EOF {
-			return
-		}
+			  if err == io.EOF {
+				  return
+			  }
 
-		if err != nil {
-			log.Errorf("rtp err => %v", err)
-			continue
-		}
+			  if err != nil {
+				  log.Errorf("rtp err => %v", err)
+				  continue
+			  }
 
-		v.buffer.Push(pkt)
+			  v.buffer.Push(pkt)
 
-		if v.feedback == webrtc.TypeRTCPFBTransportCC {
-			//store arrival time
-			timestampUs := time.Now().UnixNano() / 1000
-			rtpTCC := rtp.TransportCCExtension{}
-			err = rtpTCC.Unmarshal(pkt.GetExtension(tccExtMapID))
-			if err == nil {
-				// if time.Now().Sub(b.bufferStartTS) > time.Second {
+			  if v.feedback == webrtc.TypeRTCPFBTransportCC {
+				  //store arrival time
+				  timestampUs := time.Now().UnixNano() / 1000
+				  rtpTCC := rtp.TransportCCExtension{}
+				  err = rtpTCC.Unmarshal(pkt.GetExtension(tccExtMapID))
+				  if err == nil {
+					  // if time.Now().Sub(b.bufferStartTS) > time.Second {
 
-				//only calc the packet which rtpTCC.TransportSequence > b.lastTCCSN
-				//https://webrtc.googlesource.com/src/webrtc/+/f54860e9ef0b68e182a01edc994626d21961bc4b/modules/rtp_rtcp/source/rtcp_packet/transport_feedback.cc#353
-				// if rtpTCC.TransportSequence > b.lastTCCSN {
-				v.rtpExtInfoChan <- rtpExtInfo{
-					TSN:       rtpTCC.TransportSequence,
-					Timestamp: timestampUs,
-				}
-				// b.lastTCCSN = rtpTCC.TransportSequence
-				// }
-			}
-		}
+					  //only calc the packet which rtpTCC.TransportSequence > b.lastTCCSN
+					  //https://webrtc.googlesource.com/src/webrtc/+/f54860e9ef0b68e182a01edc994626d21961bc4b/modules/rtp_rtcp/source/rtcp_packet/transport_feedback.cc#353
+					  // if rtpTCC.TransportSequence > b.lastTCCSN {
+					  v.rtpExtInfoChan <- rtpExtInfo{
+						  TSN:       rtpTCC.TransportSequence,
+						  Timestamp: timestampUs,
+					  }
+					  // b.lastTCCSN = rtpTCC.TransportSequence
+					  // }
+				  }
+			  }
 
-		v.rtpCh <- pkt
+			  v.rtpCh <- pkt
 
-		if err != nil {
-			log.Errorf("jb err => %v", err)
+			  if err != nil {
+				  log.Errorf("jb err => %v", err)
+			  }
 		}
 	}
-}
 
 func (v *WebRTCVideoReceiver) pliLoop() {
 	t := time.NewTicker(time.Duration(v.pliCycle) * time.Second)
