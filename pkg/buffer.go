@@ -24,6 +24,10 @@ const (
 
 	// default buffer time by ms
 	defaultBufferTime = 1000
+
+	// Threshold to detect that current packet contains a full black pixel frame by payload size from disabled video
+	// track
+	blackFrameThreshold = 450
 )
 
 func tsDelta(x, y uint32) uint32 {
@@ -59,6 +63,10 @@ type Buffer struct {
 	//buffer time
 	maxBufferTS uint32
 
+	//disabled track
+	isDisabled bool
+	disableCtr uint8
+
 	stop bool
 	mu   sync.RWMutex
 
@@ -92,6 +100,33 @@ func NewBuffer(ssrc uint32, pt uint8, o BufferOptions) *Buffer {
 func (b *Buffer) Push(p *rtp.Packet) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
+	if b.isDisabled {
+		if len(p.Payload) > blackFrameThreshold {
+			b.disableCtr -= 1
+			if b.disableCtr == 1 {
+				b.isDisabled = false
+				b.disableCtr = 0
+			}
+		}
+		return
+	}
+
+	if len(p.Payload) <= blackFrameThreshold {
+		b.disableCtr += 1
+		if b.disableCtr == 20 {
+			b.isDisabled = true
+			// Reset buffer
+			b.ssrc = 0
+			b.payloadType = 0
+			b.lastClearTS = 0
+			b.lastClearSN = 0
+			b.lastNackSN = 0
+			b.pktBuffer = [65536]*rtp.Packet{}
+		}
+	} else {
+		b.disableCtr = 0
+	}
 
 	b.receivedPkt++
 	b.totalByte += uint64(p.MarshalSize())

@@ -266,6 +266,9 @@ func (v *WebRTCVideoReceiver) pliLoop() {
 	for {
 		select {
 		case <-t.C:
+			if v.buffer.isDisabled {
+				continue
+			}
 			pli := &rtcp.PictureLossIndication{SenderSSRC: v.track.SSRC(), MediaSSRC: v.track.SSRC()}
 			// log.Infof("pliLoop send pli=%d pt=%v", buffer.GetSSRC(), buffer.GetPayloadType())
 			v.rtcpCh <- pli
@@ -293,6 +296,10 @@ func (v *WebRTCVideoReceiver) rembLoop() {
 	for {
 		select {
 		case <-t.C:
+			//only calc is video is enabled
+			if v.buffer.isDisabled {
+				continue
+			}
 			// only calc video recently
 			v.lostRate, v.bandwidth = v.buffer.GetLostRateBandwidth(uint64(v.rembCycle))
 			var bw uint64
