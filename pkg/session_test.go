@@ -75,7 +75,7 @@ func TestSession(t *testing.T) {
 	err = engine.PopulateFromSDP(*remote.LocalDescription())
 	assert.NoError(t, err)
 
-	peer, err := NewWebRTCTransport(session, engine, conf)
+	peer, err := NewWebRTCTransport(context.TODO(), session, engine, conf)
 	assert.NoError(t, err)
 
 	onCloseFired, onCloseFiredFunc := context.WithCancel(context.Background())
@@ -104,8 +104,8 @@ func TestSession(t *testing.T) {
 }
 
 func TestMultiPeerSession(t *testing.T) {
-	// report := test.CheckRoutines(t)
-	// defer report()
+	report := test.CheckRoutines(t)
+	defer report()
 
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
@@ -135,9 +135,9 @@ func TestMultiPeerSession(t *testing.T) {
 	peerB, err := signalPeer(session, remoteB)
 	assert.NoError(t, err)
 
-	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
+	sessionClosed := make(chan struct{})
 	session.OnClose(func() {
-		onReadRTPFiredFunc()
+		close(sessionClosed)
 	})
 
 	onNegotationNeededFired, onNegotationNeededFiredFunc := context.WithCancel(context.Background())
@@ -169,19 +169,18 @@ func TestMultiPeerSession(t *testing.T) {
 	assert.Len(t, peerB.GetRouter(trackB.SSRC()).senders, 1)
 	router.mu.RUnlock()
 
-	peerA.Close()
+	assert.NoError(t, peerA.Close())
 	router = peerB.GetRouter(trackB.SSRC())
 	router.mu.RLock()
 	assert.Len(t, router.senders, 0)
 	router.mu.RUnlock()
 
-	peerB.Close()
-
+	assert.NoError(t, peerB.Close())
 	<-onNegotationNeededFired.Done()
-	<-onReadRTPFired.Done()
+	<-sessionClosed
 
-	remoteA.Close()
-	remoteB.Close()
+	assert.NoError(t, remoteA.Close())
+	assert.NoError(t, remoteB.Close())
 }
 
 func signalRenegotiation(t *testing.T, offer webrtc.SessionDescription, peer *WebRTCTransport, remote *webrtc.PeerConnection) {
@@ -337,16 +336,17 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 	session.AddTransport(peerA)
 	session.AddTransport(peerB)
 	session.AddTransport(peerC)
+
 	<-peerAGotTracks
 	<-peerBGotTracks
 	<-peerCGotTracks
 
-	remoteA.Close()
-	peerA.Close()
-	remoteB.Close()
-	peerB.Close()
-	remoteC.Close()
-	peerC.Close()
+	assert.NoError(t, remoteA.Close())
+	assert.NoError(t, peerA.Close())
+	assert.NoError(t, remoteB.Close())
+	assert.NoError(t, peerB.Close())
+	assert.NoError(t, remoteC.Close())
+	assert.NoError(t, peerC.Close())
 }
 
 func Test3PeerStaggerJoin(t *testing.T) {
@@ -392,7 +392,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	err = engine.PopulateFromSDP(offer)
 	assert.NoError(t, err)
 	gatherComplete := webrtc.GatheringCompletePromise(remoteB)
-	peerB, err := NewWebRTCTransport(session, engine, conf)
+	peerB, err := NewWebRTCTransport(context.TODO(), session, engine, conf)
 	session.AddTransport(peerB)
 	assert.NoError(t, err)
 	<-gatherComplete
@@ -447,7 +447,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	engine = MediaEngine{}
 	err = engine.PopulateFromSDP(offer)
 	assert.NoError(t, err)
-	peerC, err := NewWebRTCTransport(session, engine, conf)
+	peerC, err := NewWebRTCTransport(context.TODO(), session, engine, conf)
 	session.AddTransport(peerC)
 	assert.NoError(t, err)
 	<-gatherComplete
