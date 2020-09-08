@@ -38,12 +38,6 @@ func (r *Session) RemoveTransport(tid string) {
 	defer r.mu.Unlock()
 
 	delete(r.transports, tid)
-	// Remove transport subs from pubs
-	for _, t := range r.transports {
-		for _, router := range t.Routers() {
-			router.DelSub(tid)
-		}
-	}
 
 	// Close session if no transports
 	if len(r.transports) == 0 && r.onCloseHandler != nil {

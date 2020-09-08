@@ -1,10 +1,10 @@
 package sfu
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math"
-	"sync"
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
@@ -23,10 +23,11 @@ type Sender interface {
 
 // WebRTCSender represents a Sender which writes RTP to a webrtc track
 type WebRTCSender struct {
-	mu             sync.RWMutex
+	ctx            context.Context
+	cancel         context.CancelFunc
 	onCloseHandler func()
+	sender         *webrtc.RTPSender
 	track          *webrtc.Track
-	stop           bool
 	rtcpCh         chan rtcp.Packet
 	useRemb        bool
 	rembCh         chan *rtcp.ReceiverEstimatedMaximumBitrate
@@ -35,8 +36,12 @@ type WebRTCSender struct {
 }
 
 // NewWebRTCSender creates a new track sender instance
-func NewWebRTCSender(track *webrtc.Track, sender *webrtc.RTPSender) *WebRTCSender {
+func NewWebRTCSender(ctx context.Context, track *webrtc.Track, sender *webrtc.RTPSender) *WebRTCSender {
+	ctx, cancel := context.WithCancel(ctx)
 	s := &WebRTCSender{
+		ctx:      ctx,
+		cancel:   cancel,
+		sender:   sender,
 		track:    track,
 		rtcpCh:   make(chan rtcp.Packet, maxSize),
 		rembCh:   make(chan *rtcp.ReceiverEstimatedMaximumBitrate, maxSize),
@@ -55,40 +60,45 @@ func NewWebRTCSender(track *webrtc.Track, sender *webrtc.RTPSender) *WebRTCSende
 		}
 	}
 
-	go s.receiveRTCP(sender)
+	go s.receiveRTCP()
 	go s.sendRTP()
 
 	return s
 }
 
 func (s *WebRTCSender) sendRTP() {
-	for pkt := range s.sendChan {
-		s.mu.RLock()
-		stop := s.stop
-		s.mu.RUnlock()
-		if stop {
-			break
-		}
+	for {
+		select {
+		case pkt := <-s.sendChan:
+			// Transform payload type
+			pt := s.track.Codec().PayloadType
+			newPkt := *pkt
+			newPkt.Header.PayloadType = pt
+			pkt = &newPkt
 
-		// Transform payload type
-		pt := s.track.Codec().PayloadType
-		newPkt := *pkt
-		newPkt.Header.PayloadType = pt
-		pkt = &newPkt
-
-		if err := s.track.WriteRTP(pkt); err != nil {
-			log.Errorf("wt.WriteRTP err=%v", err)
+			if err := s.track.WriteRTP(pkt); err != nil {
+				log.Errorf("wt.WriteRTP err=%v", err)
+			}
+		case <-s.ctx.Done():
+			close(s.sendChan)
+			return
 		}
 	}
 }
 
 // ReadRTCP read rtp packet
 func (s *WebRTCSender) ReadRTCP() (rtcp.Packet, error) {
-	rtcp, ok := <-s.rtcpCh
-	if !ok {
-		return nil, io.EOF
+	select {
+	case pkt := <-s.rtcpCh:
+		return pkt, nil
+	case <-s.ctx.Done():
+		close(s.rtcpCh)
+		err := s.sender.Stop()
+		if err != nil {
+			return nil, err
+		}
+		return nil, io.ErrClosedPipe
 	}
-	return rtcp, nil
 }
 
 // WriteRTP to the track
@@ -103,36 +113,22 @@ func (s *WebRTCSender) OnClose(f func()) {
 
 // Close track
 func (s *WebRTCSender) Close() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.stop {
-		return
-	}
-	s.stop = true
-	close(s.sendChan)
-	close(s.rtcpCh)
+	s.cancel()
 
 	if s.onCloseHandler != nil {
 		s.onCloseHandler()
 	}
 }
 
-func (s *WebRTCSender) receiveRTCP(sender *webrtc.RTPSender) {
+func (s *WebRTCSender) receiveRTCP() {
 	for {
-		pkts, err := sender.ReadRTCP()
-		if err == io.EOF || err == io.ErrClosedPipe {
+		pkts, err := s.sender.ReadRTCP()
+		if err == io.ErrClosedPipe || err == io.EOF {
 			return
 		}
 
 		if err != nil {
 			log.Errorf("rtcp err => %v", err)
-		}
-
-		s.mu.RLock()
-		stop := s.stop
-		s.mu.RUnlock()
-		if stop {
-			return
 		}
 
 		for _, pkt := range pkts {
@@ -143,7 +139,6 @@ func (s *WebRTCSender) receiveRTCP(sender *webrtc.RTPSender) {
 				if s.useRemb {
 					s.rembCh <- pkt
 				}
-			default:
 			}
 		}
 	}
@@ -163,47 +158,46 @@ func (s *WebRTCSender) rembLoop() {
 	var lowest uint64 = math.MaxUint64
 	var rembCount, rembTotalRate uint64
 
-	for pkt := range s.rembCh {
-		s.mu.RLock()
-		stop := s.stop
-		s.mu.RUnlock()
-		if stop {
-			break
-		}
-
-		// Update stats
-		rembCount++
-		rembTotalRate += pkt.Bitrate
-		if pkt.Bitrate < lowest {
-			lowest = pkt.Bitrate
-		}
-
-		// Send upstream if time
-		if time.Since(lastRembTime) > maxRembTime {
-			lastRembTime = time.Now()
-			avg := uint64(rembTotalRate / rembCount)
-
-			_ = avg
-			s.target = lowest
-
-			if s.target < rembMin {
-				s.target = rembMin
-			} else if s.target > rembMax {
-				s.target = rembMax
+	for {
+		select {
+		case pkt := <-s.rembCh:
+			// Update stats
+			rembCount++
+			rembTotalRate += pkt.Bitrate
+			if pkt.Bitrate < lowest {
+				lowest = pkt.Bitrate
 			}
 
-			newPkt := &rtcp.ReceiverEstimatedMaximumBitrate{
-				Bitrate:    s.target,
-				SenderSSRC: 1,
-				SSRCs:      pkt.SSRCs,
+			// Send upstream if time
+			if time.Since(lastRembTime) > maxRembTime {
+				lastRembTime = time.Now()
+				avg := uint64(rembTotalRate / rembCount)
+
+				_ = avg
+				s.target = lowest
+
+				if s.target < rembMin {
+					s.target = rembMin
+				} else if s.target > rembMax {
+					s.target = rembMax
+				}
+
+				newPkt := &rtcp.ReceiverEstimatedMaximumBitrate{
+					Bitrate:    s.target,
+					SenderSSRC: 1,
+					SSRCs:      pkt.SSRCs,
+				}
+
+				s.rtcpCh <- newPkt
+
+				// Reset stats
+				rembCount = 0
+				rembTotalRate = 0
+				lowest = math.MaxUint64
 			}
-
-			s.rtcpCh <- newPkt
-
-			// Reset stats
-			rembCount = 0
-			rembTotalRate = 0
-			lowest = math.MaxUint64
+		case <-s.ctx.Done():
+			close(s.rembCh)
+			return
 		}
 	}
 }

@@ -13,7 +13,6 @@ import (
 // Router defines a track rtp/rtcp router
 type Router struct {
 	tid      string
-	stop     bool
 	mu       sync.RWMutex
 	receiver Receiver
 	senders  map[string]Sender
@@ -43,14 +42,7 @@ func (r *Router) AddSender(pid string, sub Sender) {
 	r.senders[pid] = sub
 	r.mu.Unlock()
 
-	go r.subFeedbackLoop(sub)
-}
-
-// DelSub to router
-func (r *Router) DelSub(pid string) {
-	r.mu.Lock()
-	delete(r.senders, pid)
-	r.mu.Unlock()
+	go r.subFeedbackLoop(pid, sub)
 }
 
 // Close a router
@@ -58,7 +50,6 @@ func (r *Router) Close() {
 	log.Debugf("Router close")
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.stop = true
 
 	// Close senders
 	for pid, sub := range r.senders {
@@ -70,20 +61,14 @@ func (r *Router) Close() {
 
 func (r *Router) start() {
 	for {
-		r.mu.RLock()
-		if r.stop {
-			r.mu.RUnlock()
+		pkt, err := r.receiver.ReadRTP()
+
+		if err == io.EOF {
 			return
 		}
-		r.mu.RUnlock()
-
-		pkt, err := r.receiver.ReadRTP()
 
 		if err != nil {
 			log.Errorf("r.receiver.ReadRTP err=%v", err)
-			continue
-		}
-		if pkt == nil {
 			continue
 		}
 
@@ -98,21 +83,20 @@ func (r *Router) start() {
 
 // subFeedbackLoop reads rtcp packets from the sub
 // and either handles them or forwards them to the receiver.
-func (r *Router) subFeedbackLoop(sub Sender) {
+func (r *Router) subFeedbackLoop(pid string, sub Sender) {
+	defer func() {
+		r.mu.Lock()
+		delete(r.senders, pid)
+		r.mu.Unlock()
+	}()
+
 	for {
-		r.mu.RLock()
-		if r.stop {
-			r.mu.RUnlock()
+		pkt, err := sub.ReadRTCP()
+		if err == io.ErrClosedPipe {
 			return
 		}
-		r.mu.RUnlock()
-
-		pkt, err := sub.ReadRTCP()
 
 		if err != nil {
-			if err == io.EOF {
-				return
-			}
 			log.Errorf("read rtcp err %s", err)
 			return
 		}

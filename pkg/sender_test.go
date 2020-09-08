@@ -2,12 +2,14 @@ package sfu
 
 import (
 	"context"
+	"io"
 	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
+	"github.com/pion/transport/test"
 	"github.com/pion/webrtc/v3"
 	"github.com/stretchr/testify/assert"
 )
@@ -54,6 +56,9 @@ func sendRTPWithSenderUntilDone(done <-chan struct{}, t *testing.T, track *webrt
 }
 
 func TestSenderRTPForwarding(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -79,7 +84,8 @@ func TestSenderRTPForwarding(t *testing.T) {
 	s, err := sfu.AddTrack(track)
 	assert.NoError(t, err)
 
-	sender := NewWebRTCSender(track, s)
+	ctx := context.Background()
+	sender := NewWebRTCSender(ctx, track, s)
 	assert.NotNil(t, sender)
 
 	err = signalPair(sfu, remote)
@@ -94,6 +100,9 @@ func TestSenderRTPForwarding(t *testing.T) {
 
 	_, err = sender.ReadRTCP()
 	assert.Error(t, err)
+
+	sfu.Close()
+	remote.Close()
 }
 
 func sendRTCPUntilDone(done <-chan struct{}, t *testing.T, pc *webrtc.PeerConnection, pkt rtcp.Packet) {
@@ -108,6 +117,9 @@ func sendRTCPUntilDone(done <-chan struct{}, t *testing.T, pc *webrtc.PeerConnec
 }
 
 func TestSenderRTCPForwarding(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -124,7 +136,8 @@ func TestSenderRTCPForwarding(t *testing.T) {
 	s, err := sfu.AddTrack(track)
 	assert.NoError(t, err)
 
-	sender := NewWebRTCSender(track, s)
+	ctx := context.Background()
+	sender := NewWebRTCSender(ctx, track, s)
 	assert.NotNil(t, sender)
 
 	err = signalPair(sfu, remote)
@@ -139,8 +152,11 @@ func TestSenderRTCPForwarding(t *testing.T) {
 	go func() {
 		for {
 			rtcp, err := sender.ReadRTCP()
-			assert.NoError(t, err)
+			if err == io.ErrClosedPipe {
+				return
+			}
 
+			assert.NoError(t, err)
 			assert.Equal(t, pkt, rtcp)
 			onReadRTCPFiredFunc()
 		}
@@ -153,9 +169,16 @@ func TestSenderRTCPForwarding(t *testing.T) {
 	// }
 
 	sendRTCPUntilDone(onReadRTCPFired.Done(), t, remote, pkt)
+
+	sender.Close()
+	sfu.Close()
+	remote.Close()
 }
 
 func TestSenderRTCPREMBForwarding(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
 	rtcpfb = []webrtc.RTCPFeedback{
 		{Type: webrtc.TypeRTCPFBGoogREMB},
 	}
@@ -177,7 +200,8 @@ func TestSenderRTCPREMBForwarding(t *testing.T) {
 	s, err := sfu.AddTrack(track)
 	assert.NoError(t, err)
 
-	sender := NewWebRTCSender(track, s)
+	ctx := context.Background()
+	sender := NewWebRTCSender(ctx, track, s)
 	assert.NotNil(t, sender)
 
 	err = signalPair(sfu, remote)
@@ -193,8 +217,11 @@ func TestSenderRTCPREMBForwarding(t *testing.T) {
 	go func() {
 		for {
 			rtcp, err := sender.ReadRTCP()
-			assert.NoError(t, err)
+			if err == io.ErrClosedPipe {
+				return
+			}
 
+			assert.NoError(t, err)
 			assert.Equal(t, expected, rtcp)
 			onReadRTCPFiredFunc()
 		}
@@ -207,4 +234,8 @@ func TestSenderRTCPREMBForwarding(t *testing.T) {
 	}
 
 	sendRTCPUntilDone(onReadRTCPFired.Done(), t, remote, pkt)
+
+	sender.Close()
+	sfu.Close()
+	remote.Close()
 }

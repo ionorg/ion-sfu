@@ -2,10 +2,14 @@ package sfu
 
 import (
 	"context"
+	"io"
 	"math/rand"
 	"testing"
 	"time"
 
+	"github.com/pion/rtcp"
+	"github.com/pion/rtp/codecs"
+	"github.com/pion/transport/test"
 	"github.com/pion/webrtc/v3"
 	"github.com/pion/webrtc/v3/pkg/media"
 	"github.com/stretchr/testify/assert"
@@ -16,7 +20,11 @@ func sendRTPUntilDone(done <-chan struct{}, t *testing.T, tracks []*webrtc.Track
 		select {
 		case <-time.After(20 * time.Millisecond):
 			for _, track := range tracks {
-				assert.NoError(t, track.WriteSample(media.Sample{Data: []byte{0x01, 0x02, 0x03, 0x04}, Samples: 1}))
+				err := track.WriteSample(media.Sample{Data: []byte{0x01, 0x02, 0x03, 0x04}, Samples: 1})
+				if err == io.ErrClosedPipe {
+					return
+				}
+				assert.NoError(t, err)
 			}
 		case <-done:
 			return
@@ -25,6 +33,9 @@ func sendRTPUntilDone(done <-chan struct{}, t *testing.T, tracks []*webrtc.Track
 }
 
 func TestWebRTCAudioReceiverRTPForwarding(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -55,20 +66,26 @@ func TestWebRTCAudioReceiverRTPForwarding(t *testing.T) {
 
 		receiver.Close()
 
+		onReadRTPFiredFunc()
+
 		out, err = receiver.ReadRTP()
 		assert.Nil(t, out)
-		assert.Equal(t, errReceiverClosed, err)
-
-		onReadRTPFiredFunc()
+		assert.Equal(t, io.EOF, err)
 	})
 
 	err = signalPair(remote, sfu)
 	assert.NoError(t, err)
 
 	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
+
+	assert.NoError(t, sfu.Close())
+	assert.NoError(t, remote.Close())
 }
 
 func TestWebRTCVideoReceiverRTPForwarding(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -82,7 +99,8 @@ func TestWebRTCVideoReceiverRTPForwarding(t *testing.T) {
 
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
 	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver, _ []*webrtc.Stream) {
-		receiver := NewWebRTCVideoReceiver(WebRTCVideoReceiverConfig{}, track)
+		ctx := context.Background()
+		receiver := NewWebRTCVideoReceiver(ctx, WebRTCVideoReceiverConfig{}, track)
 		assert.Equal(t, track, receiver.Track())
 
 		out, err := receiver.ReadRTP()
@@ -98,10 +116,74 @@ func TestWebRTCVideoReceiverRTPForwarding(t *testing.T) {
 		assert.Nil(t, buf)
 
 		onReadRTPFiredFunc()
+
+		receiver.Close()
 	})
 
 	err = signalPair(remote, sfu)
 	assert.NoError(t, err)
 
 	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
+
+	assert.NoError(t, sfu.Close())
+	assert.NoError(t, remote.Close())
+}
+
+func TestWebRTCVideoReceiver_rembLoop(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
+	codec := webrtc.NewRTPCodec(webrtc.RTPCodecTypeVideo, "video", 90000, 0, "", 5, &codecs.VP8Payloader{})
+	codec.RTCPFeedback = []webrtc.RTCPFeedback{{Type: webrtc.TypeRTCPFBGoogREMB}}
+
+	me := webrtc.MediaEngine{}
+	me.RegisterDefaultCodecs()
+	me.RegisterCodec(codec)
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+
+	sfu, remote, err := newPair(webrtc.Configuration{}, api)
+	assert.NoError(t, err)
+
+	track, err := remote.NewTrack(5, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+	_, err = remote.AddTrack(track)
+	assert.NoError(t, err)
+
+	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
+	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver, _ []*webrtc.Stream) {
+		assert.NoError(t, err)
+		videoConfig := WebRTCVideoReceiverConfig{}
+
+		videoReceiver := NewWebRTCVideoReceiver(context.Background(), videoConfig, track)
+		assert.NotNil(t, videoReceiver)
+
+		rtcpPacket := <-videoReceiver.rtcpCh
+
+		assert.NotNil(t, rtcpPacket)
+		err = rtcpPacket.Unmarshal([]byte{1})
+		assert.Error(t, err)
+
+		//it could either be packet too short or buffer too short
+		assert.Contains(t, err.Error(), "too short")
+
+		bytes, err := rtcpPacket.Marshal()
+		assert.NoError(t, err)
+		assert.NotNil(t, bytes)
+
+		//ensure that the rtcp from the channel is a packet
+		_, ok := rtcpPacket.(rtcp.Packet)
+		assert.True(t, ok)
+
+		onReadRTPFiredFunc()
+
+		videoReceiver.Close()
+	})
+
+	err = signalPair(remote, sfu)
+	assert.NoError(t, err)
+
+	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
+
+	assert.NoError(t, sfu.Close())
+	assert.NoError(t, remote.Close())
 }
