@@ -18,6 +18,6 @@ build_jsonrpc: go_deps
 
 test: go_deps
 	go test \
-		-timeout 30s \
+		-timeout 60s \
 		-coverprofile=cover.out -covermode=atomic \
 		-v -race ${GO_TESTPKGS} 

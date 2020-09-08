@@ -20,6 +20,7 @@ const (
 // WebRTCTransportConfig represents configuration options
 type WebRTCTransportConfig struct {
 	configuration webrtc.Configuration
+	receiver      ReceiverConfig
 	setting       webrtc.SettingEngine
 }
 
@@ -37,7 +38,7 @@ type WebRTCTransport struct {
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport
-func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportConfig) (*WebRTCTransport, error) {
+func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, cfg WebRTCTransportConfig) (*WebRTCTransport, error) {
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine), webrtc.WithSettingEngine(cfg.setting))
 	pc, err := api.NewPeerConnection(cfg.configuration)
 
@@ -46,7 +47,7 @@ func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportCon
 		return nil, errPeerConnectionInitFailed
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	p := &WebRTCTransport{
 		id:      cuid.New(),
 		ctx:     ctx,
@@ -78,7 +79,7 @@ func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportCon
 		var recv Receiver
 		switch track.Kind() {
 		case webrtc.RTPCodecTypeVideo:
-			recv = NewWebRTCVideoReceiver(ctx, config.Receiver.Video, track)
+			recv = NewWebRTCVideoReceiver(ctx, cfg.receiver.Video, track)
 		case webrtc.RTPCodecTypeAudio:
 			recv = NewWebRTCAudioReceiver(track)
 		}
@@ -114,14 +115,19 @@ func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportCon
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		log.Debugf("ice connection state: %s", connectionState)
-		switch connectionState {
-		case webrtc.ICEConnectionStateDisconnected:
-			log.Debugf("webrtc ice disconnected for peer: %s", p.id)
-		case webrtc.ICEConnectionStateFailed:
-			fallthrough
-		case webrtc.ICEConnectionStateClosed:
-			log.Debugf("webrtc ice closed for peer: %s", p.id)
-			p.Close()
+		select {
+		case <-p.ctx.Done():
+			return
+		default:
+			switch connectionState {
+			case webrtc.ICEConnectionStateDisconnected:
+				log.Debugf("webrtc ice disconnected for peer: %s", p.id)
+			case webrtc.ICEConnectionStateFailed:
+				fallthrough
+			case webrtc.ICEConnectionStateClosed:
+				log.Debugf("webrtc ice closed for peer: %s", p.id)
+				p.Close()
+			}
 		}
 	})
 

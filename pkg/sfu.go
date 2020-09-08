@@ -1,6 +1,7 @@
 package sfu
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -34,12 +35,10 @@ type Config struct {
 	Receiver ReceiverConfig `mapstructure:"receiver"`
 }
 
-var (
-	config Config
-)
-
 // SFU represents an sfu instance
 type SFU struct {
+	ctx      context.Context
+	cancel   context.CancelFunc
 	webrtc   WebRTCTransportConfig
 	mu       sync.RWMutex
 	sessions map[string]*Session
@@ -47,18 +46,20 @@ type SFU struct {
 
 // NewSFU creates a new sfu instance
 func NewSFU(c Config) *SFU {
+	ctx, cancel := context.WithCancel(context.Background())
 	w := WebRTCTransportConfig{
 		configuration: webrtc.Configuration{
 			SDPSemantics: webrtc.SDPSemanticsUnifiedPlan,
 		},
-		setting: webrtc.SettingEngine{},
+		setting:  webrtc.SettingEngine{},
+		receiver: c.Receiver,
 	}
 	s := &SFU{
+		ctx:      ctx,
+		cancel:   cancel,
 		webrtc:   w,
 		sessions: make(map[string]*Session),
 	}
-
-	config = c
 
 	log.Init(c.Log.Level)
 
@@ -124,7 +125,7 @@ func (s *SFU) NewWebRTCTransport(sid string, me MediaEngine) (*WebRTCTransport, 
 		session = s.newSession(sid)
 	}
 
-	t, err := NewWebRTCTransport(session, me, s.webrtc)
+	t, err := NewWebRTCTransport(s.ctx, session, me, s.webrtc)
 	if err != nil {
 		return nil, err
 	}
@@ -132,22 +133,32 @@ func (s *SFU) NewWebRTCTransport(sid string, me MediaEngine) (*WebRTCTransport, 
 	return t, nil
 }
 
+// Stop the sfu
+func (s *SFU) Stop() {
+	s.cancel()
+}
+
 func (s *SFU) stats() {
 	t := time.NewTicker(statCycle)
-	for range t.C {
-		info := "\n----------------stats-----------------\n"
+	for {
+		select {
+		case <-t.C:
+			info := "\n----------------stats-----------------\n"
 
-		s.mu.RLock()
-		sessions := s.sessions
-		s.mu.RUnlock()
+			s.mu.RLock()
+			sessions := s.sessions
+			s.mu.RUnlock()
 
-		if len(sessions) == 0 {
-			continue
+			if len(sessions) == 0 {
+				continue
+			}
+
+			for _, session := range sessions {
+				info += session.stats()
+			}
+			log.Infof(info)
+		case <-s.ctx.Done():
+			return
 		}
-
-		for _, session := range sessions {
-			info += session.stats()
-		}
-		log.Infof(info)
 	}
 }

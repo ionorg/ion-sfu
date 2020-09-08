@@ -2,16 +2,25 @@ package sfu
 
 import (
 	"testing"
+	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
+	"github.com/pion/transport/test"
 	"github.com/pion/webrtc/v3"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestSFU(t *testing.T) {
+	lim := test.TimeOut(time.Second * 20)
+	defer lim.Stop()
+
+	// report := test.CheckRoutines(t)
+	// defer report()
+
 	s := NewSFU(Config{
 		Log: log.Config{
 			Level: "error",
+			Stats: true,
 		},
 		WebRTC: WebRTCConfig{},
 		Receiver: ReceiverConfig{
@@ -37,4 +46,9 @@ func TestSFU(t *testing.T) {
 	transport, err := s.NewWebRTCTransport("test session", engine)
 	assert.NotNil(t, transport)
 	assert.NoError(t, err)
+
+	remote.Close()
+	transport.Close()
+
+	s.Stop()
 }
