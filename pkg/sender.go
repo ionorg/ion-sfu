@@ -123,7 +123,7 @@ func (s *WebRTCSender) Close() {
 func (s *WebRTCSender) receiveRTCP() {
 	for {
 		pkts, err := s.sender.ReadRTCP()
-		if err == io.ErrClosedPipe {
+		if err == io.ErrClosedPipe || err == io.EOF {
 			return
 		}
 

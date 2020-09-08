@@ -45,16 +45,6 @@ func (r *Router) AddSender(pid string, sub Sender) {
 	go r.subFeedbackLoop(pid, sub)
 }
 
-// DelSub to router
-// func (r *Router) DelSub(pid string) {
-// 	r.mu.Lock()
-// 	if r.senders[pid] != nil {
-// 		r.senders[pid].Close()
-// 		delete(r.senders, pid)
-// 	}
-// 	r.mu.Unlock()
-// }
-
 // Close a router
 func (r *Router) Close() {
 	log.Debugf("Router close")

@@ -219,8 +219,8 @@ func signalRenegotiation(t *testing.T, offer webrtc.SessionDescription, peer *We
 }
 
 func Test3PeerConcurrrentJoin(t *testing.T) {
-	// report := test.CheckRoutines(t)
-	// defer report()
+	report := test.CheckRoutines(t)
+	defer report()
 
 	session := NewSession("session")
 	me := webrtc.MediaEngine{}

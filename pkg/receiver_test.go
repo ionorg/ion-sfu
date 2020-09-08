@@ -9,7 +9,6 @@ import (
 
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp/codecs"
-
 	"github.com/pion/transport/test"
 	"github.com/pion/webrtc/v3"
 	"github.com/pion/webrtc/v3/pkg/media"
@@ -187,5 +186,4 @@ func TestWebRTCVideoReceiver_rembLoop(t *testing.T) {
 
 	assert.NoError(t, sfu.Close())
 	assert.NoError(t, remote.Close())
-
 }
