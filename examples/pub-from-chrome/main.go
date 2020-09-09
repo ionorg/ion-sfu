@@ -16,6 +16,7 @@ import (
 	websocketjsonrpc2 "github.com/sourcegraph/jsonrpc2/websocket"
 	"github.com/spf13/viper"
 
+	"github.com/pion/ion-sfu/examples/internal/crypto"
 	sfu "github.com/pion/ion-sfu/pkg"
 	"github.com/pion/ion-sfu/pkg/log"
 )
@@ -369,12 +370,12 @@ func main() {
 
 	if _, err := os.Stat("cert.pem"); os.IsNotExist(err) {
 		fmt.Println("Generating perm")
-		genPem()
+		crypto.genPem()
 	}
 
 	if _, err := os.Stat("key.pem"); os.IsNotExist(err) {
 		fmt.Println("Generating perm")
-		genPem()
+		crypto.genPem()
 	}
 
 	if !parse() {
