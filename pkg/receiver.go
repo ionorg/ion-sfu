@@ -204,10 +204,15 @@ func (v *WebRTCVideoReceiver) ReadRTCP() (rtcp.Packet, error) {
 
 // WriteRTCP write rtcp packet
 func (v *WebRTCVideoReceiver) WriteRTCP(pkt rtcp.Packet) error {
-	v.mu.RLock()
-	v.rtcpCh <- pkt
-	v.mu.RUnlock()
-	return nil
+	select {
+	case <-v.ctx.Done():
+		return io.ErrClosedPipe
+	default:
+		v.mu.RLock()
+		v.rtcpCh <- pkt
+		v.mu.RUnlock()
+		return nil
+	}
 }
 
 // Track returns receiver track
@@ -261,12 +266,13 @@ func (v *WebRTCVideoReceiver) receiveRTP() {
 			}
 		}
 
-		v.mu.RLock()
-		v.rtpCh <- pkt
-		v.mu.RUnlock()
-
-		if err != nil {
-			log.Errorf("jb err => %v", err)
+		select {
+		case <-v.ctx.Done():
+			return
+		default:
+			v.mu.RLock()
+			v.rtpCh <- pkt
+			v.mu.RUnlock()
 		}
 	}
 }
