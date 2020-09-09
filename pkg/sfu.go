@@ -96,7 +96,7 @@ func NewSFU(c Config) *SFU {
 }
 
 // NewSession creates a new session instance
-func (s *SFU) newSession(id string) *Session {
+func (s *SFU) NewSession(id string) *Session {
 	session := NewSession(id)
 	session.OnClose(func() {
 		s.mu.Lock()
@@ -111,7 +111,7 @@ func (s *SFU) newSession(id string) *Session {
 }
 
 // GetSession by id
-func (s *SFU) getSession(id string) *Session {
+func (s *SFU) GetSession(id string) *Session {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.sessions[id]
@@ -119,10 +119,10 @@ func (s *SFU) getSession(id string) *Session {
 
 // NewWebRTCTransport creates a new WebRTCTransport that is a member of a session
 func (s *SFU) NewWebRTCTransport(sid string, me MediaEngine) (*WebRTCTransport, error) {
-	session := s.getSession(sid)
+	session := s.GetSession(sid)
 
 	if session == nil {
-		session = s.newSession(sid)
+		session = s.NewSession(sid)
 	}
 
 	t, err := NewWebRTCTransport(s.ctx, session, me, s.webrtc)

@@ -7,10 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
-	"net"
-	"os"
-
 	sfu "github.com/pion/ion-sfu/pkg"
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/webrtc/v3"
@@ -18,6 +14,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"io"
+	"net"
+	"os"
+	"sync"
 
 	pb "github.com/pion/ion-sfu/cmd/server/grpc/proto"
 )
@@ -41,13 +41,15 @@ var (
 
 // Server struct
 type Server struct {
-	sfu *sfu.SFU
+	sfu     *sfu.SFU
+	clients sync.Map
 }
 
 // NewSFUServer Creates a new sfu server
 func NewSFUServer(c sfu.Config) *Server {
 	return &Server{
-		sfu: sfu.NewSFU(c),
+		sfu:     sfu.NewSFU(c),
+		clients: sync.Map{},
 	}
 }
 
@@ -368,16 +370,24 @@ func (s *Server) Signal(stream pb.SFU_SignalServer) error {
 
 // Relay endpoint implementation
 func (s *Server) Relay(ctx context.Context, request *pb.RelayRequest) (*pb.RelayResponse, error) {
+	var sfuClient interface{}
+	var session *sfu.Session
 
-	conn, err := grpc.Dial(request.Sfu, grpc.WithInsecure(), grpc.WithBlock())
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "%s", err)
+	sfuClient, ok := s.clients.Load(request.Sfu)
+	if !ok {
+		log.Infof("Cannot find client for %s: creating client ...", request.Sfu)
+		conn, err := grpc.Dial(request.Sfu, grpc.WithInsecure(), grpc.WithBlock())
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "%s", err)
+		}
+		defer conn.Close()
+		sfuClient = pb.NewSFUClient(conn)
+
+		log.Infof("caching client for future use ...")
+		s.clients.Store(request.Sfu, sfuClient)
 	}
-	defer conn.Close()
 
-	sfuClient := pb.NewSFUClient(conn)
-
-	client, err := sfuClient.Signal(ctx)
+	client, err := sfuClient.(pb.SFUClient).Signal(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%s", err)
 	}
@@ -385,7 +395,12 @@ func (s *Server) Relay(ctx context.Context, request *pb.RelayRequest) (*pb.Relay
 	me := sfu.MediaEngine{}
 	me.RegisterDefaultCodecs()
 
-	t, err := sfu.NewWebRTCTransport(ctx, &sfu.Session{}, me, sfu.WebRTCTransportConfig{})
+	session = s.sfu.GetSession(request.Sid)
+	if session == nil {
+		session = s.sfu.NewSession(request.Sid)
+	}
+
+	t, err := sfu.NewWebRTCTransport(ctx, session, me, sfu.WebRTCTransportConfig{})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%s", err)
 	}
