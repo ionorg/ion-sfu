@@ -1,4 +1,4 @@
-package main
+package crypto
 
 import (
 	"crypto/rand"
@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func genPem() {
+func GenPem() {
 
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 

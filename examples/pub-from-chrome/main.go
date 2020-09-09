@@ -370,12 +370,12 @@ func main() {
 
 	if _, err := os.Stat("cert.pem"); os.IsNotExist(err) {
 		fmt.Println("Generating perm")
-		crypto.genPem()
+		crypto.GenPem()
 	}
 
 	if _, err := os.Stat("key.pem"); os.IsNotExist(err) {
 		fmt.Println("Generating perm")
-		crypto.genPem()
+		crypto.GenPem()
 	}
 
 	if !parse() {
