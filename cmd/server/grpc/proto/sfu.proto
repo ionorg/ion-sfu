@@ -6,7 +6,15 @@ package sfu;
 
 service SFU {
     rpc Signal(stream SignalRequest) returns (stream SignalReply) {}
+    rpc Relay(RelayRequest) returns (RelayResponse){}
 }
+
+message RelayRequest {
+    string sfu = 1; //sfu address
+    string sid = 2; //session id
+}
+
+message RelayResponse {}
 
 message SignalRequest {
     oneof payload {

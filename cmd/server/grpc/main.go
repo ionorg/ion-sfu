@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -38,9 +39,16 @@ var (
 	errNoPeer = errors.New("no peer exists")
 )
 
-type server struct {
-	pb.UnimplementedSFUServer
+// Server struct
+type Server struct {
 	sfu *sfu.SFU
+}
+
+// NewSFUServer Creates a new sfu server
+func NewSFUServer(c sfu.Config) *Server {
+	return &Server{
+		sfu: sfu.NewSFU(c),
+	}
 }
 
 const (
@@ -110,6 +118,8 @@ func main() {
 		os.Exit(-1)
 	}
 
+	log.Init(conf.Log.Level)
+
 	log.Infof("--- Starting SFU Node ---")
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -117,8 +127,10 @@ func main() {
 	}
 	log.Infof("SFU Listening at %s", addr)
 	s := grpc.NewServer()
-	pb.RegisterSFUServer(s, &server{
-		sfu: sfu.NewSFU(conf.Config),
+	sfuServer := NewSFUServer(conf.Config)
+	pb.RegisterSFUService(s, &pb.SFUService{
+		Signal: sfuServer.Signal,
+		Relay:  sfuServer.Relay,
 	})
 	if err := s.Serve(lis); err != nil {
 		log.Panicf("failed to serve: %v", err)
@@ -144,7 +156,9 @@ func main() {
 // 2. `Trickle` containing candidate information for Trickle ICE.
 //
 // If the client closes this stream, the webrtc stream will be closed.
-func (s *server) Signal(stream pb.SFU_SignalServer) error {
+
+// Signal endpoint implementation
+func (s *Server) Signal(stream pb.SFU_SignalServer) error {
 	var pid string
 	var peer *sfu.WebRTCTransport
 	for {
@@ -350,4 +364,57 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 			}
 		}
 	}
+}
+
+// Relay endpoint implementation
+func (s *Server) Relay(ctx context.Context, request *pb.RelayRequest) (*pb.RelayResponse, error) {
+
+	conn, err := grpc.Dial(request.Sfu, grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "%s", err)
+	}
+	defer conn.Close()
+
+	sfuClient := pb.NewSFUClient(conn)
+
+	client, err := sfuClient.Signal(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "%s", err)
+	}
+
+	me := sfu.MediaEngine{}
+	me.RegisterDefaultCodecs()
+
+	t, err := sfu.NewWebRTCTransport(ctx, &sfu.Session{}, me, sfu.WebRTCTransportConfig{})
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "%s", err)
+	}
+
+	offer, err := t.CreateOffer()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "%s", err)
+	}
+
+	if err = t.SetLocalDescription(offer); err != nil {
+		return nil, status.Errorf(codes.Internal, "%s", err)
+	}
+
+	log.Debugf("Send offer:\n %s", offer.SDP)
+	err = client.Send(&pb.SignalRequest{
+		Payload: &pb.SignalRequest_Join{
+			Join: &pb.JoinRequest{
+				Sid: request.Sid,
+				Offer: &pb.SessionDescription{
+					Type: offer.Type.String(),
+					Sdp:  []byte(offer.SDP),
+				},
+			},
+		},
+	})
+
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "%s", err)
+	}
+
+	return &pb.RelayResponse{}, nil
 }
