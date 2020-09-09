@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
@@ -94,6 +95,7 @@ func (a *WebRTCAudioReceiver) stats() string {
 type WebRTCVideoReceiver struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
+	mu             sync.RWMutex
 	buffer         *Buffer
 	track          *webrtc.Track
 	bandwidth      uint64
@@ -180,6 +182,8 @@ func (v *WebRTCVideoReceiver) ReadRTP() (*rtp.Packet, error) {
 	case pkt := <-v.rtpCh:
 		return pkt, nil
 	case <-v.ctx.Done():
+		v.mu.Lock()
+		defer v.mu.Unlock()
 		close(v.rtpCh)
 		return nil, io.EOF
 	}
@@ -191,6 +195,8 @@ func (v *WebRTCVideoReceiver) ReadRTCP() (rtcp.Packet, error) {
 	case pkt := <-v.rtcpCh:
 		return pkt, nil
 	case <-v.ctx.Done():
+		v.mu.Lock()
+		defer v.mu.Unlock()
 		close(v.rtcpCh)
 		return nil, io.ErrClosedPipe
 	}
@@ -198,7 +204,9 @@ func (v *WebRTCVideoReceiver) ReadRTCP() (rtcp.Packet, error) {
 
 // WriteRTCP write rtcp packet
 func (v *WebRTCVideoReceiver) WriteRTCP(pkt rtcp.Packet) error {
+	v.mu.RLock()
 	v.rtcpCh <- pkt
+	v.mu.RUnlock()
 	return nil
 }
 
@@ -253,7 +261,9 @@ func (v *WebRTCVideoReceiver) receiveRTP() {
 			}
 		}
 
+		v.mu.RLock()
 		v.rtpCh <- pkt
+		v.mu.RUnlock()
 
 		if err != nil {
 			log.Errorf("jb err => %v", err)

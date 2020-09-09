@@ -23,10 +23,6 @@ jobs:
         if: github.event_name == 'push'
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
-      - name: tag
-        if: github.event_name == 'push'
-        run: docker tag pionwebrtc/ion-sfu:latest-devel
-
       - name: push
         if: github.event_name == 'push'
         run: docker push pionwebrtc/ion-sfu:latest-devel
