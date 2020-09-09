@@ -387,7 +387,7 @@ func (s *Server) Relay(ctx context.Context, request *pb.RelayRequest) (*pb.Relay
 		s.clients.Store(request.Sfu, sfuClient)
 	}
 
-	client, err := sfuClient.(pb.SFUClient).Signal(ctx)
+	sfuStream, err := sfuClient.(pb.SFUClient).Signal(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%s", err)
 	}
@@ -415,7 +415,7 @@ func (s *Server) Relay(ctx context.Context, request *pb.RelayRequest) (*pb.Relay
 	}
 
 	log.Debugf("Send offer:\n %s", offer.SDP)
-	err = client.Send(&pb.SignalRequest{
+	err = sfuStream.Send(&pb.SignalRequest{
 		Payload: &pb.SignalRequest_Join{
 			Join: &pb.JoinRequest{
 				Sid: request.Sid,
@@ -430,6 +430,112 @@ func (s *Server) Relay(ctx context.Context, request *pb.RelayRequest) (*pb.Relay
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "%s", err)
 	}
+
+	go func() {
+		// Handle sfu stream messages
+		for {
+			res, err := sfuStream.Recv()
+
+			if err != nil {
+				if err == io.EOF {
+					// WebRTC Transport closed
+					log.Infof("WebRTC Transport Closed")
+					err = sfuStream.CloseSend()
+					if err != nil {
+						log.Errorf("error sending close: %s", err)
+					}
+					return
+				}
+
+				errStatus, _ := status.FromError(err)
+				if errStatus.Code() == codes.Canceled {
+					err = sfuStream.CloseSend()
+					if err != nil {
+						log.Errorf("error sending close: %s", err)
+					}
+					return
+				}
+
+				log.Errorf("Error receiving signal response: %v", err)
+				return
+			}
+
+			switch payload := res.Payload.(type) {
+			case *pb.SignalReply_Join:
+				// Set the remote SessionDescription
+				log.Debugf("got answer: %s", string(payload.Join.Answer.Sdp))
+				if err = t.SetRemoteDescription(webrtc.SessionDescription{
+					Type: webrtc.SDPTypeAnswer,
+					SDP:  string(payload.Join.Answer.Sdp),
+				}); err != nil {
+					log.Errorf("join error %s", err)
+					return
+				}
+
+			case *pb.SignalReply_Negotiate:
+				log.Debugf("got negotiate %s", payload.Negotiate.Type)
+				if payload.Negotiate.Type == webrtc.SDPTypeOffer.String() {
+					log.Debugf("got offer: %s", string(payload.Negotiate.Sdp))
+					offer := webrtc.SessionDescription{
+						Type: webrtc.SDPTypeOffer,
+						SDP:  string(payload.Negotiate.Sdp),
+					}
+
+					// Peer exists, renegotiating existing peer
+					err = t.SetRemoteDescription(offer)
+					if err != nil {
+						log.Errorf("negotiate error %s", err)
+						continue
+					}
+
+					var answer webrtc.SessionDescription
+					answer, err = t.CreateAnswer()
+					if err != nil {
+						log.Errorf("negotiate error %s", err)
+						continue
+					}
+
+					err = t.SetLocalDescription(answer)
+					if err != nil {
+						log.Errorf("negotiate error %s", err)
+						continue
+					}
+
+					err = sfuStream.Send(&pb.SignalRequest{
+						Payload: &pb.SignalRequest_Negotiate{
+							Negotiate: &pb.SessionDescription{
+								Type: answer.Type.String(),
+								Sdp:  []byte(answer.SDP),
+							},
+						},
+					})
+
+					if err != nil {
+						log.Errorf("negotiate error %s", err)
+						continue
+					}
+				} else if payload.Negotiate.Type == webrtc.SDPTypeAnswer.String() {
+					log.Debugf("got answer: %s", string(payload.Negotiate.Sdp))
+					err = t.SetRemoteDescription(webrtc.SessionDescription{
+						Type: webrtc.SDPTypeAnswer,
+						SDP:  string(payload.Negotiate.Sdp),
+					})
+
+					if err != nil {
+						log.Errorf("negotiate error %s", err)
+						continue
+					}
+				}
+			case *pb.SignalReply_Trickle:
+				var candidate webrtc.ICECandidateInit
+				_ = json.Unmarshal([]byte(payload.Trickle.Init), &candidate)
+				err := t.AddICECandidate(candidate)
+				if err != nil {
+					log.Errorf("error adding ice candidate: %e", err)
+				}
+			}
+		}
+	}()
 
 	return &pb.RelayResponse{}, nil
 }
