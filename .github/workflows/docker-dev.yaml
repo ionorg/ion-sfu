@@ -3,8 +3,6 @@ on:
   push:
     branches:
     - master
-    release:
-      types: [created]
   pull_request:
     branches:
     - master
