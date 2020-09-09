@@ -107,9 +107,14 @@ func (s *WebRTCSender) ReadRTCP() (rtcp.Packet, error) {
 
 // WriteRTP to the track
 func (s *WebRTCSender) WriteRTP(pkt *rtp.Packet) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.sendChan <- pkt
+	select {
+	case <-s.ctx.Done():
+		return
+	default:
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.sendChan <- pkt
+	}
 }
 
 // OnClose is called when the sender is closed
