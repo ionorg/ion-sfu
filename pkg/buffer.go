@@ -120,17 +120,13 @@ func (b *Buffer) Push(p *rtp.Packet) {
 	b.pktBuffer[p.SequenceNumber] = p
 	b.lastPushSN = p.SequenceNumber
 
-	// clear old packet by timestamp
-	b.clearOldPkt(p.Timestamp, p.SequenceNumber)
-
-	// limit nack range
 	if b.lastPushSN-b.lastNackSN >= maxNackLostSize {
+		// limit nack range
 		b.lastNackSN = b.lastPushSN - maxNackLostSize
-	}
-
-	if b.lastPushSN-b.lastNackSN >= maxNackLostSize {
 		// calc [lastNackSN, lastpush-8] if has keyframe
 		nackPair, lostPkt := b.GetNackPair(b.pktBuffer, b.lastNackSN, b.lastPushSN)
+		// clear old packet by timestamp
+		b.clearOldPkt(p.Timestamp, p.SequenceNumber)
 		b.lastNackSN = b.lastPushSN
 		log.Tracef("b.lastNackSN=%v, b.lastPushSN=%v, lostPkt=%v, nackPair=%v", b.lastNackSN, b.lastPushSN, lostPkt, nackPair)
 		if lostPkt > 0 {
