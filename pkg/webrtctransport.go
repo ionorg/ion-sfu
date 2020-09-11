@@ -244,12 +244,13 @@ func (p *WebRTCTransport) NewSender(intrack *webrtc.Track) (Sender, error) {
 	// Create webrtc sender for the peer we are sending track to
 	sender := NewWebRTCSender(p.ctx, outtrack, s)
 
-	sender.OnClose(func() {
-		err = p.pc.RemoveTrack(s)
-		if err != nil {
-			log.Errorf("Error closing sender: %s", err)
-		}
-	})
+	// TODO: remove once resolved https://github.com/pion/webrtc/issues/1343
+	// sender.OnClose(func() {
+	// 	err = p.pc.RemoveTrack(s)
+	// 	if err != nil {
+	// 		log.Errorf("Error closing sender: %s", err)
+	// 	}
+	// })
 
 	return sender, nil
 }
