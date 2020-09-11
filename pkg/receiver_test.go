@@ -48,7 +48,7 @@ func TestWebRTCAudioReceiverRTPForwarding(t *testing.T) {
 	assert.NoError(t, err)
 
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
-	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver, _ []*webrtc.Stream) {
+	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
 		receiver := NewWebRTCAudioReceiver(track)
 		assert.Equal(t, track, receiver.Track())
 
@@ -98,7 +98,7 @@ func TestWebRTCVideoReceiverRTPForwarding(t *testing.T) {
 	assert.NoError(t, err)
 
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
-	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver, _ []*webrtc.Stream) {
+	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
 		ctx := context.Background()
 		receiver := NewWebRTCVideoReceiver(ctx, WebRTCVideoReceiverConfig{}, track)
 		assert.Equal(t, track, receiver.Track())
@@ -150,7 +150,7 @@ func TestWebRTCVideoReceiver_rembLoop(t *testing.T) {
 	assert.NoError(t, err)
 
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
-	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver, _ []*webrtc.Stream) {
+	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
 		assert.NoError(t, err)
 		videoConfig := WebRTCVideoReceiverConfig{}
 

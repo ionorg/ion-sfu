@@ -27,8 +27,8 @@ func TestRouter(t *testing.T) {
 
 	ctx := context.Background()
 	done := make(chan bool)
-	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
-	pubsfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver, _ []*webrtc.Stream) {
+	onTrackFired, onTrackFiredFunc := context.WithCancel(context.Background())
+	pubsfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
 		receiver := NewWebRTCVideoReceiver(ctx, WebRTCVideoReceiverConfig{}, track)
 		router := NewRouter("id", receiver)
 		assert.Equal(t, router.receiver, receiver)
@@ -37,12 +37,12 @@ func TestRouter(t *testing.T) {
 		assert.NoError(t, err)
 
 		ontrackFired := make(chan bool)
-		sub.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver, _ []*webrtc.Stream) {
+		sub.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 			out, err := track.ReadRTP()
 			assert.NoError(t, err)
 
 			assert.Equal(t, []byte{0x10, 0x01, 0x02, 0x03, 0x04}, out.Payload)
-			onReadRTPFiredFunc()
+			onTrackFiredFunc()
 			close(ontrackFired)
 		})
 
@@ -65,7 +65,7 @@ func TestRouter(t *testing.T) {
 		<-ontrackFired
 
 		sub.Close()
-		router.Close()
+		router.close()
 		router.mu.RLock()
 		assert.Len(t, router.senders, 0)
 		router.mu.RUnlock()
@@ -79,7 +79,7 @@ func TestRouter(t *testing.T) {
 	err = signalPair(pub, pubsfu)
 	assert.NoError(t, err)
 
-	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
+	sendRTPUntilDone(onTrackFired.Done(), t, []*webrtc.Track{track})
 	<-done
 
 	pubsfu.Close()
@@ -103,15 +103,15 @@ func TestRouterPartialReadCanClose(t *testing.T) {
 
 	ctx := context.Background()
 	subClosed := make(chan bool)
-	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
-	pubsfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver, _ []*webrtc.Stream) {
+	onTrackFired, onTrackFiredFunc := context.WithCancel(context.Background())
+	pubsfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
 		receiver := NewWebRTCVideoReceiver(ctx, WebRTCVideoReceiverConfig{}, track)
 		router := NewRouter("id", receiver)
 		subsfu, sub, err := newPair(webrtc.Configuration{}, api)
 		assert.NoError(t, err)
 
-		sub.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver, _ []*webrtc.Stream) {
-			onReadRTPFiredFunc()
+		sub.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
+			onTrackFiredFunc()
 		})
 
 		subtrack, err := subsfu.NewTrack(webrtc.DefaultPayloadTypeVP8, track.SSRC(), "video", "pion")
@@ -127,8 +127,8 @@ func TestRouterPartialReadCanClose(t *testing.T) {
 		sender := NewWebRTCSender(ctx, subtrack, s)
 		router.AddSender(subPid, sender)
 
-		<-onReadRTPFired.Done()
-		router.Close()
+		<-onTrackFired.Done()
+		router.close()
 
 		<-sender.ctx.Done()
 		<-receiver.ctx.Done()
@@ -142,7 +142,7 @@ func TestRouterPartialReadCanClose(t *testing.T) {
 	err = signalPair(pub, pubsfu)
 	assert.NoError(t, err)
 
-	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
+	sendRTPUntilDone(onTrackFired.Done(), t, []*webrtc.Track{track})
 
 	<-subClosed
 

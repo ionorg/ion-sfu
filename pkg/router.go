@@ -12,10 +12,11 @@ import (
 
 // Router defines a track rtp/rtcp router
 type Router struct {
-	tid      string
-	mu       sync.RWMutex
-	receiver Receiver
-	senders  map[string]Sender
+	tid            string
+	mu             sync.RWMutex
+	onCloseHandler func()
+	receiver       Receiver
+	senders        map[string]Sender
 }
 
 // NewRouter for routing rtp/rtcp packets
@@ -45,8 +46,15 @@ func (r *Router) AddSender(pid string, sub Sender) {
 	go r.subFeedbackLoop(pid, sub)
 }
 
+// OnClose is called when the router is closed
+func (r *Router) OnClose(f func()) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.onCloseHandler = f
+}
+
 // Close a router
-func (r *Router) Close() {
+func (r *Router) close() {
 	log.Debugf("Router close")
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -57,6 +65,10 @@ func (r *Router) Close() {
 		delete(r.senders, pid)
 	}
 	r.receiver.Close()
+
+	if r.onCloseHandler != nil {
+		r.onCloseHandler()
+	}
 }
 
 func (r *Router) start() {
@@ -64,6 +76,7 @@ func (r *Router) start() {
 		pkt, err := r.receiver.ReadRTP()
 
 		if err == io.EOF {
+			r.close()
 			return
 		}
 
