@@ -153,8 +153,8 @@ func TestNewPeerCallsOnRouterWithAudioTrackRouter(t *testing.T) {
 	lim := test.TimeOut(time.Second * 20)
 	defer lim.Stop()
 
-	// report := test.CheckRoutines(t)
-	// defer report()
+	report := test.CheckRoutines(t)
+	defer report()
 
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
@@ -185,8 +185,8 @@ func TestPeerPairRemoteBGetsOnTrack(t *testing.T) {
 	lim := test.TimeOut(time.Second * 20)
 	defer lim.Stop()
 
-	// report := test.CheckRoutines(t)
-	// defer report()
+	report := test.CheckRoutines(t)
+	defer report()
 
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
@@ -264,8 +264,8 @@ func TestPeerPairRemoteAGetsOnTrackWhenRemoteBJoinsWithPub(t *testing.T) {
 	lim := test.TimeOut(time.Second * 20)
 	defer lim.Stop()
 
-	// report := test.CheckRoutines(t)
-	// defer report()
+	report := test.CheckRoutines(t)
+	defer report()
 
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
@@ -342,8 +342,8 @@ func TestEventHandlers(t *testing.T) {
 	lim := test.TimeOut(time.Second * 20)
 	defer lim.Stop()
 
-	// report := test.CheckRoutines(t)
-	// defer report()
+	report := test.CheckRoutines(t)
+	defer report()
 
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
@@ -440,8 +440,8 @@ func TestPeerBWithAudioOnlyWhenPeerAHasAudioAndVideo(t *testing.T) {
 	lim := test.TimeOut(time.Second * 20)
 	defer lim.Stop()
 
-	// report := test.CheckRoutines(t)
-	// defer report()
+	report := test.CheckRoutines(t)
+	defer report()
 
 	// Create peer A with audio and video
 	meA := webrtc.MediaEngine{}
@@ -521,8 +521,8 @@ func TestPeerRemovesRouterWhenRemoteRemovesTrack(t *testing.T) {
 	lim := test.TimeOut(time.Second * 20)
 	defer lim.Stop()
 
-	// report := test.CheckRoutines(t)
-	// defer report()
+	report := test.CheckRoutines(t)
+	defer report()
 
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
@@ -553,6 +553,8 @@ func TestPeerRemovesRouterWhenRemoteRemovesTrack(t *testing.T) {
 	assert.NoError(t, err)
 	err = renegotiate(remote, peer)
 	assert.NoError(t, err)
+
+	time.Sleep(time.Millisecond * 50)
 
 	router = peer.GetRouter(track.SSRC())
 	assert.Nil(t, router)
