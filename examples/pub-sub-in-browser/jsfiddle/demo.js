@@ -53,6 +53,8 @@ socket.addEventListener('message', async (event) => {
       params: { desc: answer },
       id
     }))
+  } else if (resp.method === "trickle") {
+    pc.addIceCandidate(resp.params).catch(log);
   }
 })
 
