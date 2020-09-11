@@ -74,7 +74,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 	// Add transport to the session
 	session.AddTransport(p)
 
-	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver, streams []*webrtc.Stream) {
+	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 		log.Debugf("Peer %s got remote track id: %s ssrc: %d", p.id, track.ID(), track.SSRC())
 		var recv Receiver
 		switch track.Kind() {
@@ -93,15 +93,10 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 
 		p.session.AddRouter(router)
 
-		streams[0].OnRemoveTrack(func(track *webrtc.Track) {
+		router.OnClose(func() {
 			p.mu.Lock()
 			defer p.mu.Unlock()
-			r := p.routers[track.SSRC()]
-
-			if r != nil {
-				r.Close()
-				delete(p.routers, track.SSRC())
-			}
+			delete(p.routers, track.SSRC())
 		})
 
 		p.mu.Lock()
@@ -280,13 +275,6 @@ func (p *WebRTCTransport) GetRouter(ssrc uint32) *Router {
 
 // Close peer
 func (p *WebRTCTransport) Close() error {
-	p.mu.Lock()
-	for rid, router := range p.routers {
-		router.Close()
-		delete(p.routers, rid)
-	}
-	p.mu.Unlock()
-
 	p.session.RemoveTransport(p.id)
 	p.cancel()
 	return p.pc.Close()

@@ -69,13 +69,13 @@ func TestSenderRTPForwarding(t *testing.T) {
 	err = rtp.Unmarshal(rawPkt)
 	assert.NoError(t, err)
 
-	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
-	remote.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver, _ []*webrtc.Stream) {
+	onTrackFired, onTrackFiredFunc := context.WithCancel(context.Background())
+	remote.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 		out, err := track.ReadRTP()
 		assert.NoError(t, err)
 
 		assert.Equal(t, []byte{0x10, 0x01, 0x02, 0x03, 0x04}, out.Payload)
-		onReadRTPFiredFunc()
+		onTrackFiredFunc()
 	})
 
 	track, err := sfu.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
@@ -91,7 +91,7 @@ func TestSenderRTPForwarding(t *testing.T) {
 	err = signalPair(sfu, remote)
 	assert.NoError(t, err)
 
-	sendRTPWithSenderUntilDone(onReadRTPFired.Done(), t, track, sender)
+	sendRTPWithSenderUntilDone(onTrackFired.Done(), t, track, sender)
 
 	assert.Contains(t, sender.stats(), "payload")
 

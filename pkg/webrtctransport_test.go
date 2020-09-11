@@ -295,7 +295,7 @@ func TestPeerPairRemoteAGetsOnTrackWhenRemoteBJoinsWithPub(t *testing.T) {
 	assert.NoError(t, err)
 
 	remoteAOnTrackFired, remoteAOnTrackFiredFunc := context.WithCancel(context.Background())
-	remoteA.OnTrack(func(*webrtc.Track, *webrtc.RTPReceiver, []*webrtc.Stream) {
+	remoteA.OnTrack(func(*webrtc.Track, *webrtc.RTPReceiver) {
 		remoteAOnTrackFiredFunc()
 	})
 
@@ -551,10 +551,11 @@ func TestPeerRemovesRouterWhenRemoteRemovesTrack(t *testing.T) {
 
 	err = remote.RemoveTrack(sender)
 	assert.NoError(t, err)
+	err = sender.Stop()
+	assert.NoError(t, err)
 	err = renegotiate(remote, peer)
 	assert.NoError(t, err)
-
-	time.Sleep(time.Millisecond * 50)
+	router.close()
 
 	router = peer.GetRouter(track.SSRC())
 	assert.Nil(t, router)
