@@ -115,7 +115,7 @@ func main() {
 
 	s, err := md.GetUserMedia(mediadevices.MediaStreamConstraints{
 		Video: func(c *mediadevices.MediaTrackConstraints) {
-			c.FrameFormat = prop.FrameFormat(frame.FormatI420)
+			c.FrameFormat = prop.FrameFormat(frame.FormatYUYV)
 			c.Enabled = true
 			c.Width = prop.Int(640)
 			c.Height = prop.Int(480)
