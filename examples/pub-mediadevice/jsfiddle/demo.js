@@ -69,6 +69,9 @@ const join = async () => {
         offerToReceiveVideo: true
     }
 
+    pc.addTransceiver('audio', {'direction': 'sendrecv'})
+    pc.addTransceiver('video', {'direction': 'sendrecv'})
+    
     const offer = await pc.createOffer(offerOption)
     await pc.setLocalDescription(offer)
     const id = uuidv4()
