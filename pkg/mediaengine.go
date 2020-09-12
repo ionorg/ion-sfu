@@ -12,6 +12,7 @@ import (
 const (
 	mediaNameAudio = "audio"
 	mediaNameVideo = "video"
+	IOSH264Fmtp    = "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f"
 )
 
 var (
@@ -33,7 +34,7 @@ type MediaEngine struct {
 // The offerer sets the PayloadTypes for the connection.
 // PopulateFromSDP allows an answerer to properly match the PayloadTypes from the offerer.
 // A MediaEngine populated by PopulateFromSDP should be used only for a single session.
-func (e *MediaEngine) PopulateFromSDP(sd webrtc.SessionDescription) error {
+func (e *MediaEngine) PopulateFromSDP(sd webrtc.SessionDescription, codecs []string) error {
 	sdp := sdp.SessionDescription{}
 	if err := sdp.Unmarshal([]byte(sd.SDP)); err != nil {
 		return err
@@ -56,44 +57,27 @@ func (e *MediaEngine) PopulateFromSDP(sd webrtc.SessionDescription) error {
 				return fmt.Errorf("could not find codec for payload type %d", payloadType)
 			}
 
-			var codec *webrtc.RTPCodec
-			switch {
-			case strings.EqualFold(payloadCodec.Name, webrtc.Opus):
-				codec = webrtc.NewRTPOpusCodec(payloadType, payloadCodec.ClockRate)
-			case strings.EqualFold(payloadCodec.Name, webrtc.VP8):
-				codec = webrtc.NewRTPVP8CodecExt(payloadType, payloadCodec.ClockRate, rtcpfb, payloadCodec.Fmtp)
-			case strings.EqualFold(payloadCodec.Name, webrtc.VP9):
-				codec = webrtc.NewRTPVP9CodecExt(payloadType, payloadCodec.ClockRate, rtcpfb, payloadCodec.Fmtp)
-			case strings.EqualFold(payloadCodec.Name, webrtc.H264):
-				codec = webrtc.NewRTPH264CodecExt(payloadType, payloadCodec.ClockRate, rtcpfb, payloadCodec.Fmtp)
-			default:
-				// ignoring other codecs
-				continue
+			fmt.Printf("codecs=%+v\n", codecs)
+			for _, c := range codecs {
+				var codec *webrtc.RTPCodec
+				switch {
+				case strings.EqualFold(payloadCodec.Name, webrtc.Opus) && strings.EqualFold(payloadCodec.Name, c):
+					codec = webrtc.NewRTPOpusCodec(payloadType, payloadCodec.ClockRate)
+				case strings.EqualFold(payloadCodec.Name, webrtc.VP8) && strings.EqualFold(payloadCodec.Name, c):
+					codec = webrtc.NewRTPVP8CodecExt(payloadType, payloadCodec.ClockRate, rtcpfb, payloadCodec.Fmtp)
+				case strings.EqualFold(payloadCodec.Name, webrtc.VP9) && strings.EqualFold(payloadCodec.Name, c):
+					codec = webrtc.NewRTPVP9CodecExt(payloadType, payloadCodec.ClockRate, rtcpfb, payloadCodec.Fmtp)
+				case strings.EqualFold(payloadCodec.Name, webrtc.H264) && strings.EqualFold(payloadCodec.Name, c) && strings.EqualFold(payloadCodec.Fmtp, IOSH264Fmtp):
+					codec = webrtc.NewRTPH264CodecExt(payloadType, payloadCodec.ClockRate, rtcpfb, payloadCodec.Fmtp)
+				default:
+					// ignoring other codecs
+					continue
+				}
+				fmt.Printf("e.RegisterCodec  %+v\n", codec)
+				e.RegisterCodec(codec)
 			}
 
-			e.RegisterCodec(codec)
 		}
-	}
-
-	// Use defaults for codecs not provided in sdp
-	if len(e.GetCodecsByName(webrtc.Opus)) == 0 {
-		codec := webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000)
-		e.RegisterCodec(codec)
-	}
-
-	if len(e.GetCodecsByName(webrtc.VP8)) == 0 {
-		codec := webrtc.NewRTPVP8CodecExt(webrtc.DefaultPayloadTypeVP8, 90000, rtcpfb, "")
-		e.RegisterCodec(codec)
-	}
-
-	if len(e.GetCodecsByName(webrtc.VP9)) == 0 {
-		codec := webrtc.NewRTPVP9CodecExt(webrtc.DefaultPayloadTypeVP9, 90000, rtcpfb, "")
-		e.RegisterCodec(codec)
-	}
-
-	if len(e.GetCodecsByName(webrtc.H264)) == 0 {
-		codec := webrtc.NewRTPH264CodecExt(webrtc.DefaultPayloadTypeH264, 90000, rtcpfb, "")
-		e.RegisterCodec(codec)
 	}
 
 	return nil

@@ -185,7 +185,7 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 			}
 
 			me := sfu.MediaEngine{}
-			err := me.PopulateFromSDP(offer)
+			err := me.PopulateFromSDP(offer, payload.Join.Codecs)
 			if err != nil {
 				log.Errorf("join error: %v", err)
 				return status.Errorf(codes.InvalidArgument, "join error %s", err)

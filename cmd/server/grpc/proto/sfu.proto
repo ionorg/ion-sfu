@@ -27,6 +27,7 @@ message SignalReply {
 message JoinRequest {
     string sid = 1;
     SessionDescription offer = 2;
+    repeated string codecs = 3;
 }
 
 message JoinReply {

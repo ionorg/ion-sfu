@@ -16,6 +16,7 @@ import (
 	websocketjsonrpc2 "github.com/sourcegraph/jsonrpc2/websocket"
 	"github.com/spf13/viper"
 
+	proto "github.com/pion/ion-sfu/cmd/server/json-rpc/proto"
 	sfu "github.com/pion/ion-sfu/pkg"
 	"github.com/pion/ion-sfu/pkg/log"
 )
@@ -119,22 +120,6 @@ func NewRPC() *RPC {
 	}
 }
 
-// Join message sent when initializing a peer connection
-type Join struct {
-	Sid   string                    `json:"sid"`
-	Offer webrtc.SessionDescription `json:"offer"`
-}
-
-// Negotiation message sent when renegotiating
-type Negotiation struct {
-	Desc webrtc.SessionDescription `json:"desc"`
-}
-
-// Trickle message sent when renegotiating
-type Trickle struct {
-	Candidate webrtc.ICECandidateInit `json:"candidate"`
-}
-
 // Handle RPC call
 func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
 	p := forContext(ctx)
@@ -150,7 +135,7 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 			break
 		}
 
-		var join Join
+		var join proto.Join
 		err := json.Unmarshal(*req.Params, &join)
 		if err != nil {
 			log.Errorf("connect: error parsing offer: %v", err)
@@ -162,7 +147,7 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 		}
 
 		me := sfu.MediaEngine{}
-		err = me.PopulateFromSDP(join.Offer)
+		err = me.PopulateFromSDP(join.Offer, join.Codecs)
 		if err != nil {
 			log.Errorf("connect: error creating peer: %v", err)
 			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
@@ -196,6 +181,7 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 		}
 
 		answer, err := peer.CreateAnswer()
+		fmt.Printf("answer=%+v\n", answer)
 		if err != nil {
 			log.Errorf("Offer error: answer=%v err=%v", answer, err)
 			_ = conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
@@ -263,7 +249,7 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 
 		log.Infof("peer %s offer", p.peer.ID())
 
-		var negotiation Negotiation
+		var negotiation proto.Negotiation
 		err := json.Unmarshal(*req.Params, &negotiation)
 		if err != nil {
 			log.Errorf("connect: error parsing offer: %v", err)
@@ -319,7 +305,7 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 
 		log.Infof("peer %s answer", p.peer.ID())
 
-		var negotiation Negotiation
+		var negotiation proto.Negotiation
 		err := json.Unmarshal(*req.Params, &negotiation)
 		if err != nil {
 			log.Errorf("connect: error parsing answer: %v", err)
@@ -348,7 +334,7 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 
 		log.Infof("peer %s trickle", p.peer.ID())
 
-		var trickle Trickle
+		var trickle proto.Trickle
 		err := json.Unmarshal(*req.Params, &trickle)
 		if err != nil {
 			log.Errorf("connect: error parsing candidate: %v", err)
