@@ -34,6 +34,7 @@ type WebRTCTransport struct {
 	mu             sync.RWMutex
 	session        *Session
 	routers        map[uint32]*Router
+	senders        map[uint32]*WebRTCSender
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
 }
 
@@ -56,19 +57,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 		me:      me,
 		session: session,
 		routers: make(map[uint32]*Router),
-	}
-
-	// Subscribe to existing transports
-	for _, t := range session.Transports() {
-		for _, router := range t.Routers() {
-			sender, err := p.NewSender(router.Track())
-			log.Infof("Init add router ssrc %d to %s", router.Track().SSRC(), p.id)
-			if err != nil {
-				log.Errorf("Error subscribing to router %v", router)
-				continue
-			}
-			router.AddSender(p.id, sender)
-		}
+		senders: make(map[uint32]*WebRTCSender),
 	}
 
 	// Add transport to the session
@@ -129,6 +118,21 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 	return p, nil
 }
 
+// Subscribe to transports in session
+func (p *WebRTCTransport) Subscribe() {
+	for _, t := range p.session.Transports() {
+		for _, router := range t.Routers() {
+			sender, err := p.NewSender(router.Track())
+			log.Infof("Init add router ssrc %d to %s", router.Track().SSRC(), p.id)
+			if err != nil {
+				log.Errorf("Error subscribing to router %v", router)
+				continue
+			}
+			router.AddSender(p.id, sender)
+		}
+	}
+}
+
 // CreateOffer generates the localDescription
 func (p *WebRTCTransport) CreateOffer() (webrtc.SessionDescription, error) {
 	offer, err := p.pc.CreateOffer(nil)
@@ -169,6 +173,13 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 		log.Errorf("SetRemoteDescription error: %v", err)
 		return err
 	}
+
+	// Ensure senders are started
+	p.mu.RLock()
+	for _, sender := range p.senders {
+		sender.Start()
+	}
+	p.mu.RUnlock()
 
 	return nil
 }
@@ -243,6 +254,10 @@ func (p *WebRTCTransport) NewSender(intrack *webrtc.Track) (Sender, error) {
 
 	// Create webrtc sender for the peer we are sending track to
 	sender := NewWebRTCSender(p.ctx, outtrack, s)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.senders[intrack.SSRC()] = sender
 
 	// TODO: remove once resolved https://github.com/pion/webrtc/issues/1343
 	// sender.OnClose(func() {

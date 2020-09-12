@@ -24,6 +24,7 @@ type Sender interface {
 
 // WebRTCSender represents a Sender which writes RTP to a webrtc track
 type WebRTCSender struct {
+	active         bool
 	ctx            context.Context
 	cancel         context.CancelFunc
 	mu             sync.Mutex
@@ -63,9 +64,19 @@ func NewWebRTCSender(ctx context.Context, track *webrtc.Track, sender *webrtc.RT
 	}
 
 	go s.receiveRTCP()
-	go s.sendRTP()
 
 	return s
+}
+
+// Start sending RTP. We should only start sending RTP
+// after the peer connection has been fully negotiated.
+// Remote will fail to parse the offer if RTP for a
+// SSRC arrives before the RemoteDescription is set
+func (s *WebRTCSender) Start() {
+	if !s.active {
+		s.active = true
+		go s.sendRTP()
+	}
 }
 
 func (s *WebRTCSender) sendRTP() {

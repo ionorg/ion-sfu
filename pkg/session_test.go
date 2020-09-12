@@ -134,6 +134,7 @@ func TestMultiPeerSession(t *testing.T) {
 	// Setup remote <-> peer for b
 	peerB, err := signalPeer(session, remoteB)
 	assert.NoError(t, err)
+	peerB.Subscribe()
 
 	sessionClosed := make(chan struct{})
 	session.OnClose(func() {
@@ -230,9 +231,11 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 
 	peerB, remoteB, trackB, err := createPeer(t, session, api)
 	assert.NoError(t, err)
+	peerB.Subscribe()
 
 	peerC, remoteC, trackC, err := createPeer(t, session, api)
 	assert.NoError(t, err)
+	peerC.Subscribe()
 
 	peerAGotTracks := make(chan bool)
 	peerA.OnNegotiationNeeded(func() {
@@ -393,8 +396,10 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	assert.NoError(t, err)
 	gatherComplete := webrtc.GatheringCompletePromise(remoteB)
 	peerB, err := NewWebRTCTransport(context.TODO(), session, engine, conf)
-	session.AddTransport(peerB)
 	assert.NoError(t, err)
+	session.AddTransport(peerB)
+	peerB.Subscribe()
+
 	<-gatherComplete
 	err = peerB.SetRemoteDescription(*remoteB.LocalDescription())
 	assert.NoError(t, err)
@@ -448,8 +453,10 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	err = engine.PopulateFromSDP(offer)
 	assert.NoError(t, err)
 	peerC, err := NewWebRTCTransport(context.TODO(), session, engine, conf)
-	session.AddTransport(peerC)
 	assert.NoError(t, err)
+	peerC.Subscribe()
+	session.AddTransport(peerC)
+
 	<-gatherComplete
 	err = peerC.SetRemoteDescription(*remoteC.LocalDescription())
 	assert.NoError(t, err)
@@ -544,6 +551,7 @@ func TestPeerBWithAudioAndVideoWhenPeerAHasAudioOnly(t *testing.T) {
 
 	peerB, err := signalPeer(session, remoteB)
 	assert.NoError(t, err)
+	peerB.Subscribe()
 
 	onTrackBAudio := waitForRouter(peerB, trackBAudio.SSRC())
 	sendRTPUntilDone(onTrackBAudio, t, []*webrtc.Track{trackBAudio})

@@ -91,6 +91,8 @@ func TestSenderRTPForwarding(t *testing.T) {
 	err = signalPair(sfu, remote)
 	assert.NoError(t, err)
 
+	sender.Start()
+
 	sendRTPWithSenderUntilDone(onTrackFired.Done(), t, track, sender)
 
 	assert.Contains(t, sender.stats(), "payload")
@@ -142,6 +144,8 @@ func TestSenderRTCPForwarding(t *testing.T) {
 
 	err = signalPair(sfu, remote)
 	assert.NoError(t, err)
+
+	sender.Start()
 
 	pkt := &rtcp.PictureLossIndication{
 		SenderSSRC: track.SSRC(),
@@ -206,6 +210,8 @@ func TestSenderRTCPREMBForwarding(t *testing.T) {
 
 	err = signalPair(sfu, remote)
 	assert.NoError(t, err)
+
+	sender.Start()
 
 	expected := &rtcp.ReceiverEstimatedMaximumBitrate{
 		SenderSSRC: 1,

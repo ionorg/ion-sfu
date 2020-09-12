@@ -497,6 +497,7 @@ func TestPeerBWithAudioOnlyWhenPeerAHasAudioAndVideo(t *testing.T) {
 
 	peerB, err := signalPeer(session, remoteB)
 	assert.NoError(t, err)
+	peerB.Subscribe()
 
 	onTrackBAudio := waitForRouter(peerB, trackBAudio.SSRC())
 	sendRTPUntilDone(onTrackBAudio, t, []*webrtc.Track{trackBAudio})

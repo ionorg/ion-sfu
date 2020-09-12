@@ -62,6 +62,8 @@ func TestRouter(t *testing.T) {
 		assert.Equal(t, sender, router.senders[subPid])
 		assert.Contains(t, router.stats(), "track id:")
 
+		sender.Start()
+
 		<-ontrackFired
 
 		sub.Close()
@@ -126,6 +128,7 @@ func TestRouterPartialReadCanClose(t *testing.T) {
 		subPid := "subpid"
 		sender := NewWebRTCSender(ctx, subtrack, s)
 		router.AddSender(subPid, sender)
+		sender.Start()
 
 		<-onTrackFired.Done()
 		router.close()

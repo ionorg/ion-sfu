@@ -251,6 +251,11 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 
 		_ = conn.Reply(ctx, req.ID, answer)
 
+		// Subscribe to peers. We do this after the join negotiation so we can
+		// use the receipt of the answer to know the remote peer is ready to
+		// receive track rtp.
+		peer.Subscribe()
+
 	case "offer":
 		if p.peer == nil {
 			log.Errorf("connect: no peer exists for connection")

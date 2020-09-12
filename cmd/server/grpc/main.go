@@ -171,7 +171,7 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 		switch payload := in.Payload.(type) {
 		case *pb.SignalRequest_Join:
 			var answer webrtc.SessionDescription
-			log.Infof("signal->join called:\n%v", string(payload.Join.Offer.Sdp))
+			log.Infof("signal->join:\n%v", string(payload.Join.Offer.Sdp))
 
 			if peer != nil {
 				// already joined
@@ -285,10 +285,16 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 				return status.Errorf(codes.Internal, "join error %s", err)
 			}
 
+			// Subscribe to peers. We do this after the join negotiation so we can
+			// use the receipt of the answer to know the remote peer is ready to
+			// receive track rtp.
+			peer.Subscribe()
+
 		case *pb.SignalRequest_Negotiate:
 			if peer == nil {
 				return status.Errorf(codes.FailedPrecondition, "%s", errNoPeer)
 			}
+			log.Infof("signal->negotiate %s:\n%v", payload.Negotiate.Type, string(payload.Negotiate.Sdp))
 
 			if payload.Negotiate.Type == webrtc.SDPTypeOffer.String() {
 				offer := webrtc.SessionDescription{
