@@ -39,7 +39,6 @@ var (
 )
 
 type server struct {
-	pb.UnimplementedSFUServer
 	sfu *sfu.SFU
 }
 
@@ -110,6 +109,8 @@ func main() {
 		os.Exit(-1)
 	}
 
+	log.Init(conf.Log.Level)
+
 	log.Infof("--- Starting SFU Node ---")
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -117,8 +118,10 @@ func main() {
 	}
 	log.Infof("SFU Listening at %s", addr)
 	s := grpc.NewServer()
-	pb.RegisterSFUServer(s, &server{
-		sfu: sfu.NewSFU(conf.Config),
+	sfuServer := server{
+		sfu: sfu.NewSFU(conf.Config)}
+	pb.RegisterSFUService(s, &pb.SFUService{
+		Signal: sfuServer.Signal,
 	})
 	if err := s.Serve(lis); err != nil {
 		log.Panicf("failed to serve: %v", err)
