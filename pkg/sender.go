@@ -69,6 +69,12 @@ func NewWebRTCSender(ctx context.Context, track *webrtc.Track, sender *webrtc.RT
 }
 
 func (s *WebRTCSender) sendRTP() {
+	// There exists a bug in chrome where setLocalDescription
+	// fails if track RTP arrives before the sfu offer is set.
+	// We deplay sending RTP here to avoid the issue.
+	// https://bugs.chromium.org/p/webrtc/issues/detail?id=10139
+	time.Sleep(500 * time.Millisecond)
+
 	for {
 		select {
 		case pkt := <-s.sendChan:
