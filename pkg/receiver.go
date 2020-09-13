@@ -20,15 +20,15 @@ const (
 
 	// tcc stuff
 	tccExtMapID = 3
-	//64ms = 64000us = 250 << 8
-	//https://webrtc.googlesource.com/src/webrtc/+/f54860e9ef0b68e182a01edc994626d21961bc4b/modules/rtp_rtcp/source/rtcp_packet/transport_feedback.cc#41
+	// 64ms = 64000us = 250 << 8
+	// https://webrtc.googlesource.com/src/webrtc/+/f54860e9ef0b68e182a01edc994626d21961bc4b/modules/rtp_rtcp/source/rtcp_packet/transport_feedback.cc#41
 	baseScaleFactor = 64000
-	//https://webrtc.googlesource.com/src/webrtc/+/f54860e9ef0b68e182a01edc994626d21961bc4b/modules/rtp_rtcp/source/rtcp_packet/transport_feedback.cc#43
+	// https://webrtc.googlesource.com/src/webrtc/+/f54860e9ef0b68e182a01edc994626d21961bc4b/modules/rtp_rtcp/source/rtcp_packet/transport_feedback.cc#43
 	timeWrapPeriodUs = (int64(1) << 24) * baseScaleFactor
 )
 
 type rtpExtInfo struct {
-	//transport sequence num
+	// transport sequence num
 	TSN       uint16
 	Timestamp int64
 }
@@ -240,8 +240,8 @@ func (v *WebRTCVideoReceiver) receiveRTP() {
 			if err == nil {
 				// if time.Now().Sub(b.bufferStartTS) > time.Second {
 
-				//only calc the packet which rtpTCC.TransportSequence > b.lastTCCSN
-				//https://webrtc.googlesource.com/src/webrtc/+/f54860e9ef0b68e182a01edc994626d21961bc4b/modules/rtp_rtcp/source/rtcp_packet/transport_feedback.cc#353
+				// only calc the packet which rtpTCC.TransportSequence > b.lastTCCSN
+				// https://webrtc.googlesource.com/src/webrtc/+/f54860e9ef0b68e182a01edc994626d21961bc4b/modules/rtp_rtcp/source/rtcp_packet/transport_feedback.cc#353
 				// if rtpTCC.TransportSequence > b.lastTCCSN {
 				v.rtpExtInfoChan <- rtpExtInfo{
 					TSN:       rtpTCC.TransportSequence,
@@ -343,11 +343,11 @@ func (v *WebRTCVideoReceiver) tccLoop(cycle int) {
 				rtpExtInfo[info.TSN] = info.Timestamp
 			}
 
-			//find the min and max transport sn
+			// find the min and max transport sn
 			var minTSN, maxTSN uint16
 			for tsn := range rtpExtInfo {
 
-				//init
+				// init
 				if minTSN == 0 {
 					minTSN = tsn
 				}
@@ -361,14 +361,14 @@ func (v *WebRTCVideoReceiver) tccLoop(cycle int) {
 				}
 			}
 
-			//force small deta rtcp.RunLengthChunk
+			// force small deta rtcp.RunLengthChunk
 			chunk := &rtcp.RunLengthChunk{
 				Type:               rtcp.TypeTCCRunLengthChunk,
 				PacketStatusSymbol: rtcp.TypeTCCPacketReceivedSmallDelta,
 				RunLength:          maxTSN - minTSN + 1,
 			}
 
-			//gather deltas
+			// gather deltas
 			var recvDeltas []*rtcp.RecvDelta
 			var refTime uint32
 			var lastTS int64
@@ -376,7 +376,7 @@ func (v *WebRTCVideoReceiver) tccLoop(cycle int) {
 			for i := minTSN; i <= maxTSN; i++ {
 				ts, ok := rtpExtInfo[i]
 
-				//lost packet
+				// lost packet
 				if !ok {
 					recvDelta := &rtcp.RecvDelta{
 						Type: rtcp.TypeTCCPacketReceivedSmallDelta,
@@ -390,7 +390,7 @@ func (v *WebRTCVideoReceiver) tccLoop(cycle int) {
 					lastTS = ts
 				}
 
-				//received packet
+				// received packet
 				if baseTimeTicks == 0 {
 					baseTimeTicks = (ts % timeWrapPeriodUs) / baseScaleFactor
 				}
