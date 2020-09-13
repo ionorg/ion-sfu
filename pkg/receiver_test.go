@@ -165,14 +165,14 @@ func TestWebRTCVideoReceiver_rembLoop(t *testing.T) {
 		err = rtcpPacket.Unmarshal([]byte{1})
 		assert.Error(t, err)
 
-		//it could either be packet too short or buffer too short
+		// it could either be packet too short or buffer too short
 		assert.Contains(t, err.Error(), "too short")
 
 		bytes, err := rtcpPacket.Marshal()
 		assert.NoError(t, err)
 		assert.NotNil(t, bytes)
 
-		//ensure that the rtcp from the channel is a packet
+		// ensure that the rtcp from the channel is a packet
 		_, ok := rtcpPacket.(rtcp.Packet)
 		assert.True(t, ok)
 

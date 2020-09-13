@@ -46,17 +46,17 @@ type Buffer struct {
 	ssrc        uint32
 	payloadType uint8
 
-	//calc lost rate
+	// calc lost rate
 	receivedPkt int
 	lostPkt     int
 
-	//response nack channel
+	// response nack channel
 	rtcpCh chan rtcp.Packet
 
-	//calc bandwidth
+	// calc bandwidth
 	totalByte uint64
 
-	//buffer time
+	// buffer time
 	maxBufferTS uint32
 
 	stop bool
@@ -132,7 +132,7 @@ func (b *Buffer) Push(p *rtp.Packet) {
 		if lostPkt > 0 {
 			b.lostPkt += lostPkt
 			nack := &rtcp.TransportLayerNack{
-				//origin ssrc
+				// origin ssrc
 				// SenderSSRC: b.ssrc,
 				MediaSSRC: b.ssrc,
 				Nacks: []rtcp.NackPair{
@@ -150,9 +150,9 @@ func (b *Buffer) clearOldPkt(pushPktTS uint32, pushPktSN uint16) {
 	clearSN := b.lastClearSN
 	log.Tracef("clearOldPkt pushPktTS=%d pushPktSN=%d     clearTS=%d  clearSN=%d ", pushPktTS, pushPktSN, clearTS, clearSN)
 	if tsDelta(pushPktTS, clearTS) >= b.maxBufferTS {
-		//pushPktSN will loop from 0 to 65535
+		// pushPktSN will loop from 0 to 65535
 		if pushPktSN == 0 {
-			//make sure clear the old packet from 655xx to 65535
+			// make sure clear the old packet from 655xx to 65535
 			pushPktSN = maxSN - 1
 		}
 		var skipCount int
@@ -209,16 +209,16 @@ func (b *Buffer) stats() string {
 func (b *Buffer) GetNackPair(buffer [65536]*rtp.Packet, begin, end uint16) (rtcp.NackPair, int) {
 	var lostPkt int
 
-	//size is <= 17
+	// size is <= 17
 	if end-begin > maxNackLostSize {
 		return rtcp.NackPair{}, lostPkt
 	}
 
-	//Bitmask of following lost packets (BLP)
+	// Bitmask of following lost packets (BLP)
 	blp := uint16(0)
 	lost := uint16(0)
 
-	//find first lost pkt
+	// find first lost pkt
 	for i := begin; i < end; i++ {
 		if buffer[i] == nil {
 			lost = i
@@ -227,14 +227,14 @@ func (b *Buffer) GetNackPair(buffer [65536]*rtp.Packet, begin, end uint16) (rtcp
 		}
 	}
 
-	//no packet lost
+	// no packet lost
 	if lost == 0 {
 		return rtcp.NackPair{}, lostPkt
 	}
 
-	//calc blp
+	// calc blp
 	for i := lost; i < end; i++ {
-		//calc from next lost packet
+		// calc from next lost packet
 		if i > lost && buffer[i] == nil {
 			blp |= (1 << (i - lost - 1))
 			lostPkt++

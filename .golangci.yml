@@ -1,0 +1,17 @@
+linters-settings:
+  govet:
+    check-shadowing: true
+  misspell:
+    locale: US
+
+linters:
+  disable-all: true
+  enable:
+    - gofmt
+    - golint
+    - scopelint
+    - gocritic
+
+run:
+  skip-dirs:
+    - examples/pub-mediadevice

@@ -5,6 +5,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"log"
+	"net/url"
+
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/pion/mediadevices"
@@ -14,9 +18,6 @@ import (
 	"github.com/pion/mediadevices/pkg/prop"
 	"github.com/pion/webrtc/v2"
 	"github.com/sourcegraph/jsonrpc2"
-	"io"
-	"log"
-	"net/url"
 
 	// Note: If you don't have a camera or microphone or your adapters are not supported,
 	//       you can always swap your adapters with our dummy adapters below.
@@ -31,29 +32,29 @@ type Candidate struct {
 }
 
 type SendOffer struct {
-	SID string	`json:sid`
+	SID   string                     `json:sid`
 	Offer *webrtc.SessionDescription `json:offer`
 }
 
 type SendAnswer struct {
-	SID string	`json:sid`
+	SID    string                     `json:sid`
 	Answer *webrtc.SessionDescription `json:answer`
 }
 
 type TrickleResponse struct {
-	Params *webrtc.ICECandidateInit	`json:params`
-	Method string		`json:method`
+	Params *webrtc.ICECandidateInit `json:params`
+	Method string                   `json:method`
 }
 
 type Response struct {
-	Params *webrtc.SessionDescription	`json:params`
-	Result *webrtc.SessionDescription	`json:result`
-	Method string		`json:method`
-	Id uint64	`json:id`
+	Params *webrtc.SessionDescription `json:params`
+	Result *webrtc.SessionDescription `json:result`
+	Method string                     `json:method`
+	Id     uint64                     `json:id`
 }
 
 var peerConnection *webrtc.PeerConnection
-var connectionId uint64
+var connectionID uint64
 var remoteDescription *webrtc.SessionDescription
 
 var addr string
@@ -155,11 +156,11 @@ func main() {
 	// Handling OnICECandidate event
 	peerConnection.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 		if candidate != nil {
-			candidateJson, err := json.Marshal(&Candidate{
+			candidateJSON, err := json.Marshal(&Candidate{
 				Candidate: candidate,
 			})
 
-			params := (*json.RawMessage)(&candidateJson)
+			params := (*json.RawMessage)(&candidateJSON)
 
 			if err != nil {
 				log.Fatal(err)
@@ -182,23 +183,23 @@ func main() {
 		fmt.Printf("Connection State has changed to %s \n", connectionState.String())
 	})
 
-	offerJson, err := json.Marshal(&SendOffer{
+	offerJSON, err := json.Marshal(&SendOffer{
 		Offer: peerConnection.LocalDescription(),
-		SID: "test room",
+		SID:   "test room",
 	})
 
-	params := (*json.RawMessage)(&offerJson)
+	params := (*json.RawMessage)(&offerJSON)
 
 	connectionUUID := uuid.New()
-	connectionId = uint64(connectionUUID.ID())
+	connectionID = uint64(connectionUUID.ID())
 
 	offerMessage := &jsonrpc2.Request{
 		Method: "join",
 		Params: params,
 		ID: jsonrpc2.ID{
 			IsString: false,
-			Str: "",
-			Num: connectionId,
+			Str:      "",
+			Num:      connectionID,
 		},
 	}
 
@@ -208,12 +209,7 @@ func main() {
 	messageBytes := reqBodyBytes.Bytes()
 	c.WriteMessage(websocket.TextMessage, messageBytes)
 
-	for {
-		select {
-		case <-done:
-			return
-		}
-	}
+	<-done
 }
 
 func readMessage(connection *websocket.Conn, done chan struct{}) {
@@ -230,7 +226,7 @@ func readMessage(connection *websocket.Conn, done chan struct{}) {
 		var response Response
 		json.Unmarshal(message, &response)
 
-		if response.Id == connectionId {
+		if response.Id == connectionID {
 			// TODO: Handle negotiation needed event - Needed for Firefox
 
 			result := *response.Result
@@ -249,22 +245,22 @@ func readMessage(connection *websocket.Conn, done chan struct{}) {
 			peerConnection.SetLocalDescription(answer)
 
 			connectionUUID := uuid.New()
-			connectionId = uint64(connectionUUID.ID())
+			connectionID = uint64(connectionUUID.ID())
 
-			offerJson, err := json.Marshal(&SendAnswer{
+			offerJSON, err := json.Marshal(&SendAnswer{
 				Answer: peerConnection.LocalDescription(),
-				SID: "test room",
+				SID:    "test room",
 			})
 
-			params := (*json.RawMessage)(&offerJson)
+			params := (*json.RawMessage)(&offerJSON)
 
 			answerMessage := &jsonrpc2.Request{
 				Method: "answer",
 				Params: params,
 				ID: jsonrpc2.ID{
 					IsString: false,
-					Str: "",
-					Num: connectionId,
+					Str:      "",
+					Num:      connectionID,
 				},
 			}
 
