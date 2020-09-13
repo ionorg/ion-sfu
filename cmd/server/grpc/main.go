@@ -118,10 +118,9 @@ func main() {
 	}
 	log.Infof("SFU Listening at %s", addr)
 	s := grpc.NewServer()
-	sfuServer := server{
-		sfu: sfu.NewSFU(conf.Config)}
+	inst := server{sfu: sfu.NewSFU(conf.Config)}
 	pb.RegisterSFUService(s, &pb.SFUService{
-		Signal: sfuServer.Signal,
+		Signal: inst.Signal,
 	})
 	if err := s.Serve(lis); err != nil {
 		log.Panicf("failed to serve: %v", err)
