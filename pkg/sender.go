@@ -82,9 +82,6 @@ func (s *WebRTCSender) sendRTP() {
 				log.Errorf("wt.WriteRTP err=%v", err)
 			}
 		case <-s.ctx.Done():
-			s.mu.Lock()
-			defer s.mu.Unlock()
-			close(s.sendChan)
 			return
 		}
 	}
@@ -96,7 +93,6 @@ func (s *WebRTCSender) ReadRTCP() (rtcp.Packet, error) {
 	case pkt := <-s.rtcpCh:
 		return pkt, nil
 	case <-s.ctx.Done():
-		close(s.rtcpCh)
 		err := s.sender.Stop()
 		if err != nil {
 			return nil, err
@@ -207,7 +203,6 @@ func (s *WebRTCSender) rembLoop() {
 				lowest = math.MaxUint64
 			}
 		case <-s.ctx.Done():
-			close(s.rembCh)
 			return
 		}
 	}
