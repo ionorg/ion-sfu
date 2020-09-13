@@ -10,6 +10,10 @@ go_deps:
 clean:
 	rm -rf bin
 
+build_proto:
+	docker run -v $(CURDIR):/workspace pionwebrtc/ion-sfu:latest-protoc protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative cmd/server/grpc/proto/sfu.proto
+
+
 build_grpc: go_deps
 	go build -o bin/sfu $(GO_LDFLAGS) ./cmd/server/grpc/main.go
 
