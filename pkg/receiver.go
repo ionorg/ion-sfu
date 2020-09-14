@@ -168,9 +168,6 @@ func (v *WebRTCVideoReceiver) ReadRTP() (*rtp.Packet, error) {
 	case pkt := <-v.rtpCh:
 		return pkt, nil
 	case <-v.ctx.Done():
-		v.mu.Lock()
-		defer v.mu.Unlock()
-		close(v.rtpCh)
 		return nil, io.EOF
 	}
 }
@@ -181,9 +178,6 @@ func (v *WebRTCVideoReceiver) ReadRTCP() (rtcp.Packet, error) {
 	case pkt := <-v.rtcpCh:
 		return pkt, nil
 	case <-v.ctx.Done():
-		v.mu.Lock()
-		defer v.mu.Unlock()
-		close(v.rtcpCh)
 		return nil, io.ErrClosedPipe
 	}
 }
@@ -331,14 +325,14 @@ func (v *WebRTCVideoReceiver) tccLoop(cycle int) {
 	for {
 		select {
 		case <-t.C:
-			cap := len(v.rtpExtInfoChan)
-			if cap == 0 {
+			cp := len(v.rtpExtInfoChan)
+			if cp == 0 {
 				continue
 			}
 
 			// get all rtp extension infos from channel
 			rtpExtInfo := make(map[uint16]int64)
-			for i := 0; i < cap; i++ {
+			for i := 0; i < cp; i++ {
 				info := <-v.rtpExtInfoChan
 				rtpExtInfo[info.TSN] = info.Timestamp
 			}
