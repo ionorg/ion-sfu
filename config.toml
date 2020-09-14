@@ -33,3 +33,4 @@ maxbuffertime = 1000
 [log]
 stats = true
 level = "debug"
+fix = ["proc.go", "asm_amd64.s", "jsonrpc2.go"]

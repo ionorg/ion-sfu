@@ -22,13 +22,14 @@ const (
 
 // Config defines parameters for the logger
 type Config struct {
-	Level string `mapstructure:"level"`
-	Stats bool   `mapstructure:"stats"`
+	Level string   `mapstructure:"level"`
+	Stats bool     `mapstructure:"stats"`
+	Fix   []string `mapstructure:"fix"`
 }
 
 // Init initializes the package logger.
 // Supported levels are: ["debug", "info", "warn", "error"]
-func Init(level string) {
+func Init(level string, fix []string) {
 	l := zerolog.GlobalLevel()
 	switch level {
 	case "trace":
@@ -53,7 +54,13 @@ func Init(level string) {
 	output.FormatMessage = func(i interface{}) string {
 		caller, file, line, _ := runtime.Caller(9)
 		fileName := filepath.Base(file)
-		if fileName == "asm_amd64.s" || fileName == "proc.go" {
+		var needfix bool
+		for _, b := range fix {
+			if strings.Contains(fileName, b) {
+				needfix = true
+			}
+		}
+		if needfix {
 			caller, file, line, _ = runtime.Caller(8)
 			fileName = filepath.Base(file)
 		}
