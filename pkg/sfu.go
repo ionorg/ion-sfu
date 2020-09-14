@@ -57,7 +57,7 @@ func NewSFU(c Config) *SFU {
 		receiver: c.Receiver,
 	}
 
-	log.Init(c.Log.Level)
+	log.Init(c.Log.Level, c.Log.Fix)
 
 	var icePortStart, icePortEnd uint16
 

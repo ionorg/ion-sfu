@@ -109,7 +109,7 @@ func main() {
 		os.Exit(-1)
 	}
 
-	log.Init(conf.Log.Level)
+	log.Init(conf.Log.Level, conf.Log.Fix)
 
 	log.Infof("--- Starting SFU Node ---")
 	lis, err := net.Listen("tcp", addr)
