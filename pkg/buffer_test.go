@@ -117,7 +117,7 @@ func TestBufferWithBufferTimeAndZeroSSRC(t *testing.T) {
 	assert.Equal(t, uint16(10), nackPair.PacketID)
 
 	lostRate, byteRate := buffer.GetLostRateBandwidth(uint64(12))
-
+	byteRate = uint64(byteRate / 1000)
 	assert.Equal(t, lostRate, float64(0))
 	assert.Equal(t, byteRate, uint64(0))
 

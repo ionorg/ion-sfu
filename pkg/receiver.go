@@ -105,7 +105,7 @@ type WebRTCVideoReceiver struct {
 	rtpExtInfoChan chan rtpExtInfo
 
 	pliCycle     int
-	maxBandwidth int
+	maxBandwidth uint64
 	feedback     string
 }
 
@@ -114,7 +114,6 @@ type WebRTCVideoReceiverConfig struct {
 	REMBCycle       int `mapstructure:"rembcycle"`
 	PLICycle        int `mapstructure:"plicycle"`
 	TCCCycle        int `mapstructure:"tcccycle"`
-	MaxBandwidth    int `mapstructure:"maxbandwidth"`
 	MaxBufferTime   int `mapstructure:"maxbuffertime"`
 	ReceiveRTPCycle int `mapstructure:"rtpcycle"`
 }
@@ -139,7 +138,7 @@ func NewWebRTCVideoReceiver(ctx context.Context, config WebRTCVideoReceiverConfi
 		rtcpCh:         make(chan rtcp.Packet, maxSize),
 		rtpExtInfoChan: make(chan rtpExtInfo, maxSize),
 		pliCycle:       pliCycle,
-		maxBandwidth:   config.MaxBandwidth,
+		maxBandwidth:   routerConfig.MaxBandwidth * 1000,
 	}
 
 	for _, feedback := range track.Codec().RTCPFeedback {
@@ -294,20 +293,20 @@ func (v *WebRTCVideoReceiver) rembLoop(cycle int) {
 			var bw uint64
 			switch {
 			case v.lostRate == 0 && v.bandwidth == 0:
-				bw = uint64(v.maxBandwidth)
+				bw = v.maxBandwidth
 			case v.lostRate >= 0 && v.lostRate < 0.1:
-				bw = uint64(v.bandwidth * 2)
+				bw = v.bandwidth * 2
 			default:
 				bw = uint64(float64(v.bandwidth) * (1 - v.lostRate))
 			}
 
-			if bw > uint64(v.maxBandwidth) {
-				bw = uint64(v.maxBandwidth)
+			if bw > v.maxBandwidth && v.maxBandwidth > 0 {
+				bw = v.maxBandwidth
 			}
 
 			remb := &rtcp.ReceiverEstimatedMaximumBitrate{
 				SenderSSRC: v.buffer.GetSSRC(),
-				Bitrate:    bw * 1000,
+				Bitrate:    bw,
 				SSRCs:      []uint32{v.buffer.GetSSRC()},
 			}
 

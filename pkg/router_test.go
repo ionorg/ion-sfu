@@ -204,7 +204,8 @@ func TestSendersNackRateLimit(t *testing.T) {
 		assert.Equal(t, sender, router.senders[subPid])
 		assert.Contains(t, router.stats(), "track id:")
 		<-ontrackFired
-		timer := time.After(1100 * maxNackTime * time.Millisecond)
+		routerConfig.MaxNackTime = 1
+		timer := time.After(1100 * time.Millisecond)
 		nackCounter := 0
 		router.lastNack = time.Now().Unix()
 	nckloop:

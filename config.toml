@@ -1,9 +1,12 @@
 [router]
-# pass bandwidth feeback to pub
-rembfeedback = false
-# Cap bandwidth feedback
-minbandwidth = 100000
-maxbandwidth = 5000000
+# pass bandwidth feeback from subs to pubs
+subrembfeedback = false
+# Limit the remb bandwidth in kbps
+# zero means no limits
+maxbandwidth = 1000
+# Rate limit nack packets from senders to 1 nack per maxNackTime in seconds
+# zero means no rate limit
+maxnacktime = 1
 
 [receiver.video]
 # the remb cycle sending to pub, this told the pub it's bandwidth
@@ -12,8 +15,6 @@ rembcycle = 2
 plicycle = 1
 # transport-cc cycle in (ms) (experiment feature)
 tcccycle = 0
-# this limit the remb bandwidth
-maxbandwidth = 1000
 # max buffer time by ms
 maxbuffertime = 1000
 

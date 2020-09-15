@@ -179,6 +179,7 @@ func TestSenderRTCPREMBForwarding(t *testing.T) {
 	report := test.CheckRoutines(t)
 	defer report()
 
+	routerConfig.REMBFeedback = true
 	rtcpfb = []webrtc.RTCPFeedback{
 		{Type: webrtc.TypeRTCPFBGoogREMB},
 	}

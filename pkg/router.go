@@ -12,10 +12,9 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-const (
-	// Rate limit nack packets from senders in seconds
-	maxNackTime = 1
-)
+const ()
+
+var routerConfig RouterConfig
 
 // Router defines a track rtp/rtcp router
 type Router struct {
@@ -133,11 +132,14 @@ func (r *Router) subFeedbackLoop(pid string, sub Sender) {
 					sub.WriteRTP(bufferpkt)
 					continue
 				}
-				ln := atomic.LoadInt64(&r.lastNack)
-				if (time.Now().Unix() - ln) < maxNackTime {
-					continue
+
+				if routerConfig.MaxNackTime > 0 {
+					ln := atomic.LoadInt64(&r.lastNack)
+					if (time.Now().Unix() - ln) < routerConfig.MaxNackTime {
+						continue
+					}
+					atomic.StoreInt64(&r.lastNack, time.Now().Unix())
 				}
-				atomic.StoreInt64(&r.lastNack, time.Now().Unix())
 				// Packet not found, request from receiver
 				nack := &rtcp.TransportLayerNack{
 					// origin ssrc

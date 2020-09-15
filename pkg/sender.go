@@ -31,8 +31,8 @@ type WebRTCSender struct {
 	sender         *webrtc.RTPSender
 	track          *webrtc.Track
 	rtcpCh         chan rtcp.Packet
-	useRemb        bool
 	rembCh         chan *rtcp.ReceiverEstimatedMaximumBitrate
+	maxBitrate     uint64
 	target         uint64
 	sendChan       chan *rtp.Packet
 }
@@ -41,21 +41,23 @@ type WebRTCSender struct {
 func NewWebRTCSender(ctx context.Context, track *webrtc.Track, sender *webrtc.RTPSender) *WebRTCSender {
 	ctx, cancel := context.WithCancel(ctx)
 	s := &WebRTCSender{
-		ctx:      ctx,
-		cancel:   cancel,
-		sender:   sender,
-		track:    track,
-		rtcpCh:   make(chan rtcp.Packet, maxSize),
-		rembCh:   make(chan *rtcp.ReceiverEstimatedMaximumBitrate, maxSize),
-		sendChan: make(chan *rtp.Packet, maxSize),
+		ctx:        ctx,
+		cancel:     cancel,
+		sender:     sender,
+		track:      track,
+		maxBitrate: routerConfig.MaxBandwidth * 1000,
+		rtcpCh:     make(chan rtcp.Packet, maxSize),
+		sendChan:   make(chan *rtp.Packet, maxSize),
 	}
 
 	for _, feedback := range track.Codec().RTCPFeedback {
 		switch feedback.Type {
 		case webrtc.TypeRTCPFBGoogREMB:
 			log.Debugf("Using sender feedback %s", webrtc.TypeRTCPFBGoogREMB)
-			s.useRemb = true
-			go s.rembLoop()
+			if routerConfig.REMBFeedback {
+				s.rembCh = make(chan *rtcp.ReceiverEstimatedMaximumBitrate, maxSize)
+				go s.rembLoop()
+			}
 		case webrtc.TypeRTCPFBTransportCC:
 			log.Debugf("Using sender feedback %s", webrtc.TypeRTCPFBTransportCC)
 			// TODO
@@ -149,7 +151,7 @@ func (s *WebRTCSender) receiveRTCP() {
 			case *rtcp.PictureLossIndication, *rtcp.FullIntraRequest, *rtcp.TransportLayerNack:
 				s.rtcpCh <- pkt
 			case *rtcp.ReceiverEstimatedMaximumBitrate:
-				if s.useRemb {
+				if s.rembCh != nil {
 					s.rembCh <- pkt
 				}
 			}
@@ -161,12 +163,8 @@ func (s *WebRTCSender) rembLoop() {
 	lastRembTime := time.Now()
 	maxRembTime := 200 * time.Millisecond
 	rembMin := uint64(100000)
-	rembMax := uint64(5000000)
 	if rembMin == 0 {
 		rembMin = 10000 // 10 KBit
-	}
-	if rembMax == 0 {
-		rembMax = 100000000 // 100 MBit
 	}
 	var lowest uint64 = math.MaxUint64
 	var rembCount, rembTotalRate uint64
@@ -191,8 +189,8 @@ func (s *WebRTCSender) rembLoop() {
 
 				if s.target < rembMin {
 					s.target = rembMin
-				} else if s.target > rembMax {
-					s.target = rembMax
+				} else if s.target > s.maxBitrate && s.maxBitrate > 0 {
+					s.target = s.maxBitrate
 				}
 
 				newPkt := &rtcp.ReceiverEstimatedMaximumBitrate{
