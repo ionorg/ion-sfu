@@ -4,10 +4,17 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
+)
+
+const (
+	// Rate limit nack packets from senders in seconds
+	maxNackTime = 1
 )
 
 // Router defines a track rtp/rtcp router
@@ -17,6 +24,7 @@ type Router struct {
 	onCloseHandler func()
 	receiver       Receiver
 	senders        map[string]Sender
+	lastNack       int64
 }
 
 // NewRouter for routing rtp/rtcp packets
@@ -25,6 +33,7 @@ func NewRouter(tid string, recv Receiver) *Router {
 		tid:      tid,
 		receiver: recv,
 		senders:  make(map[string]Sender),
+		lastNack: time.Now().Unix(),
 	}
 
 	go r.start()
@@ -124,7 +133,11 @@ func (r *Router) subFeedbackLoop(pid string, sub Sender) {
 					sub.WriteRTP(bufferpkt)
 					continue
 				}
-
+				ln := atomic.LoadInt64(&r.lastNack)
+				if (time.Now().Unix() - ln) < maxNackTime {
+					continue
+				}
+				atomic.StoreInt64(&r.lastNack, time.Now().Unix())
 				// Packet not found, request from receiver
 				nack := &rtcp.TransportLayerNack{
 					// origin ssrc
