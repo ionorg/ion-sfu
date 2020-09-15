@@ -35,6 +35,14 @@ type Config struct {
 	WebRTC   WebRTCConfig   `mapstructure:"webrtc"`
 	Log      log.Config     `mapstructure:"log"`
 	Receiver ReceiverConfig `mapstructure:"receiver"`
+	Router   RouterConfig   `mapstructure:"router"`
+}
+
+// RouterConfig defines router configurations
+type RouterConfig struct {
+	REMBFeedback bool   `mapstructure:"rembfeedback"`
+	MaxBandwidth uint64 `mapstructure:"maxbandwidth"`
+	MaxNackTime  int64  `mapstructure:"maxnacktime"`
 }
 
 // SFU represents an sfu instance
@@ -56,6 +64,8 @@ func NewSFU(c Config) *SFU {
 		setting:  webrtc.SettingEngine{},
 		receiver: c.Receiver,
 	}
+	// Init router config
+	routerConfig = c.Router
 
 	log.Init(c.Log.Level, c.Log.Fix)
 
