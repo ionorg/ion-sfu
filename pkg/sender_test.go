@@ -217,14 +217,13 @@ func TestSenderRTCPREMBForwarding(t *testing.T) {
 	onReadRTCPFired, onReadRTCPFiredFunc := context.WithCancel(context.Background())
 	go func() {
 		for {
-			rtcp, err := sender.ReadRTCP()
-			if err == io.ErrClosedPipe {
-				return
+			select {
+			   case  pkt := <-sender.rembCh:
+				   assert.Equal(t, expected.SenderSSRC, pkt.SenderSSRC)
+				   onReadRTCPFiredFunc()
+				   case <-sender.ctx.Done():
+					   return
 			}
-
-			assert.NoError(t, err)
-			assert.Equal(t, expected, rtcp)
-			onReadRTCPFiredFunc()
 		}
 	}()
 
@@ -237,6 +236,71 @@ func TestSenderRTCPREMBForwarding(t *testing.T) {
 	sendRTCPUntilDone(onReadRTCPFired.Done(), t, remote, pkt)
 
 	sender.Close()
-	sfu.Close()
-	remote.Close()
+	assert.NoError(t, sfu.Close())
+	assert.NoError(t, remote.Close())
+}
+
+func TestSenderRTCPREMBForwardingWithTransportLayerNACK(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
+	rtcpfb = []webrtc.RTCPFeedback{
+		{Type: webrtc.TypeRTCPFBGoogREMB},
+	}
+
+	me := webrtc.MediaEngine{}
+	codec := webrtc.NewRTPVP8CodecExt(webrtc.DefaultPayloadTypeVP8, 9000, rtcpfb, "")
+	me.RegisterCodec(codec)
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+	sfu, remote, err := newPair(webrtc.Configuration{}, api)
+	assert.NoError(t, err)
+
+	rtpPkt := &rtp.Packet{}
+	err = rtpPkt.Unmarshal(rawPkt)
+	assert.NoError(t, err)
+
+	track, err := sfu.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+
+	s, err := sfu.AddTrack(track)
+	assert.NoError(t, err)
+
+	ctx := context.Background()
+	sender := NewWebRTCSender(ctx, track, s)
+	assert.NotNil(t, sender)
+
+	err = signalPair(sfu, remote)
+	assert.NoError(t, err)
+
+	expected := &rtcp.TransportLayerNack{
+			SenderSSRC: uint32(123),
+			MediaSSRC:  uint32(12),
+			Nacks:      []rtcp.NackPair{{uint16(3), rtcp.PacketBitmap(uint16(1))}},
+		}
+
+	onReadRTCPFired, onReadRTCPFiredFunc := context.WithCancel(context.Background())
+	go func() {
+		for {
+			select {
+			  case pkt := <-sender.rtcpCh:
+				  assert.NoError(t, err)
+				  assert.Equal(t, expected, pkt)
+				  onReadRTCPFiredFunc()
+
+				  case <-sender.ctx.Done():
+					  return
+			}
+		}
+	}()
+	pkt := rtcp.TransportLayerNack{
+		SenderSSRC: uint32(123),
+		MediaSSRC:  uint32(12),
+		Nacks:      []rtcp.NackPair{{uint16(3), rtcp.PacketBitmap(uint16(1))}},
+	}
+
+	sendRTCPUntilDone(onReadRTCPFired.Done(), t, remote, &pkt)
+
+	sender.Close()
+	assert.NoError(t, sfu.Close())
+	assert.NoError(t, remote.Close())
 }
