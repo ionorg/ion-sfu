@@ -42,7 +42,7 @@ type Config struct {
 type RouterConfig struct {
 	REMBFeedback bool   `mapstructure:"rembfeedback"`
 	MaxBandwidth uint64 `mapstructure:"maxbandwidth"`
-	MaxNackTime  int64  `mapstructure:"maxNackTime"`
+	MaxNackTime  int64  `mapstructure:"maxnacktime"`
 }
 
 // SFU represents an sfu instance

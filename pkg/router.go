@@ -12,8 +12,6 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-const ()
-
 var routerConfig RouterConfig
 
 // Router defines a track rtp/rtcp router

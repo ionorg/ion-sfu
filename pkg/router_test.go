@@ -216,7 +216,7 @@ func TestSendersNackRateLimit(t *testing.T) {
 				break nckloop
 			case pkt := <-receiver.rtcpCh:
 				if nck, ok := pkt.(*rtcp.TransportLayerNack); ok && nck.MediaSSRC == 456 {
-					nackCounter += 1
+					nackCounter++
 				}
 			default:
 				nack := &rtcp.TransportLayerNack{

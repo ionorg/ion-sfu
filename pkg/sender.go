@@ -53,8 +53,8 @@ func NewWebRTCSender(ctx context.Context, track *webrtc.Track, sender *webrtc.RT
 	for _, feedback := range track.Codec().RTCPFeedback {
 		switch feedback.Type {
 		case webrtc.TypeRTCPFBGoogREMB:
-			log.Debugf("Using sender feedback %s", webrtc.TypeRTCPFBGoogREMB)
 			if routerConfig.REMBFeedback {
+				log.Debugf("Using sender feedback %s", webrtc.TypeRTCPFBGoogREMB)
 				s.rembCh = make(chan *rtcp.ReceiverEstimatedMaximumBitrate, maxSize)
 				go s.rembLoop()
 			}
