@@ -433,5 +433,5 @@ func (v *WebRTCVideoReceiver) tccLoop(cycle int) {
 
 // Stats get stats for video receiver
 func (v *WebRTCVideoReceiver) stats() string {
-	return fmt.Sprintf("payload: %d | lostRate: %.2f | bandwidth: %dkbps | %s", v.buffer.GetPayloadType(), v.lostRate, v.bandwidth, v.buffer.stats())
+	return fmt.Sprintf("payload: %d | lostRate: %.2f | bandwidth: %dkbps | %s", v.buffer.GetPayloadType(), v.lostRate, v.bandwidth/1000, v.buffer.stats())
 }
