@@ -40,7 +40,7 @@ type Config struct {
 
 // RouterConfig defines router configurations
 type RouterConfig struct {
-	REMBFeedback bool   `mapstructure:"rembfeedback"`
+	REMBFeedback bool   `mapstructure:"subrembfeedback"`
 	MaxBandwidth uint64 `mapstructure:"maxbandwidth"`
 	MaxNackTime  int64  `mapstructure:"maxnacktime"`
 }
