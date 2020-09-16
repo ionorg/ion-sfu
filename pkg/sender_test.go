@@ -109,7 +109,11 @@ func sendRTCPUntilDone(done <-chan struct{}, t *testing.T, pc *webrtc.PeerConnec
 	for {
 		select {
 		case <-time.After(20 * time.Millisecond):
-			assert.NoError(t, pc.WriteRTCP([]rtcp.Packet{pkt}))
+			err := pc.WriteRTCP([]rtcp.Packet{pkt})
+			if err == io.ErrClosedPipe {
+				return
+			}
+			assert.NoError(t, err)
 		case <-done:
 			return
 		}

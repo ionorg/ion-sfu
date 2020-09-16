@@ -2,16 +2,17 @@ package sfu
 
 import (
 	"context"
-	"math/rand"
-	"strconv"
-	"strings"
-	"testing"
-
 	"github.com/pion/ion-sfu/pkg/log"
+	"github.com/pion/rtcp"
 	"github.com/pion/sdp/v2"
 	"github.com/pion/transport/test"
 	"github.com/pion/webrtc/v3"
 	"github.com/stretchr/testify/assert"
+	"io"
+	"math/rand"
+	"strconv"
+	"strings"
+	"testing"
 )
 
 func createPeer(t *testing.T, session *Session, api *webrtc.API) (*WebRTCTransport, *webrtc.PeerConnection, *webrtc.Track, error) {
@@ -103,7 +104,7 @@ func TestSession(t *testing.T) {
 	peer.Close()
 }
 
-func TestMultiPeerSession(t *testing.T) {
+func TestSession_MultiPeerSession(t *testing.T) {
 	report := test.CheckRoutines(t)
 	defer report()
 
@@ -217,7 +218,7 @@ func signalRenegotiation(t *testing.T, offer webrtc.SessionDescription, peer *We
 	assert.NoError(t, err)
 }
 
-func Test3PeerConcurrrentJoin(t *testing.T) {
+func TestSession_3PeerConcurrrentJoin(t *testing.T) {
 	report := test.CheckRoutines(t)
 	defer report()
 
@@ -349,7 +350,7 @@ func Test3PeerConcurrrentJoin(t *testing.T) {
 	assert.NoError(t, peerC.Close())
 }
 
-func Test3PeerStaggerJoin(t *testing.T) {
+func TestSession_3PeerStaggerJoin(t *testing.T) {
 	report := test.CheckRoutines(t)
 	defer report()
 
@@ -494,7 +495,7 @@ func Test3PeerStaggerJoin(t *testing.T) {
 	remoteC.Close()
 }
 
-func TestPeerBWithAudioAndVideoWhenPeerAHasAudioOnly(t *testing.T) {
+func TestSession_PeerBWithAudioAndVideoWhenPeerAHasAudioOnly(t *testing.T) {
 	report := test.CheckRoutines(t)
 	defer report()
 
@@ -570,4 +571,75 @@ func TestPeerBWithAudioAndVideoWhenPeerAHasAudioOnly(t *testing.T) {
 	remoteA.Close()
 	peerB.Close()
 	remoteB.Close()
+}
+
+func TestSession_MultiPeerSessionWithTransportNack(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
+	me := webrtc.MediaEngine{}
+	codec := webrtc.NewRTPVP8CodecExt(webrtc.DefaultPayloadTypeVP8, 9000, rtcpfb, "")
+	me.RegisterCodec(codec)
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+
+	session := NewSession("session")
+	remoteA, remoteB, err := newPair(webrtc.Configuration{}, api)
+	assert.NoError(t, err)
+
+	//// Add a pub track for remote A
+	trackA, err := remoteA.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+	_, err = remoteA.AddTrack(trackA)
+	assert.NoError(t, err)
+
+	// Add a datachannel for remote A
+	_, err = remoteA.CreateDataChannel("foo", nil)
+	assert.NoError(t, err)
+
+	//// Add a pub track for remote A
+	trackB, err := remoteB.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+	s, err := remoteB.AddTrack(trackB)
+	assert.NoError(t, err)
+
+	peerA, err := signalPeer(session, remoteA)
+	assert.NoError(t, err)
+	session.AddTransport(peerA)
+
+	pkt := rtcp.TransportLayerNack{
+		SenderSSRC: trackB.SSRC(),
+		MediaSSRC:  trackB.SSRC(),
+		Nacks:      nil,
+	}
+
+	readDone := make(chan struct{})
+
+	peerA.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
+		pktReceived, err := s.ReadRTCP()
+		if err == io.ErrClosedPipe {
+			return
+		}
+
+		assert.NoError(t, err)
+
+		assert.NotNil(t, pktReceived)
+		assert.IsType(t, &pkt, pktReceived)
+		close(readDone)
+		assert.NoError(t, s.Stop())
+		close(readDone)
+	})
+
+	trackADone := waitForRouter(peerA, trackA.SSRC())
+	sendRTPUntilDone(trackADone, t, []*webrtc.Track{trackA})
+
+	peerB, err := signalPeer(session, remoteB)
+	assert.NoError(t, err)
+	session.AddTransport(peerB)
+
+	sendRTCPUntilDone(readDone, t, remoteB, &pkt)
+
+	assert.NoError(t, remoteA.Close())
+	assert.NoError(t, remoteB.Close())
+	assert.NoError(t, peerA.Close())
+	assert.NoError(t, peerB.Close())
 }
