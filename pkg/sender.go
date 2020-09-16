@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"sync"
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
@@ -26,7 +25,6 @@ type Sender interface {
 type WebRTCSender struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
-	mu             sync.Mutex
 	onCloseHandler func()
 	sender         *webrtc.RTPSender
 	track          *webrtc.Track
@@ -115,8 +113,6 @@ func (s *WebRTCSender) WriteRTP(pkt *rtp.Packet) {
 	case <-s.ctx.Done():
 		return
 	default:
-		s.mu.Lock()
-		defer s.mu.Unlock()
 		s.sendChan <- pkt
 	}
 }

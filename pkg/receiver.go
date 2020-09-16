@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"sync"
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
@@ -95,7 +94,6 @@ func (a *WebRTCAudioReceiver) stats() string {
 type WebRTCVideoReceiver struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
-	mu             sync.RWMutex
 	buffer         *Buffer
 	track          *webrtc.Track
 	bandwidth      uint64
@@ -187,9 +185,7 @@ func (v *WebRTCVideoReceiver) WriteRTCP(pkt rtcp.Packet) error {
 	case <-v.ctx.Done():
 		return io.ErrClosedPipe
 	default:
-		v.mu.RLock()
 		v.rtcpCh <- pkt
-		v.mu.RUnlock()
 		return nil
 	}
 }
@@ -249,9 +245,7 @@ func (v *WebRTCVideoReceiver) receiveRTP() {
 		case <-v.ctx.Done():
 			return
 		default:
-			v.mu.RLock()
 			v.rtpCh <- pkt
-			v.mu.RUnlock()
 		}
 	}
 }
