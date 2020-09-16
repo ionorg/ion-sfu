@@ -85,7 +85,10 @@ func (s *WebRTCSender) sendRTP() {
 			pkt = &newPkt
 
 			if err := s.track.WriteRTP(pkt); err != nil {
-				log.Errorf("wt.WriteRTP err=%v", err)
+				if err == io.ErrClosedPipe {
+					return
+				}
+				log.Errorf("sender.track.WriteRTP err=%v", err)
 			}
 		case <-s.ctx.Done():
 			return
