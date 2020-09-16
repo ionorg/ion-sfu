@@ -349,3 +349,145 @@ func TestSenderRTCPFullIntraRequest(t *testing.T) {
 	assert.NoError(t, sfu.Close())
 	assert.NoError(t, remote.Close())
 }
+
+func TestSenderRTCPWithTypeRTCPFBTransportCCWithPictureLossIndication(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
+	rtcpfb = []webrtc.RTCPFeedback{
+		{Type: webrtc.TypeRTCPFBTransportCC},
+	}
+
+	me := webrtc.MediaEngine{}
+	codec := webrtc.NewRTPVP8CodecExt(webrtc.DefaultPayloadTypeVP8, 9000, rtcpfb, "")
+	me.RegisterCodec(codec)
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+	sfu, remote, err := newPair(webrtc.Configuration{}, api)
+	assert.NoError(t, err)
+
+	rtpPkt := &rtp.Packet{}
+	err = rtpPkt.Unmarshal(rawPkt)
+	assert.NoError(t, err)
+
+	track, err := sfu.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+
+	s, err := sfu.AddTrack(track)
+	assert.NoError(t, err)
+
+	ctx := context.Background()
+	sender := NewWebRTCSender(ctx, track, s)
+	assert.NotNil(t, sender)
+
+	err = signalPair(sfu, remote)
+	assert.NoError(t, err)
+
+	pkt := &rtcp.PictureLossIndication{
+		SenderSSRC: track.SSRC(),
+		MediaSSRC:  track.SSRC(),
+	}
+
+	senderCloseCtx, senderCloseFunc := context.WithCancel(context.Background())
+	sender.OnClose(func() {
+		senderCloseFunc()
+	})
+
+	done := make(chan struct{})
+	go func() {
+		for {
+			rtcp, err := sender.ReadRTCP()
+			if err == io.ErrClosedPipe {
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, pkt, rtcp)
+			close(done)
+		}
+	}()
+
+	sendRTCPUntilDone(done, t, remote, pkt)
+
+	stats := sender.stats()
+	expectedString := []string{"payload", "remb"}
+	for _, expected := range expectedString {
+		assert.Contains(t, stats, expected)
+	}
+	sender.Close()
+	<-senderCloseCtx.Done()
+	assert.NoError(t, sfu.Close())
+	assert.NoError(t, remote.Close())
+}
+
+func TestSenderRTCPWithWriteRTP(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
+	rtcpfb = []webrtc.RTCPFeedback{
+		{Type: webrtc.TypeRTCPFBTransportCC},
+	}
+
+	me := webrtc.MediaEngine{}
+	codec := webrtc.NewRTPVP8CodecExt(webrtc.DefaultPayloadTypeVP8, 9000, rtcpfb, "")
+	me.RegisterCodec(codec)
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+	sfu, remote, err := newPair(webrtc.Configuration{}, api)
+	assert.NoError(t, err)
+
+	rtpPkt := &rtp.Packet{}
+	err = rtpPkt.Unmarshal(rawPkt)
+	assert.NoError(t, err)
+
+	track, err := sfu.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+
+	s, err := sfu.AddTrack(track)
+	assert.NoError(t, err)
+
+	ctx := context.Background()
+	sender := NewWebRTCSender(ctx, track, s)
+
+	//Allow time for sender.sendRTP to get started
+	time.Sleep(time.Millisecond * 500)
+	assert.NotNil(t, sender)
+
+	err = signalPair(sfu, remote)
+	assert.NoError(t, err)
+
+	pkt := rtp.Packet{
+		Header:  rtp.Header{SequenceNumber: 0, Timestamp: 1},
+		Payload: []byte{0x01},
+	}
+
+	senderCloseCtx, senderCloseFunc := context.WithCancel(context.Background())
+	sender.OnClose(func() {
+		senderCloseFunc()
+	})
+
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case pktReceived := <-sender.sendChan:
+				assert.Equal(t, pkt.SequenceNumber, pktReceived.SequenceNumber)
+				assert.Equal(t, pkt.Payload, pktReceived.Payload)
+				close(done)
+
+			case <-sender.ctx.Done():
+				return
+			}
+		}
+	}()
+
+	writeRTPUntilDone(done, sender, &pkt)
+
+	stats := sender.stats()
+	expectedString := []string{"payload", "remb"}
+	for _, expected := range expectedString {
+		assert.Contains(t, stats, expected)
+	}
+
+	sender.Close()
+	<-senderCloseCtx.Done()
+	assert.NoError(t, sfu.Close())
+	assert.NoError(t, remote.Close())
+}
