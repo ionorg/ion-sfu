@@ -228,7 +228,7 @@ func TestSendersNackRateLimit(t *testing.T) {
 				time.Sleep(25 * time.Millisecond)
 			}
 		}
-		assert.Equal(t, 1, nackCounter)
+		assert.LessOrEqual(t, nackCounter, 2)
 		sub.Close()
 		router.close()
 		router.mu.RLock()
