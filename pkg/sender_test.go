@@ -116,7 +116,7 @@ func sendRTCPUntilDone(done <-chan struct{}, t *testing.T, pc *webrtc.PeerConnec
 	}
 }
 
-func TestSenderRTCPForwarding(t *testing.T) {
+func TestSenderRTCPPictureLossIndicationForwarding(t *testing.T) {
 	report := test.CheckRoutines(t)
 	defer report()
 
@@ -148,7 +148,7 @@ func TestSenderRTCPForwarding(t *testing.T) {
 		MediaSSRC:  track.SSRC(),
 	}
 
-	onReadRTCPFired, onReadRTCPFiredFunc := context.WithCancel(context.Background())
+	done := make(chan struct{})
 	go func() {
 		for {
 			rtcp, err := sender.ReadRTCP()
@@ -158,17 +158,11 @@ func TestSenderRTCPForwarding(t *testing.T) {
 
 			assert.NoError(t, err)
 			assert.Equal(t, pkt, rtcp)
-			onReadRTCPFiredFunc()
+			close(done)
 		}
 	}()
 
-	// pkt := &rtcp.ReceiverEstimatedMaximumBitrate{
-	// 	SenderSSRC: track.SSRC(),
-	// 	Bitrate:    1000,
-	// 	SSRCs:      []uint32{track.SSRC()},
-	// }
-
-	sendRTCPUntilDone(onReadRTCPFired.Done(), t, remote, pkt)
+	sendRTCPUntilDone(done, t, remote, pkt)
 
 	sender.Close()
 	sfu.Close()
@@ -214,17 +208,16 @@ func TestSenderRTCPREMBForwarding(t *testing.T) {
 		SSRCs:      []uint32{track.SSRC()},
 	}
 
-	onReadRTCPFired, onReadRTCPFiredFunc := context.WithCancel(context.Background())
+	done := make(chan struct{})
 	go func() {
 		for {
 			rtcp, err := sender.ReadRTCP()
 			if err == io.ErrClosedPipe {
 				return
 			}
-
 			assert.NoError(t, err)
 			assert.Equal(t, expected, rtcp)
-			onReadRTCPFiredFunc()
+			close(done)
 		}
 	}()
 
@@ -234,9 +227,125 @@ func TestSenderRTCPREMBForwarding(t *testing.T) {
 		SSRCs:      []uint32{track.SSRC()},
 	}
 
-	sendRTCPUntilDone(onReadRTCPFired.Done(), t, remote, pkt)
+	sendRTCPUntilDone(done, t, remote, pkt)
 
 	sender.Close()
-	sfu.Close()
-	remote.Close()
+	assert.NoError(t, sfu.Close())
+	assert.NoError(t, remote.Close())
+}
+
+func TestSenderRTCPTransportLayerNACK(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
+	rtcpfb = []webrtc.RTCPFeedback{
+		{Type: webrtc.TypeRTCPFBGoogREMB},
+	}
+
+	me := webrtc.MediaEngine{}
+	codec := webrtc.NewRTPVP8CodecExt(webrtc.DefaultPayloadTypeVP8, 9000, rtcpfb, "")
+	me.RegisterCodec(codec)
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+	sfu, remote, err := newPair(webrtc.Configuration{}, api)
+	assert.NoError(t, err)
+
+	rtpPkt := &rtp.Packet{}
+	err = rtpPkt.Unmarshal(rawPkt)
+	assert.NoError(t, err)
+
+	track, err := sfu.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+
+	s, err := sfu.AddTrack(track)
+	assert.NoError(t, err)
+
+	ctx := context.Background()
+	sender := NewWebRTCSender(ctx, track, s)
+	assert.NotNil(t, sender)
+
+	err = signalPair(sfu, remote)
+	assert.NoError(t, err)
+
+	pkt := &rtcp.TransportLayerNack{
+		SenderSSRC: track.SSRC(),
+		MediaSSRC:  track.SSRC(),
+		Nacks:      []rtcp.NackPair{{PacketID: uint16(3), LostPackets: rtcp.PacketBitmap(uint16(1))}},
+	}
+
+	done := make(chan struct{})
+	go func() {
+		for {
+			rtcp, err := sender.ReadRTCP()
+			if err == io.ErrClosedPipe {
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, pkt, rtcp)
+			close(done)
+		}
+	}()
+
+	sendRTCPUntilDone(done, t, remote, pkt)
+
+	sender.Close()
+	assert.NoError(t, sfu.Close())
+	assert.NoError(t, remote.Close())
+}
+
+func TestSenderRTCPFullIntraRequest(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
+	rtcpfb = []webrtc.RTCPFeedback{
+		{Type: webrtc.TypeRTCPFBGoogREMB},
+	}
+
+	me := webrtc.MediaEngine{}
+	codec := webrtc.NewRTPVP8CodecExt(webrtc.DefaultPayloadTypeVP8, 9000, rtcpfb, "")
+	me.RegisterCodec(codec)
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+	sfu, remote, err := newPair(webrtc.Configuration{}, api)
+	assert.NoError(t, err)
+
+	rtpPkt := &rtp.Packet{}
+	err = rtpPkt.Unmarshal(rawPkt)
+	assert.NoError(t, err)
+
+	track, err := sfu.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+
+	s, err := sfu.AddTrack(track)
+	assert.NoError(t, err)
+
+	ctx := context.Background()
+	sender := NewWebRTCSender(ctx, track, s)
+	assert.NotNil(t, sender)
+
+	err = signalPair(sfu, remote)
+	assert.NoError(t, err)
+
+	pkt := &rtcp.FullIntraRequest{
+		SenderSSRC: track.SSRC(),
+		MediaSSRC:  track.SSRC(),
+		FIR:        []rtcp.FIREntry{{SSRC: track.SSRC(), SequenceNumber: uint8(1)}},
+	}
+
+	done := make(chan struct{})
+	go func() {
+		for {
+			rtcp, err := sender.ReadRTCP()
+			if err == io.ErrClosedPipe {
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, pkt, rtcp)
+			close(done)
+		}
+	}()
+
+	sendRTCPUntilDone(done, t, remote, pkt)
+
+	sender.Close()
+	assert.NoError(t, sfu.Close())
+	assert.NoError(t, remote.Close())
 }
