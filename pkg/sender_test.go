@@ -2,7 +2,6 @@ package sfu
 
 import (
 	"context"
-	"io"
 	"math/rand"
 	"testing"
 	"time"
@@ -96,11 +95,6 @@ func TestSenderRTPForwarding(t *testing.T) {
 	assert.Contains(t, sender.stats(), "payload")
 
 	sender.Close()
-	sender.Close()
-
-	_, err = sender.ReadRTCP()
-	assert.Error(t, err)
-
 	sfu.Close()
 	remote.Close()
 }
@@ -150,18 +144,18 @@ func TestSenderRTCPPictureLossIndicationForwarding(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
+		rtcpCh := sender.ReadRTCP()
 		for {
-			rtcp, err := sender.ReadRTCP()
-			if err == io.ErrClosedPipe {
-				return
+			select {
+			case p, opn := <-rtcpCh:
+				if !opn {
+					return
+				}
+				assert.Equal(t, pkt, p)
+				close(done)
 			}
-
-			assert.NoError(t, err)
-			assert.Equal(t, pkt, rtcp)
-			close(done)
 		}
 	}()
-
 	sendRTCPUntilDone(done, t, remote, pkt)
 
 	sender.Close()
@@ -169,7 +163,7 @@ func TestSenderRTCPPictureLossIndicationForwarding(t *testing.T) {
 	remote.Close()
 }
 
-func TestSenderRTCPREMBForwarding(t *testing.T) {
+func TestSenderRTCPBlockREMBForwarding(t *testing.T) {
 	report := test.CheckRoutines(t)
 	defer report()
 
@@ -210,14 +204,18 @@ func TestSenderRTCPREMBForwarding(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
+		timer := time.After(time.Second)
+		rtcpCh := sender.ReadRTCP()
 		for {
-			rtcp, err := sender.ReadRTCP()
-			if err == io.ErrClosedPipe {
-				return
+			select {
+			case <-timer:
+				close(done)
+			case p, opn := <-rtcpCh:
+				if !opn {
+					return
+				}
+				assert.NotEqual(t, expected, p)
 			}
-			assert.NoError(t, err)
-			assert.Equal(t, expected, rtcp)
-			close(done)
 		}
 	}()
 
@@ -274,17 +272,18 @@ func TestSenderRTCPTransportLayerNACK(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
+		rtcpCh := sender.ReadRTCP()
 		for {
-			rtcp, err := sender.ReadRTCP()
-			if err == io.ErrClosedPipe {
-				return
+			select {
+			case p, opn := <-rtcpCh:
+				if !opn {
+					return
+				}
+				assert.Equal(t, pkt, p)
+				close(done)
 			}
-			assert.NoError(t, err)
-			assert.Equal(t, pkt, rtcp)
-			close(done)
 		}
 	}()
-
 	sendRTCPUntilDone(done, t, remote, pkt)
 
 	sender.Close()
@@ -332,17 +331,18 @@ func TestSenderRTCPFullIntraRequest(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
+		rtcpCh := sender.ReadRTCP()
 		for {
-			rtcp, err := sender.ReadRTCP()
-			if err == io.ErrClosedPipe {
-				return
+			select {
+			case p, opn := <-rtcpCh:
+				if !opn {
+					return
+				}
+				assert.Equal(t, pkt, p)
+				close(done)
 			}
-			assert.NoError(t, err)
-			assert.Equal(t, pkt, rtcp)
-			close(done)
 		}
 	}()
-
 	sendRTCPUntilDone(done, t, remote, pkt)
 
 	sender.Close()

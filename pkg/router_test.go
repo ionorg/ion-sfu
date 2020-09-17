@@ -10,7 +10,6 @@ import (
 
 	"github.com/pion/transport/test"
 	"github.com/pion/webrtc/v3"
-	"github.com/pion/webrtc/v3/pkg/media"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -60,7 +59,7 @@ func TestRouter(t *testing.T) {
 		assert.NoError(t, err)
 
 		subPid := "subpid"
-		sender := NewWebRTCSender(ctx, subtrack, s)
+		sender := NewWebRTCSender(ctx, subtrack, s).(*WebRTCSender)
 		router.AddSender(subPid, sender)
 		assert.Len(t, router.senders, 1)
 		assert.Equal(t, sender, router.senders[subPid])
@@ -130,9 +129,8 @@ func TestRouterPartialReadCanClose(t *testing.T) {
 		router.AddSender(subPid, sender)
 
 		<-onTrackFired.Done()
-		router.close()
+		receiver.Close()
 
-		<-sender.ctx.Done()
 		<-receiver.ctx.Done()
 
 		close(subClosed)
@@ -197,7 +195,7 @@ func TestSendersNackRateLimit(t *testing.T) {
 		assert.NoError(t, err)
 
 		subPid := "subpid"
-		sender := NewWebRTCSender(ctx, subtrack, s)
+		sender := NewWebRTCSender(ctx, subtrack, s).(*WebRTCSender)
 		router.AddSender(subPid, sender)
 		assert.Len(t, router.senders, 1)
 		assert.Equal(t, sender, router.senders[subPid])
@@ -229,11 +227,8 @@ func TestSendersNackRateLimit(t *testing.T) {
 		}
 		assert.LessOrEqual(t, nackCounter, 2)
 		sub.Close()
-		router.close()
-		router.mu.RLock()
-		assert.Len(t, router.senders, 0)
-		router.mu.RUnlock()
-		<-sender.ctx.Done()
+		receiver.Close()
+		sender.Close()
 		<-receiver.ctx.Done()
 		close(done)
 
@@ -244,104 +239,6 @@ func TestSendersNackRateLimit(t *testing.T) {
 	assert.NoError(t, err)
 
 	sendRTPUntilDone(onTimeout.Done(), t, []*webrtc.Track{track})
-	<-done
-
-	pubsfu.Close()
-	pub.Close()
-}
-
-func TestReceiverCloseOnTrackRemoved(t *testing.T) {
-	report := test.CheckRoutines(t)
-	defer report()
-
-	me := webrtc.MediaEngine{}
-	me.RegisterDefaultCodecs()
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
-	pubsfu, pub, err := newPair(webrtc.Configuration{}, api)
-	assert.NoError(t, err)
-
-	onTimeout, onTimeoutFunc := context.WithCancel(context.Background())
-	track, err := pub.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
-	assert.NoError(t, err)
-	subsfu, sub, err := newPair(webrtc.Configuration{}, api)
-	assert.NoError(t, err)
-
-	pubSender, err := pub.AddTrack(track)
-	assert.NoError(t, err)
-
-	ctx := context.Background()
-	done := make(chan bool)
-
-	onNegotiationFired := make(chan struct{})
-
-	subsfu.OnNegotiationNeeded(func() {
-		println("negotiation required")
-		time.Sleep(5 * time.Second)
-		err = signalPair(subsfu, sub)
-		assert.NoError(t, err)
-		onNegotiationFired <- struct{}{}
-		onTimeoutFunc()
-	})
-
-	pubsfu.OnNegotiationNeeded(func() {
-		println("negotiation required pub")
-	})
-
-	pubsfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
-		receiver := NewWebRTCReceiver(ctx, track).(*WebRTCReceiver)
-		router := NewRouter("id", receiver)
-		assert.Equal(t, router.receiver, receiver)
-
-		sub.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
-			out, err := track.ReadRTP()
-			assert.NoError(t, err)
-			assert.Equal(t, []byte{0x10, 0x01, 0x02, 0x03, 0x04}, out.Payload)
-			// Publisher removes his track
-			err = pub.RemoveTrack(pubSender)
-			assert.NoError(t, err)
-		})
-
-		subtrack, err := subsfu.NewTrack(webrtc.DefaultPayloadTypeVP8, track.SSRC(), "video", "pion")
-		assert.NoError(t, err)
-
-		s, err := subsfu.AddTrack(subtrack)
-		assert.NoError(t, err)
-
-		err = signalPair(subsfu, sub)
-		assert.NoError(t, err)
-
-		subPid := "subpid"
-		sender := NewWebRTCSender(ctx, subtrack, s)
-		router.AddSender(subPid, sender)
-		assert.Len(t, router.senders, 1)
-		assert.Equal(t, sender, router.senders[subPid])
-		assert.Contains(t, router.stats(), "track id:")
-		<-onNegotiationFired
-		router.mu.RLock()
-		assert.Len(t, router.senders, 0)
-		router.mu.RUnlock()
-		sub.Close()
-		<-sender.ctx.Done()
-		<-receiver.ctx.Done()
-		close(done)
-
-		subsfu.Close()
-	})
-
-	err = signalPair(pub, pubsfu)
-	assert.NoError(t, err)
-
-	for {
-		select {
-		case <-onTimeout.Done():
-			break
-		default:
-			err := track.WriteSample(media.Sample{Data: []byte{0x01, 0x02, 0x03, 0x04}, Samples: 1})
-			if err != nil {
-				println(err)
-			}
-		}
-	}
 	<-done
 
 	pubsfu.Close()

@@ -2,7 +2,6 @@ package sfu
 
 import (
 	"fmt"
-	"io"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -91,51 +90,46 @@ func (r *Router) subFeedbackLoop(pid string, sub Sender) {
 		r.mu.Unlock()
 	}()
 
+	rtcpCh := sub.ReadRTCP()
+
 	for {
-		pkt, err := sub.ReadRTCP()
-		if err == io.ErrClosedPipe {
-			return
-		}
-
-		if err != nil {
-			log.Errorf("read rtcp err %s", err)
-			return
-		}
-
-		switch pkt := pkt.(type) {
-		case *rtcp.TransportLayerNack:
-			log.Tracef("Router got nack: %+v", pkt)
-			for _, pair := range pkt.Nacks {
-				bufferpkt := r.receiver.GetPacket(pair.PacketID)
-				if bufferpkt != nil {
-					// We found the packet in the buffer, resend to sub
-					sub.WriteRTP(bufferpkt)
-					continue
-				}
-
-				if routerConfig.MaxNackTime > 0 {
-					ln := atomic.LoadInt64(&r.lastNack)
-					if (time.Now().Unix() - ln) < routerConfig.MaxNackTime {
+		select {
+		case pkt, opn := <-rtcpCh:
+			if !opn {
+				return
+			}
+			switch pkt := pkt.(type) {
+			case *rtcp.TransportLayerNack:
+				log.Tracef("Router got nack: %+v", pkt)
+				for _, pair := range pkt.Nacks {
+					bufferpkt := r.receiver.GetPacket(pair.PacketID)
+					if bufferpkt != nil {
+						// We found the packet in the buffer, resend to sub
+						sub.WriteRTP(bufferpkt)
 						continue
 					}
-					atomic.StoreInt64(&r.lastNack, time.Now().Unix())
+					if routerConfig.MaxNackTime > 0 {
+						ln := atomic.LoadInt64(&r.lastNack)
+						if (time.Now().Unix() - ln) < routerConfig.MaxNackTime {
+							continue
+						}
+						atomic.StoreInt64(&r.lastNack, time.Now().Unix())
+					}
+					// Packet not found, request from receiver
+					nack := &rtcp.TransportLayerNack{
+						// origin ssrc
+						SenderSSRC: pkt.SenderSSRC,
+						MediaSSRC:  pkt.MediaSSRC,
+						Nacks:      []rtcp.NackPair{{PacketID: pair.PacketID}},
+					}
+					if err := r.receiver.WriteRTCP(nack); err != nil {
+						log.Errorf("Error writing nack RTCP %s", err)
+					}
 				}
-				// Packet not found, request from receiver
-				nack := &rtcp.TransportLayerNack{
-					// origin ssrc
-					SenderSSRC: pkt.SenderSSRC,
-					MediaSSRC:  pkt.MediaSSRC,
-					Nacks:      []rtcp.NackPair{{PacketID: pair.PacketID}},
+			default:
+				if err := r.receiver.WriteRTCP(pkt); err != nil {
+					log.Errorf("Error writing RTCP %s", err)
 				}
-				err = r.receiver.WriteRTCP(nack)
-				if err != nil {
-					log.Errorf("Error writing nack RTCP %s", err)
-				}
-			}
-		default:
-			err = r.receiver.WriteRTCP(pkt)
-			if err != nil {
-				log.Errorf("Error writing RTCP %s", err)
 			}
 		}
 	}

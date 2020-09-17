@@ -134,6 +134,53 @@ func TestWebRTCVideoReceiverRTPForwarding(t *testing.T) {
 	assert.NoError(t, remote.Close())
 }
 
+func TestWebRTCReceiverCloseOnTrackRemoved(t *testing.T) {
+	report := test.CheckRoutines(t)
+	defer report()
+
+	me := webrtc.MediaEngine{}
+	me.RegisterDefaultCodecs()
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+	sfu, remote, err := newPair(webrtc.Configuration{}, api)
+	assert.NoError(t, err)
+
+	track, err := remote.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pion")
+	assert.NoError(t, err)
+	rt, err := remote.AddTrack(track)
+	assert.NoError(t, err)
+
+	done := make(chan bool)
+	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
+	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
+		ctx := context.Background()
+		receiver := NewWebRTCReceiver(ctx, track)
+		receiver.OnCloseHandler(func() {
+			close(done)
+		})
+
+		out := receiver.ReadRTP()
+		pkt := <-out
+		assert.Equal(t, []byte{0x10, 0x01, 0x02, 0x03, 0x04}, pkt.Payload)
+
+		onReadRTPFiredFunc()
+
+		remote.OnNegotiationNeeded(func() {
+			err = signalPair(remote, sfu)
+			assert.NoError(t, err)
+		})
+
+		err := remote.RemoveTrack(rt)
+		assert.NoError(t, err)
+	})
+
+	err = signalPair(remote, sfu)
+	assert.NoError(t, err)
+	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
+	<-done
+	assert.NoError(t, sfu.Close())
+	assert.NoError(t, remote.Close())
+}
+
 func TestWebRTCVideoReceiver_rembLoop(t *testing.T) {
 	report := test.CheckRoutines(t)
 	defer report()

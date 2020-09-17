@@ -236,7 +236,7 @@ func (p *WebRTCTransport) NewSender(intrack *webrtc.Track) (Sender, error) {
 	// Create webrtc sender for the peer we are sending track to
 	sender := NewWebRTCSender(p.ctx, outtrack, s)
 
-	sender.OnClose(func() {
+	sender.OnCloseHandler(func() {
 		err = p.pc.RemoveTrack(s)
 		if err != nil {
 			log.Errorf("Error closing sender: %s", err)

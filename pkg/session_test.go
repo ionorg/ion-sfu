@@ -171,9 +171,6 @@ func TestMultiPeerSession(t *testing.T) {
 
 	assert.NoError(t, peerA.Close())
 	router = peerB.GetRouter(trackB.SSRC())
-	router.mu.RLock()
-	assert.Len(t, router.senders, 0)
-	router.mu.RUnlock()
 
 	assert.NoError(t, peerB.Close())
 	<-onNegotationNeededFired.Done()

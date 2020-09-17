@@ -556,7 +556,7 @@ func TestPeerRemovesRouterWhenRemoteRemovesTrack(t *testing.T) {
 	err = renegotiate(remote, peer)
 	assert.NoError(t, err)
 	router.close()
-
+	time.Sleep(50 * time.Millisecond)
 	router = peer.GetRouter(track.SSRC())
 	assert.Nil(t, router)
 
