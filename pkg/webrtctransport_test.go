@@ -16,11 +16,6 @@ var conf = WebRTCTransportConfig{
 		SDPSemantics: webrtc.SDPSemanticsUnifiedPlan,
 	},
 	setting: webrtc.SettingEngine{},
-	receiver: ReceiverConfig{
-		Video: WebRTCVideoReceiverConfig{
-			REMBCycle: 1,
-		},
-	},
 }
 
 // newPair creates two new peer connections (an offerer and an answerer) using

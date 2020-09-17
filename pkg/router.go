@@ -16,12 +16,11 @@ var routerConfig RouterConfig
 
 // Router defines a track rtp/rtcp router
 type Router struct {
-	tid            string
-	mu             sync.RWMutex
-	onCloseHandler func()
-	receiver       Receiver
-	senders        map[string]Sender
-	lastNack       int64
+	tid      string
+	mu       sync.RWMutex
+	receiver Receiver
+	senders  map[string]Sender
+	lastNack int64
 }
 
 // NewRouter for routing rtp/rtcp packets
@@ -52,13 +51,6 @@ func (r *Router) AddSender(pid string, sub Sender) {
 	go r.subFeedbackLoop(pid, sub)
 }
 
-// OnClose is called when the router is closed
-func (r *Router) OnClose(f func()) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.onCloseHandler = f
-}
-
 // Close a router
 func (r *Router) close() {
 	log.Debugf("Router close")
@@ -66,37 +58,27 @@ func (r *Router) close() {
 	defer r.mu.Unlock()
 
 	// Close senders
-	for pid, sub := range r.senders {
+	for _, sub := range r.senders {
 		sub.Close()
-		delete(r.senders, pid)
-	}
-	r.receiver.Close()
-
-	if r.onCloseHandler != nil {
-		r.onCloseHandler()
 	}
 }
 
 func (r *Router) start() {
+	rtpCh := r.receiver.ReadRTP()
+	defer r.close()
 	for {
-		pkt, err := r.receiver.ReadRTP()
-
-		if err == io.EOF {
-			r.close()
-			return
+		select {
+		case pkt, opn := <-rtpCh:
+			if !opn {
+				return
+			}
+			// Push to sub send queues
+			r.mu.RLock()
+			for _, sub := range r.senders {
+				sub.WriteRTP(pkt)
+			}
+			r.mu.RUnlock()
 		}
-
-		if err != nil {
-			log.Errorf("r.receiver.ReadRTP err=%v", err)
-			continue
-		}
-
-		// Push to sub send queues
-		r.mu.RLock()
-		for _, sub := range r.senders {
-			sub.WriteRTP(pkt)
-		}
-		r.mu.RUnlock()
 	}
 }
 

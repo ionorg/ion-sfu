@@ -49,28 +49,33 @@ func TestWebRTCAudioReceiverRTPForwarding(t *testing.T) {
 
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
 	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
-		receiver := NewWebRTCAudioReceiver(track)
+		receiver := NewWebRTCReceiver(context.Background(), track)
 		assert.Equal(t, track, receiver.Track())
 
-		rtcp, err := receiver.ReadRTCP()
-		assert.Nil(t, rtcp)
-		assert.Equal(t, errMethodNotSupported, err)
+		rtcpCh := receiver.ReadRTCP()
+		assert.Nil(t, rtcpCh)
 		err = receiver.WriteRTCP(nil)
-		assert.Equal(t, errMethodNotSupported, err)
+		assert.Equal(t, io.ErrClosedPipe, err)
 		rtp := receiver.GetPacket(0)
 		assert.Nil(t, rtp)
 
-		out, err := receiver.ReadRTP()
-		assert.NoError(t, err)
-		assert.Equal(t, []byte{0x01, 0x02, 0x03, 0x04}, out.Payload)
-
+		out := receiver.ReadRTP()
+		go func() {
+			timeout := time.NewTimer(1 * time.Second)
+			for {
+				select {
+				case <-timeout.C:
+					t.Fatal("Receiver dont close")
+				case pkt, opn := <-out:
+					if !opn {
+						return
+					}
+					assert.Equal(t, []byte{0x01, 0x02, 0x03, 0x04}, pkt.Payload)
+				}
+			}
+		}()
 		receiver.Close()
-
 		onReadRTPFiredFunc()
-
-		out, err = receiver.ReadRTP()
-		assert.Nil(t, out)
-		assert.Equal(t, io.EOF, err)
 	})
 
 	err = signalPair(remote, sfu)
@@ -78,8 +83,8 @@ func TestWebRTCAudioReceiverRTPForwarding(t *testing.T) {
 
 	sendRTPUntilDone(onReadRTPFired.Done(), t, []*webrtc.Track{track})
 
-	assert.NoError(t, sfu.Close())
 	assert.NoError(t, remote.Close())
+	assert.NoError(t, sfu.Close())
 }
 
 func TestWebRTCVideoReceiverRTPForwarding(t *testing.T) {
@@ -100,16 +105,16 @@ func TestWebRTCVideoReceiverRTPForwarding(t *testing.T) {
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
 	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
 		ctx := context.Background()
-		receiver := NewWebRTCVideoReceiver(ctx, WebRTCVideoReceiverConfig{}, track)
+		receiver := NewWebRTCReceiver(ctx, track)
 		assert.Equal(t, track, receiver.Track())
 
-		out, err := receiver.ReadRTP()
-		assert.NoError(t, err)
-		assert.Equal(t, []byte{0x10, 0x01, 0x02, 0x03, 0x04}, out.Payload)
+		out := receiver.ReadRTP()
+		pkt := <-out
+		assert.Equal(t, []byte{0x10, 0x01, 0x02, 0x03, 0x04}, pkt.Payload)
 
 		// Test fetching from buffer
-		buf := receiver.GetPacket(out.SequenceNumber)
-		assert.Equal(t, out, buf)
+		buf := receiver.GetPacket(pkt.SequenceNumber)
+		assert.Equal(t, pkt, buf)
 
 		// GetPacket on unbuffered returns nil packet
 		buf = receiver.GetPacket(1)
@@ -133,6 +138,7 @@ func TestWebRTCVideoReceiver_rembLoop(t *testing.T) {
 	report := test.CheckRoutines(t)
 	defer report()
 
+	routerConfig.Video.REMBCycle = 1
 	codec := webrtc.NewRTPCodec(webrtc.RTPCodecTypeVideo, "video", 90000, 0, "", 5, &codecs.VP8Payloader{})
 	codec.RTCPFeedback = []webrtc.RTCPFeedback{{Type: webrtc.TypeRTCPFBGoogREMB}}
 
@@ -152,14 +158,12 @@ func TestWebRTCVideoReceiver_rembLoop(t *testing.T) {
 	onReadRTPFired, onReadRTPFiredFunc := context.WithCancel(context.Background())
 	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
 		assert.NoError(t, err)
-		videoConfig := WebRTCVideoReceiverConfig{
-			REMBCycle: 1,
-		}
 
-		videoReceiver := NewWebRTCVideoReceiver(context.Background(), videoConfig, track)
+		videoReceiver := NewWebRTCReceiver(context.Background(), track)
 		assert.NotNil(t, videoReceiver)
 
-		rtcpPacket := <-videoReceiver.rtcpCh
+		rtcpCh := videoReceiver.ReadRTCP()
+		rtcpPacket := <-rtcpCh
 
 		assert.NotNil(t, rtcpPacket)
 		err = rtcpPacket.Unmarshal([]byte{1})
