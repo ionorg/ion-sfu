@@ -267,5 +267,7 @@ func (b *Buffer) GetLostRateBandwidth(cycle uint64) (float64, uint64) {
 
 // GetPacket get packet by sequence number
 func (b *Buffer) GetPacket(sn uint16) *rtp.Packet {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 	return b.pktBuffer[sn]
 }

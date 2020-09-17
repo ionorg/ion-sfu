@@ -254,10 +254,10 @@ func TestPeerPairRemoteBGetsOnTrack(t *testing.T) {
 
 	<-trackBDone
 
-	remoteA.Close()
-	remoteB.Close()
-	peerA.Close()
-	peerB.Close()
+	assert.NoError(t, remoteA.Close())
+	assert.NoError(t, remoteB.Close())
+	assert.NoError(t, peerA.Close())
+	assert.NoError(t, peerB.Close())
 }
 
 func TestPeerPairRemoteAGetsOnTrackWhenRemoteBJoinsWithPub(t *testing.T) {

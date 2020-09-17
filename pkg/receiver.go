@@ -126,7 +126,7 @@ func (w *WebRTCReceiver) Track() *webrtc.Track {
 
 // GetPacket get a buffered packet if we have one
 func (w *WebRTCReceiver) GetPacket(sn uint16) *rtp.Packet {
-	if w.buffer == nil {
+	if w.buffer == nil || w.ctx.Err() != nil {
 		return nil
 	}
 	return w.buffer.GetPacket(sn)
@@ -214,7 +214,6 @@ func (w *WebRTCReceiver) bufferRtcpLoop() {
 		case pkt := <-w.buffer.GetRTCPChan():
 			w.rtcpCh <- pkt
 		case <-w.ctx.Done():
-			w.buffer.Stop()
 			return
 		}
 	}
@@ -386,6 +385,7 @@ func (w *WebRTCReceiver) stats() string {
 
 func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}) {
 	defer func() {
+		w.buffer.Stop()
 		close(w.rtpCh)
 		close(w.rtcpCh)
 		if w.onCloseHandler != nil {
