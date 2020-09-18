@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
@@ -32,6 +33,8 @@ type WebRTCSender struct {
 	maxBitrate     uint64
 	target         uint64
 	sendChan       chan *rtp.Packet
+
+	once sync.Once
 }
 
 // NewWebRTCSender creates a new track sender instance
@@ -100,6 +103,10 @@ func (s *WebRTCSender) OnClose(f func()) {
 
 // Close track
 func (s *WebRTCSender) Close() {
+	s.once.Do(s.close)
+}
+
+func (s *WebRTCSender) close() {
 	s.cancel()
 	if s.onCloseHandler != nil {
 		s.onCloseHandler()
