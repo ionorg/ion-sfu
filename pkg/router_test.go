@@ -32,7 +32,7 @@ func TestRouter(t *testing.T) {
 	done := make(chan bool)
 	onTrackFired, onTrackFiredFunc := context.WithCancel(context.Background())
 	pubsfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
-		receiver := NewWebRTCVideoReceiver(ctx, WebRTCVideoReceiverConfig{}, track)
+		receiver := NewWebRTCReceiver(ctx, track).(*WebRTCReceiver)
 		router := NewRouter("id", receiver)
 		assert.Equal(t, router.receiver, receiver)
 
@@ -59,7 +59,7 @@ func TestRouter(t *testing.T) {
 		assert.NoError(t, err)
 
 		subPid := "subpid"
-		sender := NewWebRTCSender(ctx, subtrack, s)
+		sender := NewWebRTCSender(ctx, subtrack, s).(*WebRTCSender)
 		router.AddSender(subPid, sender)
 		assert.Len(t, router.senders, 1)
 		assert.Equal(t, sender, router.senders[subPid])
@@ -68,10 +68,8 @@ func TestRouter(t *testing.T) {
 		<-ontrackFired
 
 		sub.Close()
-		router.close()
-		router.mu.RLock()
-		assert.Len(t, router.senders, 0)
-		router.mu.RUnlock()
+		receiver.Close()
+		sender.Close()
 		<-sender.ctx.Done()
 		<-receiver.ctx.Done()
 		close(done)
@@ -108,7 +106,7 @@ func TestRouterPartialReadCanClose(t *testing.T) {
 	subClosed := make(chan bool)
 	onTrackFired, onTrackFiredFunc := context.WithCancel(context.Background())
 	pubsfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
-		receiver := NewWebRTCVideoReceiver(ctx, WebRTCVideoReceiverConfig{}, track)
+		receiver := NewWebRTCReceiver(ctx, track).(*WebRTCReceiver)
 		router := NewRouter("id", receiver)
 		subsfu, sub, err := newPair(webrtc.Configuration{}, api)
 		assert.NoError(t, err)
@@ -131,9 +129,8 @@ func TestRouterPartialReadCanClose(t *testing.T) {
 		router.AddSender(subPid, sender)
 
 		<-onTrackFired.Done()
-		router.close()
+		receiver.Close()
 
-		<-sender.ctx.Done()
 		<-receiver.ctx.Done()
 
 		close(subClosed)
@@ -172,7 +169,7 @@ func TestSendersNackRateLimit(t *testing.T) {
 	ctx := context.Background()
 	done := make(chan bool)
 	pubsfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
-		receiver := NewWebRTCVideoReceiver(ctx, WebRTCVideoReceiverConfig{}, track)
+		receiver := NewWebRTCReceiver(ctx, track).(*WebRTCReceiver)
 		router := NewRouter("id", receiver)
 		assert.Equal(t, router.receiver, receiver)
 
@@ -198,7 +195,7 @@ func TestSendersNackRateLimit(t *testing.T) {
 		assert.NoError(t, err)
 
 		subPid := "subpid"
-		sender := NewWebRTCSender(ctx, subtrack, s)
+		sender := NewWebRTCSender(ctx, subtrack, s).(*WebRTCSender)
 		router.AddSender(subPid, sender)
 		assert.Len(t, router.senders, 1)
 		assert.Equal(t, sender, router.senders[subPid])
@@ -230,11 +227,8 @@ func TestSendersNackRateLimit(t *testing.T) {
 		}
 		assert.LessOrEqual(t, nackCounter, 2)
 		sub.Close()
-		router.close()
-		router.mu.RLock()
-		assert.Len(t, router.senders, 0)
-		router.mu.RUnlock()
-		<-sender.ctx.Done()
+		receiver.Close()
+		sender.Close()
 		<-receiver.ctx.Done()
 		close(done)
 

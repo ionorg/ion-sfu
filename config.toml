@@ -8,7 +8,7 @@ maxbandwidth = 1000
 # zero means no rate limit
 maxnacktime = 1
 
-[receiver.video]
+[router.video]
 # the remb cycle sending to pub, this told the pub it's bandwidth
 rembcycle = 2
 # pli cycle sending to pub, and pub will send a key frame

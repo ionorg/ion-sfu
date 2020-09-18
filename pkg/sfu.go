@@ -25,24 +25,19 @@ type WebRTCConfig struct {
 	ICEServers   []ICEServerConfig `mapstructure:"iceserver"`
 }
 
-// ReceiverConfig defines receiver configurations
-type ReceiverConfig struct {
-	Video WebRTCVideoReceiverConfig `mapstructure:"video"`
-}
-
 // Config for base SFU
 type Config struct {
-	WebRTC   WebRTCConfig   `mapstructure:"webrtc"`
-	Log      log.Config     `mapstructure:"log"`
-	Receiver ReceiverConfig `mapstructure:"receiver"`
-	Router   RouterConfig   `mapstructure:"router"`
+	WebRTC WebRTCConfig `mapstructure:"webrtc"`
+	Log    log.Config   `mapstructure:"log"`
+	Router RouterConfig `mapstructure:"router"`
 }
 
 // RouterConfig defines router configurations
 type RouterConfig struct {
-	REMBFeedback bool   `mapstructure:"subrembfeedback"`
-	MaxBandwidth uint64 `mapstructure:"maxbandwidth"`
-	MaxNackTime  int64  `mapstructure:"maxnacktime"`
+	REMBFeedback bool                      `mapstructure:"subrembfeedback"`
+	MaxBandwidth uint64                    `mapstructure:"maxbandwidth"`
+	MaxNackTime  int64                     `mapstructure:"maxnacktime"`
+	Video        WebRTCVideoReceiverConfig `mapstructure:"video"`
 }
 
 // SFU represents an sfu instance
@@ -61,8 +56,7 @@ func NewSFU(c Config) *SFU {
 		configuration: webrtc.Configuration{
 			SDPSemantics: webrtc.SDPSemanticsUnifiedPlan,
 		},
-		setting:  webrtc.SettingEngine{},
-		receiver: c.Receiver,
+		setting: webrtc.SettingEngine{},
 	}
 	// Init router config
 	routerConfig = c.Router
@@ -95,7 +89,7 @@ func NewSFU(c Config) *SFU {
 	w.configuration.ICEServers = iceServers
 
 	// Configure bandwidth estimation support
-	if c.Receiver.Video.TCCCycle > 0 {
+	if c.Router.Video.TCCCycle > 0 {
 		rtcpfb = append(rtcpfb, webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBTransportCC})
 		transportCCURL, _ := url.Parse(sdp.TransportCCURI)
 		exts := []sdp.ExtMap{
@@ -107,7 +101,7 @@ func NewSFU(c Config) *SFU {
 		w.setting.AddSDPExtensions(webrtc.SDPSectionVideo, exts)
 	}
 
-	if c.Receiver.Video.REMBCycle > 0 {
+	if c.Router.Video.REMBCycle > 0 {
 		rtcpfb = append(rtcpfb, webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBGoogREMB})
 	}
 

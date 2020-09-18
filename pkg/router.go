@@ -2,7 +2,6 @@ package sfu
 
 import (
 	"fmt"
-	"io"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,12 +15,11 @@ var routerConfig RouterConfig
 
 // Router defines a track rtp/rtcp router
 type Router struct {
-	tid            string
-	mu             sync.RWMutex
-	onCloseHandler func()
-	receiver       Receiver
-	senders        map[string]Sender
-	lastNack       int64
+	tid      string
+	mu       sync.RWMutex
+	receiver Receiver
+	senders  map[string]Sender
+	lastNack int64
 }
 
 // NewRouter for routing rtp/rtcp packets
@@ -52,13 +50,6 @@ func (r *Router) AddSender(pid string, sub Sender) {
 	go r.subFeedbackLoop(pid, sub)
 }
 
-// OnClose is called when the router is closed
-func (r *Router) OnClose(f func()) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.onCloseHandler = f
-}
-
 // Close a router
 func (r *Router) close() {
 	log.Debugf("Router close")
@@ -66,31 +57,14 @@ func (r *Router) close() {
 	defer r.mu.Unlock()
 
 	// Close senders
-	for pid, sub := range r.senders {
+	for _, sub := range r.senders {
 		sub.Close()
-		delete(r.senders, pid)
-	}
-	r.receiver.Close()
-
-	if r.onCloseHandler != nil {
-		r.onCloseHandler()
 	}
 }
 
 func (r *Router) start() {
-	for {
-		pkt, err := r.receiver.ReadRTP()
-
-		if err == io.EOF {
-			r.close()
-			return
-		}
-
-		if err != nil {
-			log.Errorf("r.receiver.ReadRTP err=%v", err)
-			continue
-		}
-
+	defer r.close()
+	for pkt := range r.receiver.ReadRTP() {
 		// Push to sub send queues
 		r.mu.RLock()
 		for _, sub := range r.senders {
@@ -109,17 +83,7 @@ func (r *Router) subFeedbackLoop(pid string, sub Sender) {
 		r.mu.Unlock()
 	}()
 
-	for {
-		pkt, err := sub.ReadRTCP()
-		if err == io.ErrClosedPipe {
-			return
-		}
-
-		if err != nil {
-			log.Errorf("read rtcp err %s", err)
-			return
-		}
-
+	for pkt := range sub.ReadRTCP() {
 		switch pkt := pkt.(type) {
 		case *rtcp.TransportLayerNack:
 			log.Tracef("Router got nack: %+v", pkt)
@@ -130,7 +94,6 @@ func (r *Router) subFeedbackLoop(pid string, sub Sender) {
 					sub.WriteRTP(bufferpkt)
 					continue
 				}
-
 				if routerConfig.MaxNackTime > 0 {
 					ln := atomic.LoadInt64(&r.lastNack)
 					if (time.Now().Unix() - ln) < routerConfig.MaxNackTime {
@@ -145,14 +108,12 @@ func (r *Router) subFeedbackLoop(pid string, sub Sender) {
 					MediaSSRC:  pkt.MediaSSRC,
 					Nacks:      []rtcp.NackPair{{PacketID: pair.PacketID}},
 				}
-				err = r.receiver.WriteRTCP(nack)
-				if err != nil {
+				if err := r.receiver.WriteRTCP(nack); err != nil {
 					log.Errorf("Error writing nack RTCP %s", err)
 				}
 			}
 		default:
-			err = r.receiver.WriteRTCP(pkt)
-			if err != nil {
+			if err := r.receiver.WriteRTCP(pkt); err != nil {
 				log.Errorf("Error writing RTCP %s", err)
 			}
 		}

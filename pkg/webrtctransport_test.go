@@ -16,11 +16,6 @@ var conf = WebRTCTransportConfig{
 		SDPSemantics: webrtc.SDPSemanticsUnifiedPlan,
 	},
 	setting: webrtc.SettingEngine{},
-	receiver: ReceiverConfig{
-		Video: WebRTCVideoReceiverConfig{
-			REMBCycle: 1,
-		},
-	},
 }
 
 // newPair creates two new peer connections (an offerer and an answerer) using
@@ -259,10 +254,10 @@ func TestPeerPairRemoteBGetsOnTrack(t *testing.T) {
 
 	<-trackBDone
 
-	remoteA.Close()
-	remoteB.Close()
-	peerA.Close()
-	peerB.Close()
+	assert.NoError(t, remoteA.Close())
+	assert.NoError(t, remoteB.Close())
+	assert.NoError(t, peerA.Close())
+	assert.NoError(t, peerB.Close())
 }
 
 func TestPeerPairRemoteAGetsOnTrackWhenRemoteBJoinsWithPub(t *testing.T) {
@@ -561,7 +556,7 @@ func TestPeerRemovesRouterWhenRemoteRemovesTrack(t *testing.T) {
 	err = renegotiate(remote, peer)
 	assert.NoError(t, err)
 	router.close()
-
+	time.Sleep(50 * time.Millisecond)
 	router = peer.GetRouter(track.SSRC())
 	assert.Nil(t, router)
 

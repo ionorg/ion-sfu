@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
@@ -36,62 +37,16 @@ type rtpExtInfo struct {
 type Receiver interface {
 	Track() *webrtc.Track
 	GetPacket(sn uint16) *rtp.Packet
-	ReadRTP() (*rtp.Packet, error)
-	ReadRTCP() (rtcp.Packet, error)
+	ReadRTP() chan *rtp.Packet
+	ReadRTCP() chan rtcp.Packet
 	WriteRTCP(rtcp.Packet) error
+	OnCloseHandler(fn func())
 	Close()
 	stats() string
 }
 
-// WebRTCAudioReceiver receives a audio track
-type WebRTCAudioReceiver struct {
-	track *webrtc.Track
-}
-
-// NewWebRTCAudioReceiver creates a new audio track receiver
-func NewWebRTCAudioReceiver(track *webrtc.Track) *WebRTCAudioReceiver {
-	a := &WebRTCAudioReceiver{
-		track: track,
-	}
-
-	return a
-}
-
-// ReadRTP read rtp packet
-func (a *WebRTCAudioReceiver) ReadRTP() (*rtp.Packet, error) {
-	return a.track.ReadRTP()
-}
-
-// ReadRTCP read rtcp packet
-func (a *WebRTCAudioReceiver) ReadRTCP() (rtcp.Packet, error) {
-	return nil, errMethodNotSupported
-}
-
-// WriteRTCP write rtcp packet
-func (a *WebRTCAudioReceiver) WriteRTCP(pkt rtcp.Packet) error {
-	return errMethodNotSupported
-}
-
-// Track returns receiver track
-func (a *WebRTCAudioReceiver) Track() *webrtc.Track {
-	return a.track
-}
-
-// GetPacket returns nil since audio isn't buffered (uses fec)
-func (a *WebRTCAudioReceiver) GetPacket(sn uint16) *rtp.Packet {
-	return nil
-}
-
-// Close track
-func (a *WebRTCAudioReceiver) Close() {}
-
-// Stats get stats for video receiver
-func (a *WebRTCAudioReceiver) stats() string {
-	return fmt.Sprintf("payload: %d", a.track.PayloadType())
-}
-
-// WebRTCVideoReceiver receives a video track
-type WebRTCVideoReceiver struct {
+// WebRTCReceiver receives a video track
+type WebRTCReceiver struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
 	buffer         *Buffer
@@ -101,10 +56,11 @@ type WebRTCVideoReceiver struct {
 	rtpCh          chan *rtp.Packet
 	rtcpCh         chan rtcp.Packet
 	rtpExtInfoChan chan rtpExtInfo
+	onCloseHandler func()
 
-	pliCycle     int
 	maxBandwidth uint64
 	feedback     string
+	wg           sync.WaitGroup
 }
 
 // WebRTCVideoReceiverConfig .
@@ -116,101 +72,84 @@ type WebRTCVideoReceiverConfig struct {
 	ReceiveRTPCycle int `mapstructure:"rtpcycle"`
 }
 
-// NewWebRTCVideoReceiver creates a new video track receiver
-func NewWebRTCVideoReceiver(ctx context.Context, config WebRTCVideoReceiverConfig, track *webrtc.Track) *WebRTCVideoReceiver {
+// NewWebRTCReceiver creates a new webrtc track receiver
+func NewWebRTCReceiver(ctx context.Context, track *webrtc.Track) Receiver {
 	ctx, cancel := context.WithCancel(ctx)
 
-	pliCycle := config.PLICycle
-	if pliCycle == 0 {
-		pliCycle = 1
-	}
-
-	v := &WebRTCVideoReceiver{
-		ctx:    ctx,
-		cancel: cancel,
-		buffer: NewBuffer(track.SSRC(), track.PayloadType(), BufferOptions{
-			BufferTime: config.MaxBufferTime,
-		}),
+	w := &WebRTCReceiver{
+		ctx:            ctx,
+		cancel:         cancel,
 		track:          track,
 		rtpCh:          make(chan *rtp.Packet, maxSize),
-		rtcpCh:         make(chan rtcp.Packet, maxSize),
 		rtpExtInfoChan: make(chan rtpExtInfo, maxSize),
-		pliCycle:       pliCycle,
-		maxBandwidth:   routerConfig.MaxBandwidth * 1000,
 	}
 
-	for _, feedback := range track.Codec().RTCPFeedback {
-		switch feedback.Type {
-		case webrtc.TypeRTCPFBTransportCC:
-			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBTransportCC)
-			v.feedback = webrtc.TypeRTCPFBTransportCC
-			go v.tccLoop(config.TCCCycle)
-		case webrtc.TypeRTCPFBGoogREMB:
-			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBGoogREMB)
-			v.feedback = webrtc.TypeRTCPFBGoogREMB
-			go v.rembLoop(config.REMBCycle)
-		}
+	waitStart := make(chan struct{})
+	switch track.Kind() {
+	case webrtc.RTPCodecTypeVideo:
+		go startVideoReceiver(w, waitStart)
+	case webrtc.RTPCodecTypeAudio:
+		go startAudioReceiver(w, waitStart)
 	}
+	<-waitStart
+	return w
+}
 
-	go v.receiveRTP()
-	go v.pliLoop()
-	go v.bufferRtcpLoop()
-
-	return v
+// OnCloseHandler method to be called on remote tracked removed
+func (w *WebRTCReceiver) OnCloseHandler(fn func()) {
+	w.onCloseHandler = fn
 }
 
 // ReadRTP read rtp packets
-func (v *WebRTCVideoReceiver) ReadRTP() (*rtp.Packet, error) {
-	select {
-	case pkt := <-v.rtpCh:
-		return pkt, nil
-	case <-v.ctx.Done():
-		return nil, io.EOF
-	}
+func (w *WebRTCReceiver) ReadRTP() chan *rtp.Packet {
+	return w.rtpCh
 }
 
 // ReadRTCP read rtcp packets
-func (v *WebRTCVideoReceiver) ReadRTCP() (rtcp.Packet, error) {
-	select {
-	case pkt := <-v.rtcpCh:
-		return pkt, nil
-	case <-v.ctx.Done():
-		return nil, io.ErrClosedPipe
-	}
+func (w *WebRTCReceiver) ReadRTCP() chan rtcp.Packet {
+	return w.rtcpCh
 }
 
 // WriteRTCP write rtcp packet
-func (v *WebRTCVideoReceiver) WriteRTCP(pkt rtcp.Packet) error {
-	select {
-	case <-v.ctx.Done():
+func (w *WebRTCReceiver) WriteRTCP(pkt rtcp.Packet) error {
+	if w.ctx.Err() != nil || w.rtcpCh == nil {
 		return io.ErrClosedPipe
-	default:
-		v.rtcpCh <- pkt
-		return nil
 	}
+	w.rtcpCh <- pkt
+	return nil
 }
 
 // Track returns receiver track
-func (v *WebRTCVideoReceiver) Track() *webrtc.Track {
-	return v.track
+func (w *WebRTCReceiver) Track() *webrtc.Track {
+	return w.track
 }
 
 // GetPacket get a buffered packet if we have one
-func (v *WebRTCVideoReceiver) GetPacket(sn uint16) *rtp.Packet {
-	return v.buffer.GetPacket(sn)
+func (w *WebRTCReceiver) GetPacket(sn uint16) *rtp.Packet {
+	if w.buffer == nil || w.ctx.Err() != nil {
+		return nil
+	}
+	return w.buffer.GetPacket(sn)
 }
 
-// Close track
-func (v *WebRTCVideoReceiver) Close() {
-	v.cancel()
+// Close gracefully close the track
+func (w *WebRTCReceiver) Close() {
+	if w.ctx.Err() != nil {
+		return
+	}
+	w.cancel()
 }
 
 // receiveRTP receive all incoming tracks' rtp and sent to one channel
-func (v *WebRTCVideoReceiver) receiveRTP() {
+func (w *WebRTCReceiver) receiveRTP() {
+	defer w.wg.Done()
 	for {
-		pkt, err := v.track.ReadRTP()
-
+		pkt, err := w.track.ReadRTP()
+		// EOF signal received, this means that the remote track has been removed
+		// or the peer has been disconnected. The router must be gracefully shutdown,
+		// waiting for all the receiver routines to stop.
 		if err == io.EOF {
+			w.Close()
 			return
 		}
 
@@ -219,9 +158,9 @@ func (v *WebRTCVideoReceiver) receiveRTP() {
 			continue
 		}
 
-		v.buffer.Push(pkt)
+		w.buffer.Push(pkt)
 
-		if v.feedback == webrtc.TypeRTCPFBTransportCC {
+		if w.feedback == webrtc.TypeRTCPFBTransportCC {
 			// store arrival time
 			timestampUs := time.Now().UnixNano() / 1000
 			rtpTCC := rtp.TransportCCExtension{}
@@ -232,7 +171,7 @@ func (v *WebRTCVideoReceiver) receiveRTP() {
 				// only calc the packet which rtpTCC.TransportSequence > b.lastTCCSN
 				// https://webrtc.googlesource.com/src/webrtc/+/f54860e9ef0b68e182a01edc994626d21961bc4b/modules/rtp_rtcp/source/rtcp_packet/transport_feedback.cc#353
 				// if rtpTCC.TransportSequence > b.lastTCCSN {
-				v.rtpExtInfoChan <- rtpExtInfo{
+				w.rtpExtInfoChan <- rtpExtInfo{
 					TSN:       rtpTCC.TransportSequence,
 					Timestamp: timestampUs,
 				}
@@ -242,83 +181,90 @@ func (v *WebRTCVideoReceiver) receiveRTP() {
 		}
 
 		select {
-		case <-v.ctx.Done():
+		case <-w.ctx.Done():
 			return
 		default:
-			v.rtpCh <- pkt
+			w.rtpCh <- pkt
 		}
 	}
 }
 
-func (v *WebRTCVideoReceiver) pliLoop() {
-	t := time.NewTicker(time.Duration(v.pliCycle) * time.Second)
+func (w *WebRTCReceiver) pliLoop(cycle int) {
+	defer w.wg.Done()
+	if cycle <= 0 {
+		cycle = 1
+	}
+	t := time.NewTicker(time.Duration(cycle) * time.Second)
 	for {
 		select {
 		case <-t.C:
-			pli := &rtcp.PictureLossIndication{SenderSSRC: v.track.SSRC(), MediaSSRC: v.track.SSRC()}
-			// log.Infof("pliLoop send pli=%d pt=%v", buffer.GetSSRC(), buffer.GetPayloadType())
-			v.rtcpCh <- pli
-		case <-v.ctx.Done():
+			pli := &rtcp.PictureLossIndication{SenderSSRC: w.track.SSRC(), MediaSSRC: w.track.SSRC()}
+			w.rtcpCh <- pli
+		case <-w.ctx.Done():
 			t.Stop()
 			return
 		}
 	}
 }
 
-func (v *WebRTCVideoReceiver) bufferRtcpLoop() {
+func (w *WebRTCReceiver) bufferRtcpLoop() {
+	defer w.wg.Done()
 	for {
 		select {
-		case pkt := <-v.buffer.GetRTCPChan():
-			v.rtcpCh <- pkt
-		case <-v.ctx.Done():
-			v.buffer.Stop()
+		case pkt := <-w.buffer.GetRTCPChan():
+			w.rtcpCh <- pkt
+		case <-w.ctx.Done():
 			return
 		}
 	}
 }
 
-func (v *WebRTCVideoReceiver) rembLoop(cycle int) {
+func (w *WebRTCReceiver) rembLoop(cycle int) {
+	defer w.wg.Done()
+	if cycle <= 0 {
+		cycle = 1
+	}
 	t := time.NewTicker(time.Duration(cycle) * time.Second)
 	for {
 		select {
 		case <-t.C:
 			// only calc video recently
-			v.lostRate, v.bandwidth = v.buffer.GetLostRateBandwidth(uint64(cycle))
+			w.lostRate, w.bandwidth = w.buffer.GetLostRateBandwidth(uint64(cycle))
 			var bw uint64
 			switch {
-			case v.lostRate == 0 && v.bandwidth == 0:
-				bw = v.maxBandwidth
-			case v.lostRate >= 0 && v.lostRate < 0.1:
-				bw = v.bandwidth * 2
+			case w.lostRate == 0 && w.bandwidth == 0:
+				bw = w.maxBandwidth
+			case w.lostRate >= 0 && w.lostRate < 0.1:
+				bw = w.bandwidth * 2
 			default:
-				bw = uint64(float64(v.bandwidth) * (1 - v.lostRate))
+				bw = uint64(float64(w.bandwidth) * (1 - w.lostRate))
 			}
 
-			if bw > v.maxBandwidth && v.maxBandwidth > 0 {
-				bw = v.maxBandwidth
+			if bw > w.maxBandwidth && w.maxBandwidth > 0 {
+				bw = w.maxBandwidth
 			}
 
 			remb := &rtcp.ReceiverEstimatedMaximumBitrate{
-				SenderSSRC: v.buffer.GetSSRC(),
+				SenderSSRC: w.buffer.GetSSRC(),
 				Bitrate:    bw,
-				SSRCs:      []uint32{v.buffer.GetSSRC()},
+				SSRCs:      []uint32{w.buffer.GetSSRC()},
 			}
-
-			v.rtcpCh <- remb
-		case <-v.ctx.Done():
+			w.rtcpCh <- remb
+		case <-w.ctx.Done():
 			t.Stop()
 			return
 		}
 	}
 }
 
-func (v *WebRTCVideoReceiver) tccLoop(cycle int) {
+func (w *WebRTCReceiver) tccLoop(cycle int) {
+	defer w.wg.Done()
 	feedbackPacketCount := uint8(0)
 	t := time.NewTicker(time.Duration(cycle) * time.Millisecond)
 	for {
 		select {
 		case <-t.C:
-			cp := len(v.rtpExtInfoChan)
+			cp := len(w.rtpExtInfoChan)
 			if cp == 0 {
 				continue
 			}
@@ -326,7 +272,7 @@ func (v *WebRTCVideoReceiver) tccLoop(cycle int) {
 			// get all rtp extension infos from channel
 			rtpExtInfo := make(map[uint16]int64)
 			for i := 0; i < cp; i++ {
-				info := <-v.rtpExtInfoChan
+				info := <-w.rtpExtInfoChan
 				rtpExtInfo[info.TSN] = info.Timestamp
 			}
 
@@ -406,8 +352,8 @@ func (v *WebRTCVideoReceiver) tccLoop(cycle int) {
 					Type:    rtcp.TypeTransportSpecificFeedback,
 					// Length:  5, //need calc
 				},
-				// SenderSSRC:         v.ssrc,
-				MediaSSRC:          v.track.SSRC(),
+				// SenderSSRC:         w.ssrc,
+				MediaSSRC:          w.track.SSRC(),
 				BaseSequenceNumber: minTSN,
 				PacketStatusCount:  maxTSN - minTSN + 1,
 				ReferenceTime:      refTime,
@@ -416,9 +362,9 @@ func (v *WebRTCVideoReceiver) tccLoop(cycle int) {
 				PacketChunks:       []rtcp.PacketStatusChunk{chunk},
 			}
 			rtcpTCC.Header.Length = rtcpTCC.Len()/4 - 1
-			v.rtcpCh <- rtcpTCC
+			w.rtcpCh <- rtcpTCC
 			feedbackPacketCount++
-		case <-v.ctx.Done():
+		case <-w.ctx.Done():
 			t.Stop()
 			return
 		}
@@ -426,6 +372,93 @@ func (v *WebRTCVideoReceiver) tccLoop(cycle int) {
 }
 
 // Stats get stats for video receiver
-func (v *WebRTCVideoReceiver) stats() string {
-	return fmt.Sprintf("payload: %d | lostRate: %.2f | bandwidth: %dkbps | %s", v.buffer.GetPayloadType(), v.lostRate, v.bandwidth/1000, v.buffer.stats())
+func (w *WebRTCReceiver) stats() string {
+	switch w.track.Kind() {
+	case webrtc.RTPCodecTypeVideo:
+		return fmt.Sprintf("payload: %d | lostRate: %.2f | bandwidth: %dkbps | %s", w.buffer.GetPayloadType(), w.lostRate, w.bandwidth/1000, w.buffer.stats())
+	case webrtc.RTPCodecTypeAudio:
+		return fmt.Sprintf("payload: %d", w.track.PayloadType())
+	default:
+		return ""
+	}
+}
+
+func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}) {
+	defer func() {
+		w.buffer.Stop()
+		close(w.rtpCh)
+		close(w.rtcpCh)
+		if w.onCloseHandler != nil {
+			w.onCloseHandler()
+		}
+	}()
+
+	w.rtcpCh = make(chan rtcp.Packet, maxSize)
+	w.buffer = NewBuffer(w.track.SSRC(), w.track.PayloadType(), BufferOptions{
+		BufferTime: routerConfig.Video.MaxBufferTime,
+	})
+	w.maxBandwidth = routerConfig.MaxBandwidth * 1000
+
+	for _, feedback := range w.track.Codec().RTCPFeedback {
+		switch feedback.Type {
+		case webrtc.TypeRTCPFBTransportCC:
+			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBTransportCC)
+			w.feedback = webrtc.TypeRTCPFBTransportCC
+			w.wg.Add(1)
+			go w.tccLoop(routerConfig.Video.TCCCycle)
+		case webrtc.TypeRTCPFBGoogREMB:
+			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBGoogREMB)
+			w.feedback = webrtc.TypeRTCPFBGoogREMB
+			w.wg.Add(1)
+			go w.rembLoop(routerConfig.Video.REMBCycle)
+		}
+	}
+	// Start rtcp reader from track
+	w.wg.Add(1)
+	go w.receiveRTP()
+	// Start pli loop
+	w.wg.Add(1)
+	go w.pliLoop(routerConfig.Video.PLICycle)
+	// Start buffer loop
+	w.wg.Add(1)
+	go w.bufferRtcpLoop()
+	// Receiver start loops done, send start signal
+	wStart <- struct{}{}
+	w.wg.Wait()
+}
+
+func startAudioReceiver(w *WebRTCReceiver, wStart chan struct{}) {
+	defer func() {
+		close(w.rtpCh)
+		if w.onCloseHandler != nil {
+			w.onCloseHandler()
+		}
+	}()
+	w.wg.Add(1)
+	go func() {
+		defer w.wg.Done()
+		for {
+			pkt, err := w.track.ReadRTP()
+			// EOF signal received, this means that the remote track has been removed
+			// or the peer has been disconnected. The router must be gracefully shutdown
+			if err == io.EOF {
+				w.Close()
+				return
+			}
+
+			if err != nil {
+				log.Errorf("rtp err => %v", err)
+				continue
+			}
+
+			select {
+			case <-w.ctx.Done():
+				return
+			default:
+				w.rtpCh <- pkt
+			}
+		}
+	}()
+	wStart <- struct{}{}
+	w.wg.Wait()
 }

@@ -3,7 +3,6 @@ package sfu
 import (
 	"context"
 	"fmt"
-	"io"
 	"sync"
 	"time"
 
@@ -20,7 +19,6 @@ const (
 // WebRTCTransportConfig represents configuration options
 type WebRTCTransportConfig struct {
 	configuration webrtc.Configuration
-	receiver      ReceiverConfig
 	setting       webrtc.SettingEngine
 }
 
@@ -76,13 +74,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 		log.Debugf("Peer %s got remote track id: %s ssrc: %d", p.id, track.ID(), track.SSRC())
-		var recv Receiver
-		switch track.Kind() {
-		case webrtc.RTPCodecTypeVideo:
-			recv = NewWebRTCVideoReceiver(ctx, cfg.receiver.Video, track)
-		case webrtc.RTPCodecTypeAudio:
-			recv = NewWebRTCAudioReceiver(track)
-		}
+		recv := NewWebRTCReceiver(ctx, track)
 
 		if recv.Track().Kind() == webrtc.RTPCodecTypeVideo {
 			go p.sendRTCP(recv)
@@ -93,7 +85,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 
 		p.session.AddRouter(router)
 
-		router.OnClose(func() {
+		recv.OnCloseHandler(func() {
 			p.mu.Lock()
 			defer p.mu.Unlock()
 			delete(p.routers, track.SSRC())
@@ -244,7 +236,7 @@ func (p *WebRTCTransport) NewSender(intrack *webrtc.Track) (Sender, error) {
 	// Create webrtc sender for the peer we are sending track to
 	sender := NewWebRTCSender(p.ctx, outtrack, s)
 
-	sender.OnClose(func() {
+	sender.OnCloseHandler(func() {
 		err = p.pc.RemoveTrack(s)
 		if err != nil {
 			log.Errorf("Error closing sender: %s", err)
@@ -281,20 +273,9 @@ func (p *WebRTCTransport) Close() error {
 }
 
 func (p *WebRTCTransport) sendRTCP(recv Receiver) {
-	for {
-		pkt, err := recv.ReadRTCP()
-		if err == io.ErrClosedPipe {
-			return
-		}
-
-		if err != nil {
-			log.Errorf("Error reading RTCP %s", err)
-			continue
-		}
-
+	for pkt := range recv.ReadRTCP() {
 		log.Tracef("sendRTCP %v", pkt)
-		err = p.pc.WriteRTCP([]rtcp.Packet{pkt})
-		if err != nil {
+		if err := p.pc.WriteRTCP([]rtcp.Packet{pkt}); err != nil {
 			log.Errorf("Error writing RTCP %s", err)
 		}
 	}

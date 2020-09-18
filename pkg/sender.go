@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math"
+	"sync"
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
@@ -15,10 +15,11 @@ import (
 
 // Sender defines a interface for a track receiver
 type Sender interface {
-	ReadRTCP() (rtcp.Packet, error)
+	ReadRTCP() chan rtcp.Packet
 	WriteRTP(*rtp.Packet)
-	stats() string
 	Close()
+	OnCloseHandler(fn func())
+	stats() string
 }
 
 // WebRTCSender represents a Sender which writes RTP to a webrtc track
@@ -29,14 +30,15 @@ type WebRTCSender struct {
 	sender         *webrtc.RTPSender
 	track          *webrtc.Track
 	rtcpCh         chan rtcp.Packet
-	rembCh         chan *rtcp.ReceiverEstimatedMaximumBitrate
 	maxBitrate     uint64
 	target         uint64
 	sendChan       chan *rtp.Packet
+
+	once sync.Once
 }
 
 // NewWebRTCSender creates a new track sender instance
-func NewWebRTCSender(ctx context.Context, track *webrtc.Track, sender *webrtc.RTPSender) *WebRTCSender {
+func NewWebRTCSender(ctx context.Context, track *webrtc.Track, sender *webrtc.RTPSender) Sender {
 	ctx, cancel := context.WithCancel(ctx)
 	s := &WebRTCSender{
 		ctx:        ctx,
@@ -46,20 +48,6 @@ func NewWebRTCSender(ctx context.Context, track *webrtc.Track, sender *webrtc.RT
 		maxBitrate: routerConfig.MaxBandwidth * 1000,
 		rtcpCh:     make(chan rtcp.Packet, maxSize),
 		sendChan:   make(chan *rtp.Packet, maxSize),
-	}
-
-	for _, feedback := range track.Codec().RTCPFeedback {
-		switch feedback.Type {
-		case webrtc.TypeRTCPFBGoogREMB:
-			if routerConfig.REMBFeedback {
-				log.Debugf("Using sender feedback %s", webrtc.TypeRTCPFBGoogREMB)
-				s.rembCh = make(chan *rtcp.ReceiverEstimatedMaximumBitrate, maxSize)
-				go s.rembLoop()
-			}
-		case webrtc.TypeRTCPFBTransportCC:
-			log.Debugf("Using sender feedback %s", webrtc.TypeRTCPFBTransportCC)
-			// TODO
-		}
 	}
 
 	go s.receiveRTCP()
@@ -97,25 +85,13 @@ func (s *WebRTCSender) sendRTP() {
 }
 
 // ReadRTCP read rtp packet
-func (s *WebRTCSender) ReadRTCP() (rtcp.Packet, error) {
-	select {
-	case pkt := <-s.rtcpCh:
-		return pkt, nil
-	case <-s.ctx.Done():
-		err := s.sender.Stop()
-		if err != nil {
-			return nil, err
-		}
-		return nil, io.ErrClosedPipe
-	}
+func (s *WebRTCSender) ReadRTCP() chan rtcp.Packet {
+	return s.rtcpCh
 }
 
 // WriteRTP to the track
 func (s *WebRTCSender) WriteRTP(pkt *rtp.Packet) {
-	select {
-	case <-s.ctx.Done():
-		return
-	default:
+	if s.ctx.Err() == nil {
 		s.sendChan <- pkt
 	}
 }
@@ -127,17 +103,27 @@ func (s *WebRTCSender) OnClose(f func()) {
 
 // Close track
 func (s *WebRTCSender) Close() {
-	s.cancel()
+	s.once.Do(s.close)
+}
 
+func (s *WebRTCSender) close() {
+	s.cancel()
 	if s.onCloseHandler != nil {
 		s.onCloseHandler()
 	}
 }
 
+// OnCloseHandler method to be called on remote tracked removed
+func (s *WebRTCSender) OnCloseHandler(fn func()) {
+	s.onCloseHandler = fn
+}
+
 func (s *WebRTCSender) receiveRTCP() {
 	for {
 		pkts, err := s.sender.ReadRTCP()
-		if err == io.ErrClosedPipe || err == io.EOF || s.ctx.Err() != nil {
+		if err == io.ErrClosedPipe || s.ctx.Err() != nil {
+			close(s.rtcpCh)
+			s.Close()
 			return
 		}
 
@@ -149,64 +135,9 @@ func (s *WebRTCSender) receiveRTCP() {
 			switch pkt := pkt.(type) {
 			case *rtcp.PictureLossIndication, *rtcp.FullIntraRequest, *rtcp.TransportLayerNack:
 				s.rtcpCh <- pkt
-			case *rtcp.ReceiverEstimatedMaximumBitrate:
-				if s.rembCh != nil {
-					s.rembCh <- pkt
-				}
+			default:
+				// TODO: Use fb packets for congestion control
 			}
-		}
-	}
-}
-
-func (s *WebRTCSender) rembLoop() {
-	lastRembTime := time.Now()
-	maxRembTime := 200 * time.Millisecond
-	rembMin := uint64(100000)
-	if rembMin == 0 {
-		rembMin = 10000 // 10 KBit
-	}
-	var lowest uint64 = math.MaxUint64
-	var rembCount, rembTotalRate uint64
-
-	for {
-		select {
-		case pkt := <-s.rembCh:
-			// Update stats
-			rembCount++
-			rembTotalRate += pkt.Bitrate
-			if pkt.Bitrate < lowest {
-				lowest = pkt.Bitrate
-			}
-
-			// Send upstream if time
-			if time.Since(lastRembTime) > maxRembTime {
-				lastRembTime = time.Now()
-				avg := uint64(rembTotalRate / rembCount)
-
-				_ = avg
-				s.target = lowest
-
-				if s.target < rembMin {
-					s.target = rembMin
-				} else if s.target > s.maxBitrate && s.maxBitrate > 0 {
-					s.target = s.maxBitrate
-				}
-
-				newPkt := &rtcp.ReceiverEstimatedMaximumBitrate{
-					Bitrate:    s.target,
-					SenderSSRC: 1,
-					SSRCs:      pkt.SSRCs,
-				}
-
-				s.rtcpCh <- newPkt
-
-				// Reset stats
-				rembCount = 0
-				rembTotalRate = 0
-				lowest = math.MaxUint64
-			}
-		case <-s.ctx.Done():
-			return
 		}
 	}
 }
