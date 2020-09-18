@@ -63,21 +63,14 @@ func (r *Router) close() {
 }
 
 func (r *Router) start() {
-	rtpCh := r.receiver.ReadRTP()
 	defer r.close()
-	for {
-		select {
-		case pkt, opn := <-rtpCh:
-			if !opn {
-				return
-			}
-			// Push to sub send queues
-			r.mu.RLock()
-			for _, sub := range r.senders {
-				sub.WriteRTP(pkt)
-			}
-			r.mu.RUnlock()
+	for pkt := range r.receiver.ReadRTP() {
+		// Push to sub send queues
+		r.mu.RLock()
+		for _, sub := range r.senders {
+			sub.WriteRTP(pkt)
 		}
+		r.mu.RUnlock()
 	}
 }
 
@@ -90,46 +83,38 @@ func (r *Router) subFeedbackLoop(pid string, sub Sender) {
 		r.mu.Unlock()
 	}()
 
-	rtcpCh := sub.ReadRTCP()
-
-	for {
-		select {
-		case pkt, opn := <-rtcpCh:
-			if !opn {
-				return
-			}
-			switch pkt := pkt.(type) {
-			case *rtcp.TransportLayerNack:
-				log.Tracef("Router got nack: %+v", pkt)
-				for _, pair := range pkt.Nacks {
-					bufferpkt := r.receiver.GetPacket(pair.PacketID)
-					if bufferpkt != nil {
-						// We found the packet in the buffer, resend to sub
-						sub.WriteRTP(bufferpkt)
+	for pkt := range sub.ReadRTCP() {
+		switch pkt := pkt.(type) {
+		case *rtcp.TransportLayerNack:
+			log.Tracef("Router got nack: %+v", pkt)
+			for _, pair := range pkt.Nacks {
+				bufferpkt := r.receiver.GetPacket(pair.PacketID)
+				if bufferpkt != nil {
+					// We found the packet in the buffer, resend to sub
+					sub.WriteRTP(bufferpkt)
+					continue
+				}
+				if routerConfig.MaxNackTime > 0 {
+					ln := atomic.LoadInt64(&r.lastNack)
+					if (time.Now().Unix() - ln) < routerConfig.MaxNackTime {
 						continue
 					}
-					if routerConfig.MaxNackTime > 0 {
-						ln := atomic.LoadInt64(&r.lastNack)
-						if (time.Now().Unix() - ln) < routerConfig.MaxNackTime {
-							continue
-						}
-						atomic.StoreInt64(&r.lastNack, time.Now().Unix())
-					}
-					// Packet not found, request from receiver
-					nack := &rtcp.TransportLayerNack{
-						// origin ssrc
-						SenderSSRC: pkt.SenderSSRC,
-						MediaSSRC:  pkt.MediaSSRC,
-						Nacks:      []rtcp.NackPair{{PacketID: pair.PacketID}},
-					}
-					if err := r.receiver.WriteRTCP(nack); err != nil {
-						log.Errorf("Error writing nack RTCP %s", err)
-					}
+					atomic.StoreInt64(&r.lastNack, time.Now().Unix())
 				}
-			default:
-				if err := r.receiver.WriteRTCP(pkt); err != nil {
-					log.Errorf("Error writing RTCP %s", err)
+				// Packet not found, request from receiver
+				nack := &rtcp.TransportLayerNack{
+					// origin ssrc
+					SenderSSRC: pkt.SenderSSRC,
+					MediaSSRC:  pkt.MediaSSRC,
+					Nacks:      []rtcp.NackPair{{PacketID: pair.PacketID}},
 				}
+				if err := r.receiver.WriteRTCP(nack); err != nil {
+					log.Errorf("Error writing nack RTCP %s", err)
+				}
+			}
+		default:
+			if err := r.receiver.WriteRTCP(pkt); err != nil {
+				log.Errorf("Error writing RTCP %s", err)
 			}
 		}
 	}
