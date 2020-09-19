@@ -23,6 +23,7 @@ type ICEServerConfig struct {
 type WebRTCConfig struct {
 	ICEPortRange []uint16          `mapstructure:"portrange"`
 	ICEServers   []ICEServerConfig `mapstructure:"iceserver"`
+	NAT1To1IPs   []string          `mapstructure:"nat1to1"`
 }
 
 // Config for base SFU
@@ -87,6 +88,10 @@ func NewSFU(c Config) *SFU {
 	}
 
 	w.configuration.ICEServers = iceServers
+
+	if len(c.WebRTC.NAT1To1IPs) > 0 {
+		w.setting.SetNAT1To1IPs(c.WebRTC.NAT1To1IPs, webrtc.ICECandidateTypeHost)
+	}
 
 	// Configure bandwidth estimation support
 	if c.Router.Video.TCCCycle > 0 {

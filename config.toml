@@ -30,6 +30,16 @@ maxbuffertime = 1000
 # username = "awsome"
 # credential = "awsome"
 
+# In case you're deploying ion-sfu on a server which is configured with
+# a 1:1 NAT (e.g., Amazon EC2), you might want to also specify the public
+# address of the machine using the setting below. This will result in
+# all host candidates (which normally have a private IP address) to
+# be rewritten with the public address provided in the settings. As
+# such, use the option with caution and only if you know what you're doing.
+# Multiple public IP addresses can be specified as a comma separated list
+# if the sfu is deployed in a DMZ between two 1-1 NAT for internal and
+# external users.
+# nat1to1 = ["1.2.3.4"]
 
 [log]
 stats = true

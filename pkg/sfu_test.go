@@ -14,15 +14,18 @@ func TestSFU(t *testing.T) {
 	lim := test.TimeOut(time.Second * 20)
 	defer lim.Stop()
 
-	// report := test.CheckRoutines(t)
-	// defer report()
+	report := test.CheckRoutines(t)
+	defer report()
 
 	s := NewSFU(Config{
 		Log: log.Config{
 			Level: "error",
 			Stats: true,
 		},
-		WebRTC: WebRTCConfig{},
+		WebRTC: WebRTCConfig{
+			ICEPortRange: []uint16{5000, 5200},
+			NAT1To1IPs:   []string{"1.1.1.1"},
+		},
 	})
 
 	me := webrtc.MediaEngine{}
