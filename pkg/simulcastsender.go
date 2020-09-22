@@ -1,7 +1,9 @@
 package sfu
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"sync"
@@ -89,7 +91,15 @@ func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 						relay = true
 					}
 				}
-				// TODO h264
+			case webrtc.DefaultPayloadTypeH264:
+				var word uint32
+				payload := bytes.NewReader(pkt.Payload)
+				err := binary.Read(payload, binary.BigEndian, &word)
+				if err != nil || (word&0x1F000000)>>24 != 24 {
+					relay = false
+				} else {
+					relay = word&0x1F == 7
+				}
 			default:
 				log.Warnf("Codec payload don't support simulcast: %d", s.track.Codec().PayloadType)
 				return
