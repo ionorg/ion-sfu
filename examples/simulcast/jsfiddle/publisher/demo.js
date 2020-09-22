@@ -46,7 +46,7 @@ socket.addEventListener('message', async (event) => {
     const answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
 
-    const id = uuid.v4()
+    const id = Math.random().toString()
     log(`Sending answer`)
     socket.send(JSON.stringify({
       method: "answer",
