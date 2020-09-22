@@ -30,12 +30,13 @@ type WebRTCSimulcastSender struct {
 	target         uint64
 
 	simulcastSSRC uint32
+	currentLayer  uint8
+	lTSCalc       time.Time
+	lSSRC         uint32
 	lTS           uint32
 	bTS           uint32
 	lSN           uint16
 	bSN           uint16
-	lSSRC         uint32
-	lTSCalc       time.Time
 
 	once sync.Once
 }
@@ -134,7 +135,7 @@ func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 		s.lTS = pkt.Timestamp
 		s.lSN = pkt.SequenceNumber
 		s.bSN++
-		//Update pkt headers
+		// Update pkt headers
 		pkt.SSRC = s.simulcastSSRC
 		pkt.SequenceNumber = s.bSN
 		pkt.Timestamp = s.bTS

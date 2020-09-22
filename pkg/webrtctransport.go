@@ -84,6 +84,21 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 		if router, ok := p.routers[track.ID()]; !ok {
 			if track.RID() != "" {
 				router = NewRouterWithSimulcast(p.id)
+				go func() {
+					// Send 3 big remb msgs to fwd all the tracks
+					ticker := time.NewTicker(1 * time.Second)
+					var ctr uint8
+					for range ticker.C {
+						ctr++
+						fmt.Printf("Sending remb for stream with rid: %q, ssrc: %d\n", track.RID(), track.SSRC())
+						if writeErr := pc.WriteRTCP([]rtcp.Packet{&rtcp.ReceiverEstimatedMaximumBitrate{Bitrate: 10000000, SenderSSRC: track.SSRC()}}); writeErr != nil {
+							fmt.Println(writeErr)
+						}
+						if ctr == 3 {
+							ticker.Stop()
+						}
+					}
+				}()
 			} else {
 				router = NewRouter(p.id)
 			}

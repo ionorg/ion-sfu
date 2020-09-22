@@ -279,7 +279,7 @@ func (w *WebRTCReceiver) rembLoop(cycle int) {
 	var minBandwidth uint64
 
 	if w.simulcast {
-		minBandwidth = 500000
+		//minBandwidth = 500000
 	}
 	for {
 		select {
