@@ -87,10 +87,7 @@ func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 			case webrtc.DefaultPayloadTypeVP8:
 				vp8Packet := codecs.VP8Packet{}
 				if _, err := vp8Packet.Unmarshal(pkt.Payload); err == nil {
-					if vp8Packet.Payload[0]&0x01 == 0 {
-						// Packet is a keyframe
-						relay = true
-					}
+					relay = vp8Packet.Payload[0]&0x01 == 0
 				}
 			case webrtc.DefaultPayloadTypeH264:
 				var word uint32

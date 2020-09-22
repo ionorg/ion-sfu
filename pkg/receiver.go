@@ -75,7 +75,6 @@ type WebRTCReceiver struct {
 // WebRTCVideoReceiverConfig .
 type WebRTCVideoReceiverConfig struct {
 	REMBCycle       int `mapstructure:"rembcycle"`
-	PLICycle        int `mapstructure:"plicycle"`
 	TCCCycle        int `mapstructure:"tcccycle"`
 	MaxBufferTime   int `mapstructure:"maxbuffertime"`
 	ReceiveRTPCycle int `mapstructure:"rtpcycle"`
@@ -237,24 +236,6 @@ func (w *WebRTCReceiver) fwdRTP() {
 			sub.WriteRTP(pkt)
 		}
 		w.RUnlock()
-	}
-}
-
-func (w *WebRTCReceiver) pliLoop(cycle int) {
-	defer w.wg.Done()
-	if cycle <= 0 {
-		cycle = 1
-	}
-	t := time.NewTicker(time.Duration(cycle) * time.Second)
-	for {
-		select {
-		case <-t.C:
-			pli := &rtcp.PictureLossIndication{SenderSSRC: w.track.SSRC(), MediaSSRC: w.track.SSRC()}
-			w.rtcpCh <- pli
-		case <-w.ctx.Done():
-			t.Stop()
-			return
-		}
 	}
 }
 
@@ -480,9 +461,6 @@ func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}) {
 	// Start rtcp reader from track
 	w.wg.Add(1)
 	go w.receiveRTP()
-	// Start pli loop
-	w.wg.Add(1)
-	go w.pliLoop(routerConfig.Video.PLICycle)
 	// Start buffer loop
 	w.wg.Add(1)
 	go w.bufferRtcpLoop()

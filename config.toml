@@ -11,8 +11,6 @@ maxnacktime = 1
 [router.video]
 # the remb cycle sending to pub, this told the pub it's bandwidth
 rembcycle = 2
-# pli cycle sending to pub, and pub will send a key frame
-plicycle = 1
 # transport-cc cycle in (ms) (experiment feature)
 tcccycle = 0
 # max buffer time by ms
