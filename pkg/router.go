@@ -46,9 +46,6 @@ func NewRouterWithSimulcast(tid string) *Router {
 func (r *Router) AddReceiver(recv Receiver) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.simulcast {
-		recv.SetSimulcast(r.simulcastSSRC)
-	}
 	r.receivers = append(r.receivers, recv)
 }
 

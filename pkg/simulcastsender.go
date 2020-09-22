@@ -72,84 +72,85 @@ func (s *WebRTCSimulcastSender) ReadRTCP() chan rtcp.Packet {
 func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 	// Simulcast write RTP is sync, so the packet can be safely modified and restored
 	if s.ctx.Err() == nil {
-		// Backup pkt original data
-		origPT := pkt.Header.PayloadType
-		origSSRC := pkt.SSRC
-		origSeq := pkt.SequenceNumber
-		origTS := pkt.Timestamp
-		var td uint32
-		// Check if packet SSRC is different from before
-		// if true, the video source changed
-		if s.lSSRC != pkt.SSRC {
-			relay := false
-			// Wait for a keyframe to sync new source
-			switch s.track.Codec().PayloadType {
-			case webrtc.DefaultPayloadTypeVP8:
-				vp8Packet := codecs.VP8Packet{}
-				if _, err := vp8Packet.Unmarshal(pkt.Payload); err == nil {
-					relay = vp8Packet.Payload[0]&0x01 == 0
-				}
-			case webrtc.DefaultPayloadTypeH264:
-				var word uint32
-				payload := bytes.NewReader(pkt.Payload)
-				err := binary.Read(payload, binary.BigEndian, &word)
-				if err != nil || (word&0x1F000000)>>24 != 24 {
-					relay = false
-				} else {
-					relay = word&0x1F == 7
-				}
-			default:
-				log.Warnf("Codec payload don't support simulcast: %d", s.track.Codec().PayloadType)
-				return
+		return
+	}
+	// Backup pkt original data
+	origPT := pkt.Header.PayloadType
+	origSSRC := pkt.SSRC
+	origSeq := pkt.SequenceNumber
+	origTS := pkt.Timestamp
+	var td uint32
+	// Check if packet SSRC is different from before
+	// if true, the video source changed
+	if s.lSSRC != pkt.SSRC {
+		relay := false
+		// Wait for a keyframe to sync new source
+		switch s.track.Codec().PayloadType {
+		case webrtc.DefaultPayloadTypeVP8:
+			vp8Packet := codecs.VP8Packet{}
+			if _, err := vp8Packet.Unmarshal(pkt.Payload); err == nil {
+				relay = vp8Packet.Payload[0]&0x01 == 0
 			}
-			if !relay {
-				// Packet is not a keyframe, discard it
-				return
+		case webrtc.DefaultPayloadTypeH264:
+			var word uint32
+			payload := bytes.NewReader(pkt.Payload)
+			err := binary.Read(payload, binary.BigEndian, &word)
+			if err != nil || (word&0x1F000000)>>24 != 24 {
+				relay = false
+			} else {
+				relay = word&0x1F == 7
 			}
+		default:
+			log.Warnf("Codec payload don't support simulcast: %d", s.track.Codec().PayloadType)
+			return
 		}
-		tmDelta := pkt.Timestamp - s.lTS
-		// Compute how much time passed between the old RTP pkt
-		// and the current packet, and fix timestamp on source change
-		if !s.lTSCalc.IsZero() && s.lSSRC != pkt.SSRC {
-			tDiff := time.Now().Sub(s.lTSCalc)
-			td = uint32((tDiff.Milliseconds() * 90) / 1000)
-			if td == 0 {
-				td = 1
-			}
-			tmDelta = 0
-		} else if s.lTSCalc.IsZero() {
-			s.lTS = pkt.Timestamp
-			s.bSN = pkt.SequenceNumber
+		if !relay {
+			// Packet is not a keyframe, discard it
+			return
 		}
-		if s.lSN > pkt.SequenceNumber {
-			// TODO: Fix out of order
-			log.Warnf("Simulcast packet out of order, current SN: %d last SN: %d", pkt.SequenceNumber, s.lSN)
+	}
+	tmDelta := pkt.Timestamp - s.lTS
+	// Compute how much time passed between the old RTP pkt
+	// and the current packet, and fix timestamp on source change
+	if !s.lTSCalc.IsZero() && s.lSSRC != pkt.SSRC {
+		tDiff := time.Now().Sub(s.lTSCalc)
+		td = uint32((tDiff.Milliseconds() * 90) / 1000)
+		if td == 0 {
+			td = 1
 		}
-		// Update base
-		s.bTS += tmDelta + td
-		s.lTSCalc = time.Now()
-		s.lSSRC = pkt.SSRC
+		tmDelta = 0
+	} else if s.lTSCalc.IsZero() {
 		s.lTS = pkt.Timestamp
-		s.lSN = pkt.SequenceNumber
-		s.bSN++
-		// Update pkt headers
-		pkt.SSRC = s.simulcastSSRC
-		pkt.SequenceNumber = s.bSN
-		pkt.Timestamp = s.bTS
-		// Write packet to client
-		err := s.track.WriteRTP(pkt)
-		// Reset packet data
-		pkt.Timestamp = origTS
-		pkt.SSRC = origSSRC
-		pkt.SequenceNumber = origSeq
-		pkt.PayloadType = origPT
+		s.bSN = pkt.SequenceNumber
+	}
+	if s.lSN > pkt.SequenceNumber {
+		// TODO: Fix out of order
+		log.Warnf("Simulcast packet out of order, current SN: %d last SN: %d", pkt.SequenceNumber, s.lSN)
+	}
+	// Update base
+	s.bTS += tmDelta + td
+	s.lTSCalc = time.Now()
+	s.lSSRC = pkt.SSRC
+	s.lTS = pkt.Timestamp
+	s.lSN = pkt.SequenceNumber
+	s.bSN++
+	// Update pkt headers
+	pkt.SSRC = s.simulcastSSRC
+	pkt.SequenceNumber = s.bSN
+	pkt.Timestamp = s.bTS
+	// Write packet to client
+	err := s.track.WriteRTP(pkt)
+	// Reset packet data
+	pkt.Timestamp = origTS
+	pkt.SSRC = origSSRC
+	pkt.SequenceNumber = origSeq
+	pkt.PayloadType = origPT
 
-		if err != nil {
-			if err == io.ErrClosedPipe {
-				return
-			}
-			log.Errorf("sender.track.WriteRTP err=%v", err)
+	if err != nil {
+		if err == io.ErrClosedPipe {
+			return
 		}
+		log.Errorf("sender.track.WriteRTP err=%v", err)
 	}
 }
 

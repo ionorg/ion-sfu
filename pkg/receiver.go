@@ -43,7 +43,6 @@ type Receiver interface {
 	ReadRTCP() chan rtcp.Packet
 	WriteRTCP(rtcp.Packet) error
 	OnCloseHandler(fn func())
-	SetSimulcast(ssrc uint32)
 	SpatialLayer() uint8
 	Close()
 	stats() string
@@ -64,7 +63,6 @@ type WebRTCReceiver struct {
 	onCloseHandler func()
 	senders        map[string]Sender
 
-	simulcast    bool
 	spatialLayer uint8
 
 	maxBandwidth uint64
@@ -91,7 +89,15 @@ func NewWebRTCReceiver(ctx context.Context, track *webrtc.Track) Receiver {
 		senders:        make(map[string]Sender),
 		rtpCh:          make(chan *rtp.Packet, maxSize),
 		rtpExtInfoChan: make(chan rtpExtInfo, maxSize),
-		simulcast:      len(track.RID()) > 0,
+	}
+
+	switch w.track.RID() {
+	case quarterResolution:
+		w.spatialLayer = 1
+	case halfResolution:
+		w.spatialLayer = 2
+	case fullResolution:
+		w.spatialLayer = 3
 	}
 
 	waitStart := make(chan struct{})
@@ -120,19 +126,6 @@ func (w *WebRTCReceiver) DeleteSender(pid string) {
 	w.Lock()
 	defer w.Unlock()
 	delete(w.senders, pid)
-}
-
-func (w *WebRTCReceiver) SetSimulcast(ssrc uint32) {
-	w.simulcast = true
-	switch w.track.RID() {
-	case quarterResolution:
-		w.spatialLayer = 1
-	case halfResolution:
-		w.spatialLayer = 2
-	case fullResolution:
-		w.spatialLayer = 3
-	}
-	log.Infof("Setting simulcast layer: %d, rid: %s", w.spatialLayer, w.track.RID())
 }
 
 func (w *WebRTCReceiver) SpatialLayer() uint8 {
@@ -259,9 +252,6 @@ func (w *WebRTCReceiver) rembLoop(cycle int) {
 	t := time.NewTicker(time.Duration(cycle) * time.Second)
 	var minBandwidth uint64
 
-	if w.simulcast {
-		//minBandwidth = 500000
-	}
 	for {
 		select {
 		case <-t.C:
@@ -454,7 +444,7 @@ func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}) {
 			go w.rembLoop(routerConfig.Video.REMBCycle)
 		}
 	}
-	if w.simulcast {
+	if w.Track().RID() != "" {
 		w.wg.Add(1)
 		go w.rembLoop(routerConfig.Video.REMBCycle)
 	}

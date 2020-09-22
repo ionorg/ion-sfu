@@ -90,9 +90,8 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 					var ctr uint8
 					for range ticker.C {
 						ctr++
-						fmt.Printf("Sending remb for stream with rid: %q, ssrc: %d\n", track.RID(), track.SSRC())
 						if writeErr := pc.WriteRTCP([]rtcp.Packet{&rtcp.ReceiverEstimatedMaximumBitrate{Bitrate: 10000000, SenderSSRC: track.SSRC()}}); writeErr != nil {
-							fmt.Println(writeErr)
+							log.Errorf("Sending simulcast remb error: %v", err)
 						}
 						if ctr == 3 {
 							ticker.Stop()
