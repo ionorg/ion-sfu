@@ -34,7 +34,7 @@ func TestRouter(t *testing.T) {
 	pubsfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
 		receiver := NewWebRTCReceiver(ctx, track).(*WebRTCReceiver)
 		router := NewRouter("id", receiver)
-		assert.Equal(t, router.receiver, receiver)
+		assert.Equal(t, router.receivers, receiver)
 
 		subsfu, sub, err := newPair(webrtc.Configuration{}, api)
 		assert.NoError(t, err)
@@ -171,7 +171,7 @@ func TestSendersNackRateLimit(t *testing.T) {
 	pubsfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
 		receiver := NewWebRTCReceiver(ctx, track).(*WebRTCReceiver)
 		router := NewRouter("id", receiver)
-		assert.Equal(t, router.receiver, receiver)
+		assert.Equal(t, router.receivers, receiver)
 
 		subsfu, sub, err := newPair(webrtc.Configuration{}, api)
 		assert.NoError(t, err)

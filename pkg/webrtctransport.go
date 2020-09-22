@@ -3,6 +3,7 @@ package sfu
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -28,16 +29,17 @@ type WebRTCTransport struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
 	pc             *webrtc.PeerConnection
-	me             MediaEngine
+	me             webrtc.MediaEngine
 	mu             sync.RWMutex
 	session        *Session
-	routers        map[uint32]*Router
+	senders        []Sender
+	routers        map[string]*Router
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport
-func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, cfg WebRTCTransportConfig) (*WebRTCTransport, error) {
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine), webrtc.WithSettingEngine(cfg.setting))
+func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEngine, cfg WebRTCTransportConfig) (*WebRTCTransport, error) {
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me), webrtc.WithSettingEngine(cfg.setting))
 	pc, err := api.NewPeerConnection(cfg.configuration)
 
 	if err != nil {
@@ -53,14 +55,14 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 		pc:      pc,
 		me:      me,
 		session: session,
-		routers: make(map[uint32]*Router),
+		routers: make(map[string]*Router),
 	}
 
 	// Subscribe to existing transports
 	for _, t := range session.Transports() {
 		for _, router := range t.Routers() {
-			sender, err := p.NewSender(router.Track())
-			log.Infof("Init add router ssrc %d to %s", router.Track().SSRC(), p.id)
+			sender, err := p.NewSender(router)
+			log.Infof("Init add router ssrc %d to %s", router.receivers[0].Track().SSRC(), p.id)
 			if err != nil {
 				log.Errorf("Error subscribing to router %v", router)
 				continue
@@ -73,31 +75,49 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 	session.AddTransport(p)
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
-		log.Debugf("Peer %s got remote track id: %s ssrc: %d", p.id, track.ID(), track.SSRC())
+		log.Debugf("Peer %s got remote track id: %s ssrc: %d rid :%s", p.id, track.ID(), track.SSRC(), track.RID())
 		recv := NewWebRTCReceiver(ctx, track)
 
 		if recv.Track().Kind() == webrtc.RTPCodecTypeVideo {
 			go p.sendRTCP(recv)
 		}
-
-		router := NewRouter(p.id, recv)
-		log.Debugf("Created router %s %d", p.id, recv.Track().SSRC())
-
-		p.session.AddRouter(router)
+		if router, ok := p.routers[track.ID()]; !ok {
+			if track.RID() != "" {
+				router = NewRouterWithSimulcast(p.id)
+			} else {
+				router = NewRouter(p.id)
+			}
+			router.AddReceiver(recv)
+			p.session.AddRouter(router)
+			p.mu.Lock()
+			p.routers[recv.Track().ID()] = router
+			p.mu.Unlock()
+			log.Debugf("Created router %s %d", p.id, recv.Track().SSRC())
+		} else {
+			router.AddReceiver(recv)
+		}
 
 		recv.OnCloseHandler(func() {
 			p.mu.Lock()
 			defer p.mu.Unlock()
-			delete(p.routers, track.SSRC())
+			delete(p.routers, track.ID())
 		})
-
-		p.mu.Lock()
-		p.routers[recv.Track().SSRC()] = router
 
 		if p.onTrackHandler != nil {
 			p.onTrackHandler(track, receiver)
 		}
-		p.mu.Unlock()
+	})
+
+	// Register data channel creation handling
+	pc.OnDataChannel(func(d *webrtc.DataChannel) {
+		fmt.Printf("New DataChannel %s %d\n", d.Label(), d.ID())
+		// Register text message handling
+		d.OnMessage(func(msg webrtc.DataChannelMessage) {
+			if i, err := strconv.Atoi(string(msg.Data)); err == nil {
+				log.Infof("Switch to layer: %d", i)
+				p.senders[0].SwitchTo(uint8(i))
+			}
+		})
 	})
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
@@ -113,7 +133,9 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 				fallthrough
 			case webrtc.ICEConnectionStateClosed:
 				log.Debugf("webrtc ice closed for peer: %s", p.id)
-				p.Close()
+				if err := p.Close(); err != nil {
+					log.Errorf("webrtc transport close err: %v", err)
+				}
 			}
 		}
 	})
@@ -208,33 +230,51 @@ func (p *WebRTCTransport) AddTransceiverFromKind(kind webrtc.RTPCodecType, init 
 }
 
 // NewSender for peer
-func (p *WebRTCTransport) NewSender(intrack *webrtc.Track) (Sender, error) {
-	to := p.me.GetCodecsByName(intrack.Codec().Name)
+func (p *WebRTCTransport) NewSender(r *Router) (Sender, error) {
+	inTrack := r.receivers[0].Track()
+	to := p.me.GetCodecsByName(inTrack.Codec().Name)
 
 	if len(to) == 0 {
 		log.Errorf("Error mapping payload type")
 		return nil, errPtNotSupported
 	}
-
 	pt := to[0].PayloadType
 
-	log.Debugf("Creating track: %d %d %s %s", pt, intrack.SSRC(), intrack.ID(), intrack.Label())
-	outtrack, err := p.pc.NewTrack(pt, intrack.SSRC(), intrack.ID(), intrack.Label())
+	var (
+		outTrack *webrtc.Track
+		sender   Sender
+		err      error
+		s        *webrtc.RTPSender
+	)
 
-	if err != nil {
-		log.Errorf("Error creating track")
-		return nil, err
+	log.Debugf("Creating track: %d %d %s %s", pt, inTrack.SSRC(), inTrack.ID(), inTrack.Label())
+	if r.simulcast {
+		// TODO For some reason label is empty for simulcast tracks, this needs to be fixed to share the
+		// stream ID with audio track.
+		if outTrack, err = p.pc.NewTrack(pt, r.simulcastSSRC, inTrack.ID(), "custom"); err != nil {
+			log.Errorf("Error creating track")
+			return nil, err
+		}
+		// Create webrtc sender for the peer we are sending track to
+		s, err = p.pc.AddTrack(outTrack)
+		if err != nil {
+			log.Errorf("Error adding send track")
+			return nil, err
+		}
+		sender = NewWebRTCSimulcastSender(p.ctx, outTrack, s, r.simulcastSSRC)
+	} else {
+		if outTrack, err = p.pc.NewTrack(pt, inTrack.SSRC(), inTrack.ID(), inTrack.Label()); err != nil {
+			log.Errorf("Error creating track")
+			return nil, err
+		}
+		// Create webrtc sender for the peer we are sending track to
+		s, err = p.pc.AddTrack(outTrack)
+		if err != nil {
+			log.Errorf("Error adding send track")
+			return nil, err
+		}
+		sender = NewWebRTCSender(p.ctx, outTrack, s)
 	}
-
-	s, err := p.pc.AddTrack(outtrack)
-
-	if err != nil {
-		log.Errorf("Error adding send track")
-		return nil, err
-	}
-
-	// Create webrtc sender for the peer we are sending track to
-	sender := NewWebRTCSender(p.ctx, outtrack, s)
 
 	sender.OnCloseHandler(func() {
 		err = p.pc.RemoveTrack(s)
@@ -243,6 +283,7 @@ func (p *WebRTCTransport) NewSender(intrack *webrtc.Track) (Sender, error) {
 		}
 	})
 
+	p.senders = append(p.senders, sender)
 	return sender, nil
 }
 
@@ -252,17 +293,17 @@ func (p *WebRTCTransport) ID() string {
 }
 
 // Routers returns routers for this peer
-func (p *WebRTCTransport) Routers() map[uint32]*Router {
+func (p *WebRTCTransport) Routers() map[string]*Router {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.routers
 }
 
 // GetRouter returns router with ssrc
-func (p *WebRTCTransport) GetRouter(ssrc uint32) *Router {
+func (p *WebRTCTransport) GetRouter(trackID string) *Router {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return p.routers[ssrc]
+	return p.routers[trackID]
 }
 
 // Close peer

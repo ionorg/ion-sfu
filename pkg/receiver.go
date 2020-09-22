@@ -33,20 +33,25 @@ type rtpExtInfo struct {
 	Timestamp int64
 }
 
-// Receiver defines a interface for a track receiver
+// Receiver defines a interface for a track receivers
 type Receiver interface {
 	Track() *webrtc.Track
+	AddSender(pid string, sender Sender)
+	DeleteSender(pid string)
 	GetPacket(sn uint16) *rtp.Packet
 	ReadRTP() chan *rtp.Packet
 	ReadRTCP() chan rtcp.Packet
 	WriteRTCP(rtcp.Packet) error
 	OnCloseHandler(fn func())
+	SetSimulcast(ssrc uint32)
+	SpatialLayer() uint8
 	Close()
 	stats() string
 }
 
 // WebRTCReceiver receives a video track
 type WebRTCReceiver struct {
+	sync.RWMutex
 	ctx            context.Context
 	cancel         context.CancelFunc
 	buffer         *Buffer
@@ -57,6 +62,10 @@ type WebRTCReceiver struct {
 	rtcpCh         chan rtcp.Packet
 	rtpExtInfoChan chan rtpExtInfo
 	onCloseHandler func()
+	senders        map[string]Sender
+
+	simulcast    bool
+	spatialLayer uint8
 
 	maxBandwidth uint64
 	feedback     string
@@ -72,7 +81,7 @@ type WebRTCVideoReceiverConfig struct {
 	ReceiveRTPCycle int `mapstructure:"rtpcycle"`
 }
 
-// NewWebRTCReceiver creates a new webrtc track receiver
+// NewWebRTCReceiver creates a new webrtc track receivers
 func NewWebRTCReceiver(ctx context.Context, track *webrtc.Track) Receiver {
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -80,8 +89,10 @@ func NewWebRTCReceiver(ctx context.Context, track *webrtc.Track) Receiver {
 		ctx:            ctx,
 		cancel:         cancel,
 		track:          track,
+		senders:        make(map[string]Sender),
 		rtpCh:          make(chan *rtp.Packet, maxSize),
 		rtpExtInfoChan: make(chan rtpExtInfo, maxSize),
+		simulcast:      len(track.RID()) > 0,
 	}
 
 	waitStart := make(chan struct{})
@@ -98,6 +109,35 @@ func NewWebRTCReceiver(ctx context.Context, track *webrtc.Track) Receiver {
 // OnCloseHandler method to be called on remote tracked removed
 func (w *WebRTCReceiver) OnCloseHandler(fn func()) {
 	w.onCloseHandler = fn
+}
+
+func (w *WebRTCReceiver) AddSender(pid string, sender Sender) {
+	w.Lock()
+	defer w.Unlock()
+	w.senders[pid] = sender
+}
+
+func (w *WebRTCReceiver) DeleteSender(pid string) {
+	w.Lock()
+	defer w.Unlock()
+	delete(w.senders, pid)
+}
+
+func (w *WebRTCReceiver) SetSimulcast(ssrc uint32) {
+	w.simulcast = true
+	switch w.track.RID() {
+	case quarterResolution:
+		w.spatialLayer = 1
+	case halfResolution:
+		w.spatialLayer = 2
+	case fullResolution:
+		w.spatialLayer = 3
+	}
+	log.Infof("Setting simulcast layer: %d, rid: %s", w.spatialLayer, w.track.RID())
+}
+
+func (w *WebRTCReceiver) SpatialLayer() uint8 {
+	return w.spatialLayer
 }
 
 // ReadRTP read rtp packets
@@ -119,7 +159,7 @@ func (w *WebRTCReceiver) WriteRTCP(pkt rtcp.Packet) error {
 	return nil
 }
 
-// Track returns receiver track
+// Track returns receivers track
 func (w *WebRTCReceiver) Track() *webrtc.Track {
 	return w.track
 }
@@ -147,7 +187,7 @@ func (w *WebRTCReceiver) receiveRTP() {
 		pkt, err := w.track.ReadRTP()
 		// EOF signal received, this means that the remote track has been removed
 		// or the peer has been disconnected. The router must be gracefully shutdown,
-		// waiting for all the receiver routines to stop.
+		// waiting for all the receivers routines to stop.
 		if err == io.EOF {
 			w.Close()
 			return
@@ -189,6 +229,17 @@ func (w *WebRTCReceiver) receiveRTP() {
 	}
 }
 
+func (w *WebRTCReceiver) fwdRTP() {
+	for pkt := range w.rtpCh {
+		// Push to sub send queues
+		w.RLock()
+		for _, sub := range w.senders {
+			sub.WriteRTP(pkt)
+		}
+		w.RUnlock()
+	}
+}
+
 func (w *WebRTCReceiver) pliLoop(cycle int) {
 	defer w.wg.Done()
 	if cycle <= 0 {
@@ -225,6 +276,11 @@ func (w *WebRTCReceiver) rembLoop(cycle int) {
 		cycle = 1
 	}
 	t := time.NewTicker(time.Duration(cycle) * time.Second)
+	var minBandwidth uint64
+
+	if w.simulcast {
+		minBandwidth = 500000
+	}
 	for {
 		select {
 		case <-t.C:
@@ -242,6 +298,10 @@ func (w *WebRTCReceiver) rembLoop(cycle int) {
 
 			if bw > w.maxBandwidth && w.maxBandwidth > 0 {
 				bw = w.maxBandwidth
+			}
+
+			if bw < minBandwidth {
+				bw = minBandwidth
 			}
 
 			remb := &rtcp.ReceiverEstimatedMaximumBitrate{
@@ -371,7 +431,7 @@ func (w *WebRTCReceiver) tccLoop(cycle int) {
 	}
 }
 
-// Stats get stats for video receiver
+// Stats get stats for video receivers
 func (w *WebRTCReceiver) stats() string {
 	switch w.track.Kind() {
 	case webrtc.RTPCodecTypeVideo:
@@ -413,6 +473,10 @@ func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}) {
 			go w.rembLoop(routerConfig.Video.REMBCycle)
 		}
 	}
+	if w.simulcast {
+		w.wg.Add(1)
+		go w.rembLoop(routerConfig.Video.REMBCycle)
+	}
 	// Start rtcp reader from track
 	w.wg.Add(1)
 	go w.receiveRTP()
@@ -423,6 +487,7 @@ func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}) {
 	w.wg.Add(1)
 	go w.bufferRtcpLoop()
 	// Receiver start loops done, send start signal
+	go w.fwdRTP()
 	wStart <- struct{}{}
 	w.wg.Wait()
 }

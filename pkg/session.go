@@ -56,9 +56,9 @@ func (r *Session) AddRouter(router *Router) {
 			continue
 		}
 
-		log.Infof("AddRouter ssrc %d to %s", router.Track().SSRC(), tid)
+		log.Infof("AddRouter ssrc %d to %s", router.receivers[0].Track().SSRC(), tid)
 
-		sender, err := t.NewSender(router.Track())
+		sender, err := t.NewSender(router)
 
 		if err != nil {
 			log.Errorf("Error subscribing transport to router: %s", err)

@@ -13,13 +13,16 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-// Sender defines a interface for a track receiver
+// Sender defines a interface for a track receivers
 type Sender interface {
 	ReadRTCP() chan rtcp.Packet
 	WriteRTP(*rtp.Packet)
 	Close()
 	OnCloseHandler(fn func())
 	stats() string
+	// Simulcast events
+	Switch() chan uint8
+	SwitchTo(layer uint8)
 }
 
 // WebRTCSender represents a Sender which writes RTP to a webrtc track
@@ -30,6 +33,7 @@ type WebRTCSender struct {
 	sender         *webrtc.RTPSender
 	track          *webrtc.Track
 	rtcpCh         chan rtcp.Packet
+	switchCh       chan uint8
 	maxBitrate     uint64
 	target         uint64
 	sendChan       chan *rtp.Packet
@@ -47,6 +51,7 @@ func NewWebRTCSender(ctx context.Context, track *webrtc.Track, sender *webrtc.RT
 		track:      track,
 		maxBitrate: routerConfig.MaxBandwidth * 1000,
 		rtcpCh:     make(chan rtcp.Packet, maxSize),
+		switchCh:   make(chan uint8, 1),
 		sendChan:   make(chan *rtp.Packet, maxSize),
 	}
 
@@ -59,7 +64,7 @@ func NewWebRTCSender(ctx context.Context, track *webrtc.Track, sender *webrtc.RT
 func (s *WebRTCSender) sendRTP() {
 	// There exists a bug in chrome where setLocalDescription
 	// fails if track RTP arrives before the sfu offer is set.
-	// We deplay sending RTP here to avoid the issue.
+	// We delay sending RTP here to avoid the issue.
 	// https://bugs.chromium.org/p/webrtc/issues/detail?id=10139
 	time.Sleep(500 * time.Millisecond)
 
@@ -94,6 +99,14 @@ func (s *WebRTCSender) WriteRTP(pkt *rtp.Packet) {
 	if s.ctx.Err() == nil {
 		s.sendChan <- pkt
 	}
+}
+
+func (s *WebRTCSender) Switch() chan uint8 {
+	return s.switchCh
+}
+
+func (s *WebRTCSender) SwitchTo(layer uint8) {
+	s.switchCh <- layer
 }
 
 // OnClose is called when the sender is closed
