@@ -186,7 +186,7 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 				SDP:  string(payload.Join.Offer.Sdp),
 			}
 
-			me := sfu.MediaEngine{}
+			me := webrtc.MediaEngine{}
 			err = me.PopulateFromSDP(offer)
 			if err != nil {
 				log.Errorf("join error: %v", err)
