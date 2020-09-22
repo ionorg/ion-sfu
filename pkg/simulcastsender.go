@@ -31,6 +31,7 @@ type WebRTCSimulcastSender struct {
 
 	simulcastSSRC uint32
 	currentLayer  uint8
+	lastPli       time.Time
 	lTSCalc       time.Time
 	lSSRC         uint32
 	lTS           uint32
@@ -71,7 +72,7 @@ func (s *WebRTCSimulcastSender) ReadRTCP() chan rtcp.Packet {
 // WriteRTP to the track
 func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 	// Simulcast write RTP is sync, so the packet can be safely modified and restored
-	if s.ctx.Err() == nil {
+	if s.ctx.Err() != nil {
 		return
 	}
 	// Backup pkt original data
@@ -83,6 +84,12 @@ func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 	// Check if packet SSRC is different from before
 	// if true, the video source changed
 	if s.lSSRC != pkt.SSRC {
+		if time.Now().Sub(s.lastPli) > time.Second {
+			//Forward pli to request a keyframe a max 1 pli per second
+			s.rtcpCh <- &rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC}
+			s.lastPli = time.Now()
+		}
+
 		relay := false
 		// Wait for a keyframe to sync new source
 		switch s.track.Codec().PayloadType {
