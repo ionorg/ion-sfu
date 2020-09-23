@@ -21,43 +21,39 @@ import (
 type WebRTCSimulcastSender struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
-	onCloseHandler func()
 	sender         *webrtc.RTPSender
 	track          *webrtc.Track
 	rtcpCh         chan rtcp.Packet
 	switchCh       chan uint8
-	maxBitrate     uint64
 	target         uint64
+	maxBitrate     uint64
+	onCloseHandler func()
 
 	simulcastSSRC uint32
 	currentLayer  uint8
+	tsOffset      uint32
+	snOffset      uint16
 	lastPli       time.Time
 	lTSCalc       time.Time
 	lSSRC         uint32
 	lTS           uint32
-	bTS           uint32
 	lSN           uint16
-	bSN           uint16
 
 	once sync.Once
 }
 
 // NewWebRTCSimulcastSender creates a new track sender instance
-func NewWebRTCSimulcastSender(ctx context.Context,
-	track *webrtc.Track,
-	sender *webrtc.RTPSender,
-	simulcastSSRC uint32,
-) Sender {
+func NewWebRTCSimulcastSender(ctx context.Context, track *webrtc.Track, sender *webrtc.RTPSender) Sender {
 	ctx, cancel := context.WithCancel(ctx)
 	s := &WebRTCSimulcastSender{
 		ctx:           ctx,
 		cancel:        cancel,
 		sender:        sender,
 		track:         track,
-		maxBitrate:    routerConfig.MaxBandwidth * 1000,
 		rtcpCh:        make(chan rtcp.Packet, maxSize),
 		switchCh:      make(chan uint8, 1),
-		simulcastSSRC: simulcastSSRC,
+		maxBitrate:    routerConfig.MaxBandwidth * 1000,
+		simulcastSSRC: track.SSRC(),
 	}
 
 	go s.receiveRTCP()
@@ -75,21 +71,14 @@ func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 	if s.ctx.Err() != nil {
 		return
 	}
-	// Backup pkt original data
-	origPT := pkt.Header.PayloadType
-	origSSRC := pkt.SSRC
-	origSeq := pkt.SequenceNumber
-	origTS := pkt.Timestamp
-	var td uint32
 	// Check if packet SSRC is different from before
 	// if true, the video source changed
 	if s.lSSRC != pkt.SSRC {
+		//Forward pli to request a keyframe at max 1 pli per second
 		if time.Now().Sub(s.lastPli) > time.Second {
-			//Forward pli to request a keyframe a max 1 pli per second
 			s.rtcpCh <- &rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC}
 			s.lastPli = time.Now()
 		}
-
 		relay := false
 		// Wait for a keyframe to sync new source
 		switch s.track.Codec().PayloadType {
@@ -108,43 +97,42 @@ func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 				relay = word&0x1F == 7
 			}
 		default:
-			log.Warnf("Codec payload don't support simulcast: %d", s.track.Codec().PayloadType)
+			log.Warnf("codec payload don't support simulcast: %d", s.track.Codec().PayloadType)
 			return
 		}
+		// Packet is not a keyframe, discard it
 		if !relay {
-			// Packet is not a keyframe, discard it
 			return
 		}
 	}
-	tmDelta := pkt.Timestamp - s.lTS
+	// Backup pkt original data
+	origPT := pkt.Header.PayloadType
+	origSSRC := pkt.SSRC
+	origSeq := pkt.SequenceNumber
+	origTS := pkt.Timestamp
 	// Compute how much time passed between the old RTP pkt
 	// and the current packet, and fix timestamp on source change
 	if !s.lTSCalc.IsZero() && s.lSSRC != pkt.SSRC {
 		tDiff := time.Now().Sub(s.lTSCalc)
-		td = uint32((tDiff.Milliseconds() * 90) / 1000)
+		td := uint32((tDiff.Milliseconds() * 90) / 1000)
 		if td == 0 {
 			td = 1
 		}
-		tmDelta = 0
+		s.tsOffset = pkt.Timestamp - (s.lTS + td)
+		s.snOffset = pkt.SequenceNumber - s.lSN - 1
 	} else if s.lTSCalc.IsZero() {
 		s.lTS = pkt.Timestamp
-		s.bSN = pkt.SequenceNumber
-	}
-	if s.lSN > pkt.SequenceNumber {
-		// TODO: Fix out of order
-		log.Warnf("Simulcast packet out of order, current SN: %d last SN: %d", pkt.SequenceNumber, s.lSN)
+		s.lSN = pkt.SequenceNumber
 	}
 	// Update base
-	s.bTS += tmDelta + td
 	s.lTSCalc = time.Now()
 	s.lSSRC = pkt.SSRC
-	s.lTS = pkt.Timestamp
-	s.lSN = pkt.SequenceNumber
-	s.bSN++
+	s.lTS = pkt.Timestamp - s.tsOffset
+	s.lSN = pkt.SequenceNumber - s.snOffset
 	// Update pkt headers
 	pkt.SSRC = s.simulcastSSRC
-	pkt.SequenceNumber = s.bSN
-	pkt.Timestamp = s.bTS
+	pkt.SequenceNumber = s.lSN
+	pkt.Timestamp = s.lTS
 	// Write packet to client
 	err := s.track.WriteRTP(pkt)
 	// Reset packet data
@@ -152,7 +140,6 @@ func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 	pkt.SSRC = origSSRC
 	pkt.SequenceNumber = origSeq
 	pkt.PayloadType = origPT
-
 	if err != nil {
 		if err == io.ErrClosedPipe {
 			return

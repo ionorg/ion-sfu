@@ -275,7 +275,7 @@ func (p *WebRTCTransport) NewSender(r *Router) (Sender, error) {
 			log.Errorf("Error adding send track")
 			return nil, err
 		}
-		sender = NewWebRTCSimulcastSender(p.ctx, outTrack, s, r.simulcastSSRC)
+		sender = NewWebRTCSimulcastSender(p.ctx, outTrack, s)
 	} else {
 		if outTrack, err = p.pc.NewTrack(pt, inTrack.SSRC(), inTrack.ID(), inTrack.Label()); err != nil {
 			log.Errorf("Error creating track")
