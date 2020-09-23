@@ -13,9 +13,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pion/mediadevices"
 	"github.com/pion/mediadevices/pkg/codec"
+	"github.com/pion/mediadevices/pkg/codec/opus"
 	"github.com/pion/mediadevices/pkg/codec/vpx"
-	"github.com/pion/mediadevices/pkg/frame"
-	"github.com/pion/mediadevices/pkg/prop"
 	"github.com/pion/webrtc/v2"
 	"github.com/sourcegraph/jsonrpc2"
 
@@ -112,15 +111,25 @@ func main() {
 	}
 	vp8Params.BitRate = 100000 // 100kbps
 
+	opusParams, err := opus.NewParams()
+	if err != nil {
+		panic(err)
+	}
+	opusParams.BitRate = 32000 // 32kbps
+
 	fmt.Println(md.EnumerateDevices())
 
 	s, err := md.GetUserMedia(mediadevices.MediaStreamConstraints{
-		Video: func(c *mediadevices.MediaTrackConstraints) {
-			c.FrameFormat = prop.FrameFormat(frame.FormatYUYV)
+		// Video: func(c *mediadevices.MediaTrackConstraints) {
+		// 	c.FrameFormat = prop.FrameFormat(frame.FormatMJPEG)
+		// 	c.Enabled = true
+		// 	c.Width = prop.Int(640)
+		// 	c.Height = prop.Int(480)
+		// 	c.VideoEncoderBuilders = []codec.VideoEncoderBuilder{&vp8Params}
+		// },
+		Audio: func(c *mediadevices.MediaTrackConstraints) {
 			c.Enabled = true
-			c.Width = prop.Int(640)
-			c.Height = prop.Int(480)
-			c.VideoEncoderBuilders = []codec.VideoEncoderBuilder{&vp8Params}
+			c.AudioEncoderBuilders = []codec.AudioEncoderBuilder{&opusParams}
 		},
 	})
 
