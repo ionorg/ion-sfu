@@ -56,7 +56,7 @@ func (r *Session) AddRouter(router *Router) {
 			continue
 		}
 
-		log.Infof("AddRouter ssrc %d to %s", router.receivers[0].Track().SSRC(), tid)
+		log.Infof("AddRouter ssrc to %s", tid)
 
 		sender, err := t.NewSender(router)
 
@@ -66,7 +66,7 @@ func (r *Session) AddRouter(router *Router) {
 		}
 
 		// Attach sender to source
-		router.AddSender(tid, sender)
+		router.AddSender(sender)
 	}
 }
 

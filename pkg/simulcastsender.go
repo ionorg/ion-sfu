@@ -19,18 +19,20 @@ import (
 
 // WebRTCSimulcastSender represents a Sender which writes RTP to a webrtc track
 type WebRTCSimulcastSender struct {
+	id             string
 	ctx            context.Context
 	cancel         context.CancelFunc
+	router         *Router
 	sender         *webrtc.RTPSender
 	track          *webrtc.Track
 	rtcpCh         chan rtcp.Packet
-	switchCh       chan uint8
 	target         uint64
 	maxBitrate     uint64
 	onCloseHandler func()
 
 	simulcastSSRC uint32
 	currentLayer  uint8
+	targetLayer   uint8
 	tsOffset      uint32
 	snOffset      uint16
 	lastPli       time.Time
@@ -43,21 +45,28 @@ type WebRTCSimulcastSender struct {
 }
 
 // NewWebRTCSimulcastSender creates a new track sender instance
-func NewWebRTCSimulcastSender(ctx context.Context, track *webrtc.Track, sender *webrtc.RTPSender) Sender {
+func NewWebRTCSimulcastSender(ctx context.Context, id string, router *Router, sender *webrtc.RTPSender, layer uint8) Sender {
 	ctx, cancel := context.WithCancel(ctx)
 	s := &WebRTCSimulcastSender{
+		id:            id,
 		ctx:           ctx,
 		cancel:        cancel,
+		router:        router,
 		sender:        sender,
-		track:         track,
+		track:         sender.Track(),
 		rtcpCh:        make(chan rtcp.Packet, maxSize),
-		switchCh:      make(chan uint8, 1),
+		currentLayer:  layer,
+		targetLayer:   layer,
 		maxBitrate:    routerConfig.MaxBandwidth * 1000,
-		simulcastSSRC: track.SSRC(),
+		simulcastSSRC: sender.Track().SSRC(),
 	}
 
 	go s.receiveRTCP()
 	return s
+}
+
+func (s *WebRTCSimulcastSender) ID() string {
+	return s.id
 }
 
 // ReadRTCP read rtp packet
@@ -74,10 +83,15 @@ func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 	// Check if packet SSRC is different from before
 	// if true, the video source changed
 	if s.lSSRC != pkt.SSRC {
+		recv := s.router.GetReceiver(s.targetLayer)
+		if recv == nil || recv.Track().SSRC() != pkt.SSRC {
+			return
+		}
 		//Forward pli to request a keyframe at max 1 pli per second
 		if time.Now().Sub(s.lastPli) > time.Second {
-			s.rtcpCh <- &rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC}
-			s.lastPli = time.Now()
+			if err := recv.WriteRTCP(&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC}); err == nil {
+				s.lastPli = time.Now()
+			}
 		}
 		relay := false
 		// Wait for a keyframe to sync new source
@@ -104,6 +118,8 @@ func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 		if !relay {
 			return
 		}
+		// Switch is done update current layer
+		s.currentLayer = s.targetLayer
 	}
 	// Backup pkt original data
 	origPT := pkt.Header.PayloadType
@@ -148,12 +164,19 @@ func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 	}
 }
 
-func (s *WebRTCSimulcastSender) Switch() chan uint8 {
-	return s.switchCh
+func (s *WebRTCSimulcastSender) SwitchTo(targetLayer uint8) {
+	// Don't switch until previous switch is done or canceled
+	if s.currentLayer != s.targetLayer {
+		return
+	}
+	s.targetLayer = targetLayer
+	if ok := s.router.SwitchSpatialLayer(s.currentLayer, targetLayer, s); !ok {
+		s.targetLayer = s.currentLayer
+	}
 }
 
-func (s *WebRTCSimulcastSender) SwitchTo(layer uint8) {
-	s.switchCh <- layer
+func (s *WebRTCSimulcastSender) CurrentLayer() uint8 {
+	return s.currentLayer
 }
 
 // OnClose is called when the sender is closed
@@ -189,12 +212,33 @@ func (s *WebRTCSimulcastSender) receiveRTCP() {
 
 		if err != nil {
 			log.Errorf("rtcp err => %v", err)
+			continue
 		}
 
 		for _, pkt := range pkts {
+			recv := s.router.GetReceiver(s.currentLayer)
+			if recv == nil {
+				continue
+			}
 			switch pkt := pkt.(type) {
-			case *rtcp.PictureLossIndication, *rtcp.FullIntraRequest, *rtcp.TransportLayerNack:
-				s.rtcpCh <- pkt
+			case *rtcp.PictureLossIndication:
+				pkt.MediaSSRC = s.lSSRC
+				pkt.SenderSSRC = s.lSSRC
+				if err := recv.WriteRTCP(pkt); err != nil {
+					log.Errorf("writing RTCP err %v", err)
+				}
+			case *rtcp.FullIntraRequest:
+				pkt.MediaSSRC = s.lSSRC
+				pkt.SenderSSRC = s.lSSRC
+				if err := recv.WriteRTCP(pkt); err != nil {
+					log.Errorf("writing RTCP err %v", err)
+				}
+			case *rtcp.TransportLayerNack:
+				pkt.MediaSSRC = s.lSSRC
+				pkt.SenderSSRC = s.lSSRC
+				if err := recv.WriteRTCP(pkt); err != nil {
+					log.Errorf("writing RTCP err %v", err)
+				}
 			default:
 				// TODO: Use fb packets for congestion control
 			}

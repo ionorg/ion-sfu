@@ -2,7 +2,9 @@ package sfu
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math/rand"
 	"strconv"
 	"sync"
 	"time"
@@ -62,12 +64,12 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 	for _, t := range session.Transports() {
 		for _, router := range t.Routers() {
 			sender, err := p.NewSender(router)
-			log.Infof("Init add router ssrc %d to %s", router.receivers[0].Track().SSRC(), p.id)
+			// log.Infof("Init add router ssrc %d to %s", router.receivers[0].Track().SSRC(), p.id)
 			if err != nil {
 				log.Errorf("Error subscribing to router %v", router)
 				continue
 			}
-			router.AddSender(p.id, sender)
+			router.AddSender(sender)
 		}
 	}
 
@@ -83,7 +85,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 		}
 		if router, ok := p.routers[track.ID()]; !ok {
 			if track.RID() != "" {
-				router = NewRouterWithSimulcast(p.id)
+				router = NewRouter(p.id, true)
 				go func() {
 					// Send 3 big remb msgs to fwd all the tracks
 					ticker := time.NewTicker(1 * time.Second)
@@ -99,7 +101,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 					}
 				}()
 			} else {
-				router = NewRouter(p.id)
+				router = NewRouter(p.id, false)
 			}
 			router.AddReceiver(recv)
 			p.session.AddRouter(router)
@@ -245,7 +247,26 @@ func (p *WebRTCTransport) AddTransceiverFromKind(kind webrtc.RTPCodecType, init 
 
 // NewSender for peer
 func (p *WebRTCTransport) NewSender(r *Router) (Sender, error) {
-	inTrack := r.receivers[0].Track()
+	var (
+		outTrack *webrtc.Track
+		inTrack  *webrtc.Track
+		layer    uint8
+		sender   Sender
+		err      error
+		s        *webrtc.RTPSender
+	)
+
+	// TODO Configure to prefer low/high layer on init
+	for _, recv := range r.receivers {
+		if recv != nil {
+			inTrack = recv.Track()
+			layer = recv.SpatialLayer()
+			break
+		}
+	}
+	if inTrack == nil {
+		return nil, errors.New("track no found")
+	}
 	to := p.me.GetCodecsByName(inTrack.Codec().Name)
 
 	if len(to) == 0 {
@@ -253,19 +274,11 @@ func (p *WebRTCTransport) NewSender(r *Router) (Sender, error) {
 		return nil, errPtNotSupported
 	}
 	pt := to[0].PayloadType
-
-	var (
-		outTrack *webrtc.Track
-		sender   Sender
-		err      error
-		s        *webrtc.RTPSender
-	)
-
 	log.Debugf("Creating track: %d %d %s %s", pt, inTrack.SSRC(), inTrack.ID(), inTrack.Label())
 	if r.simulcast {
 		// TODO For some reason label is empty for simulcast tracks, this needs to be fixed to share the
 		// stream ID with audio track.
-		if outTrack, err = p.pc.NewTrack(pt, r.simulcastSSRC, inTrack.ID(), "custom"); err != nil {
+		if outTrack, err = p.pc.NewTrack(pt, rand.Uint32(), inTrack.ID(), "custom"); err != nil {
 			log.Errorf("Error creating track")
 			return nil, err
 		}
@@ -275,7 +288,7 @@ func (p *WebRTCTransport) NewSender(r *Router) (Sender, error) {
 			log.Errorf("Error adding send track")
 			return nil, err
 		}
-		sender = NewWebRTCSimulcastSender(p.ctx, outTrack, s)
+		sender = NewWebRTCSimulcastSender(p.ctx, p.id, r, s, layer)
 	} else {
 		if outTrack, err = p.pc.NewTrack(pt, inTrack.SSRC(), inTrack.ID(), inTrack.Label()); err != nil {
 			log.Errorf("Error creating track")
@@ -287,7 +300,7 @@ func (p *WebRTCTransport) NewSender(r *Router) (Sender, error) {
 			log.Errorf("Error adding send track")
 			return nil, err
 		}
-		sender = NewWebRTCSender(p.ctx, outTrack, s)
+		sender = NewWebRTCSender(p.ctx, p.id, r, s)
 	}
 
 	sender.OnCloseHandler(func() {

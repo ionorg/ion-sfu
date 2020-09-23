@@ -36,7 +36,7 @@ type rtpExtInfo struct {
 // Receiver defines a interface for a track receivers
 type Receiver interface {
 	Track() *webrtc.Track
-	AddSender(pid string, sender Sender)
+	AddSender(sender Sender)
 	DeleteSender(pid string)
 	GetPacket(sn uint16) *rtp.Packet
 	ReadRTP() chan *rtp.Packet
@@ -98,6 +98,8 @@ func NewWebRTCReceiver(ctx context.Context, track *webrtc.Track) Receiver {
 		w.spatialLayer = 2
 	case fullResolution:
 		w.spatialLayer = 3
+	default:
+		w.spatialLayer = 0
 	}
 
 	waitStart := make(chan struct{})
@@ -116,10 +118,10 @@ func (w *WebRTCReceiver) OnCloseHandler(fn func()) {
 	w.onCloseHandler = fn
 }
 
-func (w *WebRTCReceiver) AddSender(pid string, sender Sender) {
+func (w *WebRTCReceiver) AddSender(sender Sender) {
 	w.Lock()
 	defer w.Unlock()
-	w.senders[pid] = sender
+	w.senders[sender.ID()] = sender
 }
 
 func (w *WebRTCReceiver) DeleteSender(pid string) {
@@ -492,6 +494,7 @@ func startAudioReceiver(w *WebRTCReceiver, wStart chan struct{}) {
 			}
 		}
 	}()
+	go w.fwdRTP()
 	wStart <- struct{}{}
 	w.wg.Wait()
 }
