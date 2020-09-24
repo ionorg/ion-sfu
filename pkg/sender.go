@@ -21,10 +21,11 @@ type Sender interface {
 	WriteRTP(*rtp.Packet)
 	Close()
 	OnCloseHandler(fn func())
-	CurrentLayer() uint8
+	CurrentSpatialLayer() uint8
 	stats() string
-	// Simulcast events
-	SwitchTo(layer uint8)
+	// Simulcast/SVC events
+	SwitchSpatialLayer(layer uint8)
+	SwitchTemporalLayer(layer uint8)
 }
 
 // WebRTCSender represents a Sender which writes RTP to a webrtc track
@@ -111,12 +112,16 @@ func (s *WebRTCSender) WriteRTP(pkt *rtp.Packet) {
 	}
 }
 
-func (s *WebRTCSender) CurrentLayer() uint8 {
+func (s *WebRTCSender) CurrentSpatialLayer() uint8 {
 	return s.currentLayer
 }
 
-func (s *WebRTCSender) SwitchTo(layer uint8) {
+func (s *WebRTCSender) SwitchSpatialLayer(layer uint8) {
 	log.Warnf("can't change layers in simple senders, current: %d target: %d", s.currentLayer, layer)
+}
+
+func (s *WebRTCSender) SwitchTemporalLayer(layer uint8) {
+	log.Warnf("can't change layers in simple senders, target: %d", layer)
 }
 
 // OnClose is called when the sender is closed

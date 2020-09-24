@@ -40,7 +40,7 @@ func (r *Router) GetReceiver(layer uint8) Receiver {
 
 // AddSender to router
 func (r *Router) AddSender(sub Sender) {
-	r.receivers[sub.CurrentLayer()].AddSender(sub)
+	r.receivers[sub.CurrentSpatialLayer()].AddSender(sub)
 }
 
 func (r *Router) SwitchSpatialLayer(currentLayer, targetLayer uint8, sub Sender) bool {

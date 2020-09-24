@@ -131,7 +131,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 		d.OnMessage(func(msg webrtc.DataChannelMessage) {
 			if i, err := strconv.Atoi(string(msg.Data)); err == nil {
 				log.Infof("Switch to layer: %d", i)
-				p.senders[0].SwitchTo(uint8(i))
+				p.senders[0].SwitchSpatialLayer(uint8(i))
 			}
 		})
 	})
