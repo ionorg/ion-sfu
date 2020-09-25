@@ -33,7 +33,7 @@ func TestRouter(t *testing.T) {
 	onTrackFired, onTrackFiredFunc := context.WithCancel(context.Background())
 	pubsfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
 		receiver := NewWebRTCReceiver(ctx, track).(*WebRTCReceiver)
-		router := NewRouter("id", receiver)
+		router := NewRouter("id", false)
 		assert.Equal(t, router.receivers, receiver)
 
 		subsfu, sub, err := newPair(webrtc.Configuration{}, api)
@@ -59,10 +59,8 @@ func TestRouter(t *testing.T) {
 		assert.NoError(t, err)
 
 		subPid := "subpid"
-		sender := NewWebRTCSender(ctx, subtrack, s).(*WebRTCSender)
-		router.AddSender(subPid, sender)
-		assert.Len(t, router.senders, 1)
-		assert.Equal(t, sender, router.senders[subPid])
+		sender := NewWebRTCSender(ctx, subPid, router, s).(*WebRTCSender)
+		router.AddSender(sender)
 		assert.Contains(t, router.stats(), "track id:")
 
 		<-ontrackFired
@@ -107,7 +105,7 @@ func TestRouterPartialReadCanClose(t *testing.T) {
 	onTrackFired, onTrackFiredFunc := context.WithCancel(context.Background())
 	pubsfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
 		receiver := NewWebRTCReceiver(ctx, track).(*WebRTCReceiver)
-		router := NewRouter("id", receiver)
+		router := NewRouter("id", false)
 		subsfu, sub, err := newPair(webrtc.Configuration{}, api)
 		assert.NoError(t, err)
 
@@ -125,8 +123,8 @@ func TestRouterPartialReadCanClose(t *testing.T) {
 		assert.NoError(t, err)
 
 		subPid := "subpid"
-		sender := NewWebRTCSender(ctx, subtrack, s)
-		router.AddSender(subPid, sender)
+		sender := NewWebRTCSender(ctx, subPid, router, s).(*WebRTCSender)
+		router.AddSender(sender)
 
 		<-onTrackFired.Done()
 		receiver.Close()
@@ -170,7 +168,7 @@ func TestSendersNackRateLimit(t *testing.T) {
 	done := make(chan bool)
 	pubsfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
 		receiver := NewWebRTCReceiver(ctx, track).(*WebRTCReceiver)
-		router := NewRouter("id", receiver)
+		router := NewRouter("id", false)
 		assert.Equal(t, router.receivers, receiver)
 
 		subsfu, sub, err := newPair(webrtc.Configuration{}, api)
@@ -195,10 +193,8 @@ func TestSendersNackRateLimit(t *testing.T) {
 		assert.NoError(t, err)
 
 		subPid := "subpid"
-		sender := NewWebRTCSender(ctx, subtrack, s).(*WebRTCSender)
-		router.AddSender(subPid, sender)
-		assert.Len(t, router.senders, 1)
-		assert.Equal(t, sender, router.senders[subPid])
+		sender := NewWebRTCSender(ctx, subPid, router, s).(*WebRTCSender)
+		router.AddSender(sender)
 		assert.Contains(t, router.stats(), "track id:")
 		<-ontrackFired
 		routerConfig.MaxNackTime = 1

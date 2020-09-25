@@ -39,7 +39,7 @@ func TestSFU(t *testing.T) {
 	err = remote.SetLocalDescription(offer)
 	assert.NoError(t, err)
 
-	engine := MediaEngine{}
+	engine := webrtc.MediaEngine{}
 	err = engine.PopulateFromSDP(offer)
 	assert.NoError(t, err)
 

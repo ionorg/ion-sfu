@@ -84,7 +84,8 @@ func TestSenderRTPForwarding(t *testing.T) {
 	assert.NoError(t, err)
 
 	ctx := context.Background()
-	sender := NewWebRTCSender(ctx, track, s)
+	router := NewRouter("id", false)
+	sender := NewWebRTCSender(ctx, "test", router, s)
 	assert.NotNil(t, sender)
 
 	err = signalPair(sfu, remote)
@@ -131,7 +132,8 @@ func TestSenderRTCPPictureLossIndicationForwarding(t *testing.T) {
 	assert.NoError(t, err)
 
 	ctx := context.Background()
-	sender := NewWebRTCSender(ctx, track, s)
+	router := NewRouter("id", false)
+	sender := NewWebRTCSender(ctx, "test", router, s)
 	assert.NotNil(t, sender)
 
 	err = signalPair(sfu, remote)
@@ -190,7 +192,8 @@ func TestSenderRTCPBlockREMBForwarding(t *testing.T) {
 	assert.NoError(t, err)
 
 	ctx := context.Background()
-	sender := NewWebRTCSender(ctx, track, s)
+	router := NewRouter("id", false)
+	sender := NewWebRTCSender(ctx, "test", router, s)
 	assert.NotNil(t, sender)
 
 	err = signalPair(sfu, remote)
@@ -258,7 +261,10 @@ func TestSenderRTCPTransportLayerNACK(t *testing.T) {
 	assert.NoError(t, err)
 
 	ctx := context.Background()
-	sender := NewWebRTCSender(ctx, track, s)
+	router := NewRouter("id", false)
+	sender := NewWebRTCSender(ctx, "test", router, s)
+	assert.NotNil(t, sender)
+
 	assert.NotNil(t, sender)
 
 	err = signalPair(sfu, remote)
@@ -317,7 +323,8 @@ func TestSenderRTCPFullIntraRequest(t *testing.T) {
 	assert.NoError(t, err)
 
 	ctx := context.Background()
-	sender := NewWebRTCSender(ctx, track, s)
+	router := NewRouter("id", false)
+	sender := NewWebRTCSender(ctx, "test", router, s)
 	assert.NotNil(t, sender)
 
 	err = signalPair(sfu, remote)
