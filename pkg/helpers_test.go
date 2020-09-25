@@ -74,6 +74,7 @@ func TestVP8Helper_Unmarshal(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			p := &VP8Helper{}
 			if err := p.Unmarshal(tt.args.payload); (err != nil) != tt.wantErr {
@@ -114,8 +115,8 @@ func Test_setVP8TemporalLayer(t *testing.T) {
 			args: args{
 				s: &WebRTCSimulcastSender{
 					currentTempLayer: 2,
-					refPicId:         0,
-					lastPicId:        0,
+					refPicID:         0,
+					lastPicID:        0,
 					refTlzi:          0,
 					lastTlzi:         0,
 				},
@@ -129,7 +130,7 @@ func Test_setVP8TemporalLayer(t *testing.T) {
 			args: args{
 				s: &WebRTCSimulcastSender{
 					currentTempLayer: 3,
-					refPicId:         32764,
+					refPicID:         32764,
 					refTlzi:          179,
 				},
 				pl: []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0xdf, 0x5, 0x6},
@@ -139,6 +140,7 @@ func Test_setVP8TemporalLayer(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			gotPayload, gotSkip := setVP8TemporalLayer(tt.args.pl, tt.args.s)
 			if !reflect.DeepEqual(gotPayload, tt.wantPayload) {

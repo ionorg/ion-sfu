@@ -45,8 +45,8 @@ type WebRTCSimulcastSender struct {
 	lSN                 uint16
 
 	//VP8Helper temporal helpers
-	refPicId  uint16
-	lastPicId uint16
+	refPicID  uint16
+	lastPicID uint16
 	refTlzi   uint8
 	lastTlzi  uint8
 
@@ -71,7 +71,7 @@ func NewWebRTCSimulcastSender(ctx context.Context, id string, router *Router, se
 		targetSpatialLayer:  layer,
 		maxBitrate:          routerConfig.MaxBandwidth * 1000,
 		simulcastSSRC:       sender.Track().SSRC(),
-		refPicId:            uint16(rand.Uint32()),
+		refPicID:            uint16(rand.Uint32()),
 		refTlzi:             uint8(rand.Uint32()),
 	}
 
@@ -117,7 +117,7 @@ func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 					relay = true
 					// Set VP8Helper temporal info
 					s.temporalSupported = vp8Packet.TemporalSupported
-					s.refPicId += vp8Packet.PictureID - s.lastPicId
+					s.refPicID += vp8Packet.PictureID - s.lastPicID
 					s.refTlzi += vp8Packet.TL0PICIDX - s.lastTlzi
 				}
 			}

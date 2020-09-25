@@ -26,7 +26,7 @@ type VP8Helper struct {
 	TemporalSupported bool
 	// Optional Header
 	PictureID uint16 /* 8 or 16 bits, picture ID */
-	picIdIdx  uint8
+	picIDIdx  uint8
 	mBit      bool
 	TL0PICIDX uint8 /* 8 bits temporal level zero index */
 	tlzIdx    uint8
@@ -60,7 +60,7 @@ func (p *VP8Helper) Unmarshal(payload []byte) error {
 		// Check for PictureID
 		if payload[idx]&0x80 > 0 {
 			idx++
-			p.picIdIdx = idx
+			p.picIDIdx = idx
 			pid := payload[idx] & 0x7f
 			// Check if m is 1, then Picture ID is 15 bits
 			if payload[idx]&0x80 > 0 {
@@ -102,7 +102,7 @@ func setVP8TemporalLayer(pl []byte, s *WebRTCSimulcastSender) (payload []byte, s
 		skip = true
 		// Increment references to prevent gaps
 		s.refTlzi++
-		s.refPicId++
+		s.refPicID++
 		return
 	}
 	// If we are here modify payload
@@ -113,14 +113,14 @@ func setVP8TemporalLayer(pl []byte, s *WebRTCSimulcastSender) (payload []byte, s
 		s.lastTlzi = pkt.TL0PICIDX - s.refTlzi
 		payload[pkt.tlzIdx] = s.lastTlzi
 	}
-	if pkt.picIdIdx > 0 {
-		s.lastPicId = pkt.PictureID - s.refPicId
+	if pkt.picIDIdx > 0 {
+		s.lastPicID = pkt.PictureID - s.refPicID
 		pid := make([]byte, 2)
-		binary.BigEndian.PutUint16(pid, s.lastPicId)
-		payload[pkt.picIdIdx] = pid[0]
+		binary.BigEndian.PutUint16(pid, s.lastPicID)
+		payload[pkt.picIDIdx] = pid[0]
 		if pkt.mBit {
-			payload[pkt.picIdIdx] |= 0x80
-			payload[pkt.picIdIdx+1] = pid[1]
+			payload[pkt.picIDIdx] |= 0x80
+			payload[pkt.picIDIdx+1] = pid[1]
 		}
 	}
 	return
