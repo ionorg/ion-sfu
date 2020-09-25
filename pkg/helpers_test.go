@@ -50,9 +50,9 @@ func TestVP8Helper_Unmarshal(t *testing.T) {
 		},
 		{
 			name:           "Picture ID must be 15 bits by setting M bit to 1 and present by I bit set to 1",
-			args:           args{payload: []byte{0xff, 0xff, 0xff, 0xfd, 0x3, 0x4, 0x5}},
+			args:           args{payload: []byte{0xff, 0xff, 0x92, 0x67, 0x3, 0x4, 0x5}},
 			checkPictureID: true,
-			pictureID:      32765,
+			pictureID:      4711,
 		},
 		{
 			name:        "Temporal level zero index must be present if L set to 1",

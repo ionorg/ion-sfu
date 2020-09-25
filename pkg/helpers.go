@@ -84,7 +84,7 @@ func (p *VP8Helper) Unmarshal(payload []byte) error {
 		if int(idx) >= payloadLen {
 			return errShortPacket
 		}
-		p.IsKeyFrame = payload[idx : idx+1][0]&0x01 == 0
+		p.IsKeyFrame = payload[idx]&0x01 == 0
 	}
 	return nil
 }
