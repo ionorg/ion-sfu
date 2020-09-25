@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -25,6 +26,7 @@ type WebRTCSimulcastSender struct {
 	track          *webrtc.Track
 	rtcpCh         chan rtcp.Packet
 	target         uint64
+	payload        uint8
 	maxBitrate     uint64
 	onCloseHandler func()
 
@@ -42,7 +44,7 @@ type WebRTCSimulcastSender struct {
 	lTS                 uint32
 	lSN                 uint16
 
-	//VP8 temporal helpers
+	//VP8Helper temporal helpers
 	refPicId  uint16
 	lastPicId uint16
 	refTlzi   uint8
@@ -61,6 +63,7 @@ func NewWebRTCSimulcastSender(ctx context.Context, id string, router *Router, se
 		router:              router,
 		sender:              sender,
 		track:               sender.Track(),
+		payload:             sender.Track().Codec().PayloadType,
 		rtcpCh:              make(chan rtcp.Packet, maxSize),
 		currentTempLayer:    3,
 		targetTempLayer:     3,
@@ -68,6 +71,8 @@ func NewWebRTCSimulcastSender(ctx context.Context, id string, router *Router, se
 		targetSpatialLayer:  layer,
 		maxBitrate:          routerConfig.MaxBandwidth * 1000,
 		simulcastSSRC:       sender.Track().SSRC(),
+		refPicId:            uint16(rand.Uint32()),
+		refTlzi:             uint8(rand.Uint32()),
 	}
 
 	go s.receiveRTCP()
@@ -104,15 +109,16 @@ func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 		}
 		relay := false
 		// Wait for a keyframe to sync new source
-		switch s.track.Codec().PayloadType {
+		switch s.payload {
 		case webrtc.DefaultPayloadTypeVP8:
-			vp8Packet := VP8TempHelper{}
+			vp8Packet := VP8Helper{}
 			if err := vp8Packet.Unmarshal(pkt.Payload); err == nil {
 				if vp8Packet.IsKeyFrame {
 					relay = true
-					// Set VP8 temporal info
-					s.refPicId = vp8Packet.PictureID
-					s.refTlzi = vp8Packet.TL0PICIDX
+					// Set VP8Helper temporal info
+					s.temporalSupported = vp8Packet.TemporalSupported
+					s.refPicId += vp8Packet.PictureID - s.lastPicId
+					s.refTlzi += vp8Packet.TL0PICIDX - s.lastTlzi
 				}
 			}
 		case webrtc.DefaultPayloadTypeH264:
@@ -155,15 +161,18 @@ func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 		s.lTS = pkt.Timestamp
 		s.lSN = pkt.SequenceNumber
 	}
-
 	if s.temporalSupported {
-		pl, skip := setVP8TemporalLayer(pkt.Payload, s)
-		if skip {
-			// Pkt not in temporal layer update sequence number offset to avoid gaps
-			s.snOffset++
-			return
+		if s.payload == webrtc.DefaultPayloadTypeVP8 {
+			pl, skip := setVP8TemporalLayer(pkt.Payload, s)
+			if skip {
+				// Pkt not in temporal layer update sequence number offset to avoid gaps
+				s.snOffset++
+				return
+			}
+			if pl != nil {
+				pkt.Payload = pl
+			}
 		}
-		pkt.Payload = pl
 	}
 	// Update base
 	s.lTSCalc = time.Now()
@@ -202,9 +211,7 @@ func (s *WebRTCSimulcastSender) SwitchSpatialLayer(targetLayer uint8) {
 }
 
 func (s *WebRTCSimulcastSender) SwitchTemporalLayer(layer uint8) {
-	if layer > 0 && layer <= 3 {
-		s.currentTempLayer = layer
-	}
+	s.currentTempLayer = layer
 }
 
 func (s *WebRTCSimulcastSender) CurrentSpatialLayer() uint8 {

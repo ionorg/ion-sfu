@@ -252,7 +252,6 @@ func (w *WebRTCReceiver) rembLoop(cycle int) {
 		cycle = 1
 	}
 	t := time.NewTicker(time.Duration(cycle) * time.Second)
-	var minBandwidth uint64
 
 	for {
 		select {
@@ -271,10 +270,6 @@ func (w *WebRTCReceiver) rembLoop(cycle int) {
 
 			if bw > w.maxBandwidth && w.maxBandwidth > 0 {
 				bw = w.maxBandwidth
-			}
-
-			if bw < minBandwidth {
-				bw = minBandwidth
 			}
 
 			remb := &rtcp.ReceiverEstimatedMaximumBitrate{
