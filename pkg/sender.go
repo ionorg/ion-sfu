@@ -51,15 +51,14 @@ func NewWebRTCSender(ctx context.Context, id string, router *Router, sender *web
 	ctx, cancel := context.WithCancel(ctx)
 	sender.Track()
 	s := &WebRTCSender{
-		id:         id,
-		ctx:        ctx,
-		cancel:     cancel,
-		router:     router,
-		sender:     sender,
-		track:      sender.Track(),
-		maxBitrate: routerConfig.MaxBandwidth * 1000,
-		rtcpCh:     make(chan rtcp.Packet, maxSize),
-		sendCh:     make(chan *rtp.Packet, maxSize),
+		id:     id,
+		ctx:    ctx,
+		cancel: cancel,
+		router: router,
+		sender: sender,
+		track:  sender.Track(),
+		rtcpCh: make(chan rtcp.Packet, maxSize),
+		sendCh: make(chan *rtp.Packet, maxSize),
 	}
 
 	go s.receiveRTCP()
@@ -160,14 +159,17 @@ func (s *WebRTCSender) receiveRTCP() {
 		}
 
 		for _, pkt := range pkts {
+			recv := s.router.GetReceiver(0)
+			if recv == nil {
+				continue
+			}
 			switch pkt := pkt.(type) {
 			case *rtcp.PictureLossIndication, *rtcp.FullIntraRequest:
-				if err := s.router.GetReceiver(0).WriteRTCP(pkt); err != nil {
+				if err := recv.WriteRTCP(pkt); err != nil {
 					log.Errorf("writing RTCP err %v", err)
 				}
 			case *rtcp.TransportLayerNack:
 				log.Tracef("Router got nack: %+v", pkt)
-				recv := s.router.GetReceiver(0)
 				for _, pair := range pkt.Nacks {
 					bufferPkt := recv.GetPacket(pair.PacketID)
 					if bufferPkt != nil {
@@ -175,9 +177,9 @@ func (s *WebRTCSender) receiveRTCP() {
 						s.sendCh <- bufferPkt
 						continue
 					}
-					if routerConfig.MaxNackTime > 0 {
+					if s.router.config.MaxNackTime > 0 {
 						ln := atomic.LoadInt64(&s.router.lastNack)
-						if (time.Now().Unix() - ln) < routerConfig.MaxNackTime {
+						if (time.Now().Unix() - ln) < s.router.config.MaxNackTime {
 							continue
 						}
 						atomic.StoreInt64(&s.router.lastNack, time.Now().Unix())

@@ -5,3 +5,7 @@ const (
 	halfResolution    = "h"
 	fullResolution    = "f"
 )
+
+type SimulcastConfig struct {
+	BestQualityFirst bool `mapstructure:"bestqualityfisrt"`
+}

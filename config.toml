@@ -16,6 +16,10 @@ tcccycle = 0
 # max buffer time by ms
 maxbuffertime = 1000
 
+[router.simulcast]
+# Prefer best quality initially
+bestqualityfisrt = true
+
 [webrtc]
 # Range of ports that ion accepts WebRTC traffic on
 # Format: [min, max]   and max - min >= 100

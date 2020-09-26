@@ -33,19 +33,12 @@ type Config struct {
 	Router RouterConfig `mapstructure:"router"`
 }
 
-// RouterConfig defines router configurations
-type RouterConfig struct {
-	REMBFeedback bool                      `mapstructure:"subrembfeedback"`
-	MaxBandwidth uint64                    `mapstructure:"maxbandwidth"`
-	MaxNackTime  int64                     `mapstructure:"maxnacktime"`
-	Video        WebRTCVideoReceiverConfig `mapstructure:"video"`
-}
-
 // SFU represents an sfu instance
 type SFU struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	webrtc   WebRTCTransportConfig
+	router   RouterConfig
 	mu       sync.RWMutex
 	sessions map[string]*Session
 }
@@ -61,8 +54,7 @@ var (
 // NewSFU creates a new sfu instance
 func NewSFU(c Config) *SFU {
 	ctx, cancel := context.WithCancel(context.Background())
-
-	//Configure required extensions
+	// Configure required extensions for simulcast
 	sdes, _ := url.Parse(sdp.SDESRTPStreamIDURI)
 	sdedMid, _ := url.Parse(sdp.SDESMidURI)
 	exts := []sdp.ExtMap{
@@ -81,10 +73,8 @@ func NewSFU(c Config) *SFU {
 			SDPSemantics: webrtc.SDPSemanticsUnifiedPlan,
 		},
 		setting: se,
+		router:  c.Router,
 	}
-	// Init router config
-	routerConfig = c.Router
-
 	log.Init(c.Log.Level, c.Log.Fix)
 
 	var icePortStart, icePortEnd uint16

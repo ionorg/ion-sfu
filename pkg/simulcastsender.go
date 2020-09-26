@@ -69,7 +69,6 @@ func NewWebRTCSimulcastSender(ctx context.Context, id string, router *Router, se
 		targetTempLayer:     3,
 		currentSpatialLayer: layer,
 		targetSpatialLayer:  layer,
-		maxBitrate:          routerConfig.MaxBandwidth * 1000,
 		simulcastSSRC:       sender.Track().SSRC(),
 		refPicID:            uint16(rand.Uint32()),
 		refTlzi:             uint8(rand.Uint32()),

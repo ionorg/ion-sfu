@@ -2,9 +2,7 @@ package sfu
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"math/rand"
 	"strconv"
 	"sync"
 	"time"
@@ -23,6 +21,7 @@ const (
 type WebRTCTransportConfig struct {
 	configuration webrtc.Configuration
 	setting       webrtc.SettingEngine
+	router        RouterConfig
 }
 
 // WebRTCTransport represents a sfu peer connection
@@ -63,13 +62,12 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 	// Subscribe to existing transports
 	for _, t := range session.Transports() {
 		for _, router := range t.Routers() {
-			sender, err := p.NewSender(router)
+			err := router.AddWebRTCSender(p)
 			// log.Infof("Init add router ssrc %d to %s", router.receivers[0].Track().SSRC(), p.id)
 			if err != nil {
 				log.Errorf("Error subscribing to router %v", router)
 				continue
 			}
-			router.AddSender(sender)
 		}
 	}
 
@@ -78,14 +76,14 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 		log.Debugf("Peer %s got remote track id: %s ssrc: %d rid :%s", p.id, track.ID(), track.SSRC(), track.RID())
-		recv := NewWebRTCReceiver(ctx, track)
+		recv := NewWebRTCReceiver(ctx, track, cfg.router)
 
 		if recv.Track().Kind() == webrtc.RTPCodecTypeVideo {
 			go p.sendRTCP(recv)
 		}
 		if router, ok := p.routers[track.ID()]; !ok {
 			if track.RID() != "" {
-				router = NewRouter(p.id, true)
+				router = NewRouter(p.id, cfg.router, true)
 				go func() {
 					// Send 3 big remb msgs to fwd all the tracks
 					ticker := time.NewTicker(1 * time.Second)
@@ -101,7 +99,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 					}
 				}()
 			} else {
-				router = NewRouter(p.id, false)
+				router = NewRouter(p.id, cfg.router, false)
 			}
 			router.AddReceiver(recv)
 			p.session.AddRouter(router)
@@ -243,75 +241,6 @@ func (p *WebRTCTransport) OnDataChannel(f func(*webrtc.DataChannel)) {
 // AddTransceiverFromKind adds RtpTransceiver on WebRTC Transport
 func (p *WebRTCTransport) AddTransceiverFromKind(kind webrtc.RTPCodecType, init ...webrtc.RtpTransceiverInit) (*webrtc.RTPTransceiver, error) {
 	return p.pc.AddTransceiverFromKind(kind, init...)
-}
-
-// NewSender for peer
-func (p *WebRTCTransport) NewSender(r *Router) (Sender, error) {
-	var (
-		outTrack *webrtc.Track
-		inTrack  *webrtc.Track
-		layer    uint8
-		sender   Sender
-		err      error
-		s        *webrtc.RTPSender
-	)
-
-	// TODO Configure to prefer low/high layer on init
-	for _, recv := range r.receivers {
-		if recv != nil {
-			inTrack = recv.Track()
-			layer = recv.SpatialLayer()
-			break
-		}
-	}
-	if inTrack == nil {
-		return nil, errors.New("track no found")
-	}
-	to := p.me.GetCodecsByName(inTrack.Codec().Name)
-
-	if len(to) == 0 {
-		log.Errorf("Error mapping payload type")
-		return nil, errPtNotSupported
-	}
-	pt := to[0].PayloadType
-	log.Debugf("Creating track: %d %d %s %s", pt, inTrack.SSRC(), inTrack.ID(), inTrack.Label())
-	if r.simulcast {
-		// TODO For some reason label is empty for simulcast tracks, this needs to be fixed to share the
-		// stream ID with audio track.
-		if outTrack, err = p.pc.NewTrack(pt, rand.Uint32(), inTrack.ID(), "custom"); err != nil {
-			log.Errorf("Error creating track")
-			return nil, err
-		}
-		// Create webrtc sender for the peer we are sending track to
-		s, err = p.pc.AddTrack(outTrack)
-		if err != nil {
-			log.Errorf("Error adding send track")
-			return nil, err
-		}
-		sender = NewWebRTCSimulcastSender(p.ctx, p.id, r, s, layer)
-	} else {
-		if outTrack, err = p.pc.NewTrack(pt, inTrack.SSRC(), inTrack.ID(), inTrack.Label()); err != nil {
-			log.Errorf("Error creating track")
-			return nil, err
-		}
-		// Create webrtc sender for the peer we are sending track to
-		s, err = p.pc.AddTrack(outTrack)
-		if err != nil {
-			log.Errorf("Error adding send track")
-			return nil, err
-		}
-		sender = NewWebRTCSender(p.ctx, p.id, r, s)
-	}
-
-	sender.OnCloseHandler(func() {
-		err = p.pc.RemoveTrack(s)
-		if err != nil {
-			log.Errorf("Error closing sender: %s", err)
-		}
-	})
-
-	p.senders = append(p.senders, sender)
-	return sender, nil
 }
 
 // ID of peer

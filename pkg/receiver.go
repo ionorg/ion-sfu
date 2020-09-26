@@ -79,7 +79,7 @@ type WebRTCVideoReceiverConfig struct {
 }
 
 // NewWebRTCReceiver creates a new webrtc track receivers
-func NewWebRTCReceiver(ctx context.Context, track *webrtc.Track) Receiver {
+func NewWebRTCReceiver(ctx context.Context, track *webrtc.Track, config RouterConfig) Receiver {
 	ctx, cancel := context.WithCancel(ctx)
 
 	w := &WebRTCReceiver{
@@ -105,7 +105,7 @@ func NewWebRTCReceiver(ctx context.Context, track *webrtc.Track) Receiver {
 	waitStart := make(chan struct{})
 	switch track.Kind() {
 	case webrtc.RTPCodecTypeVideo:
-		go startVideoReceiver(w, waitStart)
+		go startVideoReceiver(w, waitStart, config)
 	case webrtc.RTPCodecTypeAudio:
 		go startAudioReceiver(w, waitStart)
 	}
@@ -411,7 +411,7 @@ func (w *WebRTCReceiver) stats() string {
 	}
 }
 
-func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}) {
+func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}, config RouterConfig) {
 	defer func() {
 		w.buffer.Stop()
 		close(w.rtpCh)
@@ -423,9 +423,9 @@ func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}) {
 
 	w.rtcpCh = make(chan rtcp.Packet, maxSize)
 	w.buffer = NewBuffer(w.track.SSRC(), w.track.PayloadType(), BufferOptions{
-		BufferTime: routerConfig.Video.MaxBufferTime,
+		BufferTime: config.Video.MaxBufferTime,
 	})
-	w.maxBandwidth = routerConfig.MaxBandwidth * 1000
+	w.maxBandwidth = config.MaxBandwidth * 1000
 
 	for _, feedback := range w.track.Codec().RTCPFeedback {
 		switch feedback.Type {
@@ -433,17 +433,17 @@ func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}) {
 			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBTransportCC)
 			w.feedback = webrtc.TypeRTCPFBTransportCC
 			w.wg.Add(1)
-			go w.tccLoop(routerConfig.Video.TCCCycle)
+			go w.tccLoop(config.Video.TCCCycle)
 		case webrtc.TypeRTCPFBGoogREMB:
 			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBGoogREMB)
 			w.feedback = webrtc.TypeRTCPFBGoogREMB
 			w.wg.Add(1)
-			go w.rembLoop(routerConfig.Video.REMBCycle)
+			go w.rembLoop(config.Video.REMBCycle)
 		}
 	}
 	if w.Track().RID() != "" {
 		w.wg.Add(1)
-		go w.rembLoop(routerConfig.Video.REMBCycle)
+		go w.rembLoop(config.Video.REMBCycle)
 	}
 	// Start rtcp reader from track
 	w.wg.Add(1)
