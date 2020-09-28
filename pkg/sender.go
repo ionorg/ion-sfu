@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
@@ -17,7 +16,6 @@ import (
 // Sender defines a interface for a track receivers
 type Sender interface {
 	ID() string
-	ReadRTCP() chan rtcp.Packet
 	WriteRTP(*rtp.Packet)
 	Close()
 	OnCloseHandler(fn func())
@@ -35,8 +33,7 @@ type WebRTCSender struct {
 	cancel         context.CancelFunc
 	sender         *webrtc.RTPSender
 	track          *webrtc.Track
-	router         *Router
-	rtcpCh         chan rtcp.Packet
+	router         Router
 	sendCh         chan *rtp.Packet
 	maxBitrate     uint64
 	target         uint64
@@ -47,7 +44,7 @@ type WebRTCSender struct {
 }
 
 // NewWebRTCSender creates a new track sender instance
-func NewWebRTCSender(ctx context.Context, id string, router *Router, sender *webrtc.RTPSender) Sender {
+func NewWebRTCSender(ctx context.Context, id string, router Router, sender *webrtc.RTPSender) Sender {
 	ctx, cancel := context.WithCancel(ctx)
 	sender.Track()
 	s := &WebRTCSender{
@@ -57,7 +54,6 @@ func NewWebRTCSender(ctx context.Context, id string, router *Router, sender *web
 		router: router,
 		sender: sender,
 		track:  sender.Track(),
-		rtcpCh: make(chan rtcp.Packet, maxSize),
 		sendCh: make(chan *rtp.Packet, maxSize),
 	}
 
@@ -97,11 +93,6 @@ func (s *WebRTCSender) sendRTP() {
 			return
 		}
 	}
-}
-
-// ReadRTCP read rtp packet
-func (s *WebRTCSender) ReadRTCP() chan rtcp.Packet {
-	return s.rtcpCh
 }
 
 // WriteRTP to the track
@@ -149,7 +140,6 @@ func (s *WebRTCSender) receiveRTCP() {
 	for {
 		pkts, err := s.sender.ReadRTCP()
 		if err == io.ErrClosedPipe || s.ctx.Err() != nil {
-			close(s.rtcpCh)
 			s.Close()
 			return
 		}
@@ -169,7 +159,7 @@ func (s *WebRTCSender) receiveRTCP() {
 					log.Errorf("writing RTCP err %v", err)
 				}
 			case *rtcp.TransportLayerNack:
-				log.Tracef("Router got nack: %+v", pkt)
+				log.Tracef("router got nack: %+v", pkt)
 				for _, pair := range pkt.Nacks {
 					bufferPkt := recv.GetPacket(pair.PacketID)
 					if bufferPkt != nil {
@@ -177,13 +167,13 @@ func (s *WebRTCSender) receiveRTCP() {
 						s.sendCh <- bufferPkt
 						continue
 					}
-					if s.router.config.MaxNackTime > 0 {
-						ln := atomic.LoadInt64(&s.router.lastNack)
-						if (time.Now().Unix() - ln) < s.router.config.MaxNackTime {
-							continue
-						}
-						atomic.StoreInt64(&s.router.lastNack, time.Now().Unix())
-					}
+					// if s.router.config.MaxNackTime > 0 {
+					//	ln := atomic.LoadInt64(&s.router.lastNack)
+					//	if (time.Now().Unix() - ln) < s.router.config.MaxNackTime {
+					//		continue
+					//	}
+					//	atomic.StoreInt64(&s.router.lastNack, time.Now().Unix())
+					// }
 					// Packet not found, request from receivers
 					nack := &rtcp.TransportLayerNack{
 						// origin ssrc

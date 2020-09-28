@@ -8,6 +8,15 @@ import (
 	"github.com/pion/ion-sfu/pkg/log"
 )
 
+// Router defines a track rtp/rtcp router
+type Router interface {
+	ID() string
+	AddReceiver(recv Receiver)
+	GetReceiver(layer uint8) Receiver
+	AddWebRTCSender(p *WebRTCTransport) error
+	SwitchSpatialLayer(currentLayer, targetLayer uint8, sub Sender) bool
+}
+
 // RouterConfig defines router configurations
 type RouterConfig struct {
 	REMBFeedback bool                      `mapstructure:"subrembfeedback"`
@@ -17,8 +26,7 @@ type RouterConfig struct {
 	Simulcast    SimulcastConfig           `mapstructure:"simulcast"`
 }
 
-// Router defines a track rtp/rtcp router
-type Router struct {
+type router struct {
 	tid       string
 	mu        sync.RWMutex
 	config    RouterConfig
@@ -27,31 +35,34 @@ type Router struct {
 	simulcast bool
 }
 
-// NewRouter for routing rtp/rtcp packets
-func NewRouter(tid string, config RouterConfig, hasSimulcast bool) *Router {
-	r := &Router{
+// newRouter for routing rtp/rtcp packets
+func newRouter(tid string, config RouterConfig, hasSimulcast bool) Router {
+	return &router{
 		tid:       tid,
 		config:    config,
 		lastNack:  time.Now().Unix(),
 		simulcast: hasSimulcast,
 	}
-	return r
 }
 
-func (r *Router) AddReceiver(recv Receiver) {
+func (r *router) ID() string {
+	return r.tid
+}
+
+func (r *router) AddReceiver(recv Receiver) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.receivers[recv.SpatialLayer()] = recv
 }
 
-func (r *Router) GetReceiver(layer uint8) Receiver {
+func (r *router) GetReceiver(layer uint8) Receiver {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.receivers[layer]
 }
 
 // AddWebRTCSender to router
-func (r *Router) AddWebRTCSender(p *WebRTCTransport) error {
+func (r *router) AddWebRTCSender(p *WebRTCTransport) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var (
@@ -111,7 +122,7 @@ func (r *Router) AddWebRTCSender(p *WebRTCTransport) error {
 	return nil
 }
 
-func (r *Router) SwitchSpatialLayer(currentLayer, targetLayer uint8, sub Sender) bool {
+func (r *router) SwitchSpatialLayer(currentLayer, targetLayer uint8, sub Sender) bool {
 	currentRecv := r.GetReceiver(currentLayer)
 	targetRecv := r.GetReceiver(targetLayer)
 	if targetRecv != nil {
@@ -123,6 +134,6 @@ func (r *Router) SwitchSpatialLayer(currentLayer, targetLayer uint8, sub Sender)
 	return false
 }
 
-func (r *Router) stats() string {
+func (r *router) stats() string {
 	return ""
 }

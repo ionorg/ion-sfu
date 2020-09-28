@@ -21,10 +21,9 @@ type WebRTCSimulcastSender struct {
 	id             string
 	ctx            context.Context
 	cancel         context.CancelFunc
-	router         *Router
+	router         Router
 	sender         *webrtc.RTPSender
 	track          *webrtc.Track
-	rtcpCh         chan rtcp.Packet
 	target         uint64
 	payload        uint8
 	maxBitrate     uint64
@@ -54,7 +53,7 @@ type WebRTCSimulcastSender struct {
 }
 
 // NewWebRTCSimulcastSender creates a new track sender instance
-func NewWebRTCSimulcastSender(ctx context.Context, id string, router *Router, sender *webrtc.RTPSender, layer uint8) Sender {
+func NewWebRTCSimulcastSender(ctx context.Context, id string, router Router, sender *webrtc.RTPSender, layer uint8) Sender {
 	ctx, cancel := context.WithCancel(ctx)
 	s := &WebRTCSimulcastSender{
 		id:                  id,
@@ -64,7 +63,6 @@ func NewWebRTCSimulcastSender(ctx context.Context, id string, router *Router, se
 		sender:              sender,
 		track:               sender.Track(),
 		payload:             sender.Track().Codec().PayloadType,
-		rtcpCh:              make(chan rtcp.Packet, maxSize),
 		currentTempLayer:    3,
 		targetTempLayer:     3,
 		currentSpatialLayer: layer,
@@ -80,11 +78,6 @@ func NewWebRTCSimulcastSender(ctx context.Context, id string, router *Router, se
 
 func (s *WebRTCSimulcastSender) ID() string {
 	return s.id
-}
-
-// ReadRTCP read rtp packet
-func (s *WebRTCSimulcastSender) ReadRTCP() chan rtcp.Packet {
-	return s.rtcpCh
 }
 
 // WriteRTP to the track
@@ -217,11 +210,6 @@ func (s *WebRTCSimulcastSender) CurrentSpatialLayer() uint8 {
 	return s.currentSpatialLayer
 }
 
-// OnClose is called when the sender is closed
-func (s *WebRTCSimulcastSender) OnClose(f func()) {
-	s.onCloseHandler = f
-}
-
 // Close track
 func (s *WebRTCSimulcastSender) Close() {
 	s.once.Do(s.close)
@@ -243,7 +231,6 @@ func (s *WebRTCSimulcastSender) receiveRTCP() {
 	for {
 		pkts, err := s.sender.ReadRTCP()
 		if err == io.ErrClosedPipe || s.ctx.Err() != nil {
-			close(s.rtcpCh)
 			s.Close()
 			return
 		}

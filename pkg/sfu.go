@@ -2,6 +2,7 @@ package sfu
 
 import (
 	"context"
+	"math/rand"
 	"net/url"
 	"sync"
 	"time"
@@ -53,6 +54,9 @@ var (
 
 // NewSFU creates a new sfu instance
 func NewSFU(c Config) *SFU {
+	// Init random seed
+	rand.Seed(time.Now().UnixNano())
+
 	ctx, cancel := context.WithCancel(context.Background())
 	// Configure required extensions for simulcast
 	sdes, _ := url.Parse(sdp.SDESRTPStreamIDURI)

@@ -46,13 +46,13 @@ func (r *Session) RemoveTransport(tid string) {
 }
 
 // AddRouter adds a router to transports
-func (r *Session) AddRouter(router *Router) {
+func (r *Session) AddRouter(router Router) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	for tid, t := range r.transports {
 		// Don't sub to self
-		if router.tid == tid {
+		if router.ID() == tid {
 			continue
 		}
 

@@ -34,7 +34,7 @@ type WebRTCTransport struct {
 	mu             sync.RWMutex
 	session        *Session
 	senders        []Sender
-	routers        map[string]*Router
+	routers        map[string]Router
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
 }
 
@@ -56,7 +56,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 		pc:      pc,
 		me:      me,
 		session: session,
-		routers: make(map[string]*Router),
+		routers: make(map[string]Router),
 	}
 
 	// Subscribe to existing transports
@@ -65,7 +65,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 			err := router.AddWebRTCSender(p)
 			// log.Infof("Init add router ssrc %d to %s", router.receivers[0].Track().SSRC(), p.id)
 			if err != nil {
-				log.Errorf("Error subscribing to router %v", router)
+				log.Errorf("Error subscribing to router err: %v", err)
 				continue
 			}
 		}
@@ -75,7 +75,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 	session.AddTransport(p)
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
-		log.Debugf("Peer %s got remote track id: %s ssrc: %d rid :%s", p.id, track.ID(), track.SSRC(), track.RID())
+		log.Debugf("Peer %s got remote track id: %s ssrc: %d rid :%s label: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.Label())
 		recv := NewWebRTCReceiver(ctx, track, cfg.router)
 
 		if recv.Track().Kind() == webrtc.RTPCodecTypeVideo {
@@ -83,7 +83,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 		}
 		if router, ok := p.routers[track.ID()]; !ok {
 			if track.RID() != "" {
-				router = NewRouter(p.id, cfg.router, true)
+				router = newRouter(p.id, cfg.router, true)
 				go func() {
 					// Send 3 big remb msgs to fwd all the tracks
 					ticker := time.NewTicker(1 * time.Second)
@@ -99,7 +99,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 					}
 				}()
 			} else {
-				router = NewRouter(p.id, cfg.router, false)
+				router = newRouter(p.id, cfg.router, false)
 			}
 			router.AddReceiver(recv)
 			p.session.AddRouter(router)
@@ -249,14 +249,14 @@ func (p *WebRTCTransport) ID() string {
 }
 
 // Routers returns routers for this peer
-func (p *WebRTCTransport) Routers() map[string]*Router {
+func (p *WebRTCTransport) Routers() map[string]Router {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.routers
 }
 
 // GetRouter returns router with ssrc
-func (p *WebRTCTransport) GetRouter(trackID string) *Router {
+func (p *WebRTCTransport) GetRouter(trackID string) Router {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.routers[trackID]
@@ -283,9 +283,9 @@ func (p *WebRTCTransport) stats() string {
 	defer p.mu.RUnlock()
 
 	info := fmt.Sprintf("  peer: %s\n", p.id)
-	for _, router := range p.routers {
-		info += router.stats()
-	}
+	//for _, router := range p.routers {
+	info += "" //router.stats()
+	//}
 
 	return info
 }
