@@ -1,6 +1,8 @@
 # pub-sub-in-browser
 Demonstrates the simulcast capabilities of ion-sfu
 
+>IMPORTANT: Work in progress this example may not work yet
+
 ## Instructions
 ```
 go build cmd/server/json-rpc/main.go

@@ -3,7 +3,6 @@ package sfu
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
@@ -130,10 +129,6 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 		fmt.Printf("New DataChannel %s %d\n", d.Label(), d.ID())
 		// Register text message handling
 		d.OnMessage(func(msg webrtc.DataChannelMessage) {
-			if i, err := strconv.Atoi(string(msg.Data)); err == nil {
-				log.Infof("Switch to layer: %d", i)
-				p.senders[0].SwitchTemporalLayer(uint8(i))
-			}
 		})
 	})
 
