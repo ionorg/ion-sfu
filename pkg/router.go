@@ -118,7 +118,14 @@ func (r *router) AddWebRTCSender(p *WebRTCTransport) error {
 			log.Errorf("Error closing sender: %s", err)
 		}
 	})
-	recv.AddSender(sender)
+	go func() {
+		// There exists a bug in chrome where setLocalDescription
+		// fails if track RTP arrives before the sfu offer is set.
+		// We delay sending RTP here to avoid the issue.
+		// https://bugs.chromium.org/p/webrtc/issues/detail?id=10139
+		time.Sleep(500 * time.Millisecond)
+		recv.AddSender(sender)
+	}()
 	return nil
 }
 

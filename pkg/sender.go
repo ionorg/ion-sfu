@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"sync"
-	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/rtcp"
@@ -17,9 +16,9 @@ import (
 type Sender interface {
 	ID() string
 	WriteRTP(*rtp.Packet)
-	Close()
-	OnCloseHandler(fn func())
 	CurrentSpatialLayer() uint8
+	OnCloseHandler(fn func())
+	Close()
 	stats() string
 	// Simulcast/SVC events
 	SwitchSpatialLayer(layer uint8)
@@ -34,7 +33,6 @@ type WebRTCSender struct {
 	sender         *webrtc.RTPSender
 	track          *webrtc.Track
 	router         Router
-	sendCh         chan *rtp.Packet
 	maxBitrate     uint64
 	target         uint64
 	currentLayer   uint8
@@ -54,11 +52,9 @@ func NewWebRTCSender(ctx context.Context, id string, router Router, sender *webr
 		router: router,
 		sender: sender,
 		track:  sender.Track(),
-		sendCh: make(chan *rtp.Packet, maxSize),
 	}
 
 	go s.receiveRTCP()
-	go s.sendRTP()
 
 	return s
 }
@@ -67,38 +63,23 @@ func (s *WebRTCSender) ID() string {
 	return s.id
 }
 
-func (s *WebRTCSender) sendRTP() {
-	// There exists a bug in chrome where setLocalDescription
-	// fails if track RTP arrives before the sfu offer is set.
-	// We delay sending RTP here to avoid the issue.
-	// https://bugs.chromium.org/p/webrtc/issues/detail?id=10139
-	time.Sleep(500 * time.Millisecond)
-
-	for {
-		select {
-		case pkt := <-s.sendCh:
-			// Transform payload type
-			pt := s.track.Codec().PayloadType
-			newPkt := *pkt
-			newPkt.Header.PayloadType = pt
-			pkt = &newPkt
-
-			if err := s.track.WriteRTP(pkt); err != nil {
-				if err == io.ErrClosedPipe {
-					return
-				}
-				log.Errorf("sender.track.WriteRTP err=%v", err)
-			}
-		case <-s.ctx.Done():
-			return
-		}
-	}
-}
-
 // WriteRTP to the track
 func (s *WebRTCSender) WriteRTP(pkt *rtp.Packet) {
-	if s.ctx.Err() == nil {
-		s.sendCh <- pkt
+	if s.ctx.Err() != nil {
+		return
+	}
+	// Transform payload type
+	bPt := pkt.PayloadType
+	pt := s.track.Codec().PayloadType
+	pkt.PayloadType = pt
+	err := s.track.WriteRTP(pkt)
+	// Restore packet
+	pkt.PayloadType = bPt
+	if err != nil {
+		if err == io.ErrClosedPipe {
+			return
+		}
+		log.Errorf("sender.track.WriteRTP err=%v", err)
 	}
 }
 
@@ -164,7 +145,7 @@ func (s *WebRTCSender) receiveRTCP() {
 					bufferPkt := recv.GetPacket(pair.PacketID)
 					if bufferPkt != nil {
 						// We found the packet in the buffer, resend to sub
-						s.sendCh <- bufferPkt
+						s.WriteRTP(bufferPkt)
 						continue
 					}
 					// if s.router.config.MaxNackTime > 0 {
