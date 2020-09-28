@@ -8,7 +8,7 @@ require (
 	github.com/gorilla/websocket v1.4.2
 	github.com/lucsky/cuid v1.0.2
 	github.com/pion/mediadevices v0.0.0-20200921200001-a44240be5fb0
-	github.com/pion/rtcp v1.2.3
+	github.com/pion/rtcp v1.2.4
 	github.com/pion/rtp v1.6.1
 	github.com/pion/sdp/v2 v2.4.0
 	github.com/pion/sdp/v3 v3.0.2
