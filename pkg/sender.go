@@ -148,13 +148,6 @@ func (s *WebRTCSender) receiveRTCP() {
 						s.WriteRTP(bufferPkt)
 						continue
 					}
-					// if s.router.config.MaxNackTime > 0 {
-					//	ln := atomic.LoadInt64(&s.router.lastNack)
-					//	if (time.Now().Unix() - ln) < s.router.config.MaxNackTime {
-					//		continue
-					//	}
-					//	atomic.StoreInt64(&s.router.lastNack, time.Now().Unix())
-					// }
 					// Packet not found, request from receivers
 					nack := &rtcp.TransportLayerNack{
 						// origin ssrc

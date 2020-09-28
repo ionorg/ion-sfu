@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
@@ -66,6 +67,8 @@ type WebRTCReceiver struct {
 	spatialLayer uint8
 
 	maxBandwidth uint64
+	maxNackTime  int64
+	lastNack     int64
 	feedback     string
 	wg           sync.WaitGroup
 }
@@ -89,6 +92,8 @@ func NewWebRTCReceiver(ctx context.Context, track *webrtc.Track, config RouterCo
 		senders:        make(map[string]Sender),
 		rtpCh:          make(chan *rtp.Packet, maxSize),
 		rtpExtInfoChan: make(chan rtpExtInfo, maxSize),
+		lastNack:       time.Now().Unix(),
+		maxNackTime:    config.MaxNackTime,
 	}
 
 	switch w.track.RID() {
@@ -148,6 +153,13 @@ func (w *WebRTCReceiver) ReadRTCP() chan rtcp.Packet {
 func (w *WebRTCReceiver) WriteRTCP(pkt rtcp.Packet) error {
 	if w.ctx.Err() != nil || w.rtcpCh == nil {
 		return io.ErrClosedPipe
+	}
+	if _, ok := pkt.(*rtcp.TransportLayerNack); ok && w.maxNackTime > 0 {
+		ln := atomic.LoadInt64(&w.lastNack)
+		if (time.Now().Unix() - ln) < w.maxNackTime {
+			return nil
+		}
+		atomic.StoreInt64(&w.lastNack, time.Now().Unix())
 	}
 	w.rtcpCh <- pkt
 	return nil

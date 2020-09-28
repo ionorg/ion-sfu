@@ -31,7 +31,6 @@ type router struct {
 	mu        sync.RWMutex
 	config    RouterConfig
 	receivers [3 + 1]Receiver
-	lastNack  int64
 	simulcast bool
 }
 
@@ -40,7 +39,6 @@ func newRouter(tid string, config RouterConfig, hasSimulcast bool) Router {
 	return &router{
 		tid:       tid,
 		config:    config,
-		lastNack:  time.Now().Unix(),
 		simulcast: hasSimulcast,
 	}
 }
