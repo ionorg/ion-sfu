@@ -9,7 +9,7 @@ require (
 	github.com/lucsky/cuid v1.0.2
 	github.com/pion/mediadevices v0.0.0-20200911163948-70f7360b92d3
 	github.com/pion/rtcp v1.2.3
-	github.com/pion/rtp v1.6.0
+	github.com/pion/rtp v1.6.1
 	github.com/pion/sdp/v2 v2.4.0
 	github.com/pion/sdp/v3 v3.0.1
 	github.com/pion/transport v0.10.1
