@@ -52,6 +52,7 @@ type Receiver interface {
 type WebRTCReceiver struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
+	mux            sync.RWMutex
 	buffer         *Buffer
 	track          *webrtc.Track
 	bandwidth      uint64
@@ -64,6 +65,8 @@ type WebRTCReceiver struct {
 	maxBandwidth uint64
 	feedback     string
 	wg           sync.WaitGroup
+
+	muted bool
 }
 
 // WebRTCVideoReceiverConfig .
@@ -145,17 +148,23 @@ func (w *WebRTCReceiver) Close() {
 
 // Mute a track
 func (w *WebRTCReceiver) Mute() {
-
+	w.mux.Lock()
+	defer w.mux.Unlock()
+	w.muted = true
 }
 
 // Unmute a track
 func (w *WebRTCReceiver) Unmute() {
-
+	w.mux.Lock()
+	defer w.mux.Unlock()
+	w.muted = false
 }
 
 // IsMuted checks whether track is muted
-func (w *WebRTCReceiver) IsMuted() {
-
+func (w *WebRTCReceiver) IsMuted() bool {
+	w.mux.RLock()
+	defer w.mux.RUnlock()
+	return w.muted
 }
 
 // receiveRTP receive all incoming tracks' rtp and sent to one channel
@@ -466,6 +475,11 @@ func startAudioReceiver(w *WebRTCReceiver, wStart chan struct{}) {
 
 			if err != nil {
 				log.Errorf("rtp err => %v", err)
+				continue
+			}
+
+			// @TODO SHOULD THIS BE HERE?
+			if w.muted {
 				continue
 			}
 
