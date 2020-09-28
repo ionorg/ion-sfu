@@ -42,6 +42,9 @@ type Receiver interface {
 	WriteRTCP(rtcp.Packet) error
 	OnCloseHandler(fn func())
 	Close()
+	Mute()
+	Unmute()
+	IsMuted()
 	stats() string
 }
 
@@ -138,6 +141,21 @@ func (w *WebRTCReceiver) Close() {
 		return
 	}
 	w.cancel()
+}
+
+// Mute a track
+func (w *WebRTCReceiver) Mute() {
+
+}
+
+// Unmute a track
+func (w *WebRTCReceiver) Unmute() {
+
+}
+
+// IsMuted checks whether track is muted
+func (w *WebRTCReceiver) IsMuted() {
+
 }
 
 // receiveRTP receive all incoming tracks' rtp and sent to one channel
