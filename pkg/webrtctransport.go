@@ -36,6 +36,8 @@ type WebRTCTransport struct {
 	senders        []Sender
 	routers        map[string]Router
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
+	// Custom label for simulcast
+	label string
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport
@@ -57,12 +59,13 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 		me:      me,
 		session: session,
 		routers: make(map[string]Router),
+		label:   cuid.New(),
 	}
 
 	// Subscribe to existing transports
 	for _, t := range session.Transports() {
 		for _, router := range t.Routers() {
-			err := router.AddWebRTCSender(p)
+			err := router.AddSender(p)
 			// log.Infof("Init add router ssrc %d to %s", router.receivers[0].Track().SSRC(), p.id)
 			if err != nil {
 				log.Errorf("Error subscribing to router err: %v", err)
@@ -83,7 +86,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 		}
 		if router, ok := p.routers[track.ID()]; !ok {
 			if track.RID() != "" {
-				router = newRouter(p.id, cfg.router, true)
+				router = newRouter(p.id, cfg.router, SimulcastRouter)
 				go func() {
 					// Send 3 big remb msgs to fwd all the tracks
 					ticker := time.NewTicker(1 * time.Second)
@@ -99,7 +102,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 					}
 				}()
 			} else {
-				router = newRouter(p.id, cfg.router, false)
+				router = newRouter(p.id, cfg.router, SimpleRouter)
 			}
 			router.AddReceiver(recv)
 			p.session.AddRouter(router)

@@ -259,6 +259,7 @@ func (s *WebRTCSimulcastSender) receiveRTCP() {
 					log.Errorf("writing RTCP err %v", err)
 				}
 			case *rtcp.TransportLayerNack:
+				// TODO: Look how to look at packets in buffer
 				pkt.MediaSSRC = s.lSSRC
 				pkt.SenderSSRC = s.lSSRC
 				if err := recv.WriteRTCP(pkt); err != nil {

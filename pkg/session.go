@@ -59,7 +59,7 @@ func (r *Session) AddRouter(router Router) {
 		log.Infof("AddRouter ssrc to %s", tid)
 
 		if t, ok := t.(*WebRTCTransport); ok {
-			if err := router.AddWebRTCSender(t); err != nil {
+			if err := router.AddSender(t); err != nil {
 				log.Errorf("Error subscribing transport to router: %s", err)
 				continue
 			}

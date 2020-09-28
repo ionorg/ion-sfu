@@ -20,8 +20,8 @@ var _ Router = &RouterMock{}
 //             AddReceiverFunc: func(recv Receiver)  {
 // 	               panic("mock out the AddReceiver method")
 //             },
-//             AddWebRTCSenderFunc: func(p *WebRTCTransport) error {
-// 	               panic("mock out the AddWebRTCSender method")
+//             AddSenderFunc: func(p *WebRTCTransport) error {
+// 	               panic("mock out the AddSender method")
 //             },
 //             GetReceiverFunc: func(layer uint8) Receiver {
 // 	               panic("mock out the GetReceiver method")
@@ -42,8 +42,8 @@ type RouterMock struct {
 	// AddReceiverFunc mocks the AddReceiver method.
 	AddReceiverFunc func(recv Receiver)
 
-	// AddWebRTCSenderFunc mocks the AddWebRTCSender method.
-	AddWebRTCSenderFunc func(p *WebRTCTransport) error
+	// AddSenderFunc mocks the AddSender method.
+	AddSenderFunc func(p *WebRTCTransport) error
 
 	// GetReceiverFunc mocks the GetReceiver method.
 	GetReceiverFunc func(layer uint8) Receiver
@@ -61,8 +61,8 @@ type RouterMock struct {
 			// Recv is the recv argument value.
 			Recv Receiver
 		}
-		// AddWebRTCSender holds details about calls to the AddWebRTCSender method.
-		AddWebRTCSender []struct {
+		// AddSender holds details about calls to the AddSender method.
+		AddSender []struct {
 			// P is the p argument value.
 			P *WebRTCTransport
 		}
@@ -85,7 +85,7 @@ type RouterMock struct {
 		}
 	}
 	lockAddReceiver        sync.RWMutex
-	lockAddWebRTCSender    sync.RWMutex
+	lockAddSender          sync.RWMutex
 	lockGetReceiver        sync.RWMutex
 	lockID                 sync.RWMutex
 	lockSwitchSpatialLayer sync.RWMutex
@@ -122,34 +122,34 @@ func (mock *RouterMock) AddReceiverCalls() []struct {
 	return calls
 }
 
-// AddWebRTCSender calls AddWebRTCSenderFunc.
-func (mock *RouterMock) AddWebRTCSender(p *WebRTCTransport) error {
-	if mock.AddWebRTCSenderFunc == nil {
-		panic("RouterMock.AddWebRTCSenderFunc: method is nil but Router.AddWebRTCSender was just called")
+// AddSender calls AddSenderFunc.
+func (mock *RouterMock) AddSender(p *WebRTCTransport) error {
+	if mock.AddSenderFunc == nil {
+		panic("RouterMock.AddSenderFunc: method is nil but Router.AddSender was just called")
 	}
 	callInfo := struct {
 		P *WebRTCTransport
 	}{
 		P: p,
 	}
-	mock.lockAddWebRTCSender.Lock()
-	mock.calls.AddWebRTCSender = append(mock.calls.AddWebRTCSender, callInfo)
-	mock.lockAddWebRTCSender.Unlock()
-	return mock.AddWebRTCSenderFunc(p)
+	mock.lockAddSender.Lock()
+	mock.calls.AddSender = append(mock.calls.AddSender, callInfo)
+	mock.lockAddSender.Unlock()
+	return mock.AddSenderFunc(p)
 }
 
-// AddWebRTCSenderCalls gets all the calls that were made to AddWebRTCSender.
+// AddSenderCalls gets all the calls that were made to AddSender.
 // Check the length with:
-//     len(mockedRouter.AddWebRTCSenderCalls())
-func (mock *RouterMock) AddWebRTCSenderCalls() []struct {
+//     len(mockedRouter.AddSenderCalls())
+func (mock *RouterMock) AddSenderCalls() []struct {
 	P *WebRTCTransport
 } {
 	var calls []struct {
 		P *WebRTCTransport
 	}
-	mock.lockAddWebRTCSender.RLock()
-	calls = mock.calls.AddWebRTCSender
-	mock.lockAddWebRTCSender.RUnlock()
+	mock.lockAddSender.RLock()
+	calls = mock.calls.AddSender
+	mock.lockAddSender.RUnlock()
 	return calls
 }
 

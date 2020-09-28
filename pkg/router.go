@@ -8,12 +8,18 @@ import (
 	"github.com/pion/ion-sfu/pkg/log"
 )
 
+const (
+	SimpleRouter = iota + 1
+	SimulcastRouter
+	SVCRouter
+)
+
 // Router defines a track rtp/rtcp router
 type Router interface {
 	ID() string
 	AddReceiver(recv Receiver)
 	GetReceiver(layer uint8) Receiver
-	AddWebRTCSender(p *WebRTCTransport) error
+	AddSender(p *WebRTCTransport) error
 	SwitchSpatialLayer(currentLayer, targetLayer uint8, sub Sender) bool
 }
 
@@ -29,17 +35,17 @@ type RouterConfig struct {
 type router struct {
 	tid       string
 	mu        sync.RWMutex
+	kind      int
 	config    RouterConfig
 	receivers [3 + 1]Receiver
-	simulcast bool
 }
 
 // newRouter for routing rtp/rtcp packets
-func newRouter(tid string, config RouterConfig, hasSimulcast bool) Router {
+func newRouter(tid string, config RouterConfig, kind int) Router {
 	return &router{
-		tid:       tid,
-		config:    config,
-		simulcast: hasSimulcast,
+		tid:    tid,
+		config: config,
+		kind:   kind,
 	}
 }
 
@@ -54,22 +60,22 @@ func (r *router) AddReceiver(recv Receiver) {
 }
 
 func (r *router) GetReceiver(layer uint8) Receiver {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return r.receivers[layer]
 }
 
 // AddWebRTCSender to router
-func (r *router) AddWebRTCSender(p *WebRTCTransport) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+func (r *router) AddSender(p *WebRTCTransport) error {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	var (
 		recv   Receiver
 		sender Sender
 		ssrc   uint32
 	)
 
-	if !r.simulcast {
+	if r.kind == SimpleRouter {
 		recv = r.receivers[0]
 		ssrc = recv.Track().SSRC()
 	} else {
@@ -92,10 +98,10 @@ func (r *router) AddWebRTCSender(p *WebRTCTransport) error {
 		return errPtNotSupported
 	}
 	pt := to[0].PayloadType
-	// TODO: Fix label issue in simulcast
 	label := inTrack.Label()
-	if len(label) < 5 {
-		label = "fixme"
+	// Simulcast omits stream id, use transport label to keep all tracks under same stream
+	if r.kind == SimulcastRouter {
+		label = p.label
 	}
 	outTrack, err := p.pc.NewTrack(pt, ssrc, inTrack.ID(), label)
 	if err != nil {
@@ -106,7 +112,7 @@ func (r *router) AddWebRTCSender(p *WebRTCTransport) error {
 	if err != nil {
 		return err
 	}
-	if r.simulcast {
+	if r.kind == SimulcastRouter {
 		sender = NewWebRTCSimulcastSender(p.ctx, p.id, r, s, recv.SpatialLayer())
 	} else {
 		sender = NewWebRTCSender(p.ctx, p.id, r, s)
