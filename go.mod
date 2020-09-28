@@ -7,13 +7,13 @@ require (
 	github.com/google/uuid v1.1.2
 	github.com/gorilla/websocket v1.4.2
 	github.com/lucsky/cuid v1.0.2
-	github.com/pion/mediadevices v0.0.0-20200911163948-70f7360b92d3
+	github.com/pion/mediadevices v0.0.0-20200921200001-a44240be5fb0
 	github.com/pion/rtcp v1.2.3
 	github.com/pion/rtp v1.6.1
 	github.com/pion/sdp/v2 v2.4.0
 	github.com/pion/sdp/v3 v3.0.2
 	github.com/pion/transport v0.10.1
-	github.com/pion/webrtc/v2 v2.2.24
+	github.com/pion/webrtc/v2 v2.2.26
 	github.com/pion/webrtc/v3 v3.0.0-beta.5
 	github.com/rs/zerolog v1.20.0
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20200429184054-15c2290dcb37
