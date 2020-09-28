@@ -281,9 +281,9 @@ func (p *WebRTCTransport) stats() string {
 	defer p.mu.RUnlock()
 
 	info := fmt.Sprintf("  peer: %s\n", p.id)
-	//for _, router := range p.routers {
-	info += "" //router.stats()
-	//}
+	// for _, router := range p.routers {
+	info += "" // router.stats()
+	// }
 
 	return info
 }

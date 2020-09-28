@@ -11,7 +11,8 @@ require (
 	github.com/pion/rtcp v1.2.4
 	github.com/pion/rtp v1.6.1
 	github.com/pion/sdp/v2 v2.4.0
-	github.com/pion/webrtc/v2 v2.2.25
+	github.com/pion/sdp/v3 v3.0.1
+	github.com/pion/webrtc/v2 v2.2.26
 	github.com/pion/webrtc/v3 v3.0.0-beta.5
 	github.com/rs/zerolog v1.19.0
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20200429184054-15c2290dcb37

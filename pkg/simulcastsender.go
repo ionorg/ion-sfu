@@ -43,7 +43,7 @@ type WebRTCSimulcastSender struct {
 	lTS                 uint32
 	lSN                 uint16
 
-	//VP8Helper temporal helpers
+	// VP8Helper temporal helpers
 	refPicID  uint16
 	lastPicID uint16
 	refTlzi   uint8
@@ -93,7 +93,7 @@ func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 		if recv == nil || recv.Track().SSRC() != pkt.SSRC {
 			return
 		}
-		//Forward pli to request a keyframe at max 1 pli per second
+		// Forward pli to request a keyframe at max 1 pli per second
 		if time.Now().Sub(s.lastPli) > time.Second {
 			if err := recv.WriteRTCP(&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC}); err == nil {
 				s.lastPli = time.Now()

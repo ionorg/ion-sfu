@@ -50,6 +50,7 @@ func TestNewWebRTCSimulcastSender(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			got := NewWebRTCSimulcastSender(tt.args.ctx, tt.args.id, tt.args.router, tt.args.sender, tt.args.layer)
 			assert.NotNil(t, got)
@@ -263,6 +264,7 @@ forLoop:
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			wss := &WebRTCSimulcastSender{
@@ -409,6 +411,7 @@ func TestWebRTCSimulcastSender_ID(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			s := &WebRTCSimulcastSender{
 				id: tt.fields.id,
