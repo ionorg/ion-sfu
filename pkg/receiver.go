@@ -40,7 +40,6 @@ type Receiver interface {
 	AddSender(sender Sender)
 	DeleteSender(pid string)
 	GetPacket(sn uint16) *rtp.Packet
-	ReadRTP() chan *rtp.Packet
 	ReadRTCP() chan rtcp.Packet
 	WriteRTCP(rtcp.Packet) error
 	OnCloseHandler(fn func())
@@ -137,11 +136,6 @@ func (w *WebRTCReceiver) DeleteSender(pid string) {
 
 func (w *WebRTCReceiver) SpatialLayer() uint8 {
 	return w.spatialLayer
-}
-
-// ReadRTP read rtp packets
-func (w *WebRTCReceiver) ReadRTP() chan *rtp.Packet {
-	return w.rtpCh
 }
 
 // ReadRTCP read rtcp packets

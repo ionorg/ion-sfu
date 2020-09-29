@@ -4,11 +4,10 @@
 package sfu
 
 import (
-	"sync"
-
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
+	"sync"
 )
 
 // Ensure, that ReceiverMock does implement Receiver.
@@ -38,9 +37,6 @@ var _ Receiver = &ReceiverMock{}
 //             },
 //             ReadRTCPFunc: func() chan rtcp.Packet {
 // 	               panic("mock out the ReadRTCP method")
-//             },
-//             ReadRTPFunc: func() chan *rtp.Packet {
-// 	               panic("mock out the ReadRTP method")
 //             },
 //             SpatialLayerFunc: func() uint8 {
 // 	               panic("mock out the SpatialLayer method")
@@ -78,9 +74,6 @@ type ReceiverMock struct {
 
 	// ReadRTCPFunc mocks the ReadRTCP method.
 	ReadRTCPFunc func() chan rtcp.Packet
-
-	// ReadRTPFunc mocks the ReadRTP method.
-	ReadRTPFunc func() chan *rtp.Packet
 
 	// SpatialLayerFunc mocks the SpatialLayer method.
 	SpatialLayerFunc func() uint8
@@ -122,9 +115,6 @@ type ReceiverMock struct {
 		// ReadRTCP holds details about calls to the ReadRTCP method.
 		ReadRTCP []struct {
 		}
-		// ReadRTP holds details about calls to the ReadRTP method.
-		ReadRTP []struct {
-		}
 		// SpatialLayer holds details about calls to the SpatialLayer method.
 		SpatialLayer []struct {
 		}
@@ -146,7 +136,6 @@ type ReceiverMock struct {
 	lockGetPacket      sync.RWMutex
 	lockOnCloseHandler sync.RWMutex
 	lockReadRTCP       sync.RWMutex
-	lockReadRTP        sync.RWMutex
 	lockSpatialLayer   sync.RWMutex
 	lockTrack          sync.RWMutex
 	lockWriteRTCP      sync.RWMutex
@@ -326,32 +315,6 @@ func (mock *ReceiverMock) ReadRTCPCalls() []struct {
 	mock.lockReadRTCP.RLock()
 	calls = mock.calls.ReadRTCP
 	mock.lockReadRTCP.RUnlock()
-	return calls
-}
-
-// ReadRTP calls ReadRTPFunc.
-func (mock *ReceiverMock) ReadRTP() chan *rtp.Packet {
-	if mock.ReadRTPFunc == nil {
-		panic("ReceiverMock.ReadRTPFunc: method is nil but Receiver.ReadRTP was just called")
-	}
-	callInfo := struct {
-	}{}
-	mock.lockReadRTP.Lock()
-	mock.calls.ReadRTP = append(mock.calls.ReadRTP, callInfo)
-	mock.lockReadRTP.Unlock()
-	return mock.ReadRTPFunc()
-}
-
-// ReadRTPCalls gets all the calls that were made to ReadRTP.
-// Check the length with:
-//     len(mockedReceiver.ReadRTPCalls())
-func (mock *ReceiverMock) ReadRTPCalls() []struct {
-} {
-	var calls []struct {
-	}
-	mock.lockReadRTP.RLock()
-	calls = mock.calls.ReadRTP
-	mock.lockReadRTP.RUnlock()
 	return calls
 }
 
