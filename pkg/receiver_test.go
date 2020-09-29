@@ -456,9 +456,9 @@ func TestWebRTCReceiver_fwdRTP(t *testing.T) {
 			for i := 0; i < tt.want; i++ {
 				w.rtpCh <- &rtp.Packet{}
 			}
-			time.Sleep(200 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 			refCtr := atomic.LoadInt64(&ctr)
-			assert.Equal(t, tt.want, refCtr)
+			assert.Equal(t, int64(tt.want), refCtr)
 			close(w.rtpCh)
 		})
 	}
