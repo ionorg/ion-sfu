@@ -35,7 +35,6 @@ type WebRTCSender struct {
 	router         Router
 	maxBitrate     uint64
 	target         uint64
-	currentLayer   uint8
 	onCloseHandler func()
 
 	once sync.Once
@@ -83,20 +82,15 @@ func (s *WebRTCSender) WriteRTP(pkt *rtp.Packet) {
 }
 
 func (s *WebRTCSender) CurrentSpatialLayer() uint8 {
-	return s.currentLayer
+	return 0
 }
 
 func (s *WebRTCSender) SwitchSpatialLayer(layer uint8) {
-	log.Warnf("can't change layers in simple senders, current: %d target: %d", s.currentLayer, layer)
+	log.Warnf("can't change layers in simple senders, current: %d target: %d", 0, layer)
 }
 
 func (s *WebRTCSender) SwitchTemporalLayer(layer uint8) {
 	log.Warnf("can't change layers in simple senders, target: %d", layer)
-}
-
-// OnClose is called when the sender is closed
-func (s *WebRTCSender) OnClose(f func()) {
-	s.onCloseHandler = f
 }
 
 // Close track
