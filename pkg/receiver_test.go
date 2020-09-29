@@ -217,6 +217,7 @@ func TestWebRTCReceiver_GetPacket(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			w := &WebRTCReceiver{
 				ctx:    tt.fields.ctx,
@@ -274,6 +275,7 @@ func TestWebRTCReceiver_ReadRTCP(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			w := &WebRTCReceiver{
 				rtcpCh: tt.fields.rtcpCh,
@@ -303,6 +305,7 @@ func TestWebRTCReceiver_SpatialLayer(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			w := &WebRTCReceiver{
 				spatialLayer: tt.fields.spatialLayer,
@@ -340,6 +343,7 @@ func TestWebRTCReceiver_Track(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			w := &WebRTCReceiver{
 				track: tt.fields.track,
