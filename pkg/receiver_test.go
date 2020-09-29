@@ -3,6 +3,7 @@ package sfu
 import (
 	"context"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -423,10 +424,10 @@ func TestWebRTCReceiver_fwdRTP(t *testing.T) {
 		senders map[string]Sender
 	}
 
-	ctr := 0
+	var ctr int64
 	fakeSender := SenderMock{
 		WriteRTPFunc: func(_ *rtp.Packet) {
-			ctr++
+			atomic.AddInt64(&ctr, 1)
 		},
 	}
 
@@ -438,7 +439,7 @@ func TestWebRTCReceiver_fwdRTP(t *testing.T) {
 		{
 			name: "Receiver must fwd the pkts to every sender",
 			fields: fields{
-				rtpCh:   make(chan *rtp.Packet, 10),
+				rtpCh:   make(chan *rtp.Packet),
 				senders: map[string]Sender{"test": &fakeSender},
 			},
 			want: 10,
@@ -456,7 +457,8 @@ func TestWebRTCReceiver_fwdRTP(t *testing.T) {
 				w.rtpCh <- &rtp.Packet{}
 			}
 			time.Sleep(200 * time.Millisecond)
-			assert.Equal(t, tt.want, ctr)
+			refCtr := atomic.LoadInt64(&ctr)
+			assert.Equal(t, tt.want, refCtr)
 			close(w.rtpCh)
 		})
 	}
