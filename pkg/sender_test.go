@@ -109,7 +109,7 @@ forLoop:
 				cancel: cancel,
 				track:  senderTrack,
 			}
-			tmr := time.NewTimer(100 * time.Millisecond)
+			tmr := time.NewTimer(1000 * time.Millisecond)
 			s.WriteRTP(fakePkt)
 			for {
 				pkt, err := remoteTrack.ReadRTP()
@@ -209,7 +209,7 @@ forLoop:
 				track:  senderTrack,
 			}
 			go wss.receiveRTCP()
-			tmr := time.NewTimer(1000 * time.Millisecond)
+			tmr := time.NewTimer(5000 * time.Millisecond)
 			err := remote.WriteRTCP([]rtcp.Packet{tt.want, tt.want, tt.want, tt.want})
 			assert.NoError(t, err)
 			err = remote.WriteRTCP([]rtcp.Packet{tt.want, tt.want, tt.want, tt.want})
