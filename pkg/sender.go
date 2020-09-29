@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"sync"
-	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/rtcp"
@@ -13,87 +12,86 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-// Sender defines a interface for a track receiver
+// Sender defines a interface for a track receivers
 type Sender interface {
-	ReadRTCP() chan rtcp.Packet
+	ID() string
 	WriteRTP(*rtp.Packet)
-	Close()
+	CurrentSpatialLayer() uint8
 	OnCloseHandler(fn func())
+	Close()
 	stats() string
+	// Simulcast/SVC events
+	SwitchSpatialLayer(layer uint8)
+	SwitchTemporalLayer(layer uint8)
 }
 
 // WebRTCSender represents a Sender which writes RTP to a webrtc track
 type WebRTCSender struct {
+	id             string
 	ctx            context.Context
 	cancel         context.CancelFunc
-	onCloseHandler func()
 	sender         *webrtc.RTPSender
 	track          *webrtc.Track
-	rtcpCh         chan rtcp.Packet
+	router         Router
 	maxBitrate     uint64
 	target         uint64
-	sendChan       chan *rtp.Packet
+	currentLayer   uint8
+	onCloseHandler func()
 
 	once sync.Once
 }
 
 // NewWebRTCSender creates a new track sender instance
-func NewWebRTCSender(ctx context.Context, track *webrtc.Track, sender *webrtc.RTPSender) Sender {
+func NewWebRTCSender(ctx context.Context, id string, router Router, sender *webrtc.RTPSender) Sender {
 	ctx, cancel := context.WithCancel(ctx)
 	s := &WebRTCSender{
-		ctx:        ctx,
-		cancel:     cancel,
-		sender:     sender,
-		track:      track,
-		maxBitrate: routerConfig.MaxBandwidth * 1000,
-		rtcpCh:     make(chan rtcp.Packet, maxSize),
-		sendChan:   make(chan *rtp.Packet, maxSize),
+		id:     id,
+		ctx:    ctx,
+		cancel: cancel,
+		router: router,
+		sender: sender,
+		track:  sender.Track(),
 	}
 
 	go s.receiveRTCP()
-	go s.sendRTP()
 
 	return s
 }
 
-func (s *WebRTCSender) sendRTP() {
-	// There exists a bug in chrome where setLocalDescription
-	// fails if track RTP arrives before the sfu offer is set.
-	// We deplay sending RTP here to avoid the issue.
-	// https://bugs.chromium.org/p/webrtc/issues/detail?id=10139
-	time.Sleep(500 * time.Millisecond)
-
-	for {
-		select {
-		case pkt := <-s.sendChan:
-			// Transform payload type
-			pt := s.track.Codec().PayloadType
-			newPkt := *pkt
-			newPkt.Header.PayloadType = pt
-			pkt = &newPkt
-
-			if err := s.track.WriteRTP(pkt); err != nil {
-				if err == io.ErrClosedPipe {
-					return
-				}
-				log.Errorf("sender.track.WriteRTP err=%v", err)
-			}
-		case <-s.ctx.Done():
-			return
-		}
-	}
-}
-
-// ReadRTCP read rtp packet
-func (s *WebRTCSender) ReadRTCP() chan rtcp.Packet {
-	return s.rtcpCh
+func (s *WebRTCSender) ID() string {
+	return s.id
 }
 
 // WriteRTP to the track
 func (s *WebRTCSender) WriteRTP(pkt *rtp.Packet) {
-	if s.ctx.Err() == nil {
-		s.sendChan <- pkt
+	if s.ctx.Err() != nil {
+		return
 	}
+	// Transform payload type
+	bPt := pkt.PayloadType
+	pt := s.track.Codec().PayloadType
+	pkt.PayloadType = pt
+	err := s.track.WriteRTP(pkt)
+	// Restore packet
+	pkt.PayloadType = bPt
+	if err != nil {
+		if err == io.ErrClosedPipe {
+			return
+		}
+		log.Errorf("sender.track.WriteRTP err=%v", err)
+	}
+}
+
+func (s *WebRTCSender) CurrentSpatialLayer() uint8 {
+	return s.currentLayer
+}
+
+func (s *WebRTCSender) SwitchSpatialLayer(layer uint8) {
+	log.Warnf("can't change layers in simple senders, current: %d target: %d", s.currentLayer, layer)
+}
+
+func (s *WebRTCSender) SwitchTemporalLayer(layer uint8) {
+	log.Warnf("can't change layers in simple senders, target: %d", layer)
 }
 
 // OnClose is called when the sender is closed
@@ -122,7 +120,6 @@ func (s *WebRTCSender) receiveRTCP() {
 	for {
 		pkts, err := s.sender.ReadRTCP()
 		if err == io.ErrClosedPipe || s.ctx.Err() != nil {
-			close(s.rtcpCh)
 			s.Close()
 			return
 		}
@@ -132,9 +129,35 @@ func (s *WebRTCSender) receiveRTCP() {
 		}
 
 		for _, pkt := range pkts {
+			recv := s.router.GetReceiver(0)
+			if recv == nil {
+				continue
+			}
 			switch pkt := pkt.(type) {
-			case *rtcp.PictureLossIndication, *rtcp.FullIntraRequest, *rtcp.TransportLayerNack:
-				s.rtcpCh <- pkt
+			case *rtcp.PictureLossIndication, *rtcp.FullIntraRequest:
+				if err := recv.WriteRTCP(pkt); err != nil {
+					log.Errorf("writing RTCP err %v", err)
+				}
+			case *rtcp.TransportLayerNack:
+				log.Tracef("router got nack: %+v", pkt)
+				for _, pair := range pkt.Nacks {
+					bufferPkt := recv.GetPacket(pair.PacketID)
+					if bufferPkt != nil {
+						// We found the packet in the buffer, resend to sub
+						s.WriteRTP(bufferPkt)
+						continue
+					}
+					// Packet not found, request from receivers
+					nack := &rtcp.TransportLayerNack{
+						// origin ssrc
+						SenderSSRC: pkt.SenderSSRC,
+						MediaSSRC:  pkt.MediaSSRC,
+						Nacks:      []rtcp.NackPair{{PacketID: pair.PacketID}},
+					}
+					if err := recv.WriteRTCP(nack); err != nil {
+						log.Errorf("writing nack RTCP err %v", err)
+					}
+				}
 			default:
 				// TODO: Use fb packets for congestion control
 			}

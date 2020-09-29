@@ -161,7 +161,7 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 			break
 		}
 
-		me := sfu.MediaEngine{}
+		me := webrtc.MediaEngine{}
 		err = me.PopulateFromSDP(join.Offer)
 		if err != nil {
 			log.Errorf("connect: error creating peer: %v", err)

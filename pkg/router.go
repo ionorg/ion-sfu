@@ -1,136 +1,150 @@
 package sfu
 
 import (
-	"fmt"
+	"math/rand"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
-	"github.com/pion/rtcp"
-	"github.com/pion/webrtc/v3"
 )
 
-var routerConfig RouterConfig
+const (
+	SimpleRouter = iota + 1
+	SimulcastRouter
+	SVCRouter
+)
 
 // Router defines a track rtp/rtcp router
-type Router struct {
-	tid      string
-	mu       sync.RWMutex
-	receiver Receiver
-	senders  map[string]Sender
-	lastNack int64
+type Router interface {
+	ID() string
+	AddReceiver(recv Receiver)
+	GetReceiver(layer uint8) Receiver
+	AddSender(p *WebRTCTransport) error
+	SwitchSpatialLayer(currentLayer, targetLayer uint8, sub Sender) bool
 }
 
-// NewRouter for routing rtp/rtcp packets
-func NewRouter(tid string, recv Receiver) *Router {
-	r := &Router{
-		tid:      tid,
-		receiver: recv,
-		senders:  make(map[string]Sender),
-		lastNack: time.Now().Unix(),
+// RouterConfig defines router configurations
+type RouterConfig struct {
+	REMBFeedback bool                      `mapstructure:"subrembfeedback"`
+	MaxBandwidth uint64                    `mapstructure:"maxbandwidth"`
+	MaxNackTime  int64                     `mapstructure:"maxnacktime"`
+	Video        WebRTCVideoReceiverConfig `mapstructure:"video"`
+	Simulcast    SimulcastConfig           `mapstructure:"simulcast"`
+}
+
+type router struct {
+	tid       string
+	mu        sync.RWMutex
+	kind      int
+	config    RouterConfig
+	receivers [3 + 1]Receiver
+}
+
+// newRouter for routing rtp/rtcp packets
+func newRouter(tid string, config RouterConfig, kind int) Router {
+	return &router{
+		tid:    tid,
+		config: config,
+		kind:   kind,
 	}
-
-	go r.start()
-
-	return r
 }
 
-// Track returns the router receiver track
-func (r *Router) Track() *webrtc.Track {
-	return r.receiver.Track()
+func (r *router) ID() string {
+	return r.tid
 }
 
-// AddSender to router
-func (r *Router) AddSender(pid string, sub Sender) {
-	r.mu.Lock()
-	r.senders[pid] = sub
-	r.mu.Unlock()
-
-	go r.subFeedbackLoop(pid, sub)
-}
-
-// Close a router
-func (r *Router) close() {
-	log.Debugf("Router close")
+func (r *router) AddReceiver(recv Receiver) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
-	// Close senders
-	for _, sub := range r.senders {
-		sub.Close()
-	}
+	r.receivers[recv.SpatialLayer()] = recv
 }
 
-func (r *Router) start() {
-	defer r.close()
-	for pkt := range r.receiver.ReadRTP() {
-		// Push to sub send queues
-		r.mu.RLock()
-		for _, sub := range r.senders {
-			sub.WriteRTP(pkt)
-		}
-		r.mu.RUnlock()
-	}
+func (r *router) GetReceiver(layer uint8) Receiver {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.receivers[layer]
 }
 
-// subFeedbackLoop reads rtcp packets from the sub
-// and either handles them or forwards them to the receiver.
-func (r *Router) subFeedbackLoop(pid string, sub Sender) {
-	defer func() {
-		r.mu.Lock()
-		delete(r.senders, pid)
-		r.mu.Unlock()
-	}()
+// AddWebRTCSender to router
+func (r *router) AddSender(p *WebRTCTransport) error {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var (
+		recv   Receiver
+		sender Sender
+		ssrc   uint32
+	)
 
-	for pkt := range sub.ReadRTCP() {
-		switch pkt := pkt.(type) {
-		case *rtcp.TransportLayerNack:
-			log.Tracef("Router got nack: %+v", pkt)
-			for _, pair := range pkt.Nacks {
-				bufferpkt := r.receiver.GetPacket(pair.PacketID)
-				if bufferpkt != nil {
-					// We found the packet in the buffer, resend to sub
-					sub.WriteRTP(bufferpkt)
-					continue
-				}
-				if routerConfig.MaxNackTime > 0 {
-					ln := atomic.LoadInt64(&r.lastNack)
-					if (time.Now().Unix() - ln) < routerConfig.MaxNackTime {
-						continue
-					}
-					atomic.StoreInt64(&r.lastNack, time.Now().Unix())
-				}
-				// Packet not found, request from receiver
-				nack := &rtcp.TransportLayerNack{
-					// origin ssrc
-					SenderSSRC: pkt.SenderSSRC,
-					MediaSSRC:  pkt.MediaSSRC,
-					Nacks:      []rtcp.NackPair{{PacketID: pair.PacketID}},
-				}
-				if err := r.receiver.WriteRTCP(nack); err != nil {
-					log.Errorf("Error writing nack RTCP %s", err)
-				}
-			}
-		default:
-			if err := r.receiver.WriteRTCP(pkt); err != nil {
-				log.Errorf("Error writing RTCP %s", err)
-			}
-		}
-	}
-}
-
-func (r *Router) stats() string {
-	info := fmt.Sprintf("    track id: %s label: %s ssrc: %d | %s\n", r.receiver.Track().ID(), r.receiver.Track().Label(), r.receiver.Track().SSRC(), r.receiver.stats())
-
-	if len(r.senders) < 6 {
-		for pid, sub := range r.senders {
-			info += fmt.Sprintf("      sender: %s | %s\n", pid, sub.stats())
-		}
-		info += "\n"
+	if r.kind == SimpleRouter {
+		recv = r.receivers[0]
+		ssrc = recv.Track().SSRC()
 	} else {
-		info += fmt.Sprintf("      senders: %d\n\n", len(r.senders))
+		for _, rcv := range r.receivers {
+			recv = rcv
+			if !r.config.Simulcast.BestQualityFirst && rcv != nil {
+				break
+			}
+		}
+		ssrc = rand.Uint32()
 	}
 
-	return info
+	if recv == nil {
+		return errNoReceiverFound
+	}
+
+	inTrack := recv.Track()
+	to := p.me.GetCodecsByName(recv.Track().Codec().Name)
+	if len(to) == 0 {
+		return errPtNotSupported
+	}
+	pt := to[0].PayloadType
+	label := inTrack.Label()
+	// Simulcast omits stream id, use transport label to keep all tracks under same stream
+	if r.kind == SimulcastRouter {
+		label = p.label
+	}
+	outTrack, err := p.pc.NewTrack(pt, ssrc, inTrack.ID(), label)
+	if err != nil {
+		return err
+	}
+	// Create webrtc sender for the peer we are sending track to
+	s, err := p.pc.AddTrack(outTrack)
+	if err != nil {
+		return err
+	}
+	if r.kind == SimulcastRouter {
+		sender = NewWebRTCSimulcastSender(p.ctx, p.id, r, s, recv.SpatialLayer())
+	} else {
+		sender = NewWebRTCSender(p.ctx, p.id, r, s)
+	}
+	sender.OnCloseHandler(func() {
+		if err := p.pc.RemoveTrack(s); err != nil {
+			log.Errorf("Error closing sender: %s", err)
+		}
+	})
+	go func() {
+		// There exists a bug in chrome where setLocalDescription
+		// fails if track RTP arrives before the sfu offer is set.
+		// We delay sending RTP here to avoid the issue.
+		// https://bugs.chromium.org/p/webrtc/issues/detail?id=10139
+		time.Sleep(500 * time.Millisecond)
+		recv.AddSender(sender)
+	}()
+	return nil
+}
+
+func (r *router) SwitchSpatialLayer(currentLayer, targetLayer uint8, sub Sender) bool {
+	currentRecv := r.GetReceiver(currentLayer)
+	targetRecv := r.GetReceiver(targetLayer)
+	if targetRecv != nil {
+		// TODO do a more smart layer change
+		currentRecv.DeleteSender(sub.ID())
+		targetRecv.AddSender(sub)
+		return true
+	}
+	return false
+}
+
+func (r *router) stats() string {
+	return ""
 }

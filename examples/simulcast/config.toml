@@ -3,7 +3,7 @@
 subrembfeedback = false
 # Limit the remb bandwidth in kbps
 # zero means no limits
-maxbandwidth = 400
+maxbandwidth = 7000
 # Rate limit nack packets from senders to 1 nack per maxNackTime in seconds
 # zero means no rate limit
 maxnacktime = 1
@@ -11,22 +11,20 @@ maxnacktime = 1
 [router.video]
 # the remb cycle sending to pub, this told the pub it's bandwidth
 rembcycle = 2
+# pli cycle sending to pub, and pub will send a key frame
+plicycle = 30
 # transport-cc cycle in (ms) (experiment feature)
 tcccycle = 0
 # max buffer time by ms
 maxbuffertime = 1000
-
-[router.simulcast]
-# Prefer best quality initially
-bestqualityfirst = true
 
 [webrtc]
 # Range of ports that ion accepts WebRTC traffic on
 # Format: [min, max]   and max - min >= 100
 # portrange = [50000, 60000]
 # if sfu behind nat, set iceserver
-# [[webrtc.iceserver]]
-# urls = ["stun:stun.stunprotocol.org:3478"]
+[[webrtc.iceserver]]
+urls = ["stun:stun.stunprotocol.org:3478"]
 # [[webrtc.iceserver]]
 # urls = ["turn:turn.awsome.org:3478"]
 # username = "awsome"
@@ -44,6 +42,6 @@ bestqualityfirst = true
 # nat1to1 = ["1.2.3.4"]
 
 [log]
-stats = true
+stats = false
 level = "debug"
 fix = ["proc.go", "asm_amd64.s", "jsonrpc2.go"]

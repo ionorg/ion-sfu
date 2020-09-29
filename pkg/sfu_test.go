@@ -4,51 +4,59 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pion/ion-sfu/pkg/log"
-	"github.com/pion/transport/test"
 	"github.com/pion/webrtc/v3"
-	"github.com/stretchr/testify/assert"
 )
 
-func TestSFU(t *testing.T) {
-	lim := test.TimeOut(time.Second * 20)
-	defer lim.Stop()
+// Init test helpers
 
-	report := test.CheckRoutines(t)
-	defer report()
+func signalPair(pcOffer *webrtc.PeerConnection, pcAnswer *webrtc.PeerConnection) error {
+	offer, err := pcOffer.CreateOffer(nil)
+	if err != nil {
+		return err
+	}
+	gatherComplete := webrtc.GatheringCompletePromise(pcOffer)
+	if err = pcOffer.SetLocalDescription(offer); err != nil {
+		return err
+	}
+	<-gatherComplete
+	if err = pcAnswer.SetRemoteDescription(*pcOffer.LocalDescription()); err != nil {
+		return err
+	}
 
-	s := NewSFU(Config{
-		Log: log.Config{
-			Level: "error",
-			Stats: true,
-		},
-		WebRTC: WebRTCConfig{
-			ICEPortRange: []uint16{5000, 5200},
-			NAT1To1IPs:   []string{"1.1.1.1"},
-		},
-	})
+	answer, err := pcAnswer.CreateAnswer(nil)
+	if err != nil {
+		return err
+	}
+	if err = pcAnswer.SetLocalDescription(answer); err != nil {
+		return err
+	}
+	return pcOffer.SetRemoteDescription(*pcAnswer.LocalDescription())
+}
 
-	me := webrtc.MediaEngine{}
-	me.RegisterDefaultCodecs()
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
-	remote, err := api.NewPeerConnection(conf.configuration)
-	assert.NoError(t, err)
+func sendRTPWithSenderUntilDone(done <-chan struct{}, t *testing.T, track *webrtc.Track, sender Sender) {
+	for {
+		select {
+		case <-time.After(20 * time.Millisecond):
+			pkt := track.Packetizer().Packetize([]byte{0x01, 0x02, 0x03, 0x04}, 1)[0]
+			sender.WriteRTP(pkt)
+		case <-done:
+			return
+		}
+	}
+}
 
-	offer, err := remote.CreateOffer(nil)
-	assert.NoError(t, err)
-	err = remote.SetLocalDescription(offer)
-	assert.NoError(t, err)
+// newPair creates two new peer connections (an offerer and an answerer) using
+// the api.
+func newPair(cfg webrtc.Configuration, api *webrtc.API) (pcOffer *webrtc.PeerConnection, pcAnswer *webrtc.PeerConnection, err error) {
+	pca, err := api.NewPeerConnection(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	engine := MediaEngine{}
-	err = engine.PopulateFromSDP(offer)
-	assert.NoError(t, err)
+	pcb, err := api.NewPeerConnection(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	transport, err := s.NewWebRTCTransport("test session", engine)
-	assert.NotNil(t, transport)
-	assert.NoError(t, err)
-
-	remote.Close()
-	transport.Close()
-
-	s.Stop()
+	return pca, pcb, nil
 }
