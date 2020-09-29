@@ -7,5 +7,5 @@ const (
 )
 
 type SimulcastConfig struct {
-	BestQualityFirst bool `mapstructure:"bestqualityfisrt"`
+	BestQualityFirst bool `mapstructure:"bestqualityfirst"`
 }

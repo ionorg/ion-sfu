@@ -44,7 +44,6 @@ type WebRTCSender struct {
 // NewWebRTCSender creates a new track sender instance
 func NewWebRTCSender(ctx context.Context, id string, router Router, sender *webrtc.RTPSender) Sender {
 	ctx, cancel := context.WithCancel(ctx)
-	sender.Track()
 	s := &WebRTCSender{
 		id:     id,
 		ctx:    ctx,
