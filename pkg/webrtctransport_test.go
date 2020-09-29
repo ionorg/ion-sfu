@@ -37,6 +37,7 @@ func TestNewWebRTCTransport(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := NewWebRTCTransport(tt.args.ctx, tt.args.session, tt.args.me, tt.args.cfg)
 			if (err != nil) != tt.wantErr {
@@ -71,6 +72,7 @@ func TestWebRTCTransport_AddTransceiverFromKind(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			s := NewSession("test")
 			p, err := NewWebRTCTransport(context.Background(), s, me, WebRTCTransportConfig{})
