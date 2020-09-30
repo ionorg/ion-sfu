@@ -19,7 +19,7 @@ type Router interface {
 	ID() string
 	AddReceiver(recv Receiver)
 	GetReceiver(layer uint8) Receiver
-	AddSender(p *WebRTCTransport) error
+	AddSender(p *WebRTCTransport, streamID string) error
 	SwitchSpatialLayer(currentLayer, targetLayer uint8, sub Sender) bool
 }
 
@@ -66,7 +66,7 @@ func (r *router) GetReceiver(layer uint8) Receiver {
 }
 
 // AddWebRTCSender to router
-func (r *router) AddSender(p *WebRTCTransport) error {
+func (r *router) AddSender(p *WebRTCTransport, streamID string) error {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var (
@@ -99,9 +99,9 @@ func (r *router) AddSender(p *WebRTCTransport) error {
 	}
 	pt := to[0].PayloadType
 	label := inTrack.Label()
-	// Simulcast omits stream id, use transport label to keep all tracks under same stream
+	// Simulcast omits stream id, use transport streamID to keep all tracks under same stream
 	if r.kind == SimulcastRouter {
-		label = p.label
+		label = p.streamID
 	}
 	outTrack, err := p.pc.NewTrack(pt, ssrc, inTrack.ID(), label)
 	if err != nil {
@@ -122,6 +122,7 @@ func (r *router) AddSender(p *WebRTCTransport) error {
 			log.Errorf("Error closing sender: %s", err)
 		}
 	})
+	p.AddSender(streamID, sender)
 	go func() {
 		// There exists a bug in chrome where setLocalDescription
 		// fails if track RTP arrives before the sfu offer is set.

@@ -32,11 +32,10 @@ type WebRTCTransport struct {
 	me             webrtc.MediaEngine
 	mu             sync.RWMutex
 	session        *Session
-	senders        []Sender
+	senders        map[string][]Sender
 	routers        map[string]Router
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
-	// Custom label for simulcast
-	label string
+	streamID       string
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport
@@ -58,13 +57,13 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 		me:      me,
 		session: session,
 		routers: make(map[string]Router),
-		label:   cuid.New(),
+		senders: make(map[string][]Sender),
 	}
 
 	// Subscribe to existing transports
 	for _, t := range session.Transports() {
 		for _, router := range t.Routers() {
-			err := router.AddSender(p)
+			err := router.AddSender(p, t.StreamID())
 			// log.Infof("Init add router ssrc %d to %s", router.receivers[0].Track().SSRC(), p.id)
 			if err != nil {
 				log.Errorf("Error subscribing to router err: %v", err)
@@ -77,8 +76,17 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 	session.AddTransport(p)
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
-		log.Debugf("Peer %s got remote track id: %s ssrc: %d rid :%s label: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.Label())
+		log.Debugf("Peer %s got remote track id: %s ssrc: %d rid :%s streamID: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.Label())
 		recv := NewWebRTCReceiver(ctx, track, cfg.router)
+
+		// Set transport label
+		if p.streamID != "" {
+			if track.RID() != "" {
+				p.streamID = track.Label()
+			} else {
+				p.streamID = cuid.New()
+			}
+		}
 
 		if recv.Track().Kind() == webrtc.RTPCodecTypeVideo {
 			go p.sendRTCP(recv)
@@ -104,7 +112,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 				router = newRouter(p.id, cfg.router, SimpleRouter)
 			}
 			router.AddReceiver(recv)
-			p.session.AddRouter(router)
+			p.session.AddRouter(router, p.streamID)
 			p.mu.Lock()
 			p.routers[recv.Track().ID()] = router
 			p.mu.Unlock()
@@ -126,10 +134,13 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 
 	// Register data channel creation handling
 	pc.OnDataChannel(func(d *webrtc.DataChannel) {
-		fmt.Printf("New DataChannel %s %d\n", d.Label(), d.ID())
+		log.Debugf("New DataChannel %s %d\n", d.Label(), d.ID())
 		// Register text message handling
-		d.OnMessage(func(msg webrtc.DataChannelMessage) {
-		})
+		if d.Label() == ChannelLabel {
+			d.OnMessage(func(msg webrtc.DataChannelMessage) {
+				HandleApiCommand(p, msg.Data)
+			})
+		}
 	})
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
@@ -246,6 +257,10 @@ func (p *WebRTCTransport) ID() string {
 	return p.id
 }
 
+func (p *WebRTCTransport) StreamID() string {
+	return p.streamID
+}
+
 // Routers returns routers for this peer
 func (p *WebRTCTransport) Routers() map[string]Router {
 	p.mu.RLock()
@@ -258,6 +273,23 @@ func (p *WebRTCTransport) GetRouter(trackID string) Router {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.routers[trackID]
+}
+
+func (p *WebRTCTransport) AddSender(streamID string, sender Sender) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if senders, ok := p.senders[streamID]; ok {
+		senders = append(senders, sender)
+		p.senders[streamID] = senders
+	} else {
+		p.senders[streamID] = []Sender{sender}
+	}
+}
+
+func (p *WebRTCTransport) GetSenders(streamID string) []Sender {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.senders[streamID]
 }
 
 // Close peer
