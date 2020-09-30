@@ -219,6 +219,8 @@ func TestWebRTCSimulcastSender_receiveRTCP(t *testing.T) {
 			gotRTCP <- in1
 			return nil
 		},
+		DeleteSenderFunc: func(_ string) {
+		},
 	}
 
 	fakeRouter := &RouterMock{
@@ -233,7 +235,7 @@ func TestWebRTCSimulcastSender_receiveRTCP(t *testing.T) {
 forLoop:
 	for {
 		select {
-		case <-time.After(1000 * time.Millisecond):
+		case <-time.After(20 * time.Millisecond):
 			pkt := senderTrack.Packetizer().Packetize([]byte{0x01, 0x02, 0x03, 0x04}, 1)[0]
 			err = senderTrack.WriteRTP(pkt)
 			assert.NoError(t, err)
@@ -276,16 +278,13 @@ forLoop:
 			}
 			go wss.receiveRTCP()
 			tmr := time.NewTimer(1000 * time.Millisecond)
-			err := remote.WriteRTCP([]rtcp.Packet{tt.want, tt.want, tt.want, tt.want})
-			assert.NoError(t, err)
-			err = remote.WriteRTCP([]rtcp.Packet{tt.want, tt.want, tt.want, tt.want})
-			assert.NoError(t, err)
-			err = remote.WriteRTCP([]rtcp.Packet{tt.want, tt.want, tt.want, tt.want})
-			assert.NoError(t, err)
 			for {
 				select {
 				case <-tmr.C:
 					t.Fatal("RTCP packet not received")
+				case <-time.After(10 * time.Millisecond):
+					err = remote.WriteRTCP([]rtcp.Packet{tt.want, tt.want, tt.want, tt.want})
+					assert.NoError(t, err)
 				case pkt := <-gotRTCP:
 					switch pkt.(type) {
 					case *rtcp.PictureLossIndication:
@@ -301,8 +300,6 @@ forLoop:
 					case *rtcp.TransportLayerNack:
 						continue
 					}
-				default:
-					continue
 				}
 			}
 		})
@@ -312,10 +309,16 @@ forLoop:
 func TestWebRTCSimulcastSender_Close(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	closeCtr := 0
+	fakeRouter := &RouterMock{
+		GetReceiverFunc: func(_ uint8) Receiver {
+			return nil
+		},
+	}
 
 	type fields struct {
 		ctx            context.Context
 		cancel         context.CancelFunc
+		router         Router
 		onCloseHandler func()
 	}
 	tests := []struct {
@@ -328,6 +331,7 @@ func TestWebRTCSimulcastSender_Close(t *testing.T) {
 			fields: fields{
 				ctx:            ctx,
 				cancel:         cancel,
+				router:         fakeRouter,
 				onCloseHandler: nil,
 			},
 		},
@@ -337,6 +341,7 @@ func TestWebRTCSimulcastSender_Close(t *testing.T) {
 			fields: fields{
 				ctx:    ctx,
 				cancel: cancel,
+				router: fakeRouter,
 				onCloseHandler: func() {
 					closeCtr++
 				},
@@ -349,6 +354,7 @@ func TestWebRTCSimulcastSender_Close(t *testing.T) {
 			s := &WebRTCSimulcastSender{
 				ctx:            tt.fields.ctx,
 				cancel:         tt.fields.cancel,
+				router:         tt.fields.router,
 				onCloseHandler: tt.fields.onCloseHandler,
 			}
 			if tt.fields.onCloseHandler == nil {

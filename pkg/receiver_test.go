@@ -463,3 +463,48 @@ func TestWebRTCReceiver_fwdRTP(t *testing.T) {
 		})
 	}
 }
+
+func TestWebRTCReceiver_closeSenders(t *testing.T) {
+	closeChan := make(chan struct{}, 1)
+
+	fakeSender := SenderMock{
+		CloseFunc: func() {
+			closeChan <- struct{}{}
+		},
+	}
+
+	type fields struct {
+		senders map[string]Sender
+	}
+	tests := []struct {
+		name   string
+		fields fields
+	}{
+		{
+			name: "Must call close methods on senders",
+			fields: fields{
+				senders: map[string]Sender{"test": &fakeSender},
+			},
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			w := &WebRTCReceiver{
+				senders: tt.fields.senders,
+			}
+			w.closeSenders()
+			tmr := time.NewTimer(100 * time.Millisecond)
+			for {
+				select {
+				case <-tmr.C:
+					t.Fatal("No close method called")
+				case <-closeChan:
+					tmr.Stop()
+					return
+				}
+
+			}
+		})
+	}
+}

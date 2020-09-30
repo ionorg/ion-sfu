@@ -217,6 +217,10 @@ func (s *WebRTCSimulcastSender) Close() {
 
 func (s *WebRTCSimulcastSender) close() {
 	s.cancel()
+	// Remove sender from receiver
+	if recv := s.router.GetReceiver(s.currentSpatialLayer); recv != nil {
+		recv.DeleteSender(s.id)
+	}
 	if s.onCloseHandler != nil {
 		s.onCloseHandler()
 	}
