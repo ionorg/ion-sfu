@@ -160,13 +160,14 @@ forLoop:
 				}
 				tmr := time.NewTimer(100 * time.Millisecond)
 				s.WriteRTP(tt.fields.packet)
+			testLoop:
 				for {
 					select {
 					case <-tmr.C:
 						t.Fatal("PLI packet not received")
 					case <-gotPli:
 						tmr.Stop()
-						return
+						break testLoop
 					}
 				}
 			}
@@ -187,7 +188,8 @@ forLoop:
 
 		})
 	}
-
+	_ = sfu.Close()
+	_ = remote.Close()
 }
 
 func TestWebRTCSimulcastSender_receiveRTCP(t *testing.T) {
@@ -278,6 +280,7 @@ forLoop:
 			}
 			go wss.receiveRTCP()
 			tmr := time.NewTimer(1000 * time.Millisecond)
+		testLoop:
 			for {
 				select {
 				case <-tmr.C:
@@ -291,12 +294,12 @@ forLoop:
 						assert.Equal(t, recvSSRC, pkt.DestinationSSRC()[0])
 						tmr.Stop()
 						wss.Close()
-						return
+						break testLoop
 					case *rtcp.FullIntraRequest:
 						assert.Equal(t, recvSSRC, pkt.DestinationSSRC()[0])
 						tmr.Stop()
 						wss.Close()
-						return
+						break testLoop
 					case *rtcp.TransportLayerNack:
 						continue
 					}
@@ -304,6 +307,8 @@ forLoop:
 			}
 		})
 	}
+	_ = sfu.Close()
+	_ = remote.Close()
 }
 
 func TestWebRTCSimulcastSender_Close(t *testing.T) {

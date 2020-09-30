@@ -437,17 +437,20 @@ func TestWebRTCTransport_OnDataChannel(t *testing.T) {
 			err = signalPair(remote, sfu)
 			assert.NoError(t, err)
 			tmr := time.NewTimer(5000 * time.Millisecond)
+		testLoop:
 			for {
 				select {
 				case <-tmr.C:
 					t.Fatal("onDataChannel not called")
 				case <-dcChan:
 					tmr.Stop()
-					return
+					break testLoop
 				}
 			}
 		})
 	}
+	_ = sfu.Close()
+	_ = remote.Close()
 }
 
 func TestWebRTCTransport_OnNegotiationNeeded(t *testing.T) {
@@ -502,17 +505,20 @@ func TestWebRTCTransport_OnNegotiationNeeded(t *testing.T) {
 			_, err = sfu.AddTrack(senderTrack)
 			assert.NoError(t, err)
 			tmr := time.NewTimer(5000 * time.Millisecond)
+		testLoop:
 			for {
 				select {
 				case <-tmr.C:
 					t.Fatal("onNegotiation not called")
 				case <-negChan:
 					tmr.Stop()
-					return
+					break testLoop
 				}
 			}
 		})
 	}
+	_ = sfu.Close()
+	_ = remote.Close()
 }
 
 func TestWebRTCTransport_OnTrack(t *testing.T) {
@@ -747,25 +753,38 @@ forLoop:
 				SenderSSRC: 12345,
 				MediaSSRC:  12345,
 			}
-			rtcpChan <- &rtcp.PictureLossIndication{
-				SenderSSRC: 12345,
-				MediaSSRC:  12345,
-			}
 			go p.sendRTCP(tt.args.recv)
 			tmr := time.NewTimer(1000 * time.Millisecond)
+			gotRTCP := make(chan struct{}, 1)
+			go func() {
+				for {
+					pkt, err := s.ReadRTCP()
+					assert.NoError(t, err)
+					if len(pkt) > 0 {
+						gotRTCP <- struct{}{}
+						return
+					}
+				}
+			}()
+
+		testLoop:
 			for {
-				pkt, err := s.ReadRTCP()
-				assert.NoError(t, err)
-				if len(pkt) > 0 {
+				select {
+				case <-time.After(10 * time.Millisecond):
+					rtcpChan <- &rtcp.PictureLossIndication{
+						SenderSSRC: 12345,
+						MediaSSRC:  12345,
+					}
+				case <-gotRTCP:
 					close(rtcpChan)
 					tmr.Stop()
-					return
-				}
-				select {
+					break testLoop
 				case <-tmr.C:
 					t.Fatal("onNegotiation not called")
 				}
 			}
 		})
 	}
+	_ = sfu.Close()
+	_ = remote.Close()
 }

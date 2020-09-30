@@ -118,7 +118,7 @@ forLoop:
 					assert.NotEqual(t, fakePkt.PayloadType, pkt.PayloadType)
 					assert.Equal(t, senderTrack.Codec().PayloadType, pkt.PayloadType)
 					tmr.Stop()
-					return
+					break
 				}
 				select {
 				case <-tmr.C:
@@ -127,6 +127,8 @@ forLoop:
 			}
 		})
 	}
+	_ = sfu.Close()
+	_ = remote.Close()
 }
 
 func TestWebRTCSender_receiveRTCP(t *testing.T) {
@@ -218,6 +220,7 @@ forLoop:
 			assert.NoError(t, err)
 			err = remote.WriteRTCP([]rtcp.Packet{tt.want, tt.want, tt.want, tt.want})
 			assert.NoError(t, err)
+		testLoop:
 			for {
 				select {
 				case <-tmr.C:
@@ -227,11 +230,11 @@ forLoop:
 					case *rtcp.PictureLossIndication:
 						tmr.Stop()
 						wss.Close()
-						return
+						break testLoop
 					case *rtcp.FullIntraRequest:
 						tmr.Stop()
 						wss.Close()
-						return
+						break testLoop
 					case *rtcp.TransportLayerNack:
 						continue
 					}
@@ -241,6 +244,8 @@ forLoop:
 			}
 		})
 	}
+	_ = sfu.Close()
+	_ = remote.Close()
 }
 
 func TestWebRTCSender_Close(t *testing.T) {
