@@ -233,7 +233,7 @@ func TestWebRTCSimulcastSender_receiveRTCP(t *testing.T) {
 forLoop:
 	for {
 		select {
-		case <-time.After(500 * time.Millisecond):
+		case <-time.After(1000 * time.Millisecond):
 			pkt := senderTrack.Packetizer().Packetize([]byte{0x01, 0x02, 0x03, 0x04}, 1)[0]
 			err = senderTrack.WriteRTP(pkt)
 			assert.NoError(t, err)
