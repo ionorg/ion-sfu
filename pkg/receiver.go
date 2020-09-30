@@ -128,6 +128,7 @@ func (w *WebRTCReceiver) AddSender(sender Sender) {
 	w.senders[sender.ID()] = sender
 }
 
+//DeleteSender removes a Sender from a Receiver
 func (w *WebRTCReceiver) DeleteSender(pid string) {
 	w.Lock()
 	defer w.Unlock()
@@ -136,6 +137,15 @@ func (w *WebRTCReceiver) DeleteSender(pid string) {
 
 func (w *WebRTCReceiver) SpatialLayer() uint8 {
 	return w.spatialLayer
+}
+
+//closeSenders Close all senders from Receiver
+func (w *WebRTCReceiver) closeSenders() {
+	w.Lock()
+	defer w.Unlock()
+	for _, sender := range w.senders {
+		sender.Close()
+	}
 }
 
 // ReadRTCP read rtcp packets
@@ -419,6 +429,7 @@ func (w *WebRTCReceiver) stats() string {
 
 func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}, config RouterConfig) {
 	defer func() {
+		w.closeSenders()
 		w.buffer.Stop()
 		close(w.rtpCh)
 		close(w.rtcpCh)
@@ -465,6 +476,7 @@ func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}, config RouterCo
 
 func startAudioReceiver(w *WebRTCReceiver, wStart chan struct{}) {
 	defer func() {
+		w.closeSenders()
 		close(w.rtpCh)
 		if w.onCloseHandler != nil {
 			w.onCloseHandler()

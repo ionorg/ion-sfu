@@ -312,10 +312,16 @@ forLoop:
 func TestWebRTCSimulcastSender_Close(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	closeCtr := 0
+	fakeRouter := &RouterMock{
+		GetReceiverFunc: func(_ uint8) Receiver {
+			return nil
+		},
+	}
 
 	type fields struct {
 		ctx            context.Context
 		cancel         context.CancelFunc
+		router         Router
 		onCloseHandler func()
 	}
 	tests := []struct {
@@ -328,6 +334,7 @@ func TestWebRTCSimulcastSender_Close(t *testing.T) {
 			fields: fields{
 				ctx:            ctx,
 				cancel:         cancel,
+				router:         fakeRouter,
 				onCloseHandler: nil,
 			},
 		},
@@ -337,6 +344,7 @@ func TestWebRTCSimulcastSender_Close(t *testing.T) {
 			fields: fields{
 				ctx:    ctx,
 				cancel: cancel,
+				router: fakeRouter,
 				onCloseHandler: func() {
 					closeCtr++
 				},
@@ -349,6 +357,7 @@ func TestWebRTCSimulcastSender_Close(t *testing.T) {
 			s := &WebRTCSimulcastSender{
 				ctx:            tt.fields.ctx,
 				cancel:         tt.fields.cancel,
+				router:         tt.fields.router,
 				onCloseHandler: tt.fields.onCloseHandler,
 			}
 			if tt.fields.onCloseHandler == nil {

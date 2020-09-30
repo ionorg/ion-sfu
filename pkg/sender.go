@@ -100,6 +100,10 @@ func (s *WebRTCSender) Close() {
 
 func (s *WebRTCSender) close() {
 	s.cancel()
+	// Remove sender from receiver
+	if recv := s.router.GetReceiver(0); recv != nil {
+		recv.DeleteSender(s.id)
+	}
 	if s.onCloseHandler != nil {
 		s.onCloseHandler()
 	}
