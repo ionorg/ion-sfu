@@ -6,7 +6,7 @@ custom-signaling demonstrates how you can publish to an ion-sfu instance from th
 ### Run custom-signaling
 
 #### Run the example
-Run `go build && ./pub-from-chrome -c ../../config.toml`
+Run `go build && ./custom-signaling -c ../../config.toml`
 
 ### Open custom-signaling example page
 [jsfiddle.net](https://jsfiddle.net/xow2d1Lq/) you should see a 'Publish' button. Click 'Publish'. Open another instance of the fiddle, click 'Publish' again. You should now see the remote video stream in each fiddle.

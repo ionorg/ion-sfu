@@ -32,7 +32,7 @@ func (r *Session) AddTransport(transport Transport) {
 	r.transports[transport.ID()] = transport
 }
 
-// RemoveTransport removes a transport for the session
+// RemoveTransport removes a transport from the session
 func (r *Session) RemoveTransport(tid string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -74,7 +74,7 @@ func (r *Session) Transports() map[string]Transport {
 	return r.transports
 }
 
-// OnClose called when session is closed
+// OnClose is called when the session is closed
 func (r *Session) OnClose(f func()) {
 	r.onCloseHandler = f
 }
