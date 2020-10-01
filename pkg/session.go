@@ -46,27 +46,24 @@ func (r *Session) RemoveTransport(tid string) {
 }
 
 // AddRouter adds a router to transports
-func (r *Session) AddRouter(router *Router) {
+func (r *Session) AddRouter(router Router) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	for tid, t := range r.transports {
 		// Don't sub to self
-		if router.tid == tid {
+		if router.ID() == tid {
 			continue
 		}
 
-		log.Infof("AddRouter ssrc %d to %s", router.Track().SSRC(), tid)
+		log.Infof("AddRouter ssrc to %s", tid)
 
-		sender, err := t.NewSender(router.Track())
-
-		if err != nil {
-			log.Errorf("Error subscribing transport to router: %s", err)
-			continue
+		if t, ok := t.(*WebRTCTransport); ok {
+			if err := router.AddSender(t); err != nil {
+				log.Errorf("Error subscribing transport to router: %s", err)
+				continue
+			}
 		}
-
-		// Attach sender to source
-		router.AddSender(tid, sender)
 	}
 }
 

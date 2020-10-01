@@ -1,8 +1,8 @@
-// Package sfu contains the building blocks (configs) of the sfu
 package sfu
 
 import (
 	"context"
+	"math/rand"
 	"net/url"
 	"sync"
 	"time"
@@ -20,26 +20,18 @@ type ICEServerConfig struct {
 	Credential string   `mapstructure:"credential"`
 }
 
-// WebRTCConfig defines parameters for ice configuration of your SFU
+// WebRTCConfig defines parameters for ice
 type WebRTCConfig struct {
 	ICEPortRange []uint16          `mapstructure:"portrange"`
 	ICEServers   []ICEServerConfig `mapstructure:"iceserver"`
 	NAT1To1IPs   []string          `mapstructure:"nat1to1"`
 }
 
-// Config for base SFU including WebRTC, Log and Router configurations
+// Config for base SFU
 type Config struct {
 	WebRTC WebRTCConfig `mapstructure:"webrtc"`
 	Log    log.Config   `mapstructure:"log"`
 	Router RouterConfig `mapstructure:"router"`
-}
-
-// RouterConfig defines router configurations of the SFU
-type RouterConfig struct {
-	REMBFeedback bool                      `mapstructure:"subrembfeedback"`
-	MaxBandwidth uint64                    `mapstructure:"maxbandwidth"`
-	MaxNackTime  int64                     `mapstructure:"maxnacktime"`
-	Video        WebRTCVideoReceiverConfig `mapstructure:"video"`
 }
 
 // SFU represents an sfu instance
@@ -47,22 +39,46 @@ type SFU struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	webrtc   WebRTCTransportConfig
+	router   RouterConfig
 	mu       sync.RWMutex
 	sessions map[string]*Session
 }
 
-// NewSFU creates a new sfu instance using the provided configuration
+var (
+	rtcpfb = []webrtc.RTCPFeedback{
+		{Type: webrtc.TypeRTCPFBCCM},
+		{Type: webrtc.TypeRTCPFBNACK},
+		{Type: "nack pli"},
+	}
+)
+
+// NewSFU creates a new sfu instance
 func NewSFU(c Config) *SFU {
+	// Init random seed
+	rand.Seed(time.Now().UnixNano())
+
 	ctx, cancel := context.WithCancel(context.Background())
+	// Configure required extensions for simulcast
+	sdes, _ := url.Parse(sdp.SDESRTPStreamIDURI)
+	sdedMid, _ := url.Parse(sdp.SDESMidURI)
+	exts := []sdp.ExtMap{
+		{
+			URI: sdes,
+		},
+		{
+			URI: sdedMid,
+		},
+	}
+	se := webrtc.SettingEngine{}
+	se.AddSDPExtensions(webrtc.SDPSectionVideo, exts)
+
 	w := WebRTCTransportConfig{
 		configuration: webrtc.Configuration{
 			SDPSemantics: webrtc.SDPSemanticsUnifiedPlan,
 		},
-		setting: webrtc.SettingEngine{},
+		setting: se,
+		router:  c.Router,
 	}
-	// Init router config
-	routerConfig = c.Router
-
 	log.Init(c.Log.Level, c.Log.Fix)
 
 	var icePortStart, icePortEnd uint16
@@ -148,7 +164,7 @@ func (s *SFU) getSession(id string) *Session {
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport that is a member of a session
-func (s *SFU) NewWebRTCTransport(sid string, me MediaEngine) (*WebRTCTransport, error) {
+func (s *SFU) NewWebRTCTransport(sid string, me webrtc.MediaEngine) (*WebRTCTransport, error) {
 	session := s.getSession(sid)
 
 	if session == nil {
