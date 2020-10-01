@@ -10,6 +10,7 @@ require (
 	github.com/pion/mediadevices v0.0.0-20200929170321-f3e3dc9589ca
 	github.com/pion/rtcp v1.2.4
 	github.com/pion/rtp v1.6.1
+	github.com/pion/sdp/v2 v2.4.0
 	github.com/pion/sdp/v3 v3.0.1
 	github.com/pion/webrtc/v2 v2.2.26
 	github.com/pion/webrtc/v3 v3.0.0-beta.5

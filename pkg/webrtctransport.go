@@ -29,7 +29,7 @@ type WebRTCTransport struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
 	pc             *webrtc.PeerConnection
-	me             webrtc.MediaEngine
+	me             MediaEngine
 	mu             sync.RWMutex
 	candidates     []webrtc.ICECandidateInit
 	session        *Session
@@ -41,8 +41,8 @@ type WebRTCTransport struct {
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport
-func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEngine, cfg WebRTCTransportConfig) (*WebRTCTransport, error) {
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(me), webrtc.WithSettingEngine(cfg.setting))
+func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, cfg WebRTCTransportConfig) (*WebRTCTransport, error) {
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine), webrtc.WithSettingEngine(cfg.setting))
 	pc, err := api.NewPeerConnection(cfg.configuration)
 
 	if err != nil {
