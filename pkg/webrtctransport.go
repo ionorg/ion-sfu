@@ -31,6 +31,7 @@ type WebRTCTransport struct {
 	pc             *webrtc.PeerConnection
 	me             webrtc.MediaEngine
 	mu             sync.RWMutex
+	candidates     []webrtc.ICECandidateInit
 	session        *Session
 	senders        []Sender
 	routers        map[string]Router
@@ -196,6 +197,16 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 		return err
 	}
 
+	if len(p.candidates) > 0 {
+		for _, candidate := range p.candidates {
+			err := p.pc.AddICECandidate(candidate)
+			if err != nil {
+				log.Errorf("Error adding ice candidate %s", err)
+			}
+		}
+		p.candidates = nil
+	}
+
 	return nil
 }
 
@@ -206,7 +217,11 @@ func (p *WebRTCTransport) LocalDescription() *webrtc.SessionDescription {
 
 // AddICECandidate to peer connection
 func (p *WebRTCTransport) AddICECandidate(candidate webrtc.ICECandidateInit) error {
-	return p.pc.AddICECandidate(candidate)
+	if p.pc.RemoteDescription() != nil {
+		return p.pc.AddICECandidate(candidate)
+	}
+	p.candidates = append(p.candidates, candidate)
+	return nil
 }
 
 // OnICECandidate handler
