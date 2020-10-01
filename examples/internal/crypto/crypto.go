@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// GenPem generates x509 certificate and saves it to the disk
 func GenPem() {
 
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)

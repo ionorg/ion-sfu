@@ -194,7 +194,7 @@ func (b *Buffer) clear() {
 	}
 }
 
-// GetPayloadType get payloadtype
+// GetPayloadType gets the buffers payloadtype
 func (b *Buffer) GetPayloadType() uint8 {
 	return b.payloadType
 }
@@ -265,7 +265,7 @@ func (b *Buffer) GetLostRateBandwidth(cycle uint64) (float64, uint64) {
 	return lostRate, byteRate * 8
 }
 
-// GetPacket get packet by sequence number
+// GetPacket gets packet by sequence number
 func (b *Buffer) GetPacket(sn uint16) *rtp.Packet {
 	b.mu.RLock()
 	defer b.mu.RUnlock()

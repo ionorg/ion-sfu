@@ -1,3 +1,4 @@
+// Package pub-mediadevice demonstrates how you can read a camera using the Pion Mediadevice library and publish the stream to the ion-sfu server
 package main
 
 import (
@@ -5,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/pion/webrtc/v3"
 	"io"
 	"log"
 	"net/url"
@@ -31,21 +33,25 @@ type Candidate struct {
 	Candidate *webrtc.ICECandidate `json:candidate`
 }
 
+// SendOffer object to send to the sfu over Websockets
 type SendOffer struct {
 	SID   string                     `json:sid`
 	Offer *webrtc.SessionDescription `json:offer`
 }
 
+// SendAnswer object to send to the sfu over Websockets
 type SendAnswer struct {
 	SID    string                     `json:sid`
 	Answer *webrtc.SessionDescription `json:answer`
 }
 
+// TrickleResponse received from the sfu server
 type TrickleResponse struct {
 	Params *webrtc.ICECandidateInit `json:params`
 	Method string                   `json:method`
 }
 
+// Response received from the sfu over Websockets
 type Response struct {
 	Params *webrtc.SessionDescription `json:params`
 	Result *webrtc.SessionDescription `json:result`

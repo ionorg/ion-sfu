@@ -1,3 +1,4 @@
+// Package sfu contains the building blocks (configs) of the sfu
 package sfu
 
 import (
@@ -19,21 +20,21 @@ type ICEServerConfig struct {
 	Credential string   `mapstructure:"credential"`
 }
 
-// WebRTCConfig defines parameters for ice
+// WebRTCConfig defines parameters for ice configuration of your SFU
 type WebRTCConfig struct {
 	ICEPortRange []uint16          `mapstructure:"portrange"`
 	ICEServers   []ICEServerConfig `mapstructure:"iceserver"`
 	NAT1To1IPs   []string          `mapstructure:"nat1to1"`
 }
 
-// Config for base SFU
+// Config for base SFU including WebRTC, Log and Router configurations
 type Config struct {
 	WebRTC WebRTCConfig `mapstructure:"webrtc"`
 	Log    log.Config   `mapstructure:"log"`
 	Router RouterConfig `mapstructure:"router"`
 }
 
-// RouterConfig defines router configurations
+// RouterConfig defines router configurations of the SFU
 type RouterConfig struct {
 	REMBFeedback bool                      `mapstructure:"subrembfeedback"`
 	MaxBandwidth uint64                    `mapstructure:"maxbandwidth"`
@@ -50,7 +51,7 @@ type SFU struct {
 	sessions map[string]*Session
 }
 
-// NewSFU creates a new sfu instance
+// NewSFU creates a new sfu instance using the provided configuration
 func NewSFU(c Config) *SFU {
 	ctx, cancel := context.WithCancel(context.Background())
 	w := WebRTCTransportConfig{
