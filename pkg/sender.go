@@ -1,10 +1,13 @@
 package sfu
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/rtcp"
@@ -19,6 +22,7 @@ type Sender interface {
 	CurrentSpatialLayer() uint8
 	OnCloseHandler(fn func())
 	Close()
+	Muted(val bool)
 	stats() string
 	// Simulcast/SVC events
 	SwitchSpatialLayer(layer uint8)
@@ -33,9 +37,18 @@ type WebRTCSender struct {
 	sender         *webrtc.RTPSender
 	track          *webrtc.Track
 	router         Router
+	muted          atomicBool
+	payload        uint8
 	maxBitrate     uint64
 	target         uint64
 	onCloseHandler func()
+	// Muting helpers
+	lastPli  time.Time
+	reSync   atomicBool
+	snOffset uint16
+	tsOffset uint32
+	lastSN   uint16
+	lastTS   uint32
 
 	once sync.Once
 }
@@ -44,12 +57,13 @@ type WebRTCSender struct {
 func NewWebRTCSender(ctx context.Context, id string, router Router, sender *webrtc.RTPSender) Sender {
 	ctx, cancel := context.WithCancel(ctx)
 	s := &WebRTCSender{
-		id:     id,
-		ctx:    ctx,
-		cancel: cancel,
-		router: router,
-		sender: sender,
-		track:  sender.Track(),
+		id:      id,
+		ctx:     ctx,
+		cancel:  cancel,
+		payload: sender.Track().Codec().PayloadType,
+		router:  router,
+		sender:  sender,
+		track:   sender.Track(),
 	}
 
 	go s.receiveRTCP()
@@ -63,21 +77,74 @@ func (s *WebRTCSender) ID() string {
 
 // WriteRTP to the track
 func (s *WebRTCSender) WriteRTP(pkt *rtp.Packet) {
-	if s.ctx.Err() != nil {
+	if s.ctx.Err() != nil || s.muted.get() {
 		return
 	}
-	// Transform payload type
+	if s.reSync.get() {
+		if s.track.Kind() == webrtc.RTPCodecTypeVideo {
+			recv := s.router.GetReceiver(0)
+			if recv == nil {
+				return
+			}
+			// Forward pli to request a keyframe at max 1 pli per second
+			if time.Now().Sub(s.lastPli) > time.Second {
+				if err := recv.WriteRTCP(&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC}); err == nil {
+					s.lastPli = time.Now()
+				}
+			}
+			relay := false
+			// Wait for a keyframe to sync new source
+			switch s.payload {
+			case webrtc.DefaultPayloadTypeVP8:
+				vp8Packet := VP8Helper{}
+				if err := vp8Packet.Unmarshal(pkt.Payload); err == nil {
+					relay = vp8Packet.IsKeyFrame
+				}
+			case webrtc.DefaultPayloadTypeH264:
+				var word uint32
+				payload := bytes.NewReader(pkt.Payload)
+				err := binary.Read(payload, binary.BigEndian, &word)
+				if err != nil || (word&0x1F000000)>>24 != 24 {
+					relay = false
+				} else {
+					relay = word&0x1F == 7
+				}
+			}
+			if !relay {
+				return
+			}
+		}
+		s.snOffset = pkt.SequenceNumber - s.lastSN - 1
+		s.tsOffset = pkt.Timestamp - s.lastTS
+		s.reSync.set(false)
+	}
+	// Backup payload
+	bSN := pkt.SequenceNumber
+	bTS := pkt.Timestamp
 	bPt := pkt.PayloadType
-	pt := s.track.Codec().PayloadType
-	pkt.PayloadType = pt
+	// Transform payload type
+	s.lastSN = pkt.SequenceNumber - s.snOffset
+	s.lastTS = pkt.Timestamp - s.tsOffset
+	pkt.PayloadType = s.payload
+	pkt.Timestamp = s.lastTS
+	pkt.SequenceNumber = s.lastSN
 	err := s.track.WriteRTP(pkt)
 	// Restore packet
 	pkt.PayloadType = bPt
+	pkt.Timestamp = bTS
+	pkt.SequenceNumber = bSN
 	if err != nil {
 		if err == io.ErrClosedPipe {
 			return
 		}
 		log.Errorf("sender.track.WriteRTP err=%v", err)
+	}
+}
+
+func (s *WebRTCSender) Muted(val bool) {
+	s.muted.set(val)
+	if val {
+		s.reSync.set(val)
 	}
 }
 

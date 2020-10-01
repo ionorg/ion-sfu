@@ -137,9 +137,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 		log.Debugf("New DataChannel %s %d\n", d.Label(), d.ID())
 		// Register text message handling
 		if d.Label() == ChannelLabel {
-			d.OnMessage(func(msg webrtc.DataChannelMessage) {
-				HandleApiCommand(p, msg.Data)
-			})
+			HandleApiCommand(p, d)
 		}
 	})
 

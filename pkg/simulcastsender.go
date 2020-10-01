@@ -24,6 +24,7 @@ type WebRTCSimulcastSender struct {
 	router         Router
 	sender         *webrtc.RTPSender
 	track          *webrtc.Track
+	muted          atomicBool
 	target         uint64
 	payload        uint8
 	maxBitrate     uint64
@@ -200,6 +201,10 @@ func (s *WebRTCSimulcastSender) SwitchSpatialLayer(targetLayer uint8) {
 	if ok := s.router.SwitchSpatialLayer(s.currentSpatialLayer, targetLayer, s); !ok {
 		s.targetSpatialLayer = s.currentSpatialLayer
 	}
+}
+
+func (s *WebRTCSimulcastSender) Muted(val bool) {
+	s.muted.set(val)
 }
 
 func (s *WebRTCSimulcastSender) SwitchTemporalLayer(layer uint8) {

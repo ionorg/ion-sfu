@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 
 	"github.com/pion/ion-sfu/pkg/log"
+	"github.com/pion/webrtc/v3"
 )
 
-// All available data channels commands for SFU, may reflect only changes un current sub
+// All available data channels commands for SFU, may reflect only changes on caller,
 // this is not intended to force remove,mute, etc. to other publisher tracks.
-// Data channel commands are received in ion-sfu data channel. So it mus be considered
+// Data channel commands are received in ion-sfu data channel. So it must be considered
 // a reserved name
 const (
 	// Reserved data channel streamID for sfu commands
@@ -21,7 +22,7 @@ const (
 
 	// Unmute command
 	// Client: Send intent to unmute the stream
-	// Server: Send confirmation that stream is muted
+	// Server: Send confirmation that stream is un-muted
 	unmuteCommand = "unmute"
 
 	// Best Quality Command
@@ -38,7 +39,7 @@ const (
 	forceLowerQuality = "lowestQuality"
 )
 
-//DataChannelCommand is the base command struct for all subscribers
+// DataChannelCommand is the base command struct for all subscribers
 // requests.
 type DataChannelCommand struct {
 	ID       string `json:"id"`
@@ -46,17 +47,28 @@ type DataChannelCommand struct {
 	StreamID string `json:"stream"`
 }
 
-func HandleApiCommand(t *WebRTCTransport, msg []byte) {
-	dcc := &DataChannelCommand{}
-	if err := json.Unmarshal(msg, dcc); err != nil {
-		log.Errorf("Unmarshal api command err: %v", err)
-		return
-	}
+// HandleApiCommand handle all request from sub, all tracks from stream id
+// will be affected by this commands
+func HandleApiCommand(t *WebRTCTransport, dc *webrtc.DataChannel) {
+	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
+		dcc := &DataChannelCommand{}
+		if err := json.Unmarshal(msg.Data, dcc); err != nil {
+			log.Errorf("Unmarshal api command err: %v", err)
+			return
+		}
+		senders := t.GetSenders(dcc.StreamID)
 
-	switch dcc.Cmd {
-	case muteCommand:
-	case unmuteCommand:
-	case forceBestQuality:
-	case forceLowerQuality:
-	}
+		switch dcc.Cmd {
+		case muteCommand:
+			for _, sender := range senders {
+				sender.Muted(true)
+			}
+		case unmuteCommand:
+			for _, sender := range senders {
+				sender.Muted(false)
+			}
+		case forceBestQuality:
+		case forceLowerQuality:
+		}
+	})
 }
