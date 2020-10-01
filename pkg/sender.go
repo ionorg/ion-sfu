@@ -115,7 +115,7 @@ func (s *WebRTCSender) WriteRTP(pkt *rtp.Packet) {
 			}
 		}
 		s.snOffset = pkt.SequenceNumber - s.lastSN - 1
-		s.tsOffset = pkt.Timestamp - s.lastTS
+		s.tsOffset = pkt.Timestamp - s.lastTS + 1
 		s.reSync.set(false)
 	}
 	// Backup payload

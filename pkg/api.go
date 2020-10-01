@@ -13,19 +13,22 @@ import (
 // a reserved name
 const (
 	// Reserved data channel streamID for sfu commands
-	ChannelLabel = "ion-sfu"
+	channelLabel = "ion-sfu"
 
 	// Mute command
+	// Direction: Client -> SFU -> Client
 	// Client: Send intent to mute the stream
 	// Server: Send confirmation that stream is muted
 	muteCommand = "mute"
 
 	// Unmute command
+	// Direction: Client -> SFU -> Client
 	// Client: Send intent to unmute the stream
 	// Server: Send confirmation that stream is un-muted
 	unmuteCommand = "unmute"
 
 	// Best Quality Command
+	// Direction: Client -> SFU -> Client
 	// Client: Send intent to get best quality of the stream
 	// Server: Send confirmation that stream is in best quality,
 	// send an error if stream does not support simulcast/SVC
@@ -33,10 +36,17 @@ const (
 	forceBestQuality = "bestQuality"
 
 	// Lowest Quality Command
+	// Direction: Client -> SFU -> Client
 	// Client: Send intent to get lowest quality of the stream
 	// Server: Send confirmation that stream is in lowest quality,
 	// send an error if stream does not support simulcast/SVC
 	forceLowerQuality = "lowestQuality"
+
+	// Set Speaker
+	// Direction: SFU -> Client
+	// Server: Sends information about current speaker
+	// Client: Should react to speaker if required
+	setSpeaker = "speaker"
 )
 
 // DataChannelCommand is the base command struct for all subscribers
@@ -64,6 +74,7 @@ func HandleApiCommand(t *WebRTCTransport, dc *webrtc.DataChannel) {
 				sender.Muted(true)
 			}
 		case unmuteCommand:
+			println("un muting!!!")
 			for _, sender := range senders {
 				sender.Muted(false)
 			}

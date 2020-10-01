@@ -80,8 +80,8 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 		recv := NewWebRTCReceiver(ctx, track, cfg.router)
 
 		// Set transport label
-		if p.streamID != "" {
-			if track.RID() != "" {
+		if p.streamID == "" {
+			if track.Label() != "" {
 				p.streamID = track.Label()
 			} else {
 				p.streamID = cuid.New()
@@ -136,7 +136,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 	pc.OnDataChannel(func(d *webrtc.DataChannel) {
 		log.Debugf("New DataChannel %s %d\n", d.Label(), d.ID())
 		// Register text message handling
-		if d.Label() == ChannelLabel {
+		if d.Label() == channelLabel {
 			HandleApiCommand(p, d)
 		}
 	})
