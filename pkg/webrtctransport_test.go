@@ -7,17 +7,15 @@ import (
 	"time"
 
 	"github.com/pion/rtcp"
-
-	"github.com/stretchr/testify/assert"
-
 	"github.com/pion/webrtc/v3"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewWebRTCTransport(t *testing.T) {
 	type args struct {
 		ctx     context.Context
 		session *Session
-		me      webrtc.MediaEngine
+		me      MediaEngine
 		cfg     WebRTCTransportConfig
 	}
 	tests := []struct {
@@ -30,7 +28,7 @@ func TestNewWebRTCTransport(t *testing.T) {
 			args: args{
 				ctx:     context.Background(),
 				session: NewSession("test"),
-				me:      webrtc.MediaEngine{},
+				me:      MediaEngine{},
 				cfg:     WebRTCTransportConfig{},
 			},
 			wantErr: false,
@@ -50,7 +48,7 @@ func TestNewWebRTCTransport(t *testing.T) {
 }
 
 func TestWebRTCTransport_AddTransceiverFromKind(t *testing.T) {
-	me := webrtc.MediaEngine{}
+	me := MediaEngine{}
 	me.RegisterDefaultCodecs()
 
 	type args struct {

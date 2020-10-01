@@ -44,14 +44,6 @@ type SFU struct {
 	sessions map[string]*Session
 }
 
-var (
-	rtcpfb = []webrtc.RTCPFeedback{
-		{Type: webrtc.TypeRTCPFBCCM},
-		{Type: webrtc.TypeRTCPFBNACK},
-		{Type: "nack pli"},
-	}
-)
-
 // NewSFU creates a new sfu instance
 func NewSFU(c Config) *SFU {
 	// Init random seed
@@ -164,7 +156,7 @@ func (s *SFU) getSession(id string) *Session {
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport that is a member of a session
-func (s *SFU) NewWebRTCTransport(sid string, me webrtc.MediaEngine) (*WebRTCTransport, error) {
+func (s *SFU) NewWebRTCTransport(sid string, me MediaEngine) (*WebRTCTransport, error) {
 	session := s.getSession(sid)
 
 	if session == nil {
