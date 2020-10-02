@@ -7,7 +7,7 @@ require (
 	github.com/google/uuid v1.1.2
 	github.com/gorilla/websocket v1.4.2
 	github.com/lucsky/cuid v1.0.2
-	github.com/pion/mediadevices v0.0.0-20200929170321-f3e3dc9589ca
+	github.com/pion/mediadevices v0.0.0-20201001231759-943906e125d9
 	github.com/pion/rtcp v1.2.4
 	github.com/pion/rtp v1.6.1
 	github.com/pion/sdp/v2 v2.4.0
