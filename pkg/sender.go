@@ -18,11 +18,12 @@ import (
 // Sender defines a interface for a track receivers
 type Sender interface {
 	ID() string
+	Close()
+	Kind() webrtc.RTPCodecType
+	Muted(val bool)
 	WriteRTP(*rtp.Packet)
 	CurrentSpatialLayer() uint8
 	OnCloseHandler(fn func())
-	Close()
-	Muted(val bool)
 	stats() string
 	// Simulcast/SVC events
 	SwitchSpatialLayer(layer uint8)
@@ -146,6 +147,10 @@ func (s *WebRTCSender) Muted(val bool) {
 	if val {
 		s.reSync.set(val)
 	}
+}
+
+func (s *WebRTCSender) Kind() webrtc.RTPCodecType {
+	return s.track.Kind()
 }
 
 func (s *WebRTCSender) CurrentSpatialLayer() uint8 {

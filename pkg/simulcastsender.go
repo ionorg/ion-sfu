@@ -203,6 +203,10 @@ func (s *WebRTCSimulcastSender) SwitchSpatialLayer(targetLayer uint8) {
 	}
 }
 
+func (s *WebRTCSimulcastSender) Kind() webrtc.RTPCodecType {
+	return s.track.Kind()
+}
+
 func (s *WebRTCSimulcastSender) Muted(val bool) {
 	s.muted.set(val)
 }

@@ -35,7 +35,6 @@ type WebRTCTransport struct {
 	senders        map[string][]Sender
 	routers        map[string]Router
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
-	streamID       string
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport
@@ -63,7 +62,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 	// Subscribe to existing transports
 	for _, t := range session.Transports() {
 		for _, router := range t.Routers() {
-			err := router.AddSender(p, t.StreamID())
+			err := router.AddSender(p)
 			// log.Infof("Init add router ssrc %d to %s", router.receivers[0].Track().SSRC(), p.id)
 			if err != nil {
 				log.Errorf("Error subscribing to router err: %v", err)
@@ -79,21 +78,12 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 		log.Debugf("Peer %s got remote track id: %s ssrc: %d rid :%s streamID: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.Label())
 		recv := NewWebRTCReceiver(ctx, track, cfg.router)
 
-		// Set transport label
-		if p.streamID == "" {
-			if track.Label() != "" {
-				p.streamID = track.Label()
-			} else {
-				p.streamID = cuid.New()
-			}
-		}
-
 		if recv.Track().Kind() == webrtc.RTPCodecTypeVideo {
 			go p.sendRTCP(recv)
 		}
 		if router, ok := p.routers[track.ID()]; !ok {
 			if track.RID() != "" {
-				router = newRouter(p.id, cfg.router, SimulcastRouter)
+				router = newRouter(p.id, track.Label(), cfg.router, SimulcastRouter)
 				go func() {
 					// Send 3 big remb msgs to fwd all the tracks
 					ticker := time.NewTicker(1 * time.Second)
@@ -109,10 +99,10 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 					}
 				}()
 			} else {
-				router = newRouter(p.id, cfg.router, SimpleRouter)
+				router = newRouter(p.id, track.Label(), cfg.router, SimpleRouter)
 			}
 			router.AddReceiver(recv)
-			p.session.AddRouter(router, p.streamID)
+			p.session.AddRouter(router)
 			p.mu.Lock()
 			p.routers[recv.Track().ID()] = router
 			p.mu.Unlock()
@@ -137,7 +127,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEn
 		log.Debugf("New DataChannel %s %d\n", d.Label(), d.ID())
 		// Register text message handling
 		if d.Label() == channelLabel {
-			HandleApiCommand(p, d)
+			handleApiCommand(p, d)
 		}
 	})
 
@@ -253,10 +243,6 @@ func (p *WebRTCTransport) AddTransceiverFromKind(kind webrtc.RTPCodecType, init 
 // ID of peer
 func (p *WebRTCTransport) ID() string {
 	return p.id
-}
-
-func (p *WebRTCTransport) StreamID() string {
-	return p.streamID
 }
 
 // Routers returns routers for this peer

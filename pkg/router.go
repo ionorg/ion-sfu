@@ -19,7 +19,7 @@ type Router interface {
 	ID() string
 	AddReceiver(recv Receiver)
 	GetReceiver(layer uint8) Receiver
-	AddSender(p *WebRTCTransport, streamID string) error
+	AddSender(p *WebRTCTransport) error
 	SwitchSpatialLayer(currentLayer, targetLayer uint8, sub Sender) bool
 }
 
@@ -33,19 +33,21 @@ type RouterConfig struct {
 }
 
 type router struct {
-	tid       string
 	mu        sync.RWMutex
+	tid       string
 	kind      int
 	config    RouterConfig
+	streamID  string
 	receivers [3 + 1]Receiver
 }
 
 // newRouter for routing rtp/rtcp packets
-func newRouter(tid string, config RouterConfig, kind int) Router {
+func newRouter(tid, streamID string, config RouterConfig, kind int) Router {
 	return &router{
-		tid:    tid,
-		config: config,
-		kind:   kind,
+		tid:      tid,
+		kind:     kind,
+		config:   config,
+		streamID: streamID,
 	}
 }
 
@@ -66,7 +68,7 @@ func (r *router) GetReceiver(layer uint8) Receiver {
 }
 
 // AddWebRTCSender to router
-func (r *router) AddSender(p *WebRTCTransport, streamID string) error {
+func (r *router) AddSender(p *WebRTCTransport) error {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var (
@@ -98,12 +100,7 @@ func (r *router) AddSender(p *WebRTCTransport, streamID string) error {
 		return errPtNotSupported
 	}
 	pt := to[0].PayloadType
-	label := inTrack.Label()
-	// Simulcast omits stream id, use transport streamID to keep all tracks under same stream
-	if r.kind == SimulcastRouter {
-		label = p.streamID
-	}
-	outTrack, err := p.pc.NewTrack(pt, ssrc, inTrack.ID(), label)
+	outTrack, err := p.pc.NewTrack(pt, ssrc, inTrack.ID(), inTrack.Label())
 	if err != nil {
 		return err
 	}
@@ -122,7 +119,7 @@ func (r *router) AddSender(p *WebRTCTransport, streamID string) error {
 			log.Errorf("Error closing sender: %s", err)
 		}
 	})
-	p.AddSender(streamID, sender)
+	p.AddSender(r.streamID, sender)
 	go func() {
 		// There exists a bug in chrome where setLocalDescription
 		// fails if track RTP arrives before the sfu offer is set.
