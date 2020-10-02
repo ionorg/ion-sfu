@@ -5,6 +5,7 @@ package sfu
 
 import (
 	"github.com/pion/rtp"
+	"github.com/pion/webrtc/v3"
 	"sync"
 )
 
@@ -26,6 +27,12 @@ var _ Sender = &SenderMock{}
 //             },
 //             IDFunc: func() string {
 // 	               panic("mock out the ID method")
+//             },
+//             KindFunc: func() webrtc.RTPCodecType {
+// 	               panic("mock out the Kind method")
+//             },
+//             MutedFunc: func(val bool)  {
+// 	               panic("mock out the Muted method")
 //             },
 //             OnCloseHandlerFunc: func(fn func())  {
 // 	               panic("mock out the OnCloseHandler method")
@@ -58,6 +65,12 @@ type SenderMock struct {
 	// IDFunc mocks the ID method.
 	IDFunc func() string
 
+	// KindFunc mocks the Kind method.
+	KindFunc func() webrtc.RTPCodecType
+
+	// MutedFunc mocks the Muted method.
+	MutedFunc func(val bool)
+
 	// OnCloseHandlerFunc mocks the OnCloseHandler method.
 	OnCloseHandlerFunc func(fn func())
 
@@ -83,6 +96,14 @@ type SenderMock struct {
 		}
 		// ID holds details about calls to the ID method.
 		ID []struct {
+		}
+		// Kind holds details about calls to the Kind method.
+		Kind []struct {
+		}
+		// Muted holds details about calls to the Muted method.
+		Muted []struct {
+			// Val is the val argument value.
+			Val bool
 		}
 		// OnCloseHandler holds details about calls to the OnCloseHandler method.
 		OnCloseHandler []struct {
@@ -111,6 +132,8 @@ type SenderMock struct {
 	lockClose               sync.RWMutex
 	lockCurrentSpatialLayer sync.RWMutex
 	lockID                  sync.RWMutex
+	lockKind                sync.RWMutex
+	lockMuted               sync.RWMutex
 	lockOnCloseHandler      sync.RWMutex
 	lockSwitchSpatialLayer  sync.RWMutex
 	lockSwitchTemporalLayer sync.RWMutex
@@ -193,6 +216,63 @@ func (mock *SenderMock) IDCalls() []struct {
 	mock.lockID.RLock()
 	calls = mock.calls.ID
 	mock.lockID.RUnlock()
+	return calls
+}
+
+// Kind calls KindFunc.
+func (mock *SenderMock) Kind() webrtc.RTPCodecType {
+	if mock.KindFunc == nil {
+		panic("SenderMock.KindFunc: method is nil but Sender.Kind was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockKind.Lock()
+	mock.calls.Kind = append(mock.calls.Kind, callInfo)
+	mock.lockKind.Unlock()
+	return mock.KindFunc()
+}
+
+// KindCalls gets all the calls that were made to Kind.
+// Check the length with:
+//     len(mockedSender.KindCalls())
+func (mock *SenderMock) KindCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockKind.RLock()
+	calls = mock.calls.Kind
+	mock.lockKind.RUnlock()
+	return calls
+}
+
+// Muted calls MutedFunc.
+func (mock *SenderMock) Muted(val bool) {
+	if mock.MutedFunc == nil {
+		panic("SenderMock.MutedFunc: method is nil but Sender.Muted was just called")
+	}
+	callInfo := struct {
+		Val bool
+	}{
+		Val: val,
+	}
+	mock.lockMuted.Lock()
+	mock.calls.Muted = append(mock.calls.Muted, callInfo)
+	mock.lockMuted.Unlock()
+	mock.MutedFunc(val)
+}
+
+// MutedCalls gets all the calls that were made to Muted.
+// Check the length with:
+//     len(mockedSender.MutedCalls())
+func (mock *SenderMock) MutedCalls() []struct {
+	Val bool
+} {
+	var calls []struct {
+		Val bool
+	}
+	mock.lockMuted.RLock()
+	calls = mock.calls.Muted
+	mock.lockMuted.RUnlock()
 	return calls
 }
 

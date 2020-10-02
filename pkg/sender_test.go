@@ -105,9 +105,10 @@ forLoop:
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			s := &WebRTCSender{
-				ctx:    ctx,
-				cancel: cancel,
-				track:  senderTrack,
+				ctx:     ctx,
+				cancel:  cancel,
+				payload: senderTrack.PayloadType(),
+				track:   senderTrack,
 			}
 			tmr := time.NewTimer(1000 * time.Millisecond)
 			s.WriteRTP(fakePkt)
