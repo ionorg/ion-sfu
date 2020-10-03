@@ -20,7 +20,7 @@ type Sender interface {
 	ID() string
 	Close()
 	Kind() webrtc.RTPCodecType
-	Muted(val bool)
+	Mute(val bool)
 	WriteRTP(*rtp.Packet)
 	CurrentSpatialLayer() uint8
 	OnCloseHandler(fn func())
@@ -142,7 +142,7 @@ func (s *WebRTCSender) WriteRTP(pkt *rtp.Packet) {
 	}
 }
 
-func (s *WebRTCSender) Muted(val bool) {
+func (s *WebRTCSender) Mute(val bool) {
 	if s.muted.get() == val {
 		return
 	}

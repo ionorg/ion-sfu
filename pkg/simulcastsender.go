@@ -84,7 +84,7 @@ func (s *WebRTCSimulcastSender) ID() string {
 // WriteRTP to the track
 func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 	// Simulcast write RTP is sync, so the packet can be safely modified and restored
-	if s.ctx.Err() != nil {
+	if s.ctx.Err() != nil || s.muted.get() {
 		return
 	}
 	// Check if packet SSRC is different from before
@@ -207,8 +207,15 @@ func (s *WebRTCSimulcastSender) Kind() webrtc.RTPCodecType {
 	return s.track.Kind()
 }
 
-func (s *WebRTCSimulcastSender) Muted(val bool) {
+func (s *WebRTCSimulcastSender) Mute(val bool) {
+	if s.muted.get() == val {
+		return
+	}
 	s.muted.set(val)
+	if val {
+		// reset last ssrc to force a re-sync
+		s.lSSRC = 0
+	}
 }
 
 func (s *WebRTCSimulcastSender) SwitchTemporalLayer(layer uint8) {

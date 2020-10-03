@@ -4,9 +4,10 @@
 package sfu
 
 import (
+	"sync"
+
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
-	"sync"
 )
 
 // Ensure, that SenderMock does implement Sender.
@@ -32,7 +33,7 @@ var _ Sender = &SenderMock{}
 // 	               panic("mock out the Kind method")
 //             },
 //             MutedFunc: func(val bool)  {
-// 	               panic("mock out the Muted method")
+// 	               panic("mock out the Mute method")
 //             },
 //             OnCloseHandlerFunc: func(fn func())  {
 // 	               panic("mock out the OnCloseHandler method")
@@ -68,7 +69,7 @@ type SenderMock struct {
 	// KindFunc mocks the Kind method.
 	KindFunc func() webrtc.RTPCodecType
 
-	// MutedFunc mocks the Muted method.
+	// MutedFunc mocks the Mute method.
 	MutedFunc func(val bool)
 
 	// OnCloseHandlerFunc mocks the OnCloseHandler method.
@@ -100,7 +101,7 @@ type SenderMock struct {
 		// Kind holds details about calls to the Kind method.
 		Kind []struct {
 		}
-		// Muted holds details about calls to the Muted method.
+		// Mute holds details about calls to the Mute method.
 		Muted []struct {
 			// Val is the val argument value.
 			Val bool
@@ -245,10 +246,10 @@ func (mock *SenderMock) KindCalls() []struct {
 	return calls
 }
 
-// Muted calls MutedFunc.
-func (mock *SenderMock) Muted(val bool) {
+// Mute calls MutedFunc.
+func (mock *SenderMock) Mute(val bool) {
 	if mock.MutedFunc == nil {
-		panic("SenderMock.MutedFunc: method is nil but Sender.Muted was just called")
+		panic("SenderMock.MutedFunc: method is nil but Sender.Mute was just called")
 	}
 	callInfo := struct {
 		Val bool
@@ -261,7 +262,7 @@ func (mock *SenderMock) Muted(val bool) {
 	mock.MutedFunc(val)
 }
 
-// MutedCalls gets all the calls that were made to Muted.
+// MutedCalls gets all the calls that were made to Mute.
 // Check the length with:
 //     len(mockedSender.MutedCalls())
 func (mock *SenderMock) MutedCalls() []struct {

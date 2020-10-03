@@ -34,20 +34,20 @@ func handleApiCommand(t Transport, dc *webrtc.DataChannel) {
 		for _, sender := range senders {
 			switch sender.Kind() {
 			case webrtc.RTPCodecTypeAudio:
-				sender.Muted(!srm.Audio)
+				sender.Mute(!srm.Audio)
 			case webrtc.RTPCodecTypeVideo:
 				switch srm.Video {
 				case videoHighQuality:
-					sender.Muted(false)
+					sender.Mute(false)
 					sender.SwitchSpatialLayer(3)
 				case videoMediumQuality:
-					sender.Muted(false)
+					sender.Mute(false)
 					sender.SwitchSpatialLayer(2)
 				case videoLowQuality:
-					sender.Muted(false)
+					sender.Mute(false)
 					sender.SwitchSpatialLayer(1)
 				case videoMuted:
-					sender.Muted(true)
+					sender.Mute(true)
 				}
 			}
 		}
