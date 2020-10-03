@@ -143,6 +143,9 @@ func (s *WebRTCSender) WriteRTP(pkt *rtp.Packet) {
 }
 
 func (s *WebRTCSender) Muted(val bool) {
+	if s.muted.get() == val {
+		return
+	}
 	s.muted.set(val)
 	if val {
 		s.reSync.set(val)
