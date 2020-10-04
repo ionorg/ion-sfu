@@ -1,5 +1,0 @@
----
- name: pub-mediadevice
- description: This example demonstrates how you can read a camera using the [Pion Mediadevice library](https://github.com/pion/mediadevices) and publish the stream to the ION-SFU server.
- authors:
-   - Gabriel Tanner

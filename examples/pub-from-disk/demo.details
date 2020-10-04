@@ -1,5 +1,0 @@
----
- name: pub-from-disk
- description: Example of how to publish media from disk to ion-sfu
- authors:
-   - Tarrence van As
