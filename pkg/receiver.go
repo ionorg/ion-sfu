@@ -458,11 +458,6 @@ func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}, config RouterCo
 			go w.rembLoop(config.Video.REMBCycle)
 		}
 	}
-	if w.Track().RID() != "" {
-		w.wg.Add(1)
-		go w.rembLoop(config.Video.REMBCycle)
-	}
-	// Start rtcp reader from track
 	w.wg.Add(1)
 	go w.receiveRTP()
 	// Start buffer loop

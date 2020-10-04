@@ -131,7 +131,11 @@ func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 		if !relay {
 			return
 		}
-		// Switch is done update current layer
+		// Switch is done remove sender from previous layer
+		/// and update current layer
+		if pRecv := s.router.GetReceiver(s.currentSpatialLayer); pRecv != nil && s.currentSpatialLayer != s.targetSpatialLayer {
+			pRecv.DeleteSender(s.id)
+		}
 		s.currentSpatialLayer = s.targetSpatialLayer
 	}
 	// Backup pkt original data
@@ -197,9 +201,8 @@ func (s *WebRTCSimulcastSender) SwitchSpatialLayer(targetLayer uint8) {
 	if s.currentSpatialLayer != s.targetSpatialLayer {
 		return
 	}
-	s.targetSpatialLayer = targetLayer
-	if ok := s.router.SwitchSpatialLayer(s.currentSpatialLayer, targetLayer, s); !ok {
-		s.targetSpatialLayer = s.currentSpatialLayer
+	if ok := s.router.SwitchSpatialLayer(targetLayer, s); ok {
+		s.targetSpatialLayer = targetLayer
 	}
 }
 

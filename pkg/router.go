@@ -20,7 +20,7 @@ type Router interface {
 	AddReceiver(recv Receiver)
 	GetReceiver(layer uint8) Receiver
 	AddSender(p *WebRTCTransport) error
-	SwitchSpatialLayer(currentLayer, targetLayer uint8, sub Sender) bool
+	SwitchSpatialLayer(targetLayer uint8, sub Sender) bool
 }
 
 // RouterConfig defines router configurations
@@ -131,12 +131,8 @@ func (r *router) AddSender(p *WebRTCTransport) error {
 	return nil
 }
 
-func (r *router) SwitchSpatialLayer(currentLayer, targetLayer uint8, sub Sender) bool {
-	currentRecv := r.GetReceiver(currentLayer)
-	targetRecv := r.GetReceiver(targetLayer)
-	if targetRecv != nil {
-		// TODO do a more smart layer change
-		currentRecv.DeleteSender(sub.ID())
+func (r *router) SwitchSpatialLayer(targetLayer uint8, sub Sender) bool {
+	if targetRecv := r.GetReceiver(targetLayer); targetRecv != nil {
 		targetRecv.AddSender(sub)
 		return true
 	}
