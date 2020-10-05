@@ -1,6 +1,0 @@
----
- name: sub-in-browser
- description: Example of how to subscribe to an ion-sfu pub from the browser
- authors:
-   - Sean DuBois
-   - Tarrence van As

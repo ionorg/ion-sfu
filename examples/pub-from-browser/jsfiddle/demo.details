@@ -1,6 +1,0 @@
----
- name: pub-from-browser
- description: Example of how to publish to an ion-sfu instance from the browser
- authors:
-   - Tarrence van As
-   - Sean DuBois
