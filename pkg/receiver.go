@@ -141,8 +141,8 @@ func (w *WebRTCReceiver) SpatialLayer() uint8 {
 
 //closeSenders Close all senders from Receiver
 func (w *WebRTCReceiver) closeSenders() {
-	w.Lock()
-	defer w.Unlock()
+	w.RLock()
+	defer w.RUnlock()
 	for _, sender := range w.senders {
 		sender.Close()
 	}

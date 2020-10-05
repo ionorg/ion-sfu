@@ -1,6 +1,0 @@
----
- name: custom-signaling
- description: Example of how to publish to an ion-sfu instance from the browser with a custom signaling interface
- authors:
-   - jinleileiking
-   - Tarrence van As

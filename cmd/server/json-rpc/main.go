@@ -112,7 +112,7 @@ type RPC struct {
 	sfu *sfu.SFU
 }
 
-// NewRPC ...
+// NewRPC creates a new RPC object based on the sfu configuration
 func NewRPC() *RPC {
 	return &RPC{
 		sfu: sfu.NewSFU(conf),
@@ -125,17 +125,17 @@ type Join struct {
 	Offer webrtc.SessionDescription `json:"offer"`
 }
 
-// Negotiation message sent when renegotiating
+// Negotiation message sent when renegotiating the peer connection
 type Negotiation struct {
 	Desc webrtc.SessionDescription `json:"desc"`
 }
 
-// Trickle message sent when renegotiating
+// Trickle message sent when renegotiating the peer connection
 type Trickle struct {
 	Candidate webrtc.ICECandidateInit `json:"candidate"`
 }
 
-// Handle RPC call
+// Handle incoming RPC call events like join, answer, offer and trickle
 func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
 	p := forContext(ctx)
 
@@ -161,7 +161,7 @@ func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Req
 			break
 		}
 
-		me := webrtc.MediaEngine{}
+		me := sfu.MediaEngine{}
 		err = me.PopulateFromSDP(join.Offer)
 		if err != nil {
 			log.Errorf("connect: error creating peer: %v", err)

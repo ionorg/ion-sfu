@@ -4,20 +4,18 @@ go 1.13
 
 require (
 	github.com/golang/protobuf v1.4.2
-	github.com/google/uuid v1.1.2
 	github.com/gorilla/websocket v1.4.2
 	github.com/lucsky/cuid v1.0.2
-	github.com/pion/mediadevices v0.0.0-20200929170321-f3e3dc9589ca
 	github.com/pion/rtcp v1.2.4
 	github.com/pion/rtp v1.6.1
-	github.com/pion/sdp/v3 v3.0.1
-	github.com/pion/webrtc/v2 v2.2.26
-	github.com/pion/webrtc/v3 v3.0.0-beta.5
+	github.com/pion/sdp/v2 v2.4.0
+	github.com/pion/sdp/v3 v3.0.2
+	github.com/pion/webrtc/v3 v3.0.0-beta.6
 	github.com/rs/zerolog v1.19.0
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20200429184054-15c2290dcb37
 	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.6.1
-	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
+	golang.org/x/sys v0.0.0-20200831180312-196b9ba8737a // indirect
 	google.golang.org/genproto v0.0.0-20200305110556-506484158171 // indirect
 	google.golang.org/grpc v1.32.0
 	google.golang.org/protobuf v1.23.0

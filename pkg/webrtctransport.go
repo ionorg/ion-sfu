@@ -29,8 +29,9 @@ type WebRTCTransport struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
 	pc             *webrtc.PeerConnection
-	me             webrtc.MediaEngine
+	me             MediaEngine
 	mu             sync.RWMutex
+	candidates     []webrtc.ICECandidateInit
 	session        *Session
 	senders        map[string][]Sender
 	routers        map[string]Router
@@ -38,8 +39,8 @@ type WebRTCTransport struct {
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport
-func NewWebRTCTransport(ctx context.Context, session *Session, me webrtc.MediaEngine, cfg WebRTCTransportConfig) (*WebRTCTransport, error) {
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(me), webrtc.WithSettingEngine(cfg.setting))
+func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, cfg WebRTCTransportConfig) (*WebRTCTransport, error) {
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine), webrtc.WithSettingEngine(cfg.setting))
 	pc, err := api.NewPeerConnection(cfg.configuration)
 
 	if err != nil {
@@ -190,6 +191,16 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 		return err
 	}
 
+	if len(p.candidates) > 0 {
+		for _, candidate := range p.candidates {
+			err := p.pc.AddICECandidate(candidate)
+			if err != nil {
+				log.Errorf("Error adding ice candidate %s", err)
+			}
+		}
+		p.candidates = nil
+	}
+
 	return nil
 }
 
@@ -200,7 +211,11 @@ func (p *WebRTCTransport) LocalDescription() *webrtc.SessionDescription {
 
 // AddICECandidate to peer connection
 func (p *WebRTCTransport) AddICECandidate(candidate webrtc.ICECandidateInit) error {
-	return p.pc.AddICECandidate(candidate)
+	if p.pc.RemoteDescription() != nil {
+		return p.pc.AddICECandidate(candidate)
+	}
+	p.candidates = append(p.candidates, candidate)
+	return nil
 }
 
 // OnICECandidate handler
