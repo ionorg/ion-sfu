@@ -83,8 +83,12 @@ func (r *Session) stats() string {
 	info := fmt.Sprintf("\nsession: %s\n", r.id)
 
 	r.mu.RLock()
-	for _, transport := range r.transports {
-		info += transport.stats()
+	if len(r.transports) < 10 {
+		for _, transport := range r.transports {
+			info += transport.stats()
+		}
+	} else {
+		info += fmt.Sprintf("total: %d", len(r.transports))
 	}
 	r.mu.RUnlock()
 
