@@ -236,10 +236,6 @@ func (s *WebRTCSimulcastSender) Close() {
 
 func (s *WebRTCSimulcastSender) close() {
 	s.cancel()
-	// Remove sender from receiver
-	if recv := s.router.GetReceiver(s.currentSpatialLayer); recv != nil {
-		recv.DeleteSender(s.id)
-	}
 	if s.onCloseHandler != nil {
 		s.onCloseHandler()
 	}
@@ -253,8 +249,16 @@ func (s *WebRTCSimulcastSender) OnCloseHandler(fn func()) {
 func (s *WebRTCSimulcastSender) receiveRTCP() {
 	for {
 		pkts, err := s.sender.ReadRTCP()
-		if err == io.ErrClosedPipe || s.ctx.Err() != nil {
+		if err == io.ErrClosedPipe {
+			// Remove sender from receiver
+			if recv := s.router.GetReceiver(s.currentSpatialLayer); recv != nil {
+				recv.DeleteSender(s.id)
+			}
 			s.Close()
+			return
+		}
+
+		if s.ctx.Err() != nil {
 			return
 		}
 
@@ -263,11 +267,12 @@ func (s *WebRTCSimulcastSender) receiveRTCP() {
 			continue
 		}
 
+		recv := s.router.GetReceiver(s.currentSpatialLayer)
+		if recv == nil {
+			continue
+		}
+
 		for _, pkt := range pkts {
-			recv := s.router.GetReceiver(s.currentSpatialLayer)
-			if recv == nil {
-				continue
-			}
 			switch pkt := pkt.(type) {
 			case *rtcp.PictureLossIndication:
 				pkt.MediaSSRC = s.lSSRC

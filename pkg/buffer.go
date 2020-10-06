@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/pion/webrtc/v3"
+
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
@@ -183,15 +185,6 @@ func (b *Buffer) clearOldPkt(pushPktTS uint32, pushPktSN uint16) {
 func (b *Buffer) Stop() {
 	b.stop = true
 	close(b.rtcpCh)
-	b.clear()
-}
-
-func (b *Buffer) clear() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	for i := range b.pktBuffer {
-		b.pktBuffer[i] = nil
-	}
 }
 
 // GetPayloadType gets the buffers payloadtype
@@ -270,4 +263,19 @@ func (b *Buffer) GetPacket(sn uint16) *rtp.Packet {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.pktBuffer[sn]
+}
+
+// WritePacket write buffer packet to requested track. and modify headers
+func (b *Buffer) WritePacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset uint32) error {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	if bufferPkt := b.pktBuffer[sn]; bufferPkt != nil {
+		bufferPkt.SequenceNumber -= snOffset
+		bufferPkt.Timestamp -= tsOffset
+		err := track.WriteRTP(bufferPkt)
+		bufferPkt.Timestamp += tsOffset
+		bufferPkt.SequenceNumber += snOffset
+		return err
+	}
+	return errPacketNotFound
 }

@@ -63,9 +63,6 @@ func TestBufferWithDefaultBufferTime(t *testing.T) {
 		assert.True(t, strings.Contains(buffer.stats(), entry))
 	}
 
-	buffer.clear()
-	assert.Nil(t, buffer.GetPacket(0))
-
 }
 
 func TestBufferWithBufferTimeAndZeroSSRC(t *testing.T) {
@@ -124,11 +121,6 @@ func TestBufferWithBufferTimeAndZeroSSRC(t *testing.T) {
 	buffer.clearOldPkt(9999, 13)
 	buffer.clearOldPkt(99999, 14)
 	buffer.clearOldPkt(1200, 17)
-
-	buffer.clear()
-	for _, entry := range pktsSnsAndTs {
-		assert.Nil(t, buffer.GetPacket(entry.SequenceNumber))
-	}
 }
 
 func TestBuffer_tsDelta(t *testing.T) {

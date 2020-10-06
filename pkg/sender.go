@@ -188,7 +188,7 @@ func (s *WebRTCSender) OnCloseHandler(fn func()) {
 func (s *WebRTCSender) receiveRTCP() {
 	for {
 		pkts, err := s.sender.ReadRTCP()
-		if err == io.ErrClosedPipe || s.ctx.Err() != nil {
+		if err == io.ErrClosedPipe {
 			// Remove sender from receiver
 			if recv := s.router.GetReceiver(0); recv != nil {
 				recv.DeleteSender(s.id)
@@ -197,15 +197,20 @@ func (s *WebRTCSender) receiveRTCP() {
 			return
 		}
 
+		if s.ctx.Err() != nil {
+			return
+		}
+
 		if err != nil {
 			log.Errorf("rtcp err => %v", err)
 		}
 
+		recv := s.router.GetReceiver(0)
+		if recv == nil {
+			continue
+		}
+
 		for _, pkt := range pkts {
-			recv := s.router.GetReceiver(0)
-			if recv == nil {
-				continue
-			}
 			switch pkt := pkt.(type) {
 			case *rtcp.PictureLossIndication, *rtcp.FullIntraRequest:
 				if err := recv.WriteRTCP(pkt); err != nil {
@@ -214,21 +219,8 @@ func (s *WebRTCSender) receiveRTCP() {
 			case *rtcp.TransportLayerNack:
 				log.Tracef("router got nack: %+v", pkt)
 				for _, pair := range pkt.Nacks {
-					bufferPkt := recv.GetPacket(pair.PacketID)
-					if bufferPkt != nil {
-						// We found the packet in the buffer, resend to sub
-						s.WriteRTP(bufferPkt)
-						continue
-					}
-					// Packet not found, request from receivers
-					nack := &rtcp.TransportLayerNack{
-						// origin ssrc
-						SenderSSRC: pkt.SenderSSRC,
-						MediaSSRC:  pkt.MediaSSRC,
-						Nacks:      []rtcp.NackPair{{PacketID: pair.PacketID}},
-					}
-					if err := recv.WriteRTCP(nack); err != nil {
-						log.Errorf("writing nack RTCP err %v", err)
+					if err := recv.WritePacket(pair.PacketID, s.track, s.snOffset, s.tsOffset); err == errPacketNotFound {
+						//TODO handle missing nacks in sfu cache
 					}
 				}
 			default:

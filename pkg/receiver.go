@@ -39,7 +39,7 @@ type Receiver interface {
 	Track() *webrtc.Track
 	AddSender(sender Sender)
 	DeleteSender(pid string)
-	GetPacket(sn uint16) *rtp.Packet
+	WritePacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset uint32) error
 	ReadRTCP() chan rtcp.Packet
 	WriteRTCP(rtcp.Packet) error
 	OnCloseHandler(fn func())
@@ -175,11 +175,11 @@ func (w *WebRTCReceiver) Track() *webrtc.Track {
 }
 
 // GetPacket get a buffered packet if we have one
-func (w *WebRTCReceiver) GetPacket(sn uint16) *rtp.Packet {
+func (w *WebRTCReceiver) WritePacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset uint32) error {
 	if w.buffer == nil || w.ctx.Err() != nil {
 		return nil
 	}
-	return w.buffer.GetPacket(sn)
+	return w.buffer.WritePacket(sn, track, snOffset, tsOffset)
 }
 
 // Close gracefully close the track
