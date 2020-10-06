@@ -217,9 +217,15 @@ func (s *WebRTCSender) receiveRTCP() {
 					log.Errorf("writing RTCP err %v", err)
 				}
 			case *rtcp.TransportLayerNack:
-				log.Tracef("router got nack: %+v", pkt)
+				log.Tracef("sender got nack: %+v", pkt)
 				for _, pair := range pkt.Nacks {
-					if err := recv.WritePacket(pair.PacketID, s.track, s.snOffset, s.tsOffset); err == errPacketNotFound {
+					if err := recv.WriteBufferedPacket(
+						pair.PacketID,
+						s.track,
+						s.snOffset,
+						s.tsOffset,
+						s.track.SSRC(),
+					); err == errPacketNotFound {
 						//TODO handle missing nacks in sfu cache
 					}
 				}

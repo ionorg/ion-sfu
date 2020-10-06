@@ -251,15 +251,18 @@ func (b *Buffer) GetPacket(sn uint16) *rtp.Packet {
 }
 
 // WritePacket write buffer packet to requested track. and modify headers
-func (b *Buffer) WritePacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset uint32) error {
+func (b *Buffer) WritePacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	if bufferPkt := b.pktBuffer[sn]; bufferPkt != nil {
+		bSsrc := bufferPkt.SSRC
 		bufferPkt.SequenceNumber -= snOffset
 		bufferPkt.Timestamp -= tsOffset
+		bufferPkt.SSRC = ssrc
 		err := track.WriteRTP(bufferPkt)
 		bufferPkt.Timestamp += tsOffset
 		bufferPkt.SequenceNumber += snOffset
+		bufferPkt.SSRC = bSsrc
 		return err
 	}
 	return errPacketNotFound

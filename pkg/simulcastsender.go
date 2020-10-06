@@ -287,11 +287,17 @@ func (s *WebRTCSimulcastSender) receiveRTCP() {
 					log.Errorf("writing RTCP err %v", err)
 				}
 			case *rtcp.TransportLayerNack:
-				// TODO: Look how to look at packets in buffer
-				pkt.MediaSSRC = s.lSSRC
-				pkt.SenderSSRC = s.lSSRC
-				if err := recv.WriteRTCP(pkt); err != nil {
-					log.Errorf("writing RTCP err %v", err)
+				log.Tracef("sender got nack: %+v", pkt)
+				for _, pair := range pkt.Nacks {
+					if err := recv.WriteBufferedPacket(
+						pair.PacketID,
+						s.track,
+						s.snOffset,
+						s.tsOffset,
+						s.simulcastSSRC,
+					); err == errPacketNotFound {
+						//TODO handle missing nacks in sfu cache
+					}
 				}
 			default:
 				// TODO: Use fb packets for congestion control

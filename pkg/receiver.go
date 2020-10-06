@@ -37,13 +37,13 @@ type rtpExtInfo struct {
 // Receiver defines a interface for a track receivers
 type Receiver interface {
 	Track() *webrtc.Track
-	AddSender(sender Sender)
-	DeleteSender(pid string)
-	WritePacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset uint32) error
 	ReadRTCP() chan rtcp.Packet
 	WriteRTCP(rtcp.Packet) error
-	OnCloseHandler(fn func())
+	AddSender(sender Sender)
+	DeleteSender(pid string)
 	SpatialLayer() uint8
+	OnCloseHandler(fn func())
+	WriteBufferedPacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error
 	Close()
 	stats() string
 }
@@ -174,12 +174,12 @@ func (w *WebRTCReceiver) Track() *webrtc.Track {
 	return w.track
 }
 
-// GetPacket get a buffered packet if we have one
-func (w *WebRTCReceiver) WritePacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset uint32) error {
+// WriteBufferedPacket writes buffered packet to track, return error if packet not found
+func (w *WebRTCReceiver) WriteBufferedPacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error {
 	if w.buffer == nil || w.ctx.Err() != nil {
 		return nil
 	}
-	return w.buffer.WritePacket(sn, track, snOffset, tsOffset)
+	return w.buffer.WritePacket(sn, track, snOffset, tsOffset, ssrc)
 }
 
 // Close gracefully close the track
