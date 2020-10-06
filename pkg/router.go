@@ -17,6 +17,7 @@ const (
 // Router defines a track rtp/rtcp router
 type Router interface {
 	ID() string
+	Config() RouterConfig
 	AddReceiver(recv Receiver)
 	GetReceiver(layer uint8) Receiver
 	AddSender(p *WebRTCTransport) error
@@ -53,6 +54,10 @@ func newRouter(tid, streamID string, config RouterConfig, kind int) Router {
 
 func (r *router) ID() string {
 	return r.tid
+}
+
+func (r *router) Config() RouterConfig {
+	return r.config
 }
 
 func (r *router) AddReceiver(recv Receiver) {

@@ -35,6 +35,7 @@ type WebRTCSimulcastSender struct {
 	temporalSupported   bool
 	currentTempLayer    uint8
 	targetTempLayer     uint8
+	temporalEnabled     bool
 	simulcastSSRC       uint32
 	tsOffset            uint32
 	snOffset            uint16
@@ -69,6 +70,7 @@ func NewWebRTCSimulcastSender(ctx context.Context, id string, router Router, sen
 		currentSpatialLayer: layer,
 		targetSpatialLayer:  layer,
 		simulcastSSRC:       sender.Track().SSRC(),
+		temporalEnabled:     router.Config().Simulcast.EnableTemporalLayer,
 		refPicID:            uint16(rand.Uint32()),
 		refTlzi:             uint8(rand.Uint32()),
 	}
@@ -158,7 +160,7 @@ func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 		s.lTS = pkt.Timestamp
 		s.lSN = pkt.SequenceNumber
 	}
-	if s.temporalSupported {
+	if s.temporalEnabled && s.temporalSupported {
 		if s.payload == webrtc.DefaultPayloadTypeVP8 {
 			pl, skip := setVP8TemporalLayer(pkt.Payload, s)
 			if skip {

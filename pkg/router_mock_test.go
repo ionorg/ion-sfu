@@ -23,6 +23,9 @@ var _ Router = &RouterMock{}
 //             AddSenderFunc: func(p *WebRTCTransport) error {
 // 	               panic("mock out the AddSender method")
 //             },
+//             ConfigFunc: func() RouterConfig {
+// 	               panic("mock out the Config method")
+//             },
 //             GetReceiverFunc: func(layer uint8) Receiver {
 // 	               panic("mock out the GetReceiver method")
 //             },
@@ -45,6 +48,9 @@ type RouterMock struct {
 	// AddSenderFunc mocks the AddSender method.
 	AddSenderFunc func(p *WebRTCTransport) error
 
+	// ConfigFunc mocks the Config method.
+	ConfigFunc func() RouterConfig
+
 	// GetReceiverFunc mocks the GetReceiver method.
 	GetReceiverFunc func(layer uint8) Receiver
 
@@ -66,6 +72,9 @@ type RouterMock struct {
 			// P is the p argument value.
 			P *WebRTCTransport
 		}
+		// Config holds details about calls to the Config method.
+		Config []struct {
+		}
 		// GetReceiver holds details about calls to the GetReceiver method.
 		GetReceiver []struct {
 			// Layer is the layer argument value.
@@ -84,6 +93,7 @@ type RouterMock struct {
 	}
 	lockAddReceiver        sync.RWMutex
 	lockAddSender          sync.RWMutex
+	lockConfig             sync.RWMutex
 	lockGetReceiver        sync.RWMutex
 	lockID                 sync.RWMutex
 	lockSwitchSpatialLayer sync.RWMutex
@@ -148,6 +158,32 @@ func (mock *RouterMock) AddSenderCalls() []struct {
 	mock.lockAddSender.RLock()
 	calls = mock.calls.AddSender
 	mock.lockAddSender.RUnlock()
+	return calls
+}
+
+// Config calls ConfigFunc.
+func (mock *RouterMock) Config() RouterConfig {
+	if mock.ConfigFunc == nil {
+		panic("RouterMock.ConfigFunc: method is nil but Router.Config was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockConfig.Lock()
+	mock.calls.Config = append(mock.calls.Config, callInfo)
+	mock.lockConfig.Unlock()
+	return mock.ConfigFunc()
+}
+
+// ConfigCalls gets all the calls that were made to Config.
+// Check the length with:
+//     len(mockedRouter.ConfigCalls())
+func (mock *RouterMock) ConfigCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockConfig.RLock()
+	calls = mock.calls.Config
+	mock.lockConfig.RUnlock()
 	return calls
 }
 
