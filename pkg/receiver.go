@@ -250,18 +250,6 @@ func (w *WebRTCReceiver) fwdRTP() {
 	}
 }
 
-func (w *WebRTCReceiver) bufferRtcpLoop() {
-	defer w.wg.Done()
-	for {
-		select {
-		case pkt := <-w.buffer.GetRTCPChan():
-			w.rtcpCh <- pkt
-		case <-w.ctx.Done():
-			return
-		}
-	}
-}
-
 func (w *WebRTCReceiver) rembLoop(cycle int) {
 	defer w.wg.Done()
 	if cycle <= 0 {
@@ -439,7 +427,7 @@ func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}, config RouterCo
 	}()
 
 	w.rtcpCh = make(chan rtcp.Packet, maxSize)
-	w.buffer = NewBuffer(w.track.SSRC(), w.track.PayloadType(), BufferOptions{
+	w.buffer = NewBuffer(w.rtcpCh, w.track.SSRC(), w.track.PayloadType(), BufferOptions{
 		BufferTime: config.Video.MaxBufferTime,
 	})
 	w.maxBandwidth = config.MaxBandwidth * 1000
@@ -460,9 +448,6 @@ func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}, config RouterCo
 	}
 	w.wg.Add(1)
 	go w.receiveRTP()
-	// Start buffer loop
-	w.wg.Add(1)
-	go w.bufferRtcpLoop()
 	// Receiver start loops done, send start signal
 	go w.fwdRTP()
 	wStart <- struct{}{}

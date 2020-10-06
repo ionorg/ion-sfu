@@ -41,7 +41,7 @@ type Buffer struct {
 	lastNackSN  uint16
 	lastClearTS uint32
 	lastClearSN uint16
-
+	rtcpCh      chan rtcp.Packet
 	// Last seqnum that has been added to buffer
 	lastPushSN uint16
 
@@ -51,9 +51,6 @@ type Buffer struct {
 	// calc lost rate
 	receivedPkt int
 	lostPkt     int
-
-	// response nack channel
-	rtcpCh chan rtcp.Packet
 
 	// calc bandwidth
 	totalByte uint64
@@ -74,11 +71,11 @@ type BufferOptions struct {
 }
 
 // NewBuffer constructs a new Buffer
-func NewBuffer(ssrc uint32, pt uint8, o BufferOptions) *Buffer {
+func NewBuffer(ch chan rtcp.Packet, ssrc uint32, pt uint8, o BufferOptions) *Buffer {
 	b := &Buffer{
 		ssrc:        ssrc,
 		payloadType: pt,
-		rtcpCh:      make(chan rtcp.Packet, maxPktSize),
+		rtcpCh:      ch,
 	}
 
 	if o.BufferTime <= 0 {
@@ -97,12 +94,6 @@ func (b *Buffer) Push(p *rtp.Packet) {
 
 	b.receivedPkt++
 	b.totalByte += uint64(p.MarshalSize())
-
-	// init ssrc payloadType
-	if b.ssrc == 0 || b.payloadType == 0 {
-		b.ssrc = p.SSRC
-		b.payloadType = p.PayloadType
-	}
 
 	// init lastClearTS
 	if b.lastClearTS == 0 {
@@ -184,7 +175,6 @@ func (b *Buffer) clearOldPkt(pushPktTS uint32, pushPktSN uint16) {
 // Stop buffer
 func (b *Buffer) Stop() {
 	b.stop = true
-	close(b.rtcpCh)
 }
 
 // GetPayloadType gets the buffers payloadtype
@@ -240,11 +230,6 @@ func (b *Buffer) GetNackPair(buffer [65536]*rtp.Packet, begin, end uint16) (rtcp
 // GetSSRC get ssrc
 func (b *Buffer) GetSSRC() uint32 {
 	return b.ssrc
-}
-
-// GetRTCPChan return rtcp channel
-func (b *Buffer) GetRTCPChan() chan rtcp.Packet {
-	return b.rtcpCh
 }
 
 // GetLostRateBandwidth calc lostRate and bandwidth by cycle
