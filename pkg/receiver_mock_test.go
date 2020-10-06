@@ -4,10 +4,9 @@
 package sfu
 
 import (
-	"sync"
-
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
+	"sync"
 )
 
 // Ensure, that ReceiverMock does implement Receiver.
@@ -41,7 +40,7 @@ var _ Receiver = &ReceiverMock{}
 //             TrackFunc: func() *webrtc.Track {
 // 	               panic("mock out the Track method")
 //             },
-//             WritePacketFunc: func(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset uint32) error {
+//             WriteBufferedPacketFunc: func(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset uint32, ssrc uint32) error {
 // 	               panic("mock out the WriteBufferedPacket method")
 //             },
 //             WriteRTCPFunc: func(in1 rtcp.Packet) error {
@@ -78,8 +77,8 @@ type ReceiverMock struct {
 	// TrackFunc mocks the Track method.
 	TrackFunc func() *webrtc.Track
 
-	// WritePacketFunc mocks the WriteBufferedPacket method.
-	WritePacketFunc func(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset uint32) error
+	// WriteBufferedPacketFunc mocks the WriteBufferedPacket method.
+	WriteBufferedPacketFunc func(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset uint32, ssrc uint32) error
 
 	// WriteRTCPFunc mocks the WriteRTCP method.
 	WriteRTCPFunc func(in1 rtcp.Packet) error
@@ -117,7 +116,7 @@ type ReceiverMock struct {
 		Track []struct {
 		}
 		// WriteBufferedPacket holds details about calls to the WriteBufferedPacket method.
-		WritePacket []struct {
+		WriteBufferedPacket []struct {
 			// Sn is the sn argument value.
 			Sn uint16
 			// Track is the track argument value.
@@ -126,6 +125,8 @@ type ReceiverMock struct {
 			SnOffset uint16
 			// TsOffset is the tsOffset argument value.
 			TsOffset uint32
+			// Ssrc is the ssrc argument value.
+			Ssrc uint32
 		}
 		// WriteRTCP holds details about calls to the WriteRTCP method.
 		WriteRTCP []struct {
@@ -136,16 +137,16 @@ type ReceiverMock struct {
 		stats []struct {
 		}
 	}
-	lockAddSender      sync.RWMutex
-	lockClose          sync.RWMutex
-	lockDeleteSender   sync.RWMutex
-	lockOnCloseHandler sync.RWMutex
-	lockReadRTCP       sync.RWMutex
-	lockSpatialLayer   sync.RWMutex
-	lockTrack          sync.RWMutex
-	lockWritePacket    sync.RWMutex
-	lockWriteRTCP      sync.RWMutex
-	lockstats          sync.RWMutex
+	lockAddSender           sync.RWMutex
+	lockClose               sync.RWMutex
+	lockDeleteSender        sync.RWMutex
+	lockOnCloseHandler      sync.RWMutex
+	lockReadRTCP            sync.RWMutex
+	lockSpatialLayer        sync.RWMutex
+	lockTrack               sync.RWMutex
+	lockWriteBufferedPacket sync.RWMutex
+	lockWriteRTCP           sync.RWMutex
+	lockstats               sync.RWMutex
 }
 
 // AddSender calls AddSenderFunc.
@@ -345,46 +346,50 @@ func (mock *ReceiverMock) TrackCalls() []struct {
 	return calls
 }
 
-// WriteBufferedPacket calls WritePacketFunc.
-func (mock *ReceiverMock) WriteBufferedPacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset uint32) error {
-	if mock.WritePacketFunc == nil {
-		panic("ReceiverMock.WritePacketFunc: method is nil but Receiver.WriteBufferedPacket was just called")
+// WriteBufferedPacket calls WriteBufferedPacketFunc.
+func (mock *ReceiverMock) WriteBufferedPacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset uint32, ssrc uint32) error {
+	if mock.WriteBufferedPacketFunc == nil {
+		panic("ReceiverMock.WriteBufferedPacketFunc: method is nil but Receiver.WriteBufferedPacket was just called")
 	}
 	callInfo := struct {
 		Sn       uint16
 		Track    *webrtc.Track
 		SnOffset uint16
 		TsOffset uint32
+		Ssrc     uint32
 	}{
 		Sn:       sn,
 		Track:    track,
 		SnOffset: snOffset,
 		TsOffset: tsOffset,
+		Ssrc:     ssrc,
 	}
-	mock.lockWritePacket.Lock()
-	mock.calls.WritePacket = append(mock.calls.WritePacket, callInfo)
-	mock.lockWritePacket.Unlock()
-	return mock.WritePacketFunc(sn, track, snOffset, tsOffset)
+	mock.lockWriteBufferedPacket.Lock()
+	mock.calls.WriteBufferedPacket = append(mock.calls.WriteBufferedPacket, callInfo)
+	mock.lockWriteBufferedPacket.Unlock()
+	return mock.WriteBufferedPacketFunc(sn, track, snOffset, tsOffset, ssrc)
 }
 
-// WritePacketCalls gets all the calls that were made to WriteBufferedPacket.
+// WriteBufferedPacketCalls gets all the calls that were made to WriteBufferedPacket.
 // Check the length with:
-//     len(mockedReceiver.WritePacketCalls())
-func (mock *ReceiverMock) WritePacketCalls() []struct {
+//     len(mockedReceiver.WriteBufferedPacketCalls())
+func (mock *ReceiverMock) WriteBufferedPacketCalls() []struct {
 	Sn       uint16
 	Track    *webrtc.Track
 	SnOffset uint16
 	TsOffset uint32
+	Ssrc     uint32
 } {
 	var calls []struct {
 		Sn       uint16
 		Track    *webrtc.Track
 		SnOffset uint16
 		TsOffset uint32
+		Ssrc     uint32
 	}
-	mock.lockWritePacket.RLock()
-	calls = mock.calls.WritePacket
-	mock.lockWritePacket.RUnlock()
+	mock.lockWriteBufferedPacket.RLock()
+	calls = mock.calls.WriteBufferedPacket
+	mock.lockWriteBufferedPacket.RUnlock()
 	return calls
 }
 

@@ -28,7 +28,7 @@ func TestNewWebRTCSimulcastSender(t *testing.T) {
 	type args struct {
 		ctx    context.Context
 		id     string
-		router *router
+		router Router
 		sender *webrtc.RTPSender
 		layer  uint8
 	}
@@ -39,9 +39,13 @@ func TestNewWebRTCSimulcastSender(t *testing.T) {
 		{
 			name: "Must return a non nil Sender",
 			args: args{
-				ctx:    ctx,
-				id:     "test",
-				router: nil,
+				ctx: ctx,
+				id:  "test",
+				router: &RouterMock{
+					ConfigFunc: func() RouterConfig {
+						return RouterConfig{}
+					},
+				},
 				sender: sender,
 				layer:  2,
 			},
