@@ -495,3 +495,93 @@ func TestWebRTCSimulcastSender_SwitchSpatialLayer(t *testing.T) {
 		})
 	}
 }
+
+func TestSimulcastSender_Mute(t *testing.T) {
+	me := webrtc.MediaEngine{}
+	me.RegisterDefaultCodecs()
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+	sfu, remote, err := newPair(webrtc.Configuration{}, api)
+	assert.NoError(t, err)
+
+	var remoteTrack *webrtc.Track
+	gotTrack := make(chan struct{}, 1)
+
+	remote.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
+		_, err := track.ReadRTP()
+		assert.NoError(t, err)
+		remoteTrack = track
+		gotTrack <- struct{}{}
+	})
+
+	senderTrack, err := sfu.NewTrack(webrtc.DefaultPayloadTypeVP8, 1234, "video", "pion")
+	assert.NoError(t, err)
+	_, err = sfu.AddTrack(senderTrack)
+	assert.NoError(t, err)
+
+	err = signalPair(sfu, remote)
+	assert.NoError(t, err)
+
+forLoop:
+	for {
+		select {
+		case <-time.After(20 * time.Millisecond):
+			pkt := senderTrack.Packetizer().Packetize([]byte{0x01, 0x02, 0x03, 0x04}, 1)[0]
+			err = senderTrack.WriteRTP(pkt)
+			assert.NoError(t, err)
+		case <-gotTrack:
+			break forLoop
+		}
+	}
+
+	gotPli := make(chan struct{}, 1)
+	fakeRecv := &ReceiverMock{
+		WriteRTCPFunc: func(in1 rtcp.Packet) error {
+			if _, ok := in1.(*rtcp.PictureLossIndication); ok {
+				gotPli <- struct{}{}
+			}
+			return nil
+		},
+		TrackFunc: func() *webrtc.Track {
+			return senderTrack
+		},
+	}
+
+	fakeRouter := &RouterMock{
+		GetReceiverFunc: func(_ uint8) Receiver {
+			return fakeRecv
+		},
+	}
+
+	simpleSdr := WebRTCSimulcastSender{
+		ctx:           context.Background(),
+		simulcastSSRC: 1234,
+		router:        fakeRouter,
+		track:         senderTrack,
+		payload:       senderTrack.PayloadType(),
+		lSSRC:         1234,
+	}
+	// Simple sender must forward packets while the sender is not muted
+	fakePkt := senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]
+	simpleSdr.WriteRTP(fakePkt)
+	packet, err := remoteTrack.ReadRTP()
+	assert.NoError(t, err)
+	assert.Equal(t, fakePkt.Payload, packet.Payload)
+	// Mute track will prevent tracks to reach the subscriber
+	simpleSdr.Mute(true)
+	for i := 0; i <= 5; i++ {
+		simpleSdr.WriteRTP(senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0])
+	}
+	simpleSdr.Mute(false)
+	// Now that is un-muted sender will request a key frame
+	simpleSdr.WriteRTP(senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0])
+	<-gotPli
+	// Write VP8 keyframe
+	keyFramePkt := senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]
+	keyFramePkt.Payload = []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0x9f, 0x94, 0x1}
+	simpleSdr.WriteRTP(keyFramePkt)
+	packet2, err := remoteTrack.ReadRTP()
+	assert.NoError(t, err)
+	assert.Equal(t, keyFramePkt.Payload, packet2.Payload)
+	// Packet 1 and packet 2 must have contiguous SN even after skipped packets while muted
+	assert.Equal(t, packet.SequenceNumber+1, packet2.SequenceNumber)
+}

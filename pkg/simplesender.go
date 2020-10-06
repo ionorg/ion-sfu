@@ -68,12 +68,12 @@ func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
 	}
 	if s.reSync.get() {
 		if s.track.Kind() == webrtc.RTPCodecTypeVideo {
-			recv := s.router.GetReceiver(0)
-			if recv == nil {
-				return
-			}
 			// Forward pli to request a keyframe at max 1 pli per second
 			if time.Now().Sub(s.lastPli) > time.Second {
+				recv := s.router.GetReceiver(0)
+				if recv == nil {
+					return
+				}
 				if err := recv.WriteRTCP(&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC}); err == nil {
 					s.lastPli = time.Now()
 				}
