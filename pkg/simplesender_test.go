@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNewWebRTCSender(t *testing.T) {
+func TestNewSimpleSender(t *testing.T) {
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -47,13 +47,13 @@ func TestNewWebRTCSender(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewWebRTCSender(tt.args.ctx, tt.args.id, tt.args.router, tt.args.sender)
+			got := NewSimpleSender(tt.args.ctx, tt.args.id, tt.args.router, tt.args.sender)
 			assert.NotNil(t, got)
 		})
 	}
 }
 
-func TestWebRTCSender_WriteRTP(t *testing.T) {
+func TestSimpleSender_WriteRTP(t *testing.T) {
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -104,7 +104,7 @@ forLoop:
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
-			s := &WebRTCSender{
+			s := &SimpleSender{
 				ctx:     ctx,
 				cancel:  cancel,
 				payload: senderTrack.PayloadType(),
@@ -132,7 +132,7 @@ forLoop:
 	_ = remote.Close()
 }
 
-func TestWebRTCSender_receiveRTCP(t *testing.T) {
+func TestSimpleSender_receiveRTCP(t *testing.T) {
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -174,7 +174,7 @@ func TestWebRTCSender_receiveRTCP(t *testing.T) {
 forLoop:
 	for {
 		select {
-		case <-time.After(500 * time.Millisecond):
+		case <-time.After(20 * time.Millisecond):
 			pkt := senderTrack.Packetizer().Packetize([]byte{0x01, 0x02, 0x03, 0x04}, 1)[0]
 			err = senderTrack.WriteRTP(pkt)
 			assert.NoError(t, err)
@@ -206,7 +206,7 @@ forLoop:
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
-			wss := &WebRTCSimulcastSender{
+			wss := &SimpleSender{
 				ctx:    ctx,
 				cancel: cancel,
 				router: fakeRouter,
@@ -215,15 +215,12 @@ forLoop:
 			}
 			go wss.receiveRTCP()
 			tmr := time.NewTimer(5000 * time.Millisecond)
-			err := remote.WriteRTCP([]rtcp.Packet{tt.want, tt.want, tt.want, tt.want})
-			assert.NoError(t, err)
-			err = remote.WriteRTCP([]rtcp.Packet{tt.want, tt.want, tt.want, tt.want})
-			assert.NoError(t, err)
-			err = remote.WriteRTCP([]rtcp.Packet{tt.want, tt.want, tt.want, tt.want})
-			assert.NoError(t, err)
 		testLoop:
 			for {
 				select {
+				case <-time.After(20 * time.Millisecond):
+					err := remote.WriteRTCP([]rtcp.Packet{tt.want, tt.want, tt.want, tt.want})
+					assert.NoError(t, err)
 				case <-tmr.C:
 					t.Fatal("RTCP packet not received")
 				case pkt := <-gotRTCP:
@@ -236,11 +233,9 @@ forLoop:
 						tmr.Stop()
 						wss.Close()
 						break testLoop
-					case *rtcp.TransportLayerNack:
+					default:
 						continue
 					}
-				default:
-					continue
 				}
 			}
 		})
@@ -249,7 +244,7 @@ forLoop:
 	_ = remote.Close()
 }
 
-func TestWebRTCSender_Close(t *testing.T) {
+func TestSimpleSender_Close(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	closeCtr := 0
 	fakeRouter := &RouterMock{
@@ -294,7 +289,7 @@ func TestWebRTCSender_Close(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			s := &WebRTCSender{
+			s := &SimpleSender{
 				ctx:            tt.fields.ctx,
 				cancel:         tt.fields.cancel,
 				router:         tt.fields.router,
@@ -312,7 +307,7 @@ func TestWebRTCSender_Close(t *testing.T) {
 	}
 }
 
-func TestWebRTCSender_CurrentSpatialLayer(t *testing.T) {
+func TestSimpleSender_CurrentSpatialLayer(t *testing.T) {
 	tests := []struct {
 		name string
 		want uint8
@@ -325,7 +320,7 @@ func TestWebRTCSender_CurrentSpatialLayer(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			s := &WebRTCSender{}
+			s := &SimpleSender{}
 			if got := s.CurrentSpatialLayer(); got != tt.want {
 				t.Errorf("CurrentSpatialLayer() = %v, want %v", got, tt.want)
 			}
@@ -333,7 +328,7 @@ func TestWebRTCSender_CurrentSpatialLayer(t *testing.T) {
 	}
 }
 
-func TestWebRTCSender_ID(t *testing.T) {
+func TestSimpleSender_ID(t *testing.T) {
 	type fields struct {
 		id string
 	}
@@ -353,7 +348,7 @@ func TestWebRTCSender_ID(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			s := &WebRTCSender{
+			s := &SimpleSender{
 				id: tt.fields.id,
 			}
 			if got := s.ID(); got != tt.want {
@@ -363,7 +358,7 @@ func TestWebRTCSender_ID(t *testing.T) {
 	}
 }
 
-func TestWebRTCSender_OnCloseHandler(t *testing.T) {
+func TestSimpleSender_OnCloseHandler(t *testing.T) {
 	type args struct {
 		fn func()
 	}
@@ -379,14 +374,14 @@ func TestWebRTCSender_OnCloseHandler(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			s := &WebRTCSender{}
+			s := &SimpleSender{}
 			s.OnCloseHandler(tt.args.fn)
 			assert.NotNil(t, s.onCloseHandler)
 		})
 	}
 }
 
-func TestWebRTCSender_SwitchSpatialLayer(t *testing.T) {
+func TestSimpleSender_SwitchSpatialLayer(t *testing.T) {
 	tests := []struct {
 		name string
 	}{
@@ -396,7 +391,7 @@ func TestWebRTCSender_SwitchSpatialLayer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &WebRTCSender{}
+			s := &SimpleSender{}
 			assert.NotPanics(t, func() {
 				s.SwitchSpatialLayer(4)
 			})
@@ -404,7 +399,7 @@ func TestWebRTCSender_SwitchSpatialLayer(t *testing.T) {
 	}
 }
 
-func TestWebRTCSender_SwitchTemporalLayer(t *testing.T) {
+func TestSimpleSender_SwitchTemporalLayer(t *testing.T) {
 	tests := []struct {
 		name string
 	}{
@@ -414,7 +409,7 @@ func TestWebRTCSender_SwitchTemporalLayer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &WebRTCSender{}
+			s := &SimpleSender{}
 			assert.NotPanics(t, func() {
 				s.SwitchSpatialLayer(4)
 			})

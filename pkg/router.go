@@ -117,7 +117,7 @@ func (r *router) AddSender(p *WebRTCTransport) error {
 	if r.kind == SimulcastRouter {
 		sender = NewWebRTCSimulcastSender(p.ctx, p.id, r, s, recv.SpatialLayer())
 	} else {
-		sender = NewWebRTCSender(p.ctx, p.id, r, s)
+		sender = NewSimpleSender(p.ctx, p.id, r, s)
 	}
 	sender.OnCloseHandler(func() {
 		if err := p.pc.RemoveTrack(s); err != nil {
