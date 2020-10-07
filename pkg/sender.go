@@ -14,7 +14,6 @@ type Sender interface {
 	WriteRTP(*rtp.Packet)
 	CurrentSpatialLayer() uint8
 	OnCloseHandler(fn func())
-	stats() string
 	// Simulcast/SVC events
 	SwitchSpatialLayer(layer uint8)
 	SwitchTemporalLayer(layer uint8)

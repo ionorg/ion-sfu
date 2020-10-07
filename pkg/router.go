@@ -115,7 +115,7 @@ func (r *router) AddSender(p *WebRTCTransport) error {
 		return err
 	}
 	if r.kind == SimulcastRouter {
-		sender = NewWebRTCSimulcastSender(p.ctx, p.id, r, s, recv.SpatialLayer())
+		sender = NewSimulcastSender(p.ctx, p.id, r, s, recv.SpatialLayer())
 	} else {
 		sender = NewSimpleSender(p.ctx, p.id, r, s)
 	}
@@ -142,8 +142,4 @@ func (r *router) SwitchSpatialLayer(targetLayer uint8, sub Sender) bool {
 		return true
 	}
 	return false
-}
-
-func (r *router) stats() string {
-	return ""
 }

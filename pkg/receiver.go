@@ -2,7 +2,6 @@ package sfu
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -45,7 +44,6 @@ type Receiver interface {
 	OnCloseHandler(fn func())
 	WriteBufferedPacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error
 	Close()
-	stats() string
 }
 
 // WebRTCReceiver receives a video track
@@ -400,18 +398,6 @@ func (w *WebRTCReceiver) tccLoop(cycle int) {
 			t.Stop()
 			return
 		}
-	}
-}
-
-// Stats get stats for video receivers
-func (w *WebRTCReceiver) stats() string {
-	switch w.track.Kind() {
-	case webrtc.RTPCodecTypeVideo:
-		return fmt.Sprintf("payload: %d | lostRate: %.2f | bandwidth: %dkbps | %s", w.buffer.GetPayloadType(), w.lostRate, w.bandwidth/1000, w.buffer.stats())
-	case webrtc.RTPCodecTypeAudio:
-		return fmt.Sprintf("payload: %d", w.track.PayloadType())
-	default:
-		return ""
 	}
 }
 

@@ -46,9 +46,6 @@ var _ Receiver = &ReceiverMock{}
 //             WriteRTCPFunc: func(in1 rtcp.Packet) error {
 // 	               panic("mock out the WriteRTCP method")
 //             },
-//             statsFunc: func() string {
-// 	               panic("mock out the stats method")
-//             },
 //         }
 //
 //         // use mockedReceiver in code that requires Receiver
@@ -82,9 +79,6 @@ type ReceiverMock struct {
 
 	// WriteRTCPFunc mocks the WriteRTCP method.
 	WriteRTCPFunc func(in1 rtcp.Packet) error
-
-	// statsFunc mocks the stats method.
-	statsFunc func() string
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -133,9 +127,6 @@ type ReceiverMock struct {
 			// In1 is the in1 argument value.
 			In1 rtcp.Packet
 		}
-		// stats holds details about calls to the stats method.
-		stats []struct {
-		}
 	}
 	lockAddSender           sync.RWMutex
 	lockClose               sync.RWMutex
@@ -146,7 +137,6 @@ type ReceiverMock struct {
 	lockTrack               sync.RWMutex
 	lockWriteBufferedPacket sync.RWMutex
 	lockWriteRTCP           sync.RWMutex
-	lockstats               sync.RWMutex
 }
 
 // AddSender calls AddSenderFunc.
@@ -421,31 +411,5 @@ func (mock *ReceiverMock) WriteRTCPCalls() []struct {
 	mock.lockWriteRTCP.RLock()
 	calls = mock.calls.WriteRTCP
 	mock.lockWriteRTCP.RUnlock()
-	return calls
-}
-
-// stats calls statsFunc.
-func (mock *ReceiverMock) stats() string {
-	if mock.statsFunc == nil {
-		panic("ReceiverMock.statsFunc: method is nil but Receiver.stats was just called")
-	}
-	callInfo := struct {
-	}{}
-	mock.lockstats.Lock()
-	mock.calls.stats = append(mock.calls.stats, callInfo)
-	mock.lockstats.Unlock()
-	return mock.statsFunc()
-}
-
-// statsCalls gets all the calls that were made to stats.
-// Check the length with:
-//     len(mockedReceiver.statsCalls())
-func (mock *ReceiverMock) statsCalls() []struct {
-} {
-	var calls []struct {
-	}
-	mock.lockstats.RLock()
-	calls = mock.calls.stats
-	mock.lockstats.RUnlock()
 	return calls
 }

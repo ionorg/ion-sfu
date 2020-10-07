@@ -54,13 +54,13 @@ func TestNewWebRTCSimulcastSender(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewWebRTCSimulcastSender(tt.args.ctx, tt.args.id, tt.args.router, tt.args.sender, tt.args.layer)
+			got := NewSimulcastSender(tt.args.ctx, tt.args.id, tt.args.router, tt.args.sender, tt.args.layer)
 			assert.NotNil(t, got)
 		})
 	}
 }
 
-func TestWebRTCSimulcastSender_WriteRTP(t *testing.T) {
+func TestSimulcastSender_WriteRTP(t *testing.T) {
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -156,7 +156,7 @@ forLoop:
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.fields.checkPli {
-				s := &WebRTCSimulcastSender{
+				s := &SimulcastSender{
 					ctx:           context.Background(),
 					router:        fakeRouter,
 					track:         senderTrack,
@@ -176,7 +176,7 @@ forLoop:
 				}
 			}
 			if tt.fields.checkPacket {
-				s := &WebRTCSimulcastSender{
+				s := &SimulcastSender{
 					ctx:           context.Background(),
 					router:        fakeRouter,
 					track:         senderTrack,
@@ -196,7 +196,7 @@ forLoop:
 	_ = remote.Close()
 }
 
-func TestWebRTCSimulcastSender_receiveRTCP(t *testing.T) {
+func TestSimulcastSender_receiveRTCP(t *testing.T) {
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -273,7 +273,7 @@ forLoop:
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
-			wss := &WebRTCSimulcastSender{
+			wss := &SimulcastSender{
 				ctx:           ctx,
 				cancel:        cancel,
 				router:        fakeRouter,
@@ -315,7 +315,7 @@ forLoop:
 	_ = remote.Close()
 }
 
-func TestWebRTCSimulcastSender_Close(t *testing.T) {
+func TestSimulcastSender_Close(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	closeCtr := 0
 	fakeRouter := &RouterMock{
@@ -360,7 +360,7 @@ func TestWebRTCSimulcastSender_Close(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			s := &WebRTCSimulcastSender{
+			s := &SimulcastSender{
 				ctx:            tt.fields.ctx,
 				cancel:         tt.fields.cancel,
 				router:         tt.fields.router,
@@ -378,7 +378,7 @@ func TestWebRTCSimulcastSender_Close(t *testing.T) {
 	}
 }
 
-func TestWebRTCSimulcastSender_CurrentSpatialLayer(t *testing.T) {
+func TestSimulcastSender_CurrentSpatialLayer(t *testing.T) {
 	type fields struct {
 		currentSpatialLayer uint8
 	}
@@ -398,7 +398,7 @@ func TestWebRTCSimulcastSender_CurrentSpatialLayer(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			s := &WebRTCSimulcastSender{
+			s := &SimulcastSender{
 				currentSpatialLayer: tt.fields.currentSpatialLayer,
 			}
 			if got := s.CurrentSpatialLayer(); got != tt.want {
@@ -408,7 +408,7 @@ func TestWebRTCSimulcastSender_CurrentSpatialLayer(t *testing.T) {
 	}
 }
 
-func TestWebRTCSimulcastSender_ID(t *testing.T) {
+func TestSimulcastSender_ID(t *testing.T) {
 	type fields struct {
 		id string
 	}
@@ -426,7 +426,7 @@ func TestWebRTCSimulcastSender_ID(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			s := &WebRTCSimulcastSender{
+			s := &SimulcastSender{
 				id: tt.fields.id,
 			}
 			if got := s.ID(); got != tt.want {
@@ -436,7 +436,7 @@ func TestWebRTCSimulcastSender_ID(t *testing.T) {
 	}
 }
 
-func TestWebRTCSimulcastSender_OnCloseHandler(t *testing.T) {
+func TestSimulcastSender_OnCloseHandler(t *testing.T) {
 	type args struct {
 		f func()
 	}
@@ -452,14 +452,14 @@ func TestWebRTCSimulcastSender_OnCloseHandler(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			s := &WebRTCSimulcastSender{}
+			s := &SimulcastSender{}
 			s.OnCloseHandler(tt.args.f)
 			assert.NotNil(t, s.onCloseHandler)
 		})
 	}
 }
 
-func TestWebRTCSimulcastSender_SwitchSpatialLayer(t *testing.T) {
+func TestSimulcastSender_SwitchSpatialLayer(t *testing.T) {
 	type fields struct {
 		id                  string
 		currentSpatialLayer uint8
@@ -486,7 +486,7 @@ func TestWebRTCSimulcastSender_SwitchSpatialLayer(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			s := &WebRTCSimulcastSender{
+			s := &SimulcastSender{
 				id:                  tt.fields.id,
 				currentSpatialLayer: tt.fields.currentSpatialLayer,
 				targetSpatialLayer:  tt.fields.targetSpatialLayer,
@@ -552,7 +552,7 @@ forLoop:
 		},
 	}
 
-	simpleSdr := WebRTCSimulcastSender{
+	simpleSdr := SimulcastSender{
 		ctx:           context.Background(),
 		simulcastSSRC: 1234,
 		router:        fakeRouter,

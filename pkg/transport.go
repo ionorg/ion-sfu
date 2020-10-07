@@ -8,5 +8,4 @@ type Transport interface {
 	Routers() map[string]Router
 	AddSender(streamID string, sender Sender)
 	GetSenders(streamID string) []Sender
-	stats() string
 }

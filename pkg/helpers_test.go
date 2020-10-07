@@ -102,7 +102,7 @@ func TestVP8Helper_Unmarshal(t *testing.T) {
 func Test_setVP8TemporalLayer(t *testing.T) {
 	type args struct {
 		pl []byte
-		s  *WebRTCSimulcastSender
+		s  *SimulcastSender
 	}
 	tests := []struct {
 		name        string
@@ -113,7 +113,7 @@ func Test_setVP8TemporalLayer(t *testing.T) {
 		{
 			name: "Must skip when current temporal is bigger than wanted",
 			args: args{
-				s: &WebRTCSimulcastSender{
+				s: &SimulcastSender{
 					currentTempLayer: 2,
 					refPicID:         0,
 					lastPicID:        0,
@@ -128,7 +128,7 @@ func Test_setVP8TemporalLayer(t *testing.T) {
 		{
 			name: "Must return modified payload",
 			args: args{
-				s: &WebRTCSimulcastSender{
+				s: &SimulcastSender{
 					currentTempLayer: 3,
 					refPicID:         32764,
 					refTlzi:          179,

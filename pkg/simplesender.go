@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -219,8 +218,4 @@ func (s *SimpleSender) receiveRTCP() {
 			}
 		}
 	}
-}
-
-func (s *SimpleSender) stats() string {
-	return fmt.Sprintf("payload: %d | remb: %dkbps", s.track.PayloadType(), s.target/1000)
 }

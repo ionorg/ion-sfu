@@ -111,7 +111,7 @@ func (p *VP8Helper) Unmarshal(payload []byte) error {
 // setVp8TemporalLayer is a helper to detect and modify accordingly the vp8 payload to reflect
 // temporal changes in the SFU.
 // VP8Helper temporal layers implemented according https://tools.ietf.org/html/rfc7741
-func setVP8TemporalLayer(pl []byte, s *WebRTCSimulcastSender) (payload []byte, skip bool) {
+func setVP8TemporalLayer(pl []byte, s *SimulcastSender) (payload []byte, skip bool) {
 	var pkt VP8Helper
 	if err := pkt.Unmarshal(pl); err != nil {
 		return nil, false
