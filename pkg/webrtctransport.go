@@ -151,13 +151,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 
 // CreateOffer generates the localDescription
 func (p *WebRTCTransport) CreateOffer() (webrtc.SessionDescription, error) {
-	offer, err := p.pc.CreateOffer(nil)
-	if err != nil {
-		log.Errorf("CreateOffer error: %v", err)
-		return webrtc.SessionDescription{}, err
-	}
-
-	return offer, nil
+	return p.pc.CreateOffer(nil)
 }
 
 // SetLocalDescription sets the SessionDescription of the remote peer
