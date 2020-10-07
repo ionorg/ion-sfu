@@ -1,7 +1,6 @@
 package sfu
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/pion/ion-sfu/pkg/log"
@@ -77,16 +76,4 @@ func (r *Session) Transports() map[string]Transport {
 // OnClose is called when the session is closed
 func (r *Session) OnClose(f func()) {
 	r.onCloseHandler = f
-}
-
-func (r *Session) stats() string {
-	info := fmt.Sprintf("\nsession: %s\n", r.id)
-
-	r.mu.RLock()
-	for _, transport := range r.transports {
-		info += transport.stats()
-	}
-	r.mu.RUnlock()
-
-	return info
 }

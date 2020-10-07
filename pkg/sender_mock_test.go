@@ -5,6 +5,7 @@ package sfu
 
 import (
 	"github.com/pion/rtp"
+	"github.com/pion/webrtc/v3"
 	"sync"
 )
 
@@ -27,6 +28,12 @@ var _ Sender = &SenderMock{}
 //             IDFunc: func() string {
 // 	               panic("mock out the ID method")
 //             },
+//             KindFunc: func() webrtc.RTPCodecType {
+// 	               panic("mock out the Kind method")
+//             },
+//             MuteFunc: func(val bool)  {
+// 	               panic("mock out the Mute method")
+//             },
 //             OnCloseHandlerFunc: func(fn func())  {
 // 	               panic("mock out the OnCloseHandler method")
 //             },
@@ -38,9 +45,6 @@ var _ Sender = &SenderMock{}
 //             },
 //             WriteRTPFunc: func(in1 *rtp.Packet)  {
 // 	               panic("mock out the WriteRTP method")
-//             },
-//             statsFunc: func() string {
-// 	               panic("mock out the stats method")
 //             },
 //         }
 //
@@ -58,6 +62,12 @@ type SenderMock struct {
 	// IDFunc mocks the ID method.
 	IDFunc func() string
 
+	// KindFunc mocks the Kind method.
+	KindFunc func() webrtc.RTPCodecType
+
+	// MuteFunc mocks the Mute method.
+	MuteFunc func(val bool)
+
 	// OnCloseHandlerFunc mocks the OnCloseHandler method.
 	OnCloseHandlerFunc func(fn func())
 
@@ -70,9 +80,6 @@ type SenderMock struct {
 	// WriteRTPFunc mocks the WriteRTP method.
 	WriteRTPFunc func(in1 *rtp.Packet)
 
-	// statsFunc mocks the stats method.
-	statsFunc func() string
-
 	// calls tracks calls to the methods.
 	calls struct {
 		// Close holds details about calls to the Close method.
@@ -83,6 +90,14 @@ type SenderMock struct {
 		}
 		// ID holds details about calls to the ID method.
 		ID []struct {
+		}
+		// Kind holds details about calls to the Kind method.
+		Kind []struct {
+		}
+		// Mute holds details about calls to the Mute method.
+		Mute []struct {
+			// Val is the val argument value.
+			Val bool
 		}
 		// OnCloseHandler holds details about calls to the OnCloseHandler method.
 		OnCloseHandler []struct {
@@ -104,18 +119,16 @@ type SenderMock struct {
 			// In1 is the in1 argument value.
 			In1 *rtp.Packet
 		}
-		// stats holds details about calls to the stats method.
-		stats []struct {
-		}
 	}
 	lockClose               sync.RWMutex
 	lockCurrentSpatialLayer sync.RWMutex
 	lockID                  sync.RWMutex
+	lockKind                sync.RWMutex
+	lockMute                sync.RWMutex
 	lockOnCloseHandler      sync.RWMutex
 	lockSwitchSpatialLayer  sync.RWMutex
 	lockSwitchTemporalLayer sync.RWMutex
 	lockWriteRTP            sync.RWMutex
-	lockstats               sync.RWMutex
 }
 
 // Close calls CloseFunc.
@@ -193,6 +206,63 @@ func (mock *SenderMock) IDCalls() []struct {
 	mock.lockID.RLock()
 	calls = mock.calls.ID
 	mock.lockID.RUnlock()
+	return calls
+}
+
+// Kind calls KindFunc.
+func (mock *SenderMock) Kind() webrtc.RTPCodecType {
+	if mock.KindFunc == nil {
+		panic("SenderMock.KindFunc: method is nil but Sender.Kind was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockKind.Lock()
+	mock.calls.Kind = append(mock.calls.Kind, callInfo)
+	mock.lockKind.Unlock()
+	return mock.KindFunc()
+}
+
+// KindCalls gets all the calls that were made to Kind.
+// Check the length with:
+//     len(mockedSender.KindCalls())
+func (mock *SenderMock) KindCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockKind.RLock()
+	calls = mock.calls.Kind
+	mock.lockKind.RUnlock()
+	return calls
+}
+
+// Mute calls MuteFunc.
+func (mock *SenderMock) Mute(val bool) {
+	if mock.MuteFunc == nil {
+		panic("SenderMock.MuteFunc: method is nil but Sender.Mute was just called")
+	}
+	callInfo := struct {
+		Val bool
+	}{
+		Val: val,
+	}
+	mock.lockMute.Lock()
+	mock.calls.Mute = append(mock.calls.Mute, callInfo)
+	mock.lockMute.Unlock()
+	mock.MuteFunc(val)
+}
+
+// MuteCalls gets all the calls that were made to Mute.
+// Check the length with:
+//     len(mockedSender.MuteCalls())
+func (mock *SenderMock) MuteCalls() []struct {
+	Val bool
+} {
+	var calls []struct {
+		Val bool
+	}
+	mock.lockMute.RLock()
+	calls = mock.calls.Mute
+	mock.lockMute.RUnlock()
 	return calls
 }
 
@@ -317,31 +387,5 @@ func (mock *SenderMock) WriteRTPCalls() []struct {
 	mock.lockWriteRTP.RLock()
 	calls = mock.calls.WriteRTP
 	mock.lockWriteRTP.RUnlock()
-	return calls
-}
-
-// stats calls statsFunc.
-func (mock *SenderMock) stats() string {
-	if mock.statsFunc == nil {
-		panic("SenderMock.statsFunc: method is nil but Sender.stats was just called")
-	}
-	callInfo := struct {
-	}{}
-	mock.lockstats.Lock()
-	mock.calls.stats = append(mock.calls.stats, callInfo)
-	mock.lockstats.Unlock()
-	return mock.statsFunc()
-}
-
-// statsCalls gets all the calls that were made to stats.
-// Check the length with:
-//     len(mockedSender.statsCalls())
-func (mock *SenderMock) statsCalls() []struct {
-} {
-	var calls []struct {
-	}
-	mock.lockstats.RLock()
-	calls = mock.calls.stats
-	mock.lockstats.RUnlock()
 	return calls
 }

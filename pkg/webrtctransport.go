@@ -2,7 +2,6 @@ package sfu
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -33,11 +32,9 @@ type WebRTCTransport struct {
 	mu             sync.RWMutex
 	candidates     []webrtc.ICECandidateInit
 	session        *Session
-	senders        []Sender
+	senders        map[string][]Sender
 	routers        map[string]Router
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
-	// Custom label for simulcast
-	label string
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport
@@ -59,7 +56,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 		me:      me,
 		session: session,
 		routers: make(map[string]Router),
-		label:   cuid.New(),
+		senders: make(map[string][]Sender),
 	}
 
 	// Subscribe to existing transports
@@ -78,7 +75,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 	session.AddTransport(p)
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
-		log.Debugf("Peer %s got remote track id: %s ssrc: %d rid :%s label: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.Label())
+		log.Debugf("Peer %s got remote track id: %s ssrc: %d rid :%s streamID: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.Label())
 		recv := NewWebRTCReceiver(ctx, track, cfg.router)
 
 		if recv.Track().Kind() == webrtc.RTPCodecTypeVideo {
@@ -86,23 +83,18 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 		}
 		if router, ok := p.routers[track.ID()]; !ok {
 			if track.RID() != "" {
-				router = newRouter(p.id, cfg.router, SimulcastRouter)
+				router = newRouter(p.id, track.Label(), cfg.router, SimulcastRouter)
 				go func() {
 					// Send 3 big remb msgs to fwd all the tracks
-					ticker := time.NewTicker(1 * time.Second)
-					var ctr uint8
+					ticker := time.NewTicker(3 * time.Second)
 					for range ticker.C {
-						ctr++
-						if writeErr := pc.WriteRTCP([]rtcp.Packet{&rtcp.ReceiverEstimatedMaximumBitrate{Bitrate: 10000000, SenderSSRC: track.SSRC()}}); writeErr != nil {
-							log.Errorf("Sending simulcast remb error: %v", err)
-						}
-						if ctr == 3 {
-							ticker.Stop()
+						if writeErr := pc.WriteRTCP([]rtcp.Packet{&rtcp.ReceiverEstimatedMaximumBitrate{Bitrate: 1500000, SenderSSRC: track.SSRC()}}); writeErr != nil {
+							return
 						}
 					}
 				}()
 			} else {
-				router = newRouter(p.id, cfg.router, SimpleRouter)
+				router = newRouter(p.id, track.Label(), cfg.router, SimpleRouter)
 			}
 			router.AddReceiver(recv)
 			p.session.AddRouter(router)
@@ -127,10 +119,11 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 
 	// Register data channel creation handling
 	pc.OnDataChannel(func(d *webrtc.DataChannel) {
-		fmt.Printf("New DataChannel %s %d\n", d.Label(), d.ID())
+		log.Debugf("New DataChannel %s %d\n", d.Label(), d.ID())
 		// Register text message handling
-		d.OnMessage(func(msg webrtc.DataChannelMessage) {
-		})
+		if d.Label() == channelLabel {
+			handleAPICommand(p, d)
+		}
 	})
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
@@ -158,13 +151,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 
 // CreateOffer generates the localDescription
 func (p *WebRTCTransport) CreateOffer() (webrtc.SessionDescription, error) {
-	offer, err := p.pc.CreateOffer(nil)
-	if err != nil {
-		log.Errorf("CreateOffer error: %v", err)
-		return webrtc.SessionDescription{}, err
-	}
-
-	return offer, nil
+	return p.pc.CreateOffer(nil)
 }
 
 // SetLocalDescription sets the SessionDescription of the remote peer
@@ -275,6 +262,23 @@ func (p *WebRTCTransport) GetRouter(trackID string) Router {
 	return p.routers[trackID]
 }
 
+func (p *WebRTCTransport) AddSender(streamID string, sender Sender) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if senders, ok := p.senders[streamID]; ok {
+		senders = append(senders, sender)
+		p.senders[streamID] = senders
+	} else {
+		p.senders[streamID] = []Sender{sender}
+	}
+}
+
+func (p *WebRTCTransport) GetSenders(streamID string) []Sender {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.senders[streamID]
+}
+
 // Close peer
 func (p *WebRTCTransport) Close() error {
 	p.session.RemoveTransport(p.id)
@@ -289,16 +293,4 @@ func (p *WebRTCTransport) sendRTCP(recv Receiver) {
 			log.Errorf("Error writing RTCP %s", err)
 		}
 	}
-}
-
-func (p *WebRTCTransport) stats() string {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	info := fmt.Sprintf("  peer: %s\n", p.id)
-	// for _, router := range p.routers {
-	info += "" // router.stats()
-	// }
-
-	return info
 }

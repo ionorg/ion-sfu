@@ -7,5 +7,6 @@ const (
 )
 
 type SimulcastConfig struct {
-	BestQualityFirst bool `mapstructure:"bestqualityfirst"`
+	BestQualityFirst    bool `mapstructure:"bestqualityfirst"`
+	EnableTemporalLayer bool `mapstructure:"enabletemporallayer"`
 }

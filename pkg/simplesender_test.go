@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNewWebRTCSender(t *testing.T) {
+func TestNewSimpleSender(t *testing.T) {
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -47,13 +47,13 @@ func TestNewWebRTCSender(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewWebRTCSender(tt.args.ctx, tt.args.id, tt.args.router, tt.args.sender)
+			got := NewSimpleSender(tt.args.ctx, tt.args.id, tt.args.router, tt.args.sender)
 			assert.NotNil(t, got)
 		})
 	}
 }
 
-func TestWebRTCSender_WriteRTP(t *testing.T) {
+func TestSimpleSender_WriteRTP(t *testing.T) {
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -104,10 +104,11 @@ forLoop:
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
-			s := &WebRTCSender{
-				ctx:    ctx,
-				cancel: cancel,
-				track:  senderTrack,
+			s := &SimpleSender{
+				ctx:     ctx,
+				cancel:  cancel,
+				payload: senderTrack.PayloadType(),
+				track:   senderTrack,
 			}
 			tmr := time.NewTimer(1000 * time.Millisecond)
 			s.WriteRTP(fakePkt)
@@ -131,7 +132,7 @@ forLoop:
 	_ = remote.Close()
 }
 
-func TestWebRTCSender_receiveRTCP(t *testing.T) {
+func TestSimpleSender_receiveRTCP(t *testing.T) {
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -173,7 +174,7 @@ func TestWebRTCSender_receiveRTCP(t *testing.T) {
 forLoop:
 	for {
 		select {
-		case <-time.After(500 * time.Millisecond):
+		case <-time.After(20 * time.Millisecond):
 			pkt := senderTrack.Packetizer().Packetize([]byte{0x01, 0x02, 0x03, 0x04}, 1)[0]
 			err = senderTrack.WriteRTP(pkt)
 			assert.NoError(t, err)
@@ -205,7 +206,7 @@ forLoop:
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
-			wss := &WebRTCSimulcastSender{
+			wss := &SimpleSender{
 				ctx:    ctx,
 				cancel: cancel,
 				router: fakeRouter,
@@ -214,15 +215,12 @@ forLoop:
 			}
 			go wss.receiveRTCP()
 			tmr := time.NewTimer(5000 * time.Millisecond)
-			err := remote.WriteRTCP([]rtcp.Packet{tt.want, tt.want, tt.want, tt.want})
-			assert.NoError(t, err)
-			err = remote.WriteRTCP([]rtcp.Packet{tt.want, tt.want, tt.want, tt.want})
-			assert.NoError(t, err)
-			err = remote.WriteRTCP([]rtcp.Packet{tt.want, tt.want, tt.want, tt.want})
-			assert.NoError(t, err)
 		testLoop:
 			for {
 				select {
+				case <-time.After(20 * time.Millisecond):
+					err := remote.WriteRTCP([]rtcp.Packet{tt.want, tt.want, tt.want, tt.want})
+					assert.NoError(t, err)
 				case <-tmr.C:
 					t.Fatal("RTCP packet not received")
 				case pkt := <-gotRTCP:
@@ -235,11 +233,9 @@ forLoop:
 						tmr.Stop()
 						wss.Close()
 						break testLoop
-					case *rtcp.TransportLayerNack:
+					default:
 						continue
 					}
-				default:
-					continue
 				}
 			}
 		})
@@ -248,7 +244,7 @@ forLoop:
 	_ = remote.Close()
 }
 
-func TestWebRTCSender_Close(t *testing.T) {
+func TestSimpleSender_Close(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	closeCtr := 0
 	fakeRouter := &RouterMock{
@@ -293,7 +289,7 @@ func TestWebRTCSender_Close(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			s := &WebRTCSender{
+			s := &SimpleSender{
 				ctx:            tt.fields.ctx,
 				cancel:         tt.fields.cancel,
 				router:         tt.fields.router,
@@ -311,7 +307,7 @@ func TestWebRTCSender_Close(t *testing.T) {
 	}
 }
 
-func TestWebRTCSender_CurrentSpatialLayer(t *testing.T) {
+func TestSimpleSender_CurrentSpatialLayer(t *testing.T) {
 	tests := []struct {
 		name string
 		want uint8
@@ -324,7 +320,7 @@ func TestWebRTCSender_CurrentSpatialLayer(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			s := &WebRTCSender{}
+			s := &SimpleSender{}
 			if got := s.CurrentSpatialLayer(); got != tt.want {
 				t.Errorf("CurrentSpatialLayer() = %v, want %v", got, tt.want)
 			}
@@ -332,7 +328,7 @@ func TestWebRTCSender_CurrentSpatialLayer(t *testing.T) {
 	}
 }
 
-func TestWebRTCSender_ID(t *testing.T) {
+func TestSimpleSender_ID(t *testing.T) {
 	type fields struct {
 		id string
 	}
@@ -352,7 +348,7 @@ func TestWebRTCSender_ID(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			s := &WebRTCSender{
+			s := &SimpleSender{
 				id: tt.fields.id,
 			}
 			if got := s.ID(); got != tt.want {
@@ -362,7 +358,7 @@ func TestWebRTCSender_ID(t *testing.T) {
 	}
 }
 
-func TestWebRTCSender_OnCloseHandler(t *testing.T) {
+func TestSimpleSender_OnCloseHandler(t *testing.T) {
 	type args struct {
 		fn func()
 	}
@@ -378,14 +374,14 @@ func TestWebRTCSender_OnCloseHandler(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			s := &WebRTCSender{}
+			s := &SimpleSender{}
 			s.OnCloseHandler(tt.args.fn)
 			assert.NotNil(t, s.onCloseHandler)
 		})
 	}
 }
 
-func TestWebRTCSender_SwitchSpatialLayer(t *testing.T) {
+func TestSimpleSender_SwitchSpatialLayer(t *testing.T) {
 	tests := []struct {
 		name string
 	}{
@@ -395,7 +391,7 @@ func TestWebRTCSender_SwitchSpatialLayer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &WebRTCSender{}
+			s := &SimpleSender{}
 			assert.NotPanics(t, func() {
 				s.SwitchSpatialLayer(4)
 			})
@@ -403,7 +399,7 @@ func TestWebRTCSender_SwitchSpatialLayer(t *testing.T) {
 	}
 }
 
-func TestWebRTCSender_SwitchTemporalLayer(t *testing.T) {
+func TestSimpleSender_SwitchTemporalLayer(t *testing.T) {
 	tests := []struct {
 		name string
 	}{
@@ -413,10 +409,95 @@ func TestWebRTCSender_SwitchTemporalLayer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &WebRTCSender{}
+			s := &SimpleSender{}
 			assert.NotPanics(t, func() {
 				s.SwitchSpatialLayer(4)
 			})
 		})
 	}
+}
+
+func TestSimpleSender_Mute(t *testing.T) {
+	me := webrtc.MediaEngine{}
+	me.RegisterDefaultCodecs()
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+	sfu, remote, err := newPair(webrtc.Configuration{}, api)
+	assert.NoError(t, err)
+
+	var remoteTrack *webrtc.Track
+	gotTrack := make(chan struct{}, 1)
+
+	remote.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
+		_, err := track.ReadRTP()
+		assert.NoError(t, err)
+		remoteTrack = track
+		gotTrack <- struct{}{}
+	})
+
+	senderTrack, err := sfu.NewTrack(webrtc.DefaultPayloadTypeVP8, 1234, "video", "pion")
+	assert.NoError(t, err)
+	_, err = sfu.AddTrack(senderTrack)
+	assert.NoError(t, err)
+
+	err = signalPair(sfu, remote)
+	assert.NoError(t, err)
+
+forLoop:
+	for {
+		select {
+		case <-time.After(20 * time.Millisecond):
+			pkt := senderTrack.Packetizer().Packetize([]byte{0x01, 0x02, 0x03, 0x04}, 1)[0]
+			err = senderTrack.WriteRTP(pkt)
+			assert.NoError(t, err)
+		case <-gotTrack:
+			break forLoop
+		}
+	}
+
+	gotPli := make(chan struct{}, 1)
+	fakeRecv := &ReceiverMock{
+		WriteRTCPFunc: func(in1 rtcp.Packet) error {
+			if _, ok := in1.(*rtcp.PictureLossIndication); ok {
+				gotPli <- struct{}{}
+			}
+			return nil
+		},
+	}
+
+	fakeRouter := &RouterMock{
+		GetReceiverFunc: func(_ uint8) Receiver {
+			return fakeRecv
+		},
+	}
+
+	simpleSdr := SimpleSender{
+		ctx:     context.Background(),
+		router:  fakeRouter,
+		track:   senderTrack,
+		payload: senderTrack.PayloadType(),
+	}
+	// Simple sender must forward packets while the sender is not muted
+	fakePkt := senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]
+	simpleSdr.WriteRTP(fakePkt)
+	packet, err := remoteTrack.ReadRTP()
+	assert.NoError(t, err)
+	assert.Equal(t, fakePkt.Payload, packet.Payload)
+	// Mute track will prevent tracks to reach the subscriber
+	simpleSdr.Mute(true)
+	for i := 0; i <= 5; i++ {
+		simpleSdr.WriteRTP(senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0])
+	}
+	simpleSdr.Mute(false)
+	// Now that is un-muted sender will request a key frame
+	simpleSdr.WriteRTP(senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0])
+	<-gotPli
+	// Write VP8 keyframe
+	keyFramePkt := senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]
+	keyFramePkt.Payload = []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0x9f, 0x94, 0x1}
+	simpleSdr.WriteRTP(keyFramePkt)
+	packet2, err := remoteTrack.ReadRTP()
+	assert.NoError(t, err)
+	assert.Equal(t, keyFramePkt.Payload, packet2.Payload)
+	// Packet 1 and packet 2 must have contiguous SN even after skipped packets while muted
+	assert.Equal(t, packet.SequenceNumber+1, packet2.SequenceNumber)
 }

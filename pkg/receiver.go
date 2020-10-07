@@ -2,7 +2,6 @@ package sfu
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -37,15 +36,14 @@ type rtpExtInfo struct {
 // Receiver defines a interface for a track receivers
 type Receiver interface {
 	Track() *webrtc.Track
-	AddSender(sender Sender)
-	DeleteSender(pid string)
-	GetPacket(sn uint16) *rtp.Packet
 	ReadRTCP() chan rtcp.Packet
 	WriteRTCP(rtcp.Packet) error
-	OnCloseHandler(fn func())
+	AddSender(sender Sender)
+	DeleteSender(pid string)
 	SpatialLayer() uint8
+	OnCloseHandler(fn func())
+	WriteBufferedPacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error
 	Close()
-	stats() string
 }
 
 // WebRTCReceiver receives a video track
@@ -174,12 +172,12 @@ func (w *WebRTCReceiver) Track() *webrtc.Track {
 	return w.track
 }
 
-// GetPacket get a buffered packet if we have one
-func (w *WebRTCReceiver) GetPacket(sn uint16) *rtp.Packet {
+// WriteBufferedPacket writes buffered packet to track, return error if packet not found
+func (w *WebRTCReceiver) WriteBufferedPacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error {
 	if w.buffer == nil || w.ctx.Err() != nil {
 		return nil
 	}
-	return w.buffer.GetPacket(sn)
+	return w.buffer.WritePacket(sn, track, snOffset, tsOffset, ssrc)
 }
 
 // Close gracefully close the track
@@ -247,18 +245,6 @@ func (w *WebRTCReceiver) fwdRTP() {
 			sub.WriteRTP(pkt)
 		}
 		w.RUnlock()
-	}
-}
-
-func (w *WebRTCReceiver) bufferRtcpLoop() {
-	defer w.wg.Done()
-	for {
-		select {
-		case pkt := <-w.buffer.GetRTCPChan():
-			w.rtcpCh <- pkt
-		case <-w.ctx.Done():
-			return
-		}
 	}
 }
 
@@ -415,18 +401,6 @@ func (w *WebRTCReceiver) tccLoop(cycle int) {
 	}
 }
 
-// Stats get stats for video receivers
-func (w *WebRTCReceiver) stats() string {
-	switch w.track.Kind() {
-	case webrtc.RTPCodecTypeVideo:
-		return fmt.Sprintf("payload: %d | lostRate: %.2f | bandwidth: %dkbps | %s", w.buffer.GetPayloadType(), w.lostRate, w.bandwidth/1000, w.buffer.stats())
-	case webrtc.RTPCodecTypeAudio:
-		return fmt.Sprintf("payload: %d", w.track.PayloadType())
-	default:
-		return ""
-	}
-}
-
 func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}, config RouterConfig) {
 	defer func() {
 		w.closeSenders()
@@ -439,7 +413,7 @@ func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}, config RouterCo
 	}()
 
 	w.rtcpCh = make(chan rtcp.Packet, maxSize)
-	w.buffer = NewBuffer(w.track.SSRC(), w.track.PayloadType(), BufferOptions{
+	w.buffer = NewBuffer(w.rtcpCh, w.track.SSRC(), w.track.PayloadType(), BufferOptions{
 		BufferTime: config.Video.MaxBufferTime,
 	})
 	w.maxBandwidth = config.MaxBandwidth * 1000
@@ -458,16 +432,8 @@ func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}, config RouterCo
 			go w.rembLoop(config.Video.REMBCycle)
 		}
 	}
-	if w.Track().RID() != "" {
-		w.wg.Add(1)
-		go w.rembLoop(config.Video.REMBCycle)
-	}
-	// Start rtcp reader from track
 	w.wg.Add(1)
 	go w.receiveRTP()
-	// Start buffer loop
-	w.wg.Add(1)
-	go w.bufferRtcpLoop()
 	// Receiver start loops done, send start signal
 	go w.fwdRTP()
 	wStart <- struct{}{}

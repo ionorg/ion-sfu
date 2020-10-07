@@ -43,13 +43,12 @@ func CreateTestListPackets(snsAndTSs []SequenceNumberAndTimeStamp) (packetList [
 }
 
 func TestBufferWithDefaultBufferTime(t *testing.T) {
-	buffer := NewBuffer(1, 1, BufferOptions{})
+	buffer := NewBuffer(nil, 1, 1, BufferOptions{})
 	defer buffer.Stop()
 
 	pkt := CreateTestPacket(nil)
 
 	buffer.Push(pkt)
-	assert.Equal(t, cap(buffer.GetRTCPChan()), 1000)
 	assert.Equal(t, buffer.GetPayloadType(), uint8(1))
 	assert.Equal(t, buffer.GetSSRC(), uint32(1))
 
@@ -63,14 +62,11 @@ func TestBufferWithDefaultBufferTime(t *testing.T) {
 		assert.True(t, strings.Contains(buffer.stats(), entry))
 	}
 
-	buffer.clear()
-	assert.Nil(t, buffer.GetPacket(0))
-
 }
 
 func TestBufferWithBufferTimeAndZeroSSRC(t *testing.T) {
 
-	buffer := NewBuffer(0, 0, BufferOptions{
+	buffer := NewBuffer(nil, 0, 0, BufferOptions{
 		BufferTime: 10,
 	})
 	defer buffer.Stop()
@@ -124,11 +120,6 @@ func TestBufferWithBufferTimeAndZeroSSRC(t *testing.T) {
 	buffer.clearOldPkt(9999, 13)
 	buffer.clearOldPkt(99999, 14)
 	buffer.clearOldPkt(1200, 17)
-
-	buffer.clear()
-	for _, entry := range pktsSnsAndTs {
-		assert.Nil(t, buffer.GetPacket(entry.SequenceNumber))
-	}
 }
 
 func TestBuffer_tsDelta(t *testing.T) {

@@ -23,13 +23,16 @@ var _ Router = &RouterMock{}
 //             AddSenderFunc: func(p *WebRTCTransport) error {
 // 	               panic("mock out the AddSender method")
 //             },
+//             ConfigFunc: func() RouterConfig {
+// 	               panic("mock out the Config method")
+//             },
 //             GetReceiverFunc: func(layer uint8) Receiver {
 // 	               panic("mock out the GetReceiver method")
 //             },
 //             IDFunc: func() string {
 // 	               panic("mock out the ID method")
 //             },
-//             SwitchSpatialLayerFunc: func(currentLayer uint8, targetLayer uint8, sub Sender) bool {
+//             SwitchSpatialLayerFunc: func(targetLayer uint8, sub Sender) bool {
 // 	               panic("mock out the SwitchSpatialLayer method")
 //             },
 //         }
@@ -45,6 +48,9 @@ type RouterMock struct {
 	// AddSenderFunc mocks the AddSender method.
 	AddSenderFunc func(p *WebRTCTransport) error
 
+	// ConfigFunc mocks the Config method.
+	ConfigFunc func() RouterConfig
+
 	// GetReceiverFunc mocks the GetReceiver method.
 	GetReceiverFunc func(layer uint8) Receiver
 
@@ -52,7 +58,7 @@ type RouterMock struct {
 	IDFunc func() string
 
 	// SwitchSpatialLayerFunc mocks the SwitchSpatialLayer method.
-	SwitchSpatialLayerFunc func(currentLayer uint8, targetLayer uint8, sub Sender) bool
+	SwitchSpatialLayerFunc func(targetLayer uint8, sub Sender) bool
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -66,6 +72,9 @@ type RouterMock struct {
 			// P is the p argument value.
 			P *WebRTCTransport
 		}
+		// Config holds details about calls to the Config method.
+		Config []struct {
+		}
 		// GetReceiver holds details about calls to the GetReceiver method.
 		GetReceiver []struct {
 			// Layer is the layer argument value.
@@ -76,8 +85,6 @@ type RouterMock struct {
 		}
 		// SwitchSpatialLayer holds details about calls to the SwitchSpatialLayer method.
 		SwitchSpatialLayer []struct {
-			// CurrentLayer is the currentLayer argument value.
-			CurrentLayer uint8
 			// TargetLayer is the targetLayer argument value.
 			TargetLayer uint8
 			// Sub is the sub argument value.
@@ -86,6 +93,7 @@ type RouterMock struct {
 	}
 	lockAddReceiver        sync.RWMutex
 	lockAddSender          sync.RWMutex
+	lockConfig             sync.RWMutex
 	lockGetReceiver        sync.RWMutex
 	lockID                 sync.RWMutex
 	lockSwitchSpatialLayer sync.RWMutex
@@ -153,6 +161,32 @@ func (mock *RouterMock) AddSenderCalls() []struct {
 	return calls
 }
 
+// Config calls ConfigFunc.
+func (mock *RouterMock) Config() RouterConfig {
+	if mock.ConfigFunc == nil {
+		panic("RouterMock.ConfigFunc: method is nil but Router.Config was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockConfig.Lock()
+	mock.calls.Config = append(mock.calls.Config, callInfo)
+	mock.lockConfig.Unlock()
+	return mock.ConfigFunc()
+}
+
+// ConfigCalls gets all the calls that were made to Config.
+// Check the length with:
+//     len(mockedRouter.ConfigCalls())
+func (mock *RouterMock) ConfigCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockConfig.RLock()
+	calls = mock.calls.Config
+	mock.lockConfig.RUnlock()
+	return calls
+}
+
 // GetReceiver calls GetReceiverFunc.
 func (mock *RouterMock) GetReceiver(layer uint8) Receiver {
 	if mock.GetReceiverFunc == nil {
@@ -211,37 +245,33 @@ func (mock *RouterMock) IDCalls() []struct {
 }
 
 // SwitchSpatialLayer calls SwitchSpatialLayerFunc.
-func (mock *RouterMock) SwitchSpatialLayer(currentLayer uint8, targetLayer uint8, sub Sender) bool {
+func (mock *RouterMock) SwitchSpatialLayer(targetLayer uint8, sub Sender) bool {
 	if mock.SwitchSpatialLayerFunc == nil {
 		panic("RouterMock.SwitchSpatialLayerFunc: method is nil but Router.SwitchSpatialLayer was just called")
 	}
 	callInfo := struct {
-		CurrentLayer uint8
-		TargetLayer  uint8
-		Sub          Sender
+		TargetLayer uint8
+		Sub         Sender
 	}{
-		CurrentLayer: currentLayer,
-		TargetLayer:  targetLayer,
-		Sub:          sub,
+		TargetLayer: targetLayer,
+		Sub:         sub,
 	}
 	mock.lockSwitchSpatialLayer.Lock()
 	mock.calls.SwitchSpatialLayer = append(mock.calls.SwitchSpatialLayer, callInfo)
 	mock.lockSwitchSpatialLayer.Unlock()
-	return mock.SwitchSpatialLayerFunc(currentLayer, targetLayer, sub)
+	return mock.SwitchSpatialLayerFunc(targetLayer, sub)
 }
 
 // SwitchSpatialLayerCalls gets all the calls that were made to SwitchSpatialLayer.
 // Check the length with:
 //     len(mockedRouter.SwitchSpatialLayerCalls())
 func (mock *RouterMock) SwitchSpatialLayerCalls() []struct {
-	CurrentLayer uint8
-	TargetLayer  uint8
-	Sub          Sender
+	TargetLayer uint8
+	Sub         Sender
 } {
 	var calls []struct {
-		CurrentLayer uint8
-		TargetLayer  uint8
-		Sub          Sender
+		TargetLayer uint8
+		Sub         Sender
 	}
 	mock.lockSwitchSpatialLayer.RLock()
 	calls = mock.calls.SwitchSpatialLayer

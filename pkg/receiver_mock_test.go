@@ -5,7 +5,6 @@ package sfu
 
 import (
 	"github.com/pion/rtcp"
-	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
 	"sync"
 )
@@ -29,9 +28,6 @@ var _ Receiver = &ReceiverMock{}
 //             DeleteSenderFunc: func(pid string)  {
 // 	               panic("mock out the DeleteSender method")
 //             },
-//             GetPacketFunc: func(sn uint16) *rtp.Packet {
-// 	               panic("mock out the GetPacket method")
-//             },
 //             OnCloseHandlerFunc: func(fn func())  {
 // 	               panic("mock out the OnCloseHandler method")
 //             },
@@ -44,11 +40,11 @@ var _ Receiver = &ReceiverMock{}
 //             TrackFunc: func() *webrtc.Track {
 // 	               panic("mock out the Track method")
 //             },
+//             WriteBufferedPacketFunc: func(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset uint32, ssrc uint32) error {
+// 	               panic("mock out the WriteBufferedPacket method")
+//             },
 //             WriteRTCPFunc: func(in1 rtcp.Packet) error {
 // 	               panic("mock out the WriteRTCP method")
-//             },
-//             statsFunc: func() string {
-// 	               panic("mock out the stats method")
 //             },
 //         }
 //
@@ -66,9 +62,6 @@ type ReceiverMock struct {
 	// DeleteSenderFunc mocks the DeleteSender method.
 	DeleteSenderFunc func(pid string)
 
-	// GetPacketFunc mocks the GetPacket method.
-	GetPacketFunc func(sn uint16) *rtp.Packet
-
 	// OnCloseHandlerFunc mocks the OnCloseHandler method.
 	OnCloseHandlerFunc func(fn func())
 
@@ -81,11 +74,11 @@ type ReceiverMock struct {
 	// TrackFunc mocks the Track method.
 	TrackFunc func() *webrtc.Track
 
+	// WriteBufferedPacketFunc mocks the WriteBufferedPacket method.
+	WriteBufferedPacketFunc func(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset uint32, ssrc uint32) error
+
 	// WriteRTCPFunc mocks the WriteRTCP method.
 	WriteRTCPFunc func(in1 rtcp.Packet) error
-
-	// statsFunc mocks the stats method.
-	statsFunc func() string
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -102,11 +95,6 @@ type ReceiverMock struct {
 			// Pid is the pid argument value.
 			Pid string
 		}
-		// GetPacket holds details about calls to the GetPacket method.
-		GetPacket []struct {
-			// Sn is the sn argument value.
-			Sn uint16
-		}
 		// OnCloseHandler holds details about calls to the OnCloseHandler method.
 		OnCloseHandler []struct {
 			// Fn is the fn argument value.
@@ -121,25 +109,34 @@ type ReceiverMock struct {
 		// Track holds details about calls to the Track method.
 		Track []struct {
 		}
+		// WriteBufferedPacket holds details about calls to the WriteBufferedPacket method.
+		WriteBufferedPacket []struct {
+			// Sn is the sn argument value.
+			Sn uint16
+			// Track is the track argument value.
+			Track *webrtc.Track
+			// SnOffset is the snOffset argument value.
+			SnOffset uint16
+			// TsOffset is the tsOffset argument value.
+			TsOffset uint32
+			// Ssrc is the ssrc argument value.
+			Ssrc uint32
+		}
 		// WriteRTCP holds details about calls to the WriteRTCP method.
 		WriteRTCP []struct {
 			// In1 is the in1 argument value.
 			In1 rtcp.Packet
 		}
-		// stats holds details about calls to the stats method.
-		stats []struct {
-		}
 	}
-	lockAddSender      sync.RWMutex
-	lockClose          sync.RWMutex
-	lockDeleteSender   sync.RWMutex
-	lockGetPacket      sync.RWMutex
-	lockOnCloseHandler sync.RWMutex
-	lockReadRTCP       sync.RWMutex
-	lockSpatialLayer   sync.RWMutex
-	lockTrack          sync.RWMutex
-	lockWriteRTCP      sync.RWMutex
-	lockstats          sync.RWMutex
+	lockAddSender           sync.RWMutex
+	lockClose               sync.RWMutex
+	lockDeleteSender        sync.RWMutex
+	lockOnCloseHandler      sync.RWMutex
+	lockReadRTCP            sync.RWMutex
+	lockSpatialLayer        sync.RWMutex
+	lockTrack               sync.RWMutex
+	lockWriteBufferedPacket sync.RWMutex
+	lockWriteRTCP           sync.RWMutex
 }
 
 // AddSender calls AddSenderFunc.
@@ -227,37 +224,6 @@ func (mock *ReceiverMock) DeleteSenderCalls() []struct {
 	mock.lockDeleteSender.RLock()
 	calls = mock.calls.DeleteSender
 	mock.lockDeleteSender.RUnlock()
-	return calls
-}
-
-// GetPacket calls GetPacketFunc.
-func (mock *ReceiverMock) GetPacket(sn uint16) *rtp.Packet {
-	if mock.GetPacketFunc == nil {
-		panic("ReceiverMock.GetPacketFunc: method is nil but Receiver.GetPacket was just called")
-	}
-	callInfo := struct {
-		Sn uint16
-	}{
-		Sn: sn,
-	}
-	mock.lockGetPacket.Lock()
-	mock.calls.GetPacket = append(mock.calls.GetPacket, callInfo)
-	mock.lockGetPacket.Unlock()
-	return mock.GetPacketFunc(sn)
-}
-
-// GetPacketCalls gets all the calls that were made to GetPacket.
-// Check the length with:
-//     len(mockedReceiver.GetPacketCalls())
-func (mock *ReceiverMock) GetPacketCalls() []struct {
-	Sn uint16
-} {
-	var calls []struct {
-		Sn uint16
-	}
-	mock.lockGetPacket.RLock()
-	calls = mock.calls.GetPacket
-	mock.lockGetPacket.RUnlock()
 	return calls
 }
 
@@ -370,6 +336,53 @@ func (mock *ReceiverMock) TrackCalls() []struct {
 	return calls
 }
 
+// WriteBufferedPacket calls WriteBufferedPacketFunc.
+func (mock *ReceiverMock) WriteBufferedPacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset uint32, ssrc uint32) error {
+	if mock.WriteBufferedPacketFunc == nil {
+		panic("ReceiverMock.WriteBufferedPacketFunc: method is nil but Receiver.WriteBufferedPacket was just called")
+	}
+	callInfo := struct {
+		Sn       uint16
+		Track    *webrtc.Track
+		SnOffset uint16
+		TsOffset uint32
+		Ssrc     uint32
+	}{
+		Sn:       sn,
+		Track:    track,
+		SnOffset: snOffset,
+		TsOffset: tsOffset,
+		Ssrc:     ssrc,
+	}
+	mock.lockWriteBufferedPacket.Lock()
+	mock.calls.WriteBufferedPacket = append(mock.calls.WriteBufferedPacket, callInfo)
+	mock.lockWriteBufferedPacket.Unlock()
+	return mock.WriteBufferedPacketFunc(sn, track, snOffset, tsOffset, ssrc)
+}
+
+// WriteBufferedPacketCalls gets all the calls that were made to WriteBufferedPacket.
+// Check the length with:
+//     len(mockedReceiver.WriteBufferedPacketCalls())
+func (mock *ReceiverMock) WriteBufferedPacketCalls() []struct {
+	Sn       uint16
+	Track    *webrtc.Track
+	SnOffset uint16
+	TsOffset uint32
+	Ssrc     uint32
+} {
+	var calls []struct {
+		Sn       uint16
+		Track    *webrtc.Track
+		SnOffset uint16
+		TsOffset uint32
+		Ssrc     uint32
+	}
+	mock.lockWriteBufferedPacket.RLock()
+	calls = mock.calls.WriteBufferedPacket
+	mock.lockWriteBufferedPacket.RUnlock()
+	return calls
+}
+
 // WriteRTCP calls WriteRTCPFunc.
 func (mock *ReceiverMock) WriteRTCP(in1 rtcp.Packet) error {
 	if mock.WriteRTCPFunc == nil {
@@ -398,31 +411,5 @@ func (mock *ReceiverMock) WriteRTCPCalls() []struct {
 	mock.lockWriteRTCP.RLock()
 	calls = mock.calls.WriteRTCP
 	mock.lockWriteRTCP.RUnlock()
-	return calls
-}
-
-// stats calls statsFunc.
-func (mock *ReceiverMock) stats() string {
-	if mock.statsFunc == nil {
-		panic("ReceiverMock.statsFunc: method is nil but Receiver.stats was just called")
-	}
-	callInfo := struct {
-	}{}
-	mock.lockstats.Lock()
-	mock.calls.stats = append(mock.calls.stats, callInfo)
-	mock.lockstats.Unlock()
-	return mock.statsFunc()
-}
-
-// statsCalls gets all the calls that were made to stats.
-// Check the length with:
-//     len(mockedReceiver.statsCalls())
-func (mock *ReceiverMock) statsCalls() []struct {
-} {
-	var calls []struct {
-	}
-	mock.lockstats.RLock()
-	calls = mock.calls.stats
-	mock.lockstats.RUnlock()
 	return calls
 }

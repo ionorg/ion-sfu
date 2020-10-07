@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"math/rand"
 	"sync"
@@ -16,14 +15,15 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-// WebRTCSimulcastSender represents a Sender which writes RTP to a webrtc track
-type WebRTCSimulcastSender struct {
+// SimulcastSender represents a Sender which writes RTP to a webrtc track
+type SimulcastSender struct {
 	id             string
 	ctx            context.Context
 	cancel         context.CancelFunc
 	router         Router
 	sender         *webrtc.RTPSender
 	track          *webrtc.Track
+	muted          atomicBool
 	target         uint64
 	payload        uint8
 	maxBitrate     uint64
@@ -34,6 +34,7 @@ type WebRTCSimulcastSender struct {
 	temporalSupported   bool
 	currentTempLayer    uint8
 	targetTempLayer     uint8
+	temporalEnabled     bool
 	simulcastSSRC       uint32
 	tsOffset            uint32
 	snOffset            uint16
@@ -52,10 +53,10 @@ type WebRTCSimulcastSender struct {
 	once sync.Once
 }
 
-// NewWebRTCSimulcastSender creates a new track sender instance
-func NewWebRTCSimulcastSender(ctx context.Context, id string, router Router, sender *webrtc.RTPSender, layer uint8) Sender {
+// NewSimulcastSender creates a new track sender instance
+func NewSimulcastSender(ctx context.Context, id string, router Router, sender *webrtc.RTPSender, layer uint8) Sender {
 	ctx, cancel := context.WithCancel(ctx)
-	s := &WebRTCSimulcastSender{
+	s := &SimulcastSender{
 		id:                  id,
 		ctx:                 ctx,
 		cancel:              cancel,
@@ -68,6 +69,7 @@ func NewWebRTCSimulcastSender(ctx context.Context, id string, router Router, sen
 		currentSpatialLayer: layer,
 		targetSpatialLayer:  layer,
 		simulcastSSRC:       sender.Track().SSRC(),
+		temporalEnabled:     router.Config().Simulcast.EnableTemporalLayer,
 		refPicID:            uint16(rand.Uint32()),
 		refTlzi:             uint8(rand.Uint32()),
 	}
@@ -76,14 +78,14 @@ func NewWebRTCSimulcastSender(ctx context.Context, id string, router Router, sen
 	return s
 }
 
-func (s *WebRTCSimulcastSender) ID() string {
+func (s *SimulcastSender) ID() string {
 	return s.id
 }
 
 // WriteRTP to the track
-func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
+func (s *SimulcastSender) WriteRTP(pkt *rtp.Packet) {
 	// Simulcast write RTP is sync, so the packet can be safely modified and restored
-	if s.ctx.Err() != nil {
+	if s.ctx.Err() != nil || s.muted.get() {
 		return
 	}
 	// Check if packet SSRC is different from before
@@ -130,7 +132,11 @@ func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 		if !relay {
 			return
 		}
-		// Switch is done update current layer
+		// Switch is done remove sender from previous layer
+		/// and update current layer
+		if pRecv := s.router.GetReceiver(s.currentSpatialLayer); pRecv != nil && s.currentSpatialLayer != s.targetSpatialLayer {
+			pRecv.DeleteSender(s.id)
+		}
 		s.currentSpatialLayer = s.targetSpatialLayer
 	}
 	// Backup pkt original data
@@ -153,7 +159,7 @@ func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 		s.lTS = pkt.Timestamp
 		s.lSN = pkt.SequenceNumber
 	}
-	if s.temporalSupported {
+	if s.temporalEnabled && s.temporalSupported {
 		if s.payload == webrtc.DefaultPayloadTypeVP8 {
 			pl, skip := setVP8TemporalLayer(pkt.Payload, s)
 			if skip {
@@ -191,51 +197,69 @@ func (s *WebRTCSimulcastSender) WriteRTP(pkt *rtp.Packet) {
 	}
 }
 
-func (s *WebRTCSimulcastSender) SwitchSpatialLayer(targetLayer uint8) {
+func (s *SimulcastSender) SwitchSpatialLayer(targetLayer uint8) {
 	// Don't switch until previous switch is done or canceled
 	if s.currentSpatialLayer != s.targetSpatialLayer {
 		return
 	}
-	s.targetSpatialLayer = targetLayer
-	if ok := s.router.SwitchSpatialLayer(s.currentSpatialLayer, targetLayer, s); !ok {
-		s.targetSpatialLayer = s.currentSpatialLayer
+	if ok := s.router.SwitchSpatialLayer(targetLayer, s); ok {
+		s.targetSpatialLayer = targetLayer
 	}
 }
 
-func (s *WebRTCSimulcastSender) SwitchTemporalLayer(layer uint8) {
+func (s *SimulcastSender) Kind() webrtc.RTPCodecType {
+	return s.track.Kind()
+}
+
+func (s *SimulcastSender) Mute(val bool) {
+	if s.muted.get() == val {
+		return
+	}
+	s.muted.set(val)
+	if val {
+		// reset last ssrc to force a re-sync
+		s.lSSRC = 0
+	}
+}
+
+func (s *SimulcastSender) SwitchTemporalLayer(layer uint8) {
 	s.currentTempLayer = layer
 }
 
-func (s *WebRTCSimulcastSender) CurrentSpatialLayer() uint8 {
+func (s *SimulcastSender) CurrentSpatialLayer() uint8 {
 	return s.currentSpatialLayer
 }
 
 // Close track
-func (s *WebRTCSimulcastSender) Close() {
+func (s *SimulcastSender) Close() {
 	s.once.Do(s.close)
 }
 
-func (s *WebRTCSimulcastSender) close() {
+func (s *SimulcastSender) close() {
 	s.cancel()
-	// Remove sender from receiver
-	if recv := s.router.GetReceiver(s.currentSpatialLayer); recv != nil {
-		recv.DeleteSender(s.id)
-	}
 	if s.onCloseHandler != nil {
 		s.onCloseHandler()
 	}
 }
 
 // OnCloseHandler method to be called on remote tracked removed
-func (s *WebRTCSimulcastSender) OnCloseHandler(fn func()) {
+func (s *SimulcastSender) OnCloseHandler(fn func()) {
 	s.onCloseHandler = fn
 }
 
-func (s *WebRTCSimulcastSender) receiveRTCP() {
+func (s *SimulcastSender) receiveRTCP() {
 	for {
 		pkts, err := s.sender.ReadRTCP()
-		if err == io.ErrClosedPipe || s.ctx.Err() != nil {
+		if err == io.ErrClosedPipe {
+			// Remove sender from receiver
+			if recv := s.router.GetReceiver(s.currentSpatialLayer); recv != nil {
+				recv.DeleteSender(s.id)
+			}
 			s.Close()
+			return
+		}
+
+		if s.ctx.Err() != nil {
 			return
 		}
 
@@ -244,11 +268,12 @@ func (s *WebRTCSimulcastSender) receiveRTCP() {
 			continue
 		}
 
+		recv := s.router.GetReceiver(s.currentSpatialLayer)
+		if recv == nil {
+			continue
+		}
+
 		for _, pkt := range pkts {
-			recv := s.router.GetReceiver(s.currentSpatialLayer)
-			if recv == nil {
-				continue
-			}
 			switch pkt := pkt.(type) {
 			case *rtcp.PictureLossIndication:
 				pkt.MediaSSRC = s.lSSRC
@@ -263,19 +288,21 @@ func (s *WebRTCSimulcastSender) receiveRTCP() {
 					log.Errorf("writing RTCP err %v", err)
 				}
 			case *rtcp.TransportLayerNack:
-				// TODO: Look how to look at packets in buffer
-				pkt.MediaSSRC = s.lSSRC
-				pkt.SenderSSRC = s.lSSRC
-				if err := recv.WriteRTCP(pkt); err != nil {
-					log.Errorf("writing RTCP err %v", err)
+				log.Tracef("sender got nack: %+v", pkt)
+				for _, pair := range pkt.Nacks {
+					if err := recv.WriteBufferedPacket(
+						pair.PacketID,
+						s.track,
+						s.snOffset,
+						s.tsOffset,
+						s.simulcastSSRC,
+					); err == errPacketNotFound {
+						//TODO handle missing nacks in sfu cache
+					}
 				}
 			default:
 				// TODO: Use fb packets for congestion control
 			}
 		}
 	}
-}
-
-func (s *WebRTCSimulcastSender) stats() string {
-	return fmt.Sprintf("payload: %d | remb: %dkbps", s.track.PayloadType(), s.target/1000)
 }

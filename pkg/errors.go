@@ -10,4 +10,6 @@ var (
 	// Helpers errors
 	errShortPacket = errors.New("packet is not large enough")
 	errNilPacket   = errors.New("invalid nil packet")
+	// buffer errors
+	errPacketNotFound = errors.New("packet not found in cache")
 )

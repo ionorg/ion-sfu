@@ -786,3 +786,76 @@ forLoop:
 	_ = sfu.Close()
 	_ = remote.Close()
 }
+
+func TestWebRTCTransport_AddSender(t *testing.T) {
+	type fields struct {
+		senders map[string][]Sender
+	}
+	type args struct {
+		streamID string
+		sender   Sender
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+	}{
+		{
+			name:   "Must add sender to given stream ID",
+			fields: fields{senders: map[string][]Sender{}},
+			args: struct {
+				streamID string
+				sender   Sender
+			}{streamID: "test", sender: &SimpleSender{}},
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			p := &WebRTCTransport{
+				senders: tt.fields.senders,
+			}
+			p.AddSender(tt.args.streamID, tt.args.sender)
+			assert.Equal(t, 1, len(p.senders))
+			assert.Equal(t, 1, len(p.senders[tt.args.streamID]))
+		})
+	}
+}
+
+func TestWebRTCTransport_GetSenders(t *testing.T) {
+	type fields struct {
+		senders map[string][]Sender
+	}
+	type args struct {
+		streamID string
+	}
+	sdrs := map[string][]Sender{"test": {&SimpleSender{}, &SimulcastSender{}}}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+		want   []Sender
+	}{
+		{
+			name: "Must return an array of senders from given stream ID",
+			fields: fields{
+				senders: sdrs,
+			},
+			args: args{
+				streamID: "test",
+			},
+			want: sdrs["test"],
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			p := &WebRTCTransport{
+				senders: tt.fields.senders,
+			}
+			if got := p.GetSenders(tt.args.streamID); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetSenders() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

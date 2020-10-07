@@ -2,7 +2,25 @@ package sfu
 
 import (
 	"encoding/binary"
+	"sync/atomic"
 )
+
+type atomicBool struct {
+	val int32
+}
+
+func (b *atomicBool) set(value bool) { // nolint: unparam
+	var i int32
+	if value {
+		i = 1
+	}
+
+	atomic.StoreInt32(&(b.val), i)
+}
+
+func (b *atomicBool) get() bool {
+	return atomic.LoadInt32(&(b.val)) != 0
+}
 
 // VP8Helper is a helper to get temporal data from VP8 packet header
 /*
@@ -93,7 +111,7 @@ func (p *VP8Helper) Unmarshal(payload []byte) error {
 // setVp8TemporalLayer is a helper to detect and modify accordingly the vp8 payload to reflect
 // temporal changes in the SFU.
 // VP8Helper temporal layers implemented according https://tools.ietf.org/html/rfc7741
-func setVP8TemporalLayer(pl []byte, s *WebRTCSimulcastSender) (payload []byte, skip bool) {
+func setVP8TemporalLayer(pl []byte, s *SimulcastSender) (payload []byte, skip bool) {
 	var pkt VP8Helper
 	if err := pkt.Unmarshal(pl); err != nil {
 		return nil, false
