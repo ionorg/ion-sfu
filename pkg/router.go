@@ -87,7 +87,9 @@ func (r *router) AddSender(p *WebRTCTransport) error {
 		ssrc = recv.Track().SSRC()
 	} else {
 		for _, rcv := range r.receivers {
-			recv = rcv
+			if rcv != nil {
+				recv = rcv
+			}
 			if !r.config.Simulcast.BestQualityFirst && rcv != nil {
 				break
 			}
