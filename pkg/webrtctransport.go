@@ -11,10 +11,6 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-const (
-	statCycle = 6 * time.Second
-)
-
 // WebRTCTransportConfig represents configuration options
 type WebRTCTransportConfig struct {
 	configuration webrtc.Configuration
@@ -73,6 +69,8 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 
 	// Add transport to the session
 	session.AddTransport(p)
+	// Simulcast flag to add router to session
+	simulcastToSessionJoined := false
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 		log.Debugf("Peer %s got remote track id: %s ssrc: %d rid :%s streamID: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.Label())
@@ -88,7 +86,9 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 					// Send 3 big remb msgs to fwd all the tracks
 					ticker := time.NewTicker(3 * time.Second)
 					for range ticker.C {
-						if writeErr := pc.WriteRTCP([]rtcp.Packet{&rtcp.ReceiverEstimatedMaximumBitrate{Bitrate: 1500000, SenderSSRC: track.SSRC()}}); writeErr != nil {
+						if writeErr := pc.WriteRTCP([]rtcp.Packet{
+							&rtcp.ReceiverEstimatedMaximumBitrate{Bitrate: 1500000, SenderSSRC: track.SSRC()}},
+						); writeErr != nil {
 							return
 						}
 					}
@@ -97,12 +97,42 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 				router = newRouter(p.id, track.Label(), cfg.router, SimpleRouter)
 			}
 			router.AddReceiver(recv)
-			p.session.AddRouter(router)
+			// If track is simulcast and BestQualityFirst is true and current track is full resolution subscribe to router
+			if router.Kind() == SimulcastRouter && router.Config().Simulcast.BestQualityFirst && track.RID() == fullResolution {
+				simulcastToSessionJoined = true
+				p.session.AddRouter(router)
+				// If track is simulcast AND BestQualityFirst is false and track is full resolution
+			} else if router.Kind() == SimulcastRouter && !router.Config().Simulcast.BestQualityFirst && track.RID() == fullResolution {
+				// Wait one second to receive the quarter resolution, if not received it may be not supported or disabled
+				// and only half or full resolution was sent.
+				go func() {
+					select {
+					case <-time.After(time.Second):
+						if !simulcastToSessionJoined {
+							simulcastToSessionJoined = true
+							p.session.AddRouter(router)
+							return
+						}
+					}
+				}()
+				// If track is not simulcast OR is simulcast and BestQualityFirst is false and current track is not full
+				// resolution subscribe to router
+			} else if router.Kind() != SimulcastRouter || router.Kind() == SimulcastRouter &&
+				!router.Config().Simulcast.BestQualityFirst && track.RID() != fullResolution {
+				simulcastToSessionJoined = true
+				p.session.AddRouter(router)
+			}
 			p.mu.Lock()
 			p.routers[recv.Track().ID()] = router
 			p.mu.Unlock()
 			log.Debugf("Created router %s %d", p.id, recv.Track().SSRC())
 		} else {
+			if !simulcastToSessionJoined &&
+				(router.Config().Simulcast.BestQualityFirst && track.RID() == fullResolution ||
+					!router.Config().Simulcast.BestQualityFirst && track.RID() == quarterResolution) {
+				simulcastToSessionJoined = true
+				p.session.AddRouter(router)
+			}
 			router.AddReceiver(recv)
 		}
 

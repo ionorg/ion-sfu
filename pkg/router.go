@@ -17,6 +17,7 @@ const (
 // Router defines a track rtp/rtcp router
 type Router interface {
 	ID() string
+	Kind() int
 	Config() RouterConfig
 	AddReceiver(recv Receiver)
 	GetReceiver(layer uint8) Receiver
@@ -54,6 +55,10 @@ func newRouter(tid, streamID string, config RouterConfig, kind int) Router {
 
 func (r *router) ID() string {
 	return r.tid
+}
+
+func (r *router) Kind() int {
+	return r.kind
 }
 
 func (r *router) Config() RouterConfig {

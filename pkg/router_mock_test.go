@@ -32,6 +32,9 @@ var _ Router = &RouterMock{}
 //             IDFunc: func() string {
 // 	               panic("mock out the ID method")
 //             },
+//             KindFunc: func() int {
+// 	               panic("mock out the Kind method")
+//             },
 //             SwitchSpatialLayerFunc: func(targetLayer uint8, sub Sender) bool {
 // 	               panic("mock out the SwitchSpatialLayer method")
 //             },
@@ -56,6 +59,9 @@ type RouterMock struct {
 
 	// IDFunc mocks the ID method.
 	IDFunc func() string
+
+	// KindFunc mocks the Kind method.
+	KindFunc func() int
 
 	// SwitchSpatialLayerFunc mocks the SwitchSpatialLayer method.
 	SwitchSpatialLayerFunc func(targetLayer uint8, sub Sender) bool
@@ -83,6 +89,9 @@ type RouterMock struct {
 		// ID holds details about calls to the ID method.
 		ID []struct {
 		}
+		// Kind holds details about calls to the Kind method.
+		Kind []struct {
+		}
 		// SwitchSpatialLayer holds details about calls to the SwitchSpatialLayer method.
 		SwitchSpatialLayer []struct {
 			// TargetLayer is the targetLayer argument value.
@@ -96,6 +105,7 @@ type RouterMock struct {
 	lockConfig             sync.RWMutex
 	lockGetReceiver        sync.RWMutex
 	lockID                 sync.RWMutex
+	lockKind               sync.RWMutex
 	lockSwitchSpatialLayer sync.RWMutex
 }
 
@@ -241,6 +251,32 @@ func (mock *RouterMock) IDCalls() []struct {
 	mock.lockID.RLock()
 	calls = mock.calls.ID
 	mock.lockID.RUnlock()
+	return calls
+}
+
+// Kind calls KindFunc.
+func (mock *RouterMock) Kind() int {
+	if mock.KindFunc == nil {
+		panic("RouterMock.KindFunc: method is nil but Router.Kind was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockKind.Lock()
+	mock.calls.Kind = append(mock.calls.Kind, callInfo)
+	mock.lockKind.Unlock()
+	return mock.KindFunc()
+}
+
+// KindCalls gets all the calls that were made to Kind.
+// Check the length with:
+//     len(mockedRouter.KindCalls())
+func (mock *RouterMock) KindCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockKind.RLock()
+	calls = mock.calls.Kind
+	mock.lockKind.RUnlock()
 	return calls
 }
 
