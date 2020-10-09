@@ -136,22 +136,17 @@ func (p *jsonPeer) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc
 			break
 		}
 
-		go func() {
-			for {
-				select {
-				case offer := <-p.OfferChan:
-					if err := conn.Notify(ctx, "offer", offer); err != nil {
-						log.Errorf("error sending offer %s", err)
-					}
-				case trickle := <-p.IceChan:
-					if err := conn.Notify(ctx, "trickle", trickle.ToJSON()); err != nil {
-						log.Errorf("error sending ice candidate %s", err)
-					}
-				case <-p.Done:
-					return
-				}
+		p.OnOffer = func(offer *webrtc.SessionDescription) {
+			if err := conn.Notify(ctx, "offer", offer); err != nil {
+				log.Errorf("error sending offer %s", err)
 			}
-		}()
+
+		}
+		p.OnIceCandidate = func(candidate *webrtc.ICECandidateInit) {
+			if err := conn.Notify(ctx, "trickle", candidate); err != nil {
+				log.Errorf("error sending ice candidate %s", err)
+			}
+		}
 
 		_ = conn.Reply(ctx, req.ID, answer)
 
