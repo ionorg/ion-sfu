@@ -93,48 +93,6 @@ func parse() bool {
 	return true
 }
 
-type contextKey struct {
-	name string
-}
-type peerContext struct {
-	peer *sfu.WebRTCTransport
-}
-
-var peerCtxKey = &contextKey{"peer"}
-
-func forContext(ctx context.Context) *peerContext {
-	raw, _ := ctx.Value(peerCtxKey).(*peerContext)
-	return raw
-}
-
-// RPC defines the json-rpc
-type RPC struct {
-	sfu *sfu.SFU
-}
-
-// NewRPC creates a new RPC object based on the sfu configuration
-func NewRPC() *RPC {
-	return &RPC{
-		sfu: sfu.NewSFU(conf),
-	}
-}
-
-// Join message sent when initializing a peer connection
-type Join struct {
-	Sid   string                    `json:"sid"`
-	Offer webrtc.SessionDescription `json:"offer"`
-}
-
-// Negotiation message sent when renegotiating the peer connection
-type Negotiation struct {
-	Desc webrtc.SessionDescription `json:"desc"`
-}
-
-// Trickle message sent when renegotiating the peer connection
-type Trickle struct {
-	Candidate webrtc.ICECandidateInit `json:"candidate"`
-}
-
 // Handle incoming RPC call events like join, answer, offer and trickle
 func (r *RPC) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
 	p := forContext(ctx)
@@ -374,7 +332,7 @@ func main() {
 	log.Init(conf.Log.Level, conf.Log.Fix)
 
 	log.Infof("--- Starting SFU Node ---")
-	rpc := NewRPC()
+	sfu := sfu.NewSFU(conf)
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			return true
@@ -390,16 +348,13 @@ func main() {
 		}
 		defer c.Close()
 
-		p := &peerContext{}
-		ctx := context.WithValue(r.Context(), peerCtxKey, p)
-		jc := jsonrpc2.NewConn(ctx, websocketjsonrpc2.NewObjectStream(c), rpc)
-
-		<-jc.DisconnectNotify()
-
-		if p.peer != nil {
-			log.Infof("Closing peer")
-			p.peer.Close()
+		p := &peer{
+			sfu: sfu,
 		}
+		defer p.Close()
+
+		jc := jsonrpc2.NewConn(r.Context(), websocketjsonrpc2.NewObjectStream(c), p)
+		<-jc.DisconnectNotify()
 	}))
 
 	var err error
