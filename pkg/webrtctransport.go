@@ -33,6 +33,7 @@ type WebRTCTransport struct {
 	candidates     []webrtc.ICECandidateInit
 	session        *Session
 	senders        map[string][]Sender
+	pendingSenders []func()
 	routers        map[string]Router
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
 }
@@ -141,11 +142,12 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 func (p *WebRTCTransport) Subscribe() {
 	for _, t := range p.session.Transports() {
 		for _, router := range t.Routers() {
-			err := router.AddSender(p)
+			start, err := router.AddSender(p)
 			if err != nil {
 				log.Errorf("Error subscribing to router err: %v", err)
 				continue
 			}
+			p.pendingSenders = append(p.pendingSenders, start)
 		}
 	}
 }
@@ -183,6 +185,13 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 	if err != nil {
 		log.Errorf("SetRemoteDescription error: %v", err)
 		return err
+	}
+
+	if len(p.pendingSenders) > 0 {
+		for _, start := range p.pendingSenders {
+			start()
+		}
+		p.pendingSenders = nil
 	}
 
 	if len(p.candidates) > 0 {

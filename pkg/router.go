@@ -19,7 +19,7 @@ type Router interface {
 	Config() RouterConfig
 	AddReceiver(recv Receiver)
 	GetReceiver(layer uint8) Receiver
-	AddSender(p *WebRTCTransport) error
+	AddSender(p *WebRTCTransport) (func(), error)
 	SwitchSpatialLayer(targetLayer uint8, sub Sender) bool
 }
 
@@ -72,7 +72,7 @@ func (r *router) GetReceiver(layer uint8) Receiver {
 }
 
 // AddWebRTCSender to router
-func (r *router) AddSender(p *WebRTCTransport) error {
+func (r *router) AddSender(p *WebRTCTransport) (func(), error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var (
@@ -97,23 +97,23 @@ func (r *router) AddSender(p *WebRTCTransport) error {
 	}
 
 	if recv == nil {
-		return errNoReceiverFound
+		return nil, errNoReceiverFound
 	}
 
 	inTrack := recv.Track()
 	to := p.me.GetCodecsByName(recv.Track().Codec().Name)
 	if len(to) == 0 {
-		return errPtNotSupported
+		return nil, errPtNotSupported
 	}
 	pt := to[0].PayloadType
 	outTrack, err := p.pc.NewTrack(pt, ssrc, inTrack.ID(), inTrack.Label())
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// Create webrtc sender for the peer we are sending track to
 	s, err := p.pc.AddTrack(outTrack)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if r.kind == SimulcastRouter {
 		sender = NewSimulcastSender(p.ctx, p.id, r, s, recv.SpatialLayer())
@@ -126,8 +126,9 @@ func (r *router) AddSender(p *WebRTCTransport) error {
 		}
 	})
 	p.AddSender(r.streamID, sender)
-	recv.AddSender(sender)
-	return nil
+	return func() {
+		recv.AddSender(sender)
+	}, nil
 }
 
 func (r *router) SwitchSpatialLayer(targetLayer uint8, sub Sender) bool {
