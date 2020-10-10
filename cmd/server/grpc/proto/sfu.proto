@@ -32,6 +32,7 @@ message JoinRequest {
 message JoinReply {
     string pid = 1;
     SessionDescription answer = 2;
+    SessionDescription offer = 3;
 }
 
 message Trickle {

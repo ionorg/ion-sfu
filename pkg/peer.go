@@ -20,7 +20,7 @@ type Peer struct {
 	sfu *SFU
 	pc  *WebRTCTransport
 
-	OnIceCandidate func(*webrtc.ICECandidateInit)
+	OnICECandidate func(*webrtc.ICECandidateInit)
 	OnOffer        func(*webrtc.SessionDescription)
 }
 
@@ -31,29 +31,40 @@ func NewPeer(sfu *SFU) Peer {
 	}
 }
 
-// Join initializes this peer for a given sessionID (takes an SDPOffer)
-func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
+// Join initializes this peer for a given session and offer sdp.
+// It returns an answer for the given offer and an offer which could
+// contain media from existing peers in the session
+func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionDescription, *webrtc.SessionDescription, error) {
 	if p.pc != nil {
 		log.Debugf("peer already exists")
-		return nil, ErrTransportExists
+		return nil, nil, ErrTransportExists
 	}
 
 	me := MediaEngine{}
 	err := me.PopulateFromSDP(sdp)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing sdp: %v", err)
+		return nil, nil, fmt.Errorf("error parsing sdp: %v", err)
 	}
 
 	pc, err := p.sfu.NewWebRTCTransport(sid, me)
 	if err != nil {
-		return nil, fmt.Errorf("error creating transport: %v", err)
+		return nil, nil, fmt.Errorf("error creating transport: %v", err)
 	}
-	log.Infof("peer %s join session %s", pc.ID(), sid)
+	log.Debugf("peer %s join session %s", pc.ID(), sid)
 	p.pc = pc
 
-	answer, err := p.Offer(sdp)
+	// Get answer for pub
+	answer, err := p.Answer(sdp)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	// Subscribe to peers in session
+	pc.Subscribe()
+
+	offer, err := pc.CreateOffer()
+	if err != nil {
+		return nil, nil, err
 	}
 
 	pc.OnNegotiationNeeded(func() {
@@ -81,25 +92,24 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 			return
 		}
 
-		if p.OnIceCandidate != nil {
+		if p.OnICECandidate != nil {
 			json := c.ToJSON()
-			p.OnIceCandidate(&json)
+			p.OnICECandidate(&json)
 		}
-
 	})
 
 	p.pc = pc
-	return answer, nil
+	return answer, &offer, nil
 }
 
-// Offer new offer available over signaling for this peer
-func (p *Peer) Offer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
+// Answer an offer from the remove peer connection
+func (p *Peer) Answer(offer webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
 	if p.pc == nil {
 		return nil, ErrNoTransportEstablished
 	}
-	log.Infof("peer %s offer", p.pc.ID())
+	log.Debugf("peer %s offer", p.pc.ID())
 
-	if err := p.pc.SetRemoteDescription(sdp); err != nil {
+	if err := p.pc.SetRemoteDescription(offer); err != nil {
 		return nil, fmt.Errorf("error setting remote description: %v", err)
 	}
 
@@ -117,12 +127,12 @@ func (p *Peer) Offer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription,
 }
 
 // Answer available over signaling for this peer
-func (p *Peer) Answer(sdp webrtc.SessionDescription) error {
+func (p *Peer) SetRemoteDescription(answer webrtc.SessionDescription) error {
 	if p.pc == nil {
 		return ErrNoTransportEstablished
 	}
-	log.Infof("peer %s answer", p.pc.ID())
-	if err := p.pc.SetRemoteDescription(sdp); err != nil {
+	log.Debugf("peer %s answer", p.pc.ID())
+	if err := p.pc.SetRemoteDescription(answer); err != nil {
 		return fmt.Errorf("error setting remote description: %v", err)
 	}
 	return nil
@@ -133,7 +143,7 @@ func (p *Peer) Trickle(candidate webrtc.ICECandidateInit) error {
 	if p.pc == nil {
 		return ErrNoTransportEstablished
 	}
-	log.Infof("peer %s trickle", p.pc.ID())
+	log.Debugf("peer %s trickle", p.pc.ID())
 
 	if err := p.pc.AddICECandidate(candidate); err != nil {
 		return fmt.Errorf("error setting ice candidate: %s", err)

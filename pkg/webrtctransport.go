@@ -59,18 +59,6 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 		senders: make(map[string][]Sender),
 	}
 
-	// Subscribe to existing transports
-	for _, t := range session.Transports() {
-		for _, router := range t.Routers() {
-			err := router.AddSender(p)
-			// log.Infof("Init add router ssrc %d to %s", router.receivers[0].Track().SSRC(), p.id)
-			if err != nil {
-				log.Errorf("Error subscribing to router err: %v", err)
-				continue
-			}
-		}
-	}
-
 	// Add transport to the session
 	session.AddTransport(p)
 
@@ -147,6 +135,19 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 	})
 
 	return p, nil
+}
+
+// Subscribe to transports in the session
+func (p *WebRTCTransport) Subscribe() {
+	for _, t := range p.session.Transports() {
+		for _, router := range t.Routers() {
+			err := router.AddSender(p)
+			if err != nil {
+				log.Errorf("Error subscribing to router err: %v", err)
+				continue
+			}
+		}
+	}
 }
 
 // CreateOffer generates the localDescription

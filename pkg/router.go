@@ -3,7 +3,6 @@ package sfu
 import (
 	"math/rand"
 	"sync"
-	"time"
 
 	"github.com/pion/ion-sfu/pkg/log"
 )
@@ -127,14 +126,7 @@ func (r *router) AddSender(p *WebRTCTransport) error {
 		}
 	})
 	p.AddSender(r.streamID, sender)
-	go func() {
-		// There exists a bug in chrome where setLocalDescription
-		// fails if track RTP arrives before the sfu offer is set.
-		// We delay sending RTP here to avoid the issue.
-		// https://bugs.chromium.org/p/webrtc/issues/detail?id=10139
-		time.Sleep(500 * time.Millisecond)
-		recv.AddSender(sender)
-	}()
+	recv.AddSender(sender)
 	return nil
 }
 

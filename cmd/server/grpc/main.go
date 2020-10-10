@@ -175,7 +175,7 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 				SDP:  string(payload.Join.Offer.Sdp),
 			}
 
-			answer, err := peer.Join(payload.Join.Sid, offer)
+			answer, offer, err := peer.Join(payload.Join.Sid, offer)
 			if err != nil {
 				switch err {
 				case sfu.ErrTransportExists:
@@ -187,7 +187,7 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 			}
 
 			// Notify user of new ice candidate
-			peer.OnIceCandidate = func(candidate *webrtc.ICECandidateInit) {
+			peer.OnICECandidate = func(candidate *webrtc.ICECandidateInit) {
 				bytes, err := json.Marshal(candidate)
 				if err != nil {
 					log.Errorf("OnIceCandidate error %s", err)
@@ -229,6 +229,10 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 							Type: answer.Type.String(),
 							Sdp:  []byte(answer.SDP),
 						},
+						Offer: &pb.SessionDescription{
+							Type: offer.Type.String(),
+							Sdp:  []byte(offer.SDP),
+						},
 					},
 				},
 			})
@@ -245,7 +249,7 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 					SDP:  string(payload.Negotiate.Sdp),
 				}
 
-				answer, err := peer.Offer(offer)
+				answer, err := peer.Answer(offer)
 				err = stream.Send(&pb.SignalReply{
 					Payload: &pb.SignalReply_Negotiate{
 						Negotiate: &pb.SessionDescription{
@@ -270,7 +274,7 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 					SDP:  string(payload.Negotiate.Sdp),
 				}
 
-				err := peer.Answer(answer)
+				err := peer.SetRemoteDescription(answer)
 				if err != nil {
 					switch err {
 					case sfu.ErrNoTransportEstablished:

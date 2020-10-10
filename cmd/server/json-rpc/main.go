@@ -92,10 +92,18 @@ func parse() bool {
 	return true
 }
 
-// Join message sent when initializing a peer connection
-type Join struct {
+// JoinRequest message sent when initializing a peer connection
+type JoinRequest struct {
 	Sid   string                    `json:"sid"`
 	Offer webrtc.SessionDescription `json:"offer"`
+}
+
+// JoinResponse message is sent in response to a join request.
+// It contains an answer for the joins offer as well as a new
+// offer with any media for existing peers in the session.
+type JoinResponse struct {
+	Offer  webrtc.SessionDescription `json:"offer"`
+	Answer webrtc.SessionDescription `json:"answer"`
 }
 
 // Negotiation message sent when renegotiating the peer connection
@@ -122,7 +130,7 @@ func (p *jsonPeer) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc
 
 	switch req.Method {
 	case "join":
-		var join Join
+		var join JoinRequest
 		err := json.Unmarshal(*req.Params, &join)
 		if err != nil {
 			log.Errorf("connect: error parsing offer: %v", err)
@@ -130,7 +138,7 @@ func (p *jsonPeer) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc
 			break
 		}
 
-		answer, err := p.Join(join.Sid, join.Offer)
+		answer, offer, err := p.Join(join.Sid, join.Offer)
 		if err != nil {
 			replyError(err)
 			break
@@ -142,13 +150,16 @@ func (p *jsonPeer) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc
 			}
 
 		}
-		p.OnIceCandidate = func(candidate *webrtc.ICECandidateInit) {
+		p.OnICECandidate = func(candidate *webrtc.ICECandidateInit) {
 			if err := conn.Notify(ctx, "trickle", candidate); err != nil {
 				log.Errorf("error sending ice candidate %s", err)
 			}
 		}
 
-		_ = conn.Reply(ctx, req.ID, answer)
+		_ = conn.Reply(ctx, req.ID, JoinResponse{
+			Answer: *answer,
+			Offer:  *offer,
+		})
 
 	case "offer":
 		var negotiation Negotiation
@@ -159,7 +170,7 @@ func (p *jsonPeer) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc
 			break
 		}
 
-		answer, err := p.Offer(negotiation.Desc)
+		answer, err := p.Answer(negotiation.Desc)
 		if err != nil {
 			replyError(err)
 			break
@@ -175,7 +186,7 @@ func (p *jsonPeer) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc
 			break
 		}
 
-		err = p.Answer(negotiation.Desc)
+		err = p.SetRemoteDescription(negotiation.Desc)
 		if err != nil {
 			replyError(err)
 		}
