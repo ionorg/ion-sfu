@@ -170,12 +170,11 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 		case *pb.SignalRequest_Join:
 			log.Infof("signal->join called:\n%v", string(payload.Join.Offer.Sdp))
 
-			offer := webrtc.SessionDescription{
+			answer, offer, err := peer.Join(payload.Join.Sid, webrtc.SessionDescription{
 				Type: webrtc.SDPTypeOffer,
 				SDP:  string(payload.Join.Offer.Sdp),
-			}
+			})
 
-			answer, offer, err := peer.Join(payload.Join.Sid, offer)
 			if err != nil {
 				switch err {
 				case sfu.ErrTransportExists:
