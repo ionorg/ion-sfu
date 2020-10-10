@@ -159,7 +159,7 @@ func (p *jsonPeer) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc
 			break
 		}
 
-		answer, err := p.Offer(negotiation.Desc)
+		answer, err := p.Answer(negotiation.Desc)
 		if err != nil {
 			replyError(err)
 			break
@@ -175,7 +175,7 @@ func (p *jsonPeer) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc
 			break
 		}
 
-		err = p.Answer(negotiation.Desc)
+		err = p.SetRemoteDescription(negotiation.Desc)
 		if err != nil {
 			replyError(err)
 		}

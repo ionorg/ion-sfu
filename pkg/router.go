@@ -1,5 +1,7 @@
 package sfu
 
+//go:generate go run github.com/matryer/moq -out router_mock_test.generated.go . Router
+
 import (
 	"math/rand"
 	"sync"

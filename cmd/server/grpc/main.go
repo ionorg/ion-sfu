@@ -245,7 +245,7 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 					SDP:  string(payload.Negotiate.Sdp),
 				}
 
-				answer, err := peer.Offer(offer)
+				answer, err := peer.Answer(offer)
 				err = stream.Send(&pb.SignalReply{
 					Payload: &pb.SignalReply_Negotiate{
 						Negotiate: &pb.SessionDescription{
@@ -270,7 +270,7 @@ func (s *server) Signal(stream pb.SFU_SignalServer) error {
 					SDP:  string(payload.Negotiate.Sdp),
 				}
 
-				err := peer.Answer(answer)
+				err := peer.SetRemoteDescription(answer)
 				if err != nil {
 					switch err {
 					case sfu.ErrNoTransportEstablished:
