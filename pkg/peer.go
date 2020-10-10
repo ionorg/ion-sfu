@@ -51,7 +51,7 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 	log.Infof("peer %s join session %s", pc.ID(), sid)
 	p.pc = pc
 
-	answer, err := p.Offer(sdp)
+	answer, err := p.Answer(sdp)
 	if err != nil {
 		return nil, err
 	}
@@ -92,8 +92,8 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 	return answer, nil
 }
 
-// Offer new offer available over signaling for this peer
-func (p *Peer) Offer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
+// Answer an offer from remote
+func (p *Peer) Answer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
 	if p.pc == nil {
 		return nil, ErrNoTransportEstablished
 	}
@@ -116,8 +116,8 @@ func (p *Peer) Offer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription,
 	return &answer, nil
 }
 
-// Answer available over signaling for this peer
-func (p *Peer) Answer(sdp webrtc.SessionDescription) error {
+// SetRemoteDescription when receiving an answer from remote
+func (p *Peer) SetRemoteDescription(sdp webrtc.SessionDescription) error {
 	if p.pc == nil {
 		return ErrNoTransportEstablished
 	}

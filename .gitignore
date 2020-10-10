@@ -9,3 +9,4 @@ main
 *debug.test
 *.pem
 bin
+*.generated.go

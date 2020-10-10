@@ -1,5 +1,7 @@
 package sfu
 
+//go:generate go run github.com/matryer/moq -out sender_mock_test.generated.go . Sender
+
 import (
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
