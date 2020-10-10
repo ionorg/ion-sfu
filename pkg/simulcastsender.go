@@ -23,7 +23,7 @@ type SimulcastSender struct {
 	router         Router
 	sender         *webrtc.RTPSender
 	track          *webrtc.Track
-	muted          atomicBool
+	enabled        atomicBool
 	target         uint64
 	payload        uint8
 	maxBitrate     uint64
@@ -85,7 +85,7 @@ func (s *SimulcastSender) ID() string {
 // WriteRTP to the track
 func (s *SimulcastSender) WriteRTP(pkt *rtp.Packet) {
 	// Simulcast write RTP is sync, so the packet can be safely modified and restored
-	if s.ctx.Err() != nil || s.muted.get() {
+	if s.ctx.Err() != nil || !s.enabled.get() {
 		return
 	}
 	// Check if packet SSRC is different from before
@@ -212,11 +212,11 @@ func (s *SimulcastSender) Kind() webrtc.RTPCodecType {
 }
 
 func (s *SimulcastSender) Mute(val bool) {
-	if s.muted.get() == val {
+	if s.enabled.get() != val {
 		return
 	}
-	s.muted.set(val)
-	if val {
+	s.enabled.set(!val)
+	if !val {
 		// reset last ssrc to force a re-sync
 		s.lSSRC = 0
 	}
