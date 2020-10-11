@@ -8,3 +8,4 @@ coverage:
 
 ignore:
   - "cmd/*"
+  - "*.generated.go"
