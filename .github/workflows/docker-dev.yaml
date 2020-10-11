@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v2
     
       - name: build
-        run: docker build --tag pionwebrtc/ion-sfu:latest-protoc -f cmd/server/grpc/proto/Dockerfile .
+        run: docker build --tag pionwebrtc/ion-sfu:latest-protoc -f cmd/signal/grpc/proto/Dockerfile .
 
       - name: login
         if: github.event_name == 'push'

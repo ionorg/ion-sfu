@@ -118,7 +118,7 @@ func RegisterSFUService(s grpc.ServiceRegistrar, srv *SFUService) {
 				ClientStreams: true,
 			},
 		},
-		Metadata: "cmd/server/grpc/proto/sfu.proto",
+		Metadata: "cmd/signal/grpc/proto/sfu.proto",
 	}
 
 	s.RegisterService(&sd, nil)
