@@ -12,14 +12,14 @@ clean:
 	rm -rf bin
 
 build_proto:
-	docker run -v $(CURDIR):/workspace pionwebrtc/ion-sfu:latest-protoc protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative cmd/server/grpc/proto/sfu.proto
+	docker run -v $(CURDIR):/workspace pionwebrtc/ion-sfu:latest-protoc protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative cmd/signal/grpc/proto/sfu.proto
 
 
 build_grpc: go_init
-	go build -o bin/sfu $(GO_LDFLAGS) ./cmd/server/grpc/main.go
+	go build -o bin/sfu $(GO_LDFLAGS) ./cmd/signal/grpc/main.go
 
 build_jsonrpc: go_init
-	go build -o bin/sfu $(GO_LDFLAGS) ./cmd/server/json-rpc/main.go
+	go build -o bin/sfu $(GO_LDFLAGS) ./cmd/signal/json-rpc/main.go
 
 test: go_init
 	go test \

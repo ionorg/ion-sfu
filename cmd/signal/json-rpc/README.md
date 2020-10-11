@@ -5,14 +5,14 @@
 ## Quick Start
 ### Serving over http
 ```
-go build cmd/server/json-rpc/main.go
+go build cmd/signal/json-rpc/main.go
 ./main -c config.toml -a ":7000"
 ```
 
 ### Serving over `https`
 Generate a keypair and run:
 ```
-go build cmd/server/json-rpc/main.go
+go build cmd/signal/json-rpc/main.go
 ./main -c config.toml -key ./key.pem -cert ./cert.pem -a "0.0.0.0:10000"
 ```
 

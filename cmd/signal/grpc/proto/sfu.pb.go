@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.25.0-devel
 // 	protoc        v3.12.2
-// source: cmd/server/grpc/proto/sfu.proto
+// source: cmd/signal/grpc/proto/sfu.proto
 
 package proto
 
@@ -40,7 +40,7 @@ type SignalRequest struct {
 func (x *SignalRequest) Reset() {
 	*x = SignalRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_cmd_server_grpc_proto_sfu_proto_msgTypes[0]
+		mi := &file_cmd_signal_grpc_proto_sfu_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -53,7 +53,7 @@ func (x *SignalRequest) String() string {
 func (*SignalRequest) ProtoMessage() {}
 
 func (x *SignalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cmd_server_grpc_proto_sfu_proto_msgTypes[0]
+	mi := &file_cmd_signal_grpc_proto_sfu_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -66,7 +66,7 @@ func (x *SignalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SignalRequest.ProtoReflect.Descriptor instead.
 func (*SignalRequest) Descriptor() ([]byte, []int) {
-	return file_cmd_server_grpc_proto_sfu_proto_rawDescGZIP(), []int{0}
+	return file_cmd_signal_grpc_proto_sfu_proto_rawDescGZIP(), []int{0}
 }
 
 func (m *SignalRequest) GetPayload() isSignalRequest_Payload {
@@ -134,7 +134,7 @@ type SignalReply struct {
 func (x *SignalReply) Reset() {
 	*x = SignalReply{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_cmd_server_grpc_proto_sfu_proto_msgTypes[1]
+		mi := &file_cmd_signal_grpc_proto_sfu_proto_msgTypes[1]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -147,7 +147,7 @@ func (x *SignalReply) String() string {
 func (*SignalReply) ProtoMessage() {}
 
 func (x *SignalReply) ProtoReflect() protoreflect.Message {
-	mi := &file_cmd_server_grpc_proto_sfu_proto_msgTypes[1]
+	mi := &file_cmd_signal_grpc_proto_sfu_proto_msgTypes[1]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -160,7 +160,7 @@ func (x *SignalReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SignalReply.ProtoReflect.Descriptor instead.
 func (*SignalReply) Descriptor() ([]byte, []int) {
-	return file_cmd_server_grpc_proto_sfu_proto_rawDescGZIP(), []int{1}
+	return file_cmd_signal_grpc_proto_sfu_proto_rawDescGZIP(), []int{1}
 }
 
 func (m *SignalReply) GetPayload() isSignalReply_Payload {
@@ -225,7 +225,7 @@ type JoinRequest struct {
 func (x *JoinRequest) Reset() {
 	*x = JoinRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_cmd_server_grpc_proto_sfu_proto_msgTypes[2]
+		mi := &file_cmd_signal_grpc_proto_sfu_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -238,7 +238,7 @@ func (x *JoinRequest) String() string {
 func (*JoinRequest) ProtoMessage() {}
 
 func (x *JoinRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cmd_server_grpc_proto_sfu_proto_msgTypes[2]
+	mi := &file_cmd_signal_grpc_proto_sfu_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -251,7 +251,7 @@ func (x *JoinRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JoinRequest.ProtoReflect.Descriptor instead.
 func (*JoinRequest) Descriptor() ([]byte, []int) {
-	return file_cmd_server_grpc_proto_sfu_proto_rawDescGZIP(), []int{2}
+	return file_cmd_signal_grpc_proto_sfu_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *JoinRequest) GetSid() string {
@@ -280,7 +280,7 @@ type JoinReply struct {
 func (x *JoinReply) Reset() {
 	*x = JoinReply{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_cmd_server_grpc_proto_sfu_proto_msgTypes[3]
+		mi := &file_cmd_signal_grpc_proto_sfu_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -293,7 +293,7 @@ func (x *JoinReply) String() string {
 func (*JoinReply) ProtoMessage() {}
 
 func (x *JoinReply) ProtoReflect() protoreflect.Message {
-	mi := &file_cmd_server_grpc_proto_sfu_proto_msgTypes[3]
+	mi := &file_cmd_signal_grpc_proto_sfu_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -306,7 +306,7 @@ func (x *JoinReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JoinReply.ProtoReflect.Descriptor instead.
 func (*JoinReply) Descriptor() ([]byte, []int) {
-	return file_cmd_server_grpc_proto_sfu_proto_rawDescGZIP(), []int{3}
+	return file_cmd_signal_grpc_proto_sfu_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *JoinReply) GetPid() string {
@@ -334,7 +334,7 @@ type Trickle struct {
 func (x *Trickle) Reset() {
 	*x = Trickle{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_cmd_server_grpc_proto_sfu_proto_msgTypes[4]
+		mi := &file_cmd_signal_grpc_proto_sfu_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -347,7 +347,7 @@ func (x *Trickle) String() string {
 func (*Trickle) ProtoMessage() {}
 
 func (x *Trickle) ProtoReflect() protoreflect.Message {
-	mi := &file_cmd_server_grpc_proto_sfu_proto_msgTypes[4]
+	mi := &file_cmd_signal_grpc_proto_sfu_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -360,7 +360,7 @@ func (x *Trickle) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Trickle.ProtoReflect.Descriptor instead.
 func (*Trickle) Descriptor() ([]byte, []int) {
-	return file_cmd_server_grpc_proto_sfu_proto_rawDescGZIP(), []int{4}
+	return file_cmd_signal_grpc_proto_sfu_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Trickle) GetInit() string {
@@ -382,7 +382,7 @@ type SessionDescription struct {
 func (x *SessionDescription) Reset() {
 	*x = SessionDescription{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_cmd_server_grpc_proto_sfu_proto_msgTypes[5]
+		mi := &file_cmd_signal_grpc_proto_sfu_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -395,7 +395,7 @@ func (x *SessionDescription) String() string {
 func (*SessionDescription) ProtoMessage() {}
 
 func (x *SessionDescription) ProtoReflect() protoreflect.Message {
-	mi := &file_cmd_server_grpc_proto_sfu_proto_msgTypes[5]
+	mi := &file_cmd_signal_grpc_proto_sfu_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -408,7 +408,7 @@ func (x *SessionDescription) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionDescription.ProtoReflect.Descriptor instead.
 func (*SessionDescription) Descriptor() ([]byte, []int) {
-	return file_cmd_server_grpc_proto_sfu_proto_rawDescGZIP(), []int{5}
+	return file_cmd_signal_grpc_proto_sfu_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *SessionDescription) GetType() string {
@@ -425,10 +425,10 @@ func (x *SessionDescription) GetSdp() []byte {
 	return nil
 }
 
-var File_cmd_server_grpc_proto_sfu_proto protoreflect.FileDescriptor
+var File_cmd_signal_grpc_proto_sfu_proto protoreflect.FileDescriptor
 
-var file_cmd_server_grpc_proto_sfu_proto_rawDesc = []byte{
-	0x0a, 0x1f, 0x63, 0x6d, 0x64, 0x2f, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x2f, 0x67, 0x72, 0x70,
+var file_cmd_signal_grpc_proto_sfu_proto_rawDesc = []byte{
+	0x0a, 0x1f, 0x63, 0x6d, 0x64, 0x2f, 0x73, 0x69, 0x67, 0x6e, 0x61, 0x6c, 0x2f, 0x67, 0x72, 0x70,
 	0x63, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x73, 0x66, 0x75, 0x2e, 0x70, 0x72, 0x6f, 0x74,
 	0x6f, 0x12, 0x03, 0x73, 0x66, 0x75, 0x22, 0xa5, 0x01, 0x0a, 0x0d, 0x53, 0x69, 0x67, 0x6e, 0x61,
 	0x6c, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x26, 0x0a, 0x04, 0x6a, 0x6f, 0x69, 0x6e,
@@ -472,25 +472,25 @@ var file_cmd_server_grpc_proto_sfu_proto_rawDesc = []byte{
 	0x73, 0x74, 0x1a, 0x10, 0x2e, 0x73, 0x66, 0x75, 0x2e, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x6c, 0x52,
 	0x65, 0x70, 0x6c, 0x79, 0x22, 0x00, 0x28, 0x01, 0x30, 0x01, 0x42, 0x2f, 0x5a, 0x2d, 0x67, 0x69,
 	0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x70, 0x69, 0x6f, 0x6e, 0x2f, 0x69, 0x6f,
-	0x6e, 0x2d, 0x73, 0x66, 0x75, 0x2f, 0x63, 0x6d, 0x64, 0x2f, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72,
+	0x6e, 0x2d, 0x73, 0x66, 0x75, 0x2f, 0x63, 0x6d, 0x64, 0x2f, 0x73, 0x69, 0x67, 0x6e, 0x61, 0x6c,
 	0x2f, 0x67, 0x72, 0x70, 0x63, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f,
 	0x74, 0x6f, 0x33,
 }
 
 var (
-	file_cmd_server_grpc_proto_sfu_proto_rawDescOnce sync.Once
-	file_cmd_server_grpc_proto_sfu_proto_rawDescData = file_cmd_server_grpc_proto_sfu_proto_rawDesc
+	file_cmd_signal_grpc_proto_sfu_proto_rawDescOnce sync.Once
+	file_cmd_signal_grpc_proto_sfu_proto_rawDescData = file_cmd_signal_grpc_proto_sfu_proto_rawDesc
 )
 
-func file_cmd_server_grpc_proto_sfu_proto_rawDescGZIP() []byte {
-	file_cmd_server_grpc_proto_sfu_proto_rawDescOnce.Do(func() {
-		file_cmd_server_grpc_proto_sfu_proto_rawDescData = protoimpl.X.CompressGZIP(file_cmd_server_grpc_proto_sfu_proto_rawDescData)
+func file_cmd_signal_grpc_proto_sfu_proto_rawDescGZIP() []byte {
+	file_cmd_signal_grpc_proto_sfu_proto_rawDescOnce.Do(func() {
+		file_cmd_signal_grpc_proto_sfu_proto_rawDescData = protoimpl.X.CompressGZIP(file_cmd_signal_grpc_proto_sfu_proto_rawDescData)
 	})
-	return file_cmd_server_grpc_proto_sfu_proto_rawDescData
+	return file_cmd_signal_grpc_proto_sfu_proto_rawDescData
 }
 
-var file_cmd_server_grpc_proto_sfu_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
-var file_cmd_server_grpc_proto_sfu_proto_goTypes = []interface{}{
+var file_cmd_signal_grpc_proto_sfu_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_cmd_signal_grpc_proto_sfu_proto_goTypes = []interface{}{
 	(*SignalRequest)(nil),      // 0: sfu.SignalRequest
 	(*SignalReply)(nil),        // 1: sfu.SignalReply
 	(*JoinRequest)(nil),        // 2: sfu.JoinRequest
@@ -498,7 +498,7 @@ var file_cmd_server_grpc_proto_sfu_proto_goTypes = []interface{}{
 	(*Trickle)(nil),            // 4: sfu.Trickle
 	(*SessionDescription)(nil), // 5: sfu.SessionDescription
 }
-var file_cmd_server_grpc_proto_sfu_proto_depIdxs = []int32{
+var file_cmd_signal_grpc_proto_sfu_proto_depIdxs = []int32{
 	2, // 0: sfu.SignalRequest.join:type_name -> sfu.JoinRequest
 	5, // 1: sfu.SignalRequest.negotiate:type_name -> sfu.SessionDescription
 	4, // 2: sfu.SignalRequest.trickle:type_name -> sfu.Trickle
@@ -516,13 +516,13 @@ var file_cmd_server_grpc_proto_sfu_proto_depIdxs = []int32{
 	0, // [0:8] is the sub-list for field type_name
 }
 
-func init() { file_cmd_server_grpc_proto_sfu_proto_init() }
-func file_cmd_server_grpc_proto_sfu_proto_init() {
-	if File_cmd_server_grpc_proto_sfu_proto != nil {
+func init() { file_cmd_signal_grpc_proto_sfu_proto_init() }
+func file_cmd_signal_grpc_proto_sfu_proto_init() {
+	if File_cmd_signal_grpc_proto_sfu_proto != nil {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_cmd_server_grpc_proto_sfu_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_cmd_signal_grpc_proto_sfu_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*SignalRequest); i {
 			case 0:
 				return &v.state
@@ -534,7 +534,7 @@ func file_cmd_server_grpc_proto_sfu_proto_init() {
 				return nil
 			}
 		}
-		file_cmd_server_grpc_proto_sfu_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_cmd_signal_grpc_proto_sfu_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*SignalReply); i {
 			case 0:
 				return &v.state
@@ -546,7 +546,7 @@ func file_cmd_server_grpc_proto_sfu_proto_init() {
 				return nil
 			}
 		}
-		file_cmd_server_grpc_proto_sfu_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+		file_cmd_signal_grpc_proto_sfu_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*JoinRequest); i {
 			case 0:
 				return &v.state
@@ -558,7 +558,7 @@ func file_cmd_server_grpc_proto_sfu_proto_init() {
 				return nil
 			}
 		}
-		file_cmd_server_grpc_proto_sfu_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+		file_cmd_signal_grpc_proto_sfu_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*JoinReply); i {
 			case 0:
 				return &v.state
@@ -570,7 +570,7 @@ func file_cmd_server_grpc_proto_sfu_proto_init() {
 				return nil
 			}
 		}
-		file_cmd_server_grpc_proto_sfu_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+		file_cmd_signal_grpc_proto_sfu_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Trickle); i {
 			case 0:
 				return &v.state
@@ -582,7 +582,7 @@ func file_cmd_server_grpc_proto_sfu_proto_init() {
 				return nil
 			}
 		}
-		file_cmd_server_grpc_proto_sfu_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+		file_cmd_signal_grpc_proto_sfu_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*SessionDescription); i {
 			case 0:
 				return &v.state
@@ -595,12 +595,12 @@ func file_cmd_server_grpc_proto_sfu_proto_init() {
 			}
 		}
 	}
-	file_cmd_server_grpc_proto_sfu_proto_msgTypes[0].OneofWrappers = []interface{}{
+	file_cmd_signal_grpc_proto_sfu_proto_msgTypes[0].OneofWrappers = []interface{}{
 		(*SignalRequest_Join)(nil),
 		(*SignalRequest_Negotiate)(nil),
 		(*SignalRequest_Trickle)(nil),
 	}
-	file_cmd_server_grpc_proto_sfu_proto_msgTypes[1].OneofWrappers = []interface{}{
+	file_cmd_signal_grpc_proto_sfu_proto_msgTypes[1].OneofWrappers = []interface{}{
 		(*SignalReply_Join)(nil),
 		(*SignalReply_Negotiate)(nil),
 		(*SignalReply_Trickle)(nil),
@@ -609,18 +609,18 @@ func file_cmd_server_grpc_proto_sfu_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: file_cmd_server_grpc_proto_sfu_proto_rawDesc,
+			RawDescriptor: file_cmd_signal_grpc_proto_sfu_proto_rawDesc,
 			NumEnums:      0,
 			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_cmd_server_grpc_proto_sfu_proto_goTypes,
-		DependencyIndexes: file_cmd_server_grpc_proto_sfu_proto_depIdxs,
-		MessageInfos:      file_cmd_server_grpc_proto_sfu_proto_msgTypes,
+		GoTypes:           file_cmd_signal_grpc_proto_sfu_proto_goTypes,
+		DependencyIndexes: file_cmd_signal_grpc_proto_sfu_proto_depIdxs,
+		MessageInfos:      file_cmd_signal_grpc_proto_sfu_proto_msgTypes,
 	}.Build()
-	File_cmd_server_grpc_proto_sfu_proto = out.File
-	file_cmd_server_grpc_proto_sfu_proto_rawDesc = nil
-	file_cmd_server_grpc_proto_sfu_proto_goTypes = nil
-	file_cmd_server_grpc_proto_sfu_proto_depIdxs = nil
+	File_cmd_signal_grpc_proto_sfu_proto = out.File
+	file_cmd_signal_grpc_proto_sfu_proto_rawDesc = nil
+	file_cmd_signal_grpc_proto_sfu_proto_goTypes = nil
+	file_cmd_signal_grpc_proto_sfu_proto_depIdxs = nil
 }

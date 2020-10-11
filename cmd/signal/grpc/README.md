@@ -4,6 +4,6 @@
 
 ## Quick Start
 ```
-go build cmd/server/grpc/main.go
+go build cmd/signal/grpc/main.go
 ./main -c config.toml
 ```
