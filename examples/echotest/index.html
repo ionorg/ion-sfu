@@ -230,7 +230,7 @@
       integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV"
       crossorigin="anonymous"
     ></script>
-    <script src="../../../ion-sdk-js/dist/bundle.js"></script>
+    <script src="https://unpkg.com/ion-sdk-js@1.0.2/dist/ion-sdk.min.js"></script>
     <script>
       const localVideo = document.getElementById("local-video");
       const remoteVideo = document.getElementById("remote-video");
@@ -269,7 +269,10 @@
 
       const start = (sc) => {
         simulcast = sc;
-        const localStream = IonSDK.LocalStream.getUserMedia({ simulcast: sc })
+        const localStream = IonSDK.LocalStream.getUserMedia({
+          resolution: "hd",
+          simulcast: sc,
+        })
           .then((stream) => {
             localVideo.srcObject = stream;
             localVideo.autoplay = true;
