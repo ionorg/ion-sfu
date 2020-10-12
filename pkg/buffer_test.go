@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pion/webrtc/v3"
+
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/stretchr/testify/assert"
@@ -43,7 +45,7 @@ func CreateTestListPackets(snsAndTSs []SequenceNumberAndTimeStamp) (packetList [
 }
 
 func TestBufferWithDefaultBufferTime(t *testing.T) {
-	buffer := NewBuffer(nil, 1, 1, BufferOptions{})
+	buffer := NewBuffer(nil, &webrtc.Track{}, BufferOptions{})
 	defer buffer.Stop()
 
 	pkt := CreateTestPacket(nil)
@@ -66,7 +68,7 @@ func TestBufferWithDefaultBufferTime(t *testing.T) {
 
 func TestBufferWithBufferTimeAndZeroSSRC(t *testing.T) {
 
-	buffer := NewBuffer(nil, 0, 0, BufferOptions{
+	buffer := NewBuffer(nil, &webrtc.Track{}, BufferOptions{
 		BufferTime: 10,
 	})
 	defer buffer.Stop()
