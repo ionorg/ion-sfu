@@ -14,22 +14,12 @@ import (
 )
 
 const (
-	// bandwidth range(kbps)
-	// minBandwidth = 200
 	maxSize = 1024
 )
-
-type rtpExtInfo struct {
-	// transport sequence num
-	TSN       uint16
-	Timestamp int64
-}
 
 // Receiver defines a interface for a track receivers
 type Receiver interface {
 	Track() *webrtc.Track
-	ReadRTCP() chan rtcp.Packet
-	WriteRTCP(rtcp.Packet) error
 	AddSender(sender Sender)
 	DeleteSender(pid string)
 	SpatialLayer() uint8
@@ -44,25 +34,16 @@ type WebRTCReceiver struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
 	receiver       *webrtc.RTPReceiver
-	buffer         *Buffer
 	track          *webrtc.Track
+	buffer         *Buffer
 	bandwidth      uint64
 	rtpCh          chan *rtp.Packet
-	rtcpCh         chan rtcp.Packet
-	onCloseHandler func()
 	senders        map[string]Sender
+	onCloseHandler func()
 
 	spatialLayer uint8
 
 	wg sync.WaitGroup
-}
-
-// WebRTCVideoReceiverConfig .
-type WebRTCVideoReceiverConfig struct {
-	REMBCycle       int `mapstructure:"rembcycle"`
-	TCCCycle        int `mapstructure:"tcccycle"`
-	MaxBufferTime   int `mapstructure:"maxbuffertime"`
-	ReceiveRTPCycle int `mapstructure:"rtpcycle"`
 }
 
 // NewWebRTCReceiver creates a new webrtc track receivers
@@ -110,7 +91,7 @@ func (w *WebRTCReceiver) AddSender(sender Sender) {
 	w.senders[sender.ID()] = sender
 }
 
-//DeleteSender removes a Sender from a Receiver
+// DeleteSender removes a Sender from a Receiver
 func (w *WebRTCReceiver) DeleteSender(pid string) {
 	w.Lock()
 	defer w.Unlock()
@@ -121,27 +102,13 @@ func (w *WebRTCReceiver) SpatialLayer() uint8 {
 	return w.spatialLayer
 }
 
-//closeSenders Close all senders from Receiver
+// closeSenders close all senders from Receiver
 func (w *WebRTCReceiver) closeSenders() {
 	w.RLock()
 	defer w.RUnlock()
 	for _, sender := range w.senders {
 		sender.Close()
 	}
-}
-
-// ReadRTCP read rtcp packets
-func (w *WebRTCReceiver) ReadRTCP() chan rtcp.Packet {
-	return w.rtcpCh
-}
-
-// WriteRTCP write rtcp packet
-func (w *WebRTCReceiver) WriteRTCP(pkt rtcp.Packet) error {
-	if w.ctx.Err() != nil || w.rtcpCh == nil {
-		return io.ErrClosedPipe
-	}
-	w.rtcpCh <- pkt
-	return nil
 }
 
 // Track returns receivers track
@@ -230,22 +197,20 @@ func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}, config RouterCo
 	defer func() {
 		w.closeSenders()
 		close(w.rtpCh)
-		close(w.rtcpCh)
 		if w.onCloseHandler != nil {
 			w.onCloseHandler()
 		}
 	}()
 
-	w.rtcpCh = make(chan rtcp.Packet, maxSize)
-	w.buffer = NewBuffer(w.rtcpCh, w.track, BufferOptions{
-		BufferTime: config.Video.MaxBufferTime,
+	w.buffer = NewBuffer(w.track, BufferOptions{
+		BufferTime: config.MaxBufferTime,
 	})
 
 	w.wg.Add(1)
 	go w.readRTP()
-	// Receiver start loops done, send start signal
-	go w.fwdRTP()
+	w.wg.Add(1)
 	go w.readRTCP()
+	go w.fwdRTP()
 	wStart <- struct{}{}
 	w.wg.Wait()
 }

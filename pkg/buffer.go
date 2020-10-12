@@ -26,10 +26,15 @@ func tsDelta(x, y uint32) uint32 {
 	return y - x
 }
 
+type rtpExtInfo struct {
+	// transport sequence num
+	TSN       uint16
+	Timestamp int64
+}
+
 // Buffer contains all packets
 type Buffer struct {
 	pktBuffer     [maxSN]*rtp.Packet
-	rtcpCh        chan rtcp.Packet
 	lastNackSN    uint16
 	lastClearTS   uint32
 	lastClearSN   uint16
@@ -76,12 +81,11 @@ type BufferOptions struct {
 }
 
 // NewBuffer constructs a new Buffer
-func NewBuffer(ch chan rtcp.Packet, track *webrtc.Track, o BufferOptions) *Buffer {
+func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 	b := &Buffer{
 		ssrc:        track.SSRC(),
 		payloadType: track.PayloadType(),
 		clockRate:   track.Codec().ClockRate,
-		rtcpCh:      ch,
 	}
 
 	if o.BufferTime <= 0 {
@@ -147,7 +151,7 @@ func (b *Buffer) Push(p *rtp.Packet) {
 					nackPair,
 				},
 			}
-			b.rtcpCh <- nack
+			print(nack.String())
 		}
 	}
 }

@@ -29,11 +29,9 @@ type Router interface {
 
 // RouterConfig defines router configurations
 type RouterConfig struct {
-	REMBFeedback bool                      `mapstructure:"subrembfeedback"`
-	MaxBandwidth uint64                    `mapstructure:"maxbandwidth"`
-	MaxNackTime  int64                     `mapstructure:"maxnacktime"`
-	Video        WebRTCVideoReceiverConfig `mapstructure:"video"`
-	Simulcast    SimulcastConfig           `mapstructure:"simulcast"`
+	MaxBandwidth  uint64          `mapstructure:"maxbandwidth"`
+	MaxBufferTime int             `mapstructure:"maxbuffertime"`
+	Simulcast     SimulcastConfig `mapstructure:"simulcast"`
 }
 
 type router struct {

@@ -317,10 +317,15 @@ func (p *WebRTCTransport) Close() error {
 }
 
 func (p *WebRTCTransport) sendRTCP(recv Receiver) {
-	for pkt := range recv.ReadRTCP() {
-		log.Tracef("sendRTCP %v", pkt)
-		if err := p.pc.WriteRTCP([]rtcp.Packet{pkt}); err != nil {
-			log.Errorf("Error writing RTCP %s", err)
+	tm := time.NewTicker(time.Second)
+	for {
+		select {
+		case <-tm.C:
+			p.mu.RLock()
+			if err := p.pc.WriteRTCP([]rtcp.Packet{nil}); err != nil {
+				log.Errorf("Error writing RTCP %s", err)
+			}
+			p.mu.RUnlock()
 		}
 	}
 }
