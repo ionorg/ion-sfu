@@ -22,7 +22,7 @@ type SimpleSender struct {
 	sender         *webrtc.RTPSender
 	track          *webrtc.Track
 	router         Router
-	muted          atomicBool
+	enabled        atomicBool
 	payload        uint8
 	maxBitrate     uint64
 	target         uint64
@@ -62,7 +62,7 @@ func (s *SimpleSender) ID() string {
 
 // WriteRTP to the track
 func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
-	if s.ctx.Err() != nil || s.muted.get() {
+	if s.ctx.Err() != nil || !s.enabled.get() {
 		return
 	}
 	if s.reSync.get() {
@@ -127,10 +127,10 @@ func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
 }
 
 func (s *SimpleSender) Mute(val bool) {
-	if s.muted.get() == val {
+	if s.enabled.get() != val {
 		return
 	}
-	s.muted.set(val)
+	s.enabled.set(!val)
 	if val {
 		s.reSync.set(val)
 	}

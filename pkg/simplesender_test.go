@@ -111,6 +111,7 @@ forLoop:
 				track:   senderTrack,
 			}
 			tmr := time.NewTimer(1000 * time.Millisecond)
+			s.Mute(false)
 			s.WriteRTP(fakePkt)
 			for {
 				pkt, err := remoteTrack.ReadRTP()
@@ -458,7 +459,7 @@ forLoop:
 	fakeRecv := &ReceiverMock{
 		WriteRTCPFunc: func(in1 rtcp.Packet) error {
 			if _, ok := in1.(*rtcp.PictureLossIndication); ok {
-				gotPli <- struct{}{}
+				close(gotPli)
 			}
 			return nil
 		},
@@ -472,6 +473,7 @@ forLoop:
 
 	simpleSdr := SimpleSender{
 		ctx:     context.Background(),
+		enabled: atomicBool{1},
 		router:  fakeRouter,
 		track:   senderTrack,
 		payload: senderTrack.PayloadType(),

@@ -10,7 +10,7 @@ RUN cd $GOPATH/src/github.com/pion/ion-sfu && go mod download
 COPY pkg/ $GOPATH/src/github.com/pion/ion-sfu/pkg
 COPY cmd/ $GOPATH/src/github.com/pion/ion-sfu/cmd
 
-WORKDIR $GOPATH/src/github.com/pion/ion-sfu/cmd/server/json-rpc
+WORKDIR $GOPATH/src/github.com/pion/ion-sfu/cmd/signal/json-rpc
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /sfu .
 
 FROM alpine:3.12.0

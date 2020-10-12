@@ -158,6 +158,7 @@ forLoop:
 			if tt.fields.checkPli {
 				s := &SimulcastSender{
 					ctx:           context.Background(),
+					enabled:       atomicBool{1},
 					router:        fakeRouter,
 					track:         senderTrack,
 					simulcastSSRC: simulcastSSRC,
@@ -178,6 +179,7 @@ forLoop:
 			if tt.fields.checkPacket {
 				s := &SimulcastSender{
 					ctx:           context.Background(),
+					enabled:       atomicBool{1},
 					router:        fakeRouter,
 					track:         senderTrack,
 					simulcastSSRC: simulcastSSRC,
@@ -276,6 +278,7 @@ forLoop:
 			wss := &SimulcastSender{
 				ctx:           ctx,
 				cancel:        cancel,
+				enabled:       atomicBool{1},
 				router:        fakeRouter,
 				sender:        s,
 				track:         senderTrack,
@@ -554,6 +557,7 @@ forLoop:
 
 	simpleSdr := SimulcastSender{
 		ctx:           context.Background(),
+		enabled:       atomicBool{1},
 		simulcastSSRC: 1234,
 		router:        fakeRouter,
 		track:         senderTrack,
