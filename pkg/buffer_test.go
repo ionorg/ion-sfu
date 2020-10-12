@@ -1,7 +1,6 @@
 package sfu
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/pion/webrtc/v3"
@@ -46,24 +45,17 @@ func CreateTestListPackets(snsAndTSs []SequenceNumberAndTimeStamp) (packetList [
 
 func TestBufferWithDefaultBufferTime(t *testing.T) {
 	buffer := NewBuffer(nil, &webrtc.Track{}, BufferOptions{})
-	defer buffer.Stop()
 
 	pkt := CreateTestPacket(nil)
 
 	buffer.Push(pkt)
 	assert.Equal(t, buffer.GetPayloadType(), uint8(1))
-	assert.Equal(t, buffer.GetSSRC(), uint32(1))
 
 	receivedPkt := buffer.GetPacket(0)
 
 	assert.Equal(t, receivedPkt, pkt)
 
 	assert.Nil(t, buffer.GetPacket(1))
-	expectedStatString := []string{"buffer", "lastNackSN"}
-	for _, entry := range expectedStatString {
-		assert.True(t, strings.Contains(buffer.stats(), entry))
-	}
-
 }
 
 func TestBufferWithBufferTimeAndZeroSSRC(t *testing.T) {
@@ -71,7 +63,6 @@ func TestBufferWithBufferTimeAndZeroSSRC(t *testing.T) {
 	buffer := NewBuffer(nil, &webrtc.Track{}, BufferOptions{
 		BufferTime: 10,
 	})
-	defer buffer.Stop()
 
 	pktsSnsAndTs := []SequenceNumberAndTimeStamp{
 		{
@@ -113,15 +104,6 @@ func TestBufferWithBufferTimeAndZeroSSRC(t *testing.T) {
 	nackPair, lostPkt = buffer.GetNackPair(buffer.pktBuffer, 10, 12)
 	assert.Equal(t, 1, lostPkt)
 	assert.Equal(t, uint16(10), nackPair.PacketID)
-
-	lostRate, byteRate := buffer.GetLostRateBandwidth(uint64(12))
-	byteRate = uint64(byteRate / 1000)
-	assert.Equal(t, lostRate, float64(0))
-	assert.Equal(t, byteRate, uint64(0))
-
-	buffer.clearOldPkt(9999, 13)
-	buffer.clearOldPkt(99999, 14)
-	buffer.clearOldPkt(1200, 17)
 }
 
 func TestBuffer_tsDelta(t *testing.T) {
