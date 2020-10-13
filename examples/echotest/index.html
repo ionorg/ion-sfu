@@ -62,118 +62,7 @@
           </button>
         </div>
       </div>
-      <div class="row pt-3" id="controls" style="display: none">
-        <div class="col-3">
-          <strong>Video</strong>
-          <div id="simulcast-controls" style="display: none">
-            <div class="radio">
-              <label
-                ><input
-                  type="radio"
-                  onclick="controlVideo(this)"
-                  value="high"
-                  name="optvideos"
-                  checked
-                />
-                High</label
-              >
-            </div>
-            <div class="radio">
-              <label
-                ><input
-                  type="radio"
-                  onclick="controlVideo(this)"
-                  value="medium"
-                  name="optvideos"
-                />
-                Medium</label
-              >
-            </div>
-            <div class="radio">
-              <label
-                ><input
-                  type="radio"
-                  onclick="controlVideo(this)"
-                  value="low"
-                  name="optvideos"
-                />
-                Low</label
-              >
-            </div>
-            <div class="radio">
-              <label
-                ><input
-                  type="radio"
-                  onclick="controlVideo(this)"
-                  value="none"
-                  name="optvideos"
-                />
-                Mute</label
-              >
-            </div>
-          </div>
 
-          <div id="simple-controls" style="display: none">
-            <div class="radio">
-              <label
-                ><input
-                  type="radio"
-                  onclick="controlVideo(this)"
-                  value="high"
-                  name="optvideo"
-                  checked
-                />
-                Unmute</label
-              >
-            </div>
-            <div class="radio">
-              <label
-                ><input
-                  type="radio"
-                  onclick="controlVideo(this)"
-                  value="none"
-                  name="optvideo"
-                />
-                Mute</label
-              >
-            </div>
-          </div>
-        </div>
-        <div class="col-3">
-          <strong>Audio</strong>
-          <div class="radio">
-            <label
-              ><input
-                type="radio"
-                onclick="controlAudio(this)"
-                value="true"
-                name="optaudio"
-                checked
-              />
-              Unmute</label
-            >
-          </div>
-          <div class="radio">
-            <label
-              ><input
-                type="radio"
-                onclick="controlAudio(this)"
-                value="false"
-                name="optaudio"
-              />
-              Mute</label
-            >
-          </div>
-        </div>
-        <div class="col-6">
-          <strong>API call</strong>
-          <pre
-            id="api"
-            class="d-block border"
-            style="background-color: #f8f9fa; height: 117px"
-          ></pre>
-        </div>
-      </div>
       <div class="row">
         <div class="col-6 pt-2">
           <span
@@ -187,6 +76,68 @@
             width="320"
             height="240"
           ></video>
+          <div class="controls" style="display: none">
+            <div class="row pt-3">
+              <div class="col-3">
+                <strong>Video</strong>
+                <div class="radio">
+                  <label
+                    ><input
+                      type="radio"
+                      onclick="controlLocalVideo(this)"
+                      value="true"
+                      name="optlocalvideo"
+                      checked
+                    />
+                    Unmute</label
+                  >
+                </div>
+                <div class="radio">
+                  <label
+                    ><input
+                      type="radio"
+                      onclick="controlLocalVideo(this)"
+                      value="false"
+                      name="optlocalvideo"
+                    />
+                    Mute</label
+                  >
+                </div>
+              </div>
+              <div class="col-3">
+                <strong>Audio</strong>
+                <div class="radio">
+                  <label
+                    ><input
+                      type="radio"
+                      onclick="controlLocalAudio(this)"
+                      value="true"
+                      name="optlocalaudio"
+                      checked
+                    />
+                    Unmute</label
+                  >
+                </div>
+                <div class="radio">
+                  <label
+                    ><input
+                      type="radio"
+                      onclick="controlLocalAudio(this)"
+                      value="false"
+                      name="optlocalaudio"
+                    />
+                    Mute</label
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <strong class="mt-3 d-block">Local logs:</strong>
+          <div
+            id="local-logs"
+            class="mt-2 d-block"
+            style="background-color: #f8f9fa"
+          ></div>
         </div>
         <div class="col-6 pt-2">
           <span
@@ -210,6 +161,119 @@
             width="320"
             height="240"
           ></video>
+          <div class="controls" style="display: none">
+            <div class="row pt-3">
+              <div class="col-3">
+                <strong>Video</strong>
+                <div id="simulcast-controls" style="display: none">
+                  <div class="radio">
+                    <label
+                      ><input type="radio" onclLocal(this)" value="high"
+                      name="optremotevideos" checked /> High</label
+                    >
+                  </div>
+                  <div class="radio">
+                    <label
+                      ><input
+                        type="radio"
+                        onclick="controlRemoteVideo(this)"
+                        value="medium"
+                        name="optremotevideos"
+                      />
+                      Medium</label
+                    >
+                  </div>
+                  <div class="radio">
+                    <label
+                      ><input
+                        type="radio"
+                        onclick="controlRemoteVideo(this)"
+                        value="low"
+                        name="optremotevideos"
+                      />
+                      Low</label
+                    >
+                  </div>
+                  <div class="radio">
+                    <label
+                      ><input
+                        type="radio"
+                        onclick="controlRemoteVideo(this)"
+                        value="none"
+                        name="optremotevideos"
+                      />
+                      Mute</label
+                    >
+                  </div>
+                </div>
+
+                <div id="simple-controls" style="display: none">
+                  <div class="radio">
+                    <label
+                      ><input
+                        type="radio"
+                        onclick="controlRemoteVideo(this)"
+                        value="high"
+                        name="optremotevideo"
+                      />
+                      Unmute</label
+                    >
+                  </div>
+                  <div class="radio">
+                    <label
+                      ><input
+                        type="radio"
+                        onclick="controlRemoteVideo(this)"
+                        value="none"
+                        name="optremotevideo"
+                        checked
+                      />
+                      Mute</label
+                    >
+                  </div>
+                </div>
+              </div>
+              <div class="col-3">
+                <strong>Audio</strong>
+                <div class="radio">
+                  <label
+                    ><input
+                      type="radio"
+                      onclick="controlRemoteAudio(this)"
+                      value="true"
+                      name="optremoteaudio"
+                    />
+                    Unmute</label
+                  >
+                </div>
+                <div class="radio">
+                  <label
+                    ><input
+                      type="radio"
+                      onclick="controlRemoteAudio(this)"
+                      value="false"
+                      name="optremoteaudio"
+                      checked
+                    />
+                    Mute</label
+                  >
+                </div>
+              </div>
+            </div>
+            <strong class="d-block">API call</strong>
+            <pre
+              id="api"
+              class="d-block border"
+              style="background-color: #f8f9fa; height: 117px"
+            ></pre>
+          </div>
+
+          <strong class="mt-3 d-block">Echo logs:</strong>
+          <div
+            id="echo-logs"
+            class="mt-2 d-block"
+            style="background-color: #f8f9fa"
+          ></div>
         </div>
       </div>
     </div>
@@ -267,13 +331,16 @@
       const clientLocal = new IonSDK.Client("test session", signalLocal);
       const clientRemote = new IonSDK.Client("test session", signalRemote);
 
+      let localStream;
       const start = (sc) => {
         simulcast = sc;
-        const localStream = IonSDK.LocalStream.getUserMedia({
+        IonSDK.LocalStream.getUserMedia({
           resolution: "hd",
           simulcast: sc,
+          audio: true,
         })
           .then((stream) => {
+            localStream = stream;
             localVideo.srcObject = stream;
             localVideo.autoplay = true;
             localVideo.controls = true;
@@ -293,7 +360,9 @@
 
           getStats();
 
-          document.getElementById("controls").style.display = "flex";
+          document
+            .querySelectorAll(".controls")
+            .forEach((el) => (el.style.display = "block"));
           if (simulcast) {
             document.getElementById("simulcast-controls").style.display =
               "block";
@@ -309,7 +378,7 @@
         audio: true,
       };
 
-      const controlVideo = (radio) => {
+      const controlRemoteVideo = (radio) => {
         remoteStream.preferLayer(radio.value);
 
         // update ui
@@ -318,7 +387,7 @@
         document.getElementById("api").innerHTML = syntaxHighlight(str);
       };
 
-      const controlAudio = (radio) => {
+      const controlRemoteAudio = (radio) => {
         if (radio.value === "true") {
           remoteStream.mute("audio");
         } else {
@@ -329,6 +398,22 @@
         api.audio = radio.value === "true";
         const str = JSON.stringify(api, null, 2);
         document.getElementById("api").innerHTML = syntaxHighlight(str);
+      };
+
+      const controlLocalVideo = (radio) => {
+        if (radio.value === "false") {
+          localStream.mute("video");
+        } else {
+          localStream.unmute("video");
+        }
+      };
+
+      const controlLocalAudio = (radio) => {
+        if (radio.value === "false") {
+          localStream.mute("audio");
+        } else {
+          localStream.unmute("audio");
+        }
       };
 
       function syntaxHighlight(json) {
