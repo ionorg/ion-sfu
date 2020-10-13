@@ -3,7 +3,6 @@ package sfu
 //go:generate go run github.com/matryer/moq -out router_mock_test.generated.go . Router
 
 import (
-	"io"
 	"math/rand"
 	"sync"
 	"time"
@@ -26,6 +25,7 @@ type Router interface {
 	AddReceiver(recv Receiver)
 	GetReceiver(layer uint8) Receiver
 	AddSender(p *WebRTCTransport) error
+	GetRTCP() []rtcp.Packet
 	SendRTCP(rtcp []rtcp.Packet) error
 	SwitchSpatialLayer(targetLayer uint8, sub Sender) bool
 }
@@ -48,14 +48,12 @@ type router struct {
 
 // newRouter for routing rtp/rtcp packets
 func newRouter(peer *WebRTCTransport, streamID string, config RouterConfig, kind int) Router {
-	r := &router{
+	return &router{
 		peer:     peer,
 		kind:     kind,
 		config:   config,
 		streamID: streamID,
 	}
-	go r.sendRTCP()
-	return r
 }
 
 func (r *router) ID() string {
@@ -152,38 +150,23 @@ func (r *router) SendRTCP(rtcp []rtcp.Packet) error {
 	return r.peer.pc.WriteRTCP(rtcp)
 }
 
-func (r *router) sendRTCP() {
-	t := time.NewTicker(time.Second)
-	for {
-		select {
-		case <-t.C:
-			if r.kind == SimpleRouter || r.kind == SVCRouter {
-				if r.receivers[0] != nil {
-					if err := r.peer.pc.WriteRTCP(r.receivers[0].GetRTCP()); err != nil {
-						if err == io.ErrClosedPipe {
-							return
-						}
-						log.Errorf("Error writing rtcp feedback loop to router: %s, kind: %d err: %v", r.peer.id, r.kind, err)
-					}
-				}
-				continue
-			}
-			var rtcpPkts []rtcp.Packet
-			r.mu.Lock()
-			for _, recv := range r.receivers {
-				if recv != nil {
-					rtcpPkts = append(rtcpPkts, recv.GetRTCP()...)
-				}
-			}
-			r.mu.Unlock()
-			if err := r.peer.pc.WriteRTCP(rtcpPkts); err != nil {
-				if err == io.ErrClosedPipe {
-					return
-				}
-				log.Errorf("Error writing rtcp feedback loop to router: %s, kind: %d err: %v", r.peer.id, r.kind, err)
-			}
+func (r *router) GetRTCP() []rtcp.Packet {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if r.kind == SimpleRouter || r.kind == SVCRouter {
+		if r.receivers[0] != nil {
+			return r.receivers[0].GetRTCP()
+		}
+		return nil
+	}
+	var rtcpPkts []rtcp.Packet
+	for _, recv := range r.receivers {
+		if recv != nil {
+			rtcpPkts = append(rtcpPkts, recv.GetRTCP()...)
 		}
 	}
+	return rtcpPkts
 }
 
 func (r *router) SwitchSpatialLayer(targetLayer uint8, sub Sender) bool {

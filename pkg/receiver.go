@@ -210,6 +210,7 @@ func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}, config RouterCo
 
 	w.buffer = NewBuffer(w.track, BufferOptions{
 		BufferTime: config.MaxBufferTime,
+		MaxBitRate: config.MaxBandwidth * 1000,
 	})
 
 	w.wg.Add(1)

@@ -54,19 +54,17 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 		routers: make(map[string]Router),
 		senders: make(map[string][]Sender),
 	}
-
 	// Subscribe to existing transports
 	for _, t := range session.Transports() {
 		for _, router := range t.Routers() {
 			err := router.AddSender(p)
 			// log.Infof("Init add router ssrc %d to %s", router.receivers[0].Track().SSRC(), p.id)
 			if err != nil {
-				log.Errorf("Error subscribing to router err: %v", err)
+				log.Errorf("Subscribing to router err: %v", err)
 				continue
 			}
 		}
 	}
-
 	// Add transport to the session
 	session.AddTransport(p)
 	// Simulcast flag to add router to session
@@ -144,7 +142,6 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 		}
 	})
 
-	// Register data channel creation handling
 	pc.OnDataChannel(func(d *webrtc.DataChannel) {
 		log.Debugf("New DataChannel %s %d\n", d.Label(), d.ID())
 		// Register text message handling
@@ -172,6 +169,8 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 			}
 		}
 	})
+
+	go p.sendRTCP()
 
 	return p, nil
 }
@@ -311,4 +310,27 @@ func (p *WebRTCTransport) Close() error {
 	p.session.RemoveTransport(p.id)
 	p.cancel()
 	return p.pc.Close()
+}
+
+func (p *WebRTCTransport) sendRTCP() {
+	t := time.NewTicker(time.Second)
+	for {
+		select {
+		case <-t.C:
+			pkts := make([]rtcp.Packet, 0)
+			p.mu.RLock()
+			for _, r := range p.routers {
+				pkts = append(pkts, r.GetRTCP()...)
+			}
+			p.mu.RUnlock()
+			if len(pkts) > 0 {
+				if err := p.pc.WriteRTCP(pkts); err != nil {
+					log.Errorf("write rtcp err: %v", err)
+				}
+			}
+		case <-p.ctx.Done():
+			t.Stop()
+			return
+		}
+	}
 }

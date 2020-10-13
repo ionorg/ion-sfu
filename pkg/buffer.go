@@ -61,6 +61,7 @@ type Buffer struct {
 
 	// buffer time
 	maxBufferTS uint32
+	maxBitrate  uint64
 	totalByte   uint64
 
 	mu sync.RWMutex
@@ -72,6 +73,7 @@ type Buffer struct {
 // BufferOptions provides configuration options for the buffer
 type BufferOptions struct {
 	BufferTime int
+	MaxBitRate uint64
 }
 
 // NewBuffer constructs a new Buffer
@@ -109,7 +111,6 @@ func (b *Buffer) Push(p *rtp.Packet) {
 			b.maxSeqNo = p.SequenceNumber
 		}
 	}
-
 	b.pktBuffer[p.SequenceNumber] = p
 	b.lastSN = p.SequenceNumber
 	b.packetCount++
@@ -147,7 +148,7 @@ func (b *Buffer) Push(p *rtp.Packet) {
 	}
 }
 
-func (b *Buffer) buildREMBFeedback() *rtcp.ReceiverEstimatedMaximumBitrate {
+func (b *Buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
 	br := b.totalByte * 8
 	if b.lostRate < 0.02 {
 		br = uint64(float64(br)*1.08) + 1000
@@ -155,8 +156,8 @@ func (b *Buffer) buildREMBFeedback() *rtcp.ReceiverEstimatedMaximumBitrate {
 	if b.lostRate > .1 {
 		br = uint64(float64(br) * float64(1-0.5*b.lostRate))
 	}
-	if br > 1e6 {
-		br = 1e6
+	if br > b.maxBitrate {
+		br = b.maxBitrate
 	}
 	b.totalByte = 0
 	return &rtcp.ReceiverEstimatedMaximumBitrate{
@@ -219,7 +220,7 @@ func (b *Buffer) getRTCP() []rtcp.Packet {
 	RReport := &rtcp.ReceiverReport{
 		Reports: []rtcp.ReceptionReport{b.buildReceptionReport()},
 	}
-	remb := b.buildREMBFeedback()
+	remb := b.buildREMBPacket()
 	return []rtcp.Packet{RReport, remb}
 }
 
