@@ -6,6 +6,7 @@ require (
 	github.com/golang/protobuf v1.4.2
 	github.com/gorilla/websocket v1.4.2
 	github.com/lucsky/cuid v1.0.2
+	github.com/matryer/moq v0.1.3 // indirect
 	github.com/pion/rtcp v1.2.4
 	github.com/pion/rtp v1.6.1
 	github.com/pion/sdp/v2 v2.4.0

@@ -4,11 +4,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pion/webrtc/v3"
-
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
+	"github.com/pion/webrtc/v3"
 )
 
 const (
@@ -41,33 +40,28 @@ type Buffer struct {
 	lastSRNTPTime uint64
 	lastSRRTPTime uint32
 	lastSRRecv    int64 // Represents wall clock of the most recent sender report arrival
-	receivedPkts  uint64
 	lastSN        uint16
 	baseSN        uint16
 	cycles        uint32
 	lastExpected  uint32
 	lastReceived  uint32
+	lostRate      float32
 
-	ssrc        uint32
-	payloadType uint8
-	clockRate   uint32
-	// stats required to generate receiver reports
-	// ref: https://www.rfc-editor.org/rfc/rfc3550.html
-	totalByte       uint64
+	ssrc            uint32
+	payloadType     uint8
+	clockRate       uint32
 	lastPacketTime, // time the last RTP packet from this source was received
 	lastRtcpPacketTime, // time the last RTCP packet was received.
 	lastRtcpSrTime int64 // time the last RTCP SR was received. Required for DLSR computation.
 	packetCount, // number of packets received from this source.
-	octetCount, // number of octets received from this source.
-	extendedMaxSeqNum,
 	lastTransit,
 	cumulativePacketLost uint32 // The total of RTP packets that have been lost since the beginning of reception.
-	maxSeqNo     uint16 // The highest sequence number received in an RTP data packet
-	fractionLost uint8  // The fraction packets from source lost since the previous SR or RR packet was sent
-	jitter       uint32 // An estimate of the statistical variance of the RTP data packet inter-arrival time.
+	maxSeqNo uint16 // The highest sequence number received in an RTP data packet
+	jitter   uint32 // An estimate of the statistical variance of the RTP data packet inter-arrival time.
 
 	// buffer time
 	maxBufferTS uint32
+	totalByte   uint64
 
 	mu sync.RWMutex
 
@@ -100,10 +94,7 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 func (b *Buffer) Push(p *rtp.Packet) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-
-	b.receivedPkts++
 	b.totalByte += uint64(p.MarshalSize())
-
 	if b.packetCount == 0 {
 		b.lastClearTS = p.Timestamp
 		b.lastClearSN = p.SequenceNumber
@@ -156,7 +147,26 @@ func (b *Buffer) Push(p *rtp.Packet) {
 	}
 }
 
-func (b *Buffer) buildRR() rtcp.ReceptionReport {
+func (b *Buffer) buildREMBFeedback() *rtcp.ReceiverEstimatedMaximumBitrate {
+	br := b.totalByte * 8
+	if b.lostRate < 0.02 {
+		br = uint64(float64(br)*1.08) + 1000
+	}
+	if b.lostRate > .1 {
+		br = uint64(float64(br) * float64(1-0.5*b.lostRate))
+	}
+	if br > 1e6 {
+		br = 1e6
+	}
+	b.totalByte = 0
+	return &rtcp.ReceiverEstimatedMaximumBitrate{
+		SenderSSRC: b.ssrc,
+		Bitrate:    br,
+		SSRCs:      []uint32{b.ssrc},
+	}
+}
+
+func (b *Buffer) buildReceptionReport() rtcp.ReceptionReport {
 	extMaxSeq := b.cycles | uint32(b.maxSeqNo)
 	expected := extMaxSeq - uint32(b.baseSN) + 1
 	lost := expected - b.packetCount
@@ -171,13 +181,17 @@ func (b *Buffer) buildRR() rtcp.ReceptionReport {
 
 	lostInterval := expectedInterval - receivedInterval
 
-	var fracLost byte
+	b.lostRate = float32(lostInterval) / float32(expectedInterval)
+	var fracLost uint8
 	if expectedInterval != 0 && lostInterval > 0 {
-		fracLost = byte((lostInterval << 8) / expectedInterval)
+		fracLost = uint8((lostInterval << 8) / expectedInterval)
 	}
-	delayMS := uint32((time.Now().UnixNano() - b.lastSRRecv) / 1e6)
-	dlsr := (delayMS / 1e3) << 16
-	dlsr |= (delayMS % 1e3) * 65536 / 1000
+	var dlsr uint32
+	if b.lastSRRecv != 0 {
+		delayMS := uint32((time.Now().UnixNano() - b.lastSRRecv) / 1e6)
+		dlsr = (delayMS / 1e3) << 16
+		dlsr |= (delayMS % 1e3) * 65536 / 1000
+	}
 
 	rr := rtcp.ReceptionReport{
 		SSRC:               b.ssrc,
@@ -191,12 +205,22 @@ func (b *Buffer) buildRR() rtcp.ReceptionReport {
 	return rr
 }
 
-func (b *Buffer) setSR(rtpTime uint32, ntpTime uint64) {
+func (b *Buffer) setSenderReportData(rtpTime uint32, ntpTime uint64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.lastSRRTPTime = rtpTime
 	b.lastSRNTPTime = ntpTime
 	b.lastSRRecv = time.Now().UnixNano()
+}
+
+func (b *Buffer) getRTCP() []rtcp.Packet {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	RReport := &rtcp.ReceiverReport{
+		Reports: []rtcp.ReceptionReport{b.buildReceptionReport()},
+	}
+	remb := b.buildREMBFeedback()
+	return []rtcp.Packet{RReport, remb}
 }
 
 // clearOldPkt clear old packet

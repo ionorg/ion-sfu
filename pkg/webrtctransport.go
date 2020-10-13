@@ -74,14 +74,11 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 		log.Debugf("Peer %s got remote track id: %s ssrc: %d rid :%s streamID: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.Label())
-		recv := NewWebRTCReceiver(ctx, track, cfg.router)
+		recv := NewWebRTCReceiver(ctx, receiver, track, cfg.router)
 
-		if recv.Track().Kind() == webrtc.RTPCodecTypeVideo {
-			go p.sendRTCP(recv)
-		}
 		if router, ok := p.routers[track.ID()]; !ok {
 			if track.RID() != "" {
-				router = newRouter(p.id, track.Label(), cfg.router, SimulcastRouter)
+				router = newRouter(p, track.Label(), cfg.router, SimulcastRouter)
 				go func() {
 					// Send 3 big remb msgs to fwd all the tracks
 					ticker := time.NewTicker(3 * time.Second)
@@ -94,7 +91,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 					}
 				}()
 			} else {
-				router = newRouter(p.id, track.Label(), cfg.router, SimpleRouter)
+				router = newRouter(p, track.Label(), cfg.router, SimpleRouter)
 			}
 			router.AddReceiver(recv)
 			// If track is simulcast and BestQualityFirst is true and current track is full resolution subscribe to router
@@ -314,18 +311,4 @@ func (p *WebRTCTransport) Close() error {
 	p.session.RemoveTransport(p.id)
 	p.cancel()
 	return p.pc.Close()
-}
-
-func (p *WebRTCTransport) sendRTCP(recv Receiver) {
-	tm := time.NewTicker(time.Second)
-	for {
-		select {
-		case <-tm.C:
-			p.mu.RLock()
-			if err := p.pc.WriteRTCP([]rtcp.Packet{nil}); err != nil {
-				log.Errorf("Error writing RTCP %s", err)
-			}
-			p.mu.RUnlock()
-		}
-	}
 }

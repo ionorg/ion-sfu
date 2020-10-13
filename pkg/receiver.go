@@ -23,6 +23,7 @@ type Receiver interface {
 	AddSender(sender Sender)
 	DeleteSender(pid string)
 	SpatialLayer() uint8
+	GetRTCP() []rtcp.Packet
 	OnCloseHandler(fn func())
 	WriteBufferedPacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error
 	Close()
@@ -47,15 +48,16 @@ type WebRTCReceiver struct {
 }
 
 // NewWebRTCReceiver creates a new webrtc track receivers
-func NewWebRTCReceiver(ctx context.Context, track *webrtc.Track, config RouterConfig) Receiver {
+func NewWebRTCReceiver(ctx context.Context, receiver *webrtc.RTPReceiver, track *webrtc.Track, config RouterConfig) Receiver {
 	ctx, cancel := context.WithCancel(ctx)
 
 	w := &WebRTCReceiver{
-		ctx:     ctx,
-		cancel:  cancel,
-		track:   track,
-		senders: make(map[string]Sender),
-		rtpCh:   make(chan *rtp.Packet, maxSize),
+		ctx:      ctx,
+		cancel:   cancel,
+		receiver: receiver,
+		track:    track,
+		senders:  make(map[string]Sender),
+		rtpCh:    make(chan *rtp.Packet, maxSize),
 	}
 
 	switch w.track.RID() {
@@ -70,7 +72,7 @@ func NewWebRTCReceiver(ctx context.Context, track *webrtc.Track, config RouterCo
 	}
 
 	waitStart := make(chan struct{})
-	switch track.Kind() {
+	switch w.track.Kind() {
 	case webrtc.RTPCodecTypeVideo:
 		go startVideoReceiver(w, waitStart, config)
 	case webrtc.RTPCodecTypeAudio:
@@ -114,6 +116,10 @@ func (w *WebRTCReceiver) closeSenders() {
 // Track returns receivers track
 func (w *WebRTCReceiver) Track() *webrtc.Track {
 	return w.track
+}
+
+func (w *WebRTCReceiver) GetRTCP() []rtcp.Packet {
+	return w.buffer.getRTCP()
 }
 
 // WriteBufferedPacket writes buffered packet to track, return error if packet not found
@@ -176,7 +182,7 @@ func (w *WebRTCReceiver) readRTCP() {
 		for _, pkt := range pkts {
 			switch pkt := pkt.(type) {
 			case *rtcp.SenderReport:
-				w.buffer.setSR(pkt.RTPTime, pkt.NTPTime)
+				w.buffer.setSenderReportData(pkt.RTPTime, pkt.NTPTime)
 			}
 		}
 	}
