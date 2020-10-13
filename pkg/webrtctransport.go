@@ -60,16 +60,18 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 	}
 
 	// Subscribe to existing transports
-	for _, t := range session.Transports() {
-		for _, router := range t.Routers() {
-			err := router.AddSender(p)
-			// log.Infof("Init add router ssrc %d to %s", router.receivers[0].Track().SSRC(), p.id)
-			if err != nil {
-				log.Errorf("Error subscribing to router err: %v", err)
-				continue
+	defer func() {
+		for _, t := range session.Transports() {
+			for _, router := range t.Routers() {
+				err := router.AddSender(p)
+				// log.Infof("Init add router ssrc %d to %s", router.receivers[0].Track().SSRC(), p.id)
+				if err != nil {
+					log.Errorf("Error subscribing to router err: %v", err)
+					continue
+				}
 			}
 		}
-	}
+	}()
 
 	// Add transport to the session
 	session.AddTransport(p)

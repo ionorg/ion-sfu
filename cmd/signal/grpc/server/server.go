@@ -101,8 +101,8 @@ func (s *GRPCSignal) Signal(stream pb.SFU_SignalServer) error {
 				err := stream.Send(&pb.SignalReply{
 					Payload: &pb.SignalReply_Negotiate{
 						Negotiate: &pb.SessionDescription{
-							Type: offer.Type.String(),
-							Sdp:  []byte(offer.SDP),
+							Type: o.Type.String(),
+							Sdp:  []byte(o.SDP),
 						},
 					},
 				})
