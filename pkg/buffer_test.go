@@ -3,9 +3,6 @@ package sfu
 import (
 	"testing"
 
-	"github.com/pion/webrtc/v3"
-
-	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/stretchr/testify/assert"
 )
@@ -41,69 +38,6 @@ func CreateTestListPackets(snsAndTSs []SequenceNumberAndTimeStamp) (packetList [
 	}
 
 	return packetList
-}
-
-func TestBufferWithDefaultBufferTime(t *testing.T) {
-	buffer := NewBuffer(nil, &webrtc.Track{}, BufferOptions{})
-
-	pkt := CreateTestPacket(nil)
-
-	buffer.Push(pkt)
-	assert.Equal(t, buffer.GetPayloadType(), uint8(1))
-
-	receivedPkt := buffer.GetPacket(0)
-
-	assert.Equal(t, receivedPkt, pkt)
-
-	assert.Nil(t, buffer.GetPacket(1))
-}
-
-func TestBufferWithBufferTimeAndZeroSSRC(t *testing.T) {
-
-	buffer := NewBuffer(nil, &webrtc.Track{}, BufferOptions{
-		BufferTime: 10,
-	})
-
-	pktsSnsAndTs := []SequenceNumberAndTimeStamp{
-		{
-			SequenceNumber: 11,
-			Timestamp:      123,
-		},
-		{
-			SequenceNumber: 12,
-			Timestamp:      124,
-		},
-		{
-			SequenceNumber: 14,
-			Timestamp:      200,
-		},
-		{
-			SequenceNumber: 15,
-			Timestamp:      200,
-		},
-		{
-			SequenceNumber: 15,
-			Timestamp:      400,
-		},
-	}
-
-	packets := CreateTestListPackets(pktsSnsAndTs)
-
-	for _, packet := range packets {
-		buffer.Push(packet)
-	}
-
-	nackPair, lostPkt := buffer.GetNackPair(buffer.pktBuffer, 0, 1)
-	assert.Equal(t, 1, lostPkt)
-	assert.Equal(t, rtcp.NackPair{}, nackPair)
-
-	nackPair, lostPkt = buffer.GetNackPair(buffer.pktBuffer, 0, 25)
-	assert.Equal(t, 0, lostPkt)
-	assert.Equal(t, rtcp.NackPair{}, nackPair)
-
-	nackPair, lostPkt = buffer.GetNackPair(buffer.pktBuffer, 10, 12)
-	assert.Equal(t, 1, lostPkt)
-	assert.Equal(t, uint16(10), nackPair.PacketID)
 }
 
 func TestBuffer_tsDelta(t *testing.T) {

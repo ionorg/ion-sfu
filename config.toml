@@ -1,7 +1,7 @@
 [router]
 # Limit the remb bandwidth in kbps
 # zero means no limits
-maxbandwidth = 400
+maxbandwidth = 1500
 # max buffer time by ms for video tracks
 maxbuffertime = 1000
 

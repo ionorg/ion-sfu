@@ -12,4 +12,5 @@ var (
 	errNilPacket   = errors.New("invalid nil packet")
 	// buffer errors
 	errPacketNotFound = errors.New("packet not found in cache")
+	errPacketTooOld   = errors.New("packet not found in cache, too old")
 )

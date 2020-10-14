@@ -147,7 +147,7 @@ func setVP8TemporalLayer(pl []byte, s *SimulcastSender) (payload []byte, skip bo
 	return
 }
 
-func seqNoDiff(sn1, sn2 uint16) int {
+func snDiff(sn1, sn2 uint16) int {
 	if sn1 == sn2 {
 		return 0
 	}
