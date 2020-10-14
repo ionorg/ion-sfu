@@ -26,7 +26,7 @@ type Router interface {
 	GetReceiver(layer uint8) Receiver
 	AddSender(p *WebRTCTransport) error
 	GetRTCP() []rtcp.Packet
-	SendRTCP(rtcp []rtcp.Packet) error
+	SendRTCP(pkts []rtcp.Packet) error
 	SwitchSpatialLayer(targetLayer uint8, sub Sender) bool
 }
 
@@ -146,8 +146,8 @@ func (r *router) AddSender(p *WebRTCTransport) error {
 	return nil
 }
 
-func (r *router) SendRTCP(rtcp []rtcp.Packet) error {
-	return r.peer.pc.WriteRTCP(rtcp)
+func (r *router) SendRTCP(pkts []rtcp.Packet) error {
+	return r.peer.pc.WriteRTCP(pkts)
 }
 
 func (r *router) GetRTCP() []rtcp.Packet {

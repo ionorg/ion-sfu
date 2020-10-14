@@ -43,8 +43,6 @@ type WebRTCReceiver struct {
 	onCloseHandler func()
 
 	spatialLayer uint8
-
-	wg sync.WaitGroup
 }
 
 // NewWebRTCReceiver creates a new webrtc track receivers
@@ -71,14 +69,15 @@ func NewWebRTCReceiver(ctx context.Context, receiver *webrtc.RTPReceiver, track 
 		w.spatialLayer = 0
 	}
 
-	waitStart := make(chan struct{})
-	switch w.track.Kind() {
-	case webrtc.RTPCodecTypeVideo:
-		go startVideoReceiver(w, waitStart, config)
-	case webrtc.RTPCodecTypeAudio:
-		go startAudioReceiver(w, waitStart)
-	}
-	<-waitStart
+	w.buffer = NewBuffer(track, BufferOptions{
+		BufferTime: config.MaxBufferTime,
+		MaxBitRate: config.MaxBandwidth * 1000,
+	})
+
+	go w.readRTP()
+	go w.readRTCP()
+	go w.fwdRTP()
+
 	return w
 }
 
@@ -140,7 +139,13 @@ func (w *WebRTCReceiver) Close() {
 
 // readRTP receive all incoming tracks' rtp and sent to one channel
 func (w *WebRTCReceiver) readRTP() {
-	defer w.wg.Done()
+	defer func() {
+		w.closeSenders()
+		close(w.rtpCh)
+		if w.onCloseHandler != nil {
+			w.onCloseHandler()
+		}
+	}()
 	for {
 		pkt, err := w.track.ReadRTP()
 		// EOF signal received, this means that the remote track has been removed
@@ -168,7 +173,6 @@ func (w *WebRTCReceiver) readRTP() {
 }
 
 func (w *WebRTCReceiver) readRTCP() {
-	defer w.wg.Done()
 	for {
 		pkts, err := w.receiver.ReadRTCP()
 		if err == io.ErrClosedPipe || w.ctx.Err() != nil {
@@ -190,72 +194,10 @@ func (w *WebRTCReceiver) readRTCP() {
 
 func (w *WebRTCReceiver) fwdRTP() {
 	for pkt := range w.rtpCh {
-		// Push to sub send queues
 		w.RLock()
 		for _, sub := range w.senders {
 			sub.WriteRTP(pkt)
 		}
 		w.RUnlock()
 	}
-}
-
-func startVideoReceiver(w *WebRTCReceiver, wStart chan struct{}, config RouterConfig) {
-	defer func() {
-		w.closeSenders()
-		close(w.rtpCh)
-		if w.onCloseHandler != nil {
-			w.onCloseHandler()
-		}
-	}()
-
-	w.buffer = NewBuffer(w.track, BufferOptions{
-		BufferTime: config.MaxBufferTime,
-		MaxBitRate: config.MaxBandwidth * 1000,
-	})
-
-	w.wg.Add(1)
-	go w.readRTP()
-	w.wg.Add(1)
-	go w.readRTCP()
-	go w.fwdRTP()
-	wStart <- struct{}{}
-	w.wg.Wait()
-}
-
-func startAudioReceiver(w *WebRTCReceiver, wStart chan struct{}) {
-	defer func() {
-		w.closeSenders()
-		close(w.rtpCh)
-		if w.onCloseHandler != nil {
-			w.onCloseHandler()
-		}
-	}()
-	w.wg.Add(1)
-	go func() {
-		defer w.wg.Done()
-		for {
-			pkt, err := w.track.ReadRTP()
-			// EOF signal received, this means that the remote track has been removed
-			// or the peer has been disconnected. The router must be gracefully shutdown
-			if err == io.EOF {
-				w.Close()
-				return
-			}
-
-			if err != nil {
-				log.Errorf("rtp err => %v", err)
-				continue
-			}
-
-			select {
-			case <-w.ctx.Done():
-				return
-			default:
-				w.rtpCh <- pkt
-			}
-		}
-	}()
-	go w.fwdRTP()
-	wStart <- struct{}{}
-	w.wg.Wait()
 }
