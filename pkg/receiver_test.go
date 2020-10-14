@@ -281,7 +281,7 @@ func TestWebRTCReceiver_fwdRTP(t *testing.T) {
 				senders: tt.fields.senders,
 				rtpCh:   tt.fields.rtpCh,
 			}
-			go w.fwdRTP()
+			go w.writeRTP()
 			for i := 0; i < tt.want; i++ {
 				w.rtpCh <- &rtp.Packet{}
 			}

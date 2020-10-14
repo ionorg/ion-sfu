@@ -76,7 +76,7 @@ func NewWebRTCReceiver(ctx context.Context, receiver *webrtc.RTPReceiver, track 
 
 	go w.readRTP()
 	go w.readRTCP()
-	go w.fwdRTP()
+	go w.writeRTP()
 
 	return w
 }
@@ -101,15 +101,6 @@ func (w *WebRTCReceiver) DeleteSender(pid string) {
 
 func (w *WebRTCReceiver) SpatialLayer() uint8 {
 	return w.spatialLayer
-}
-
-// closeSenders close all senders from Receiver
-func (w *WebRTCReceiver) closeSenders() {
-	w.RLock()
-	defer w.RUnlock()
-	for _, sender := range w.senders {
-		sender.Close()
-	}
 }
 
 // Track returns receivers track
@@ -192,12 +183,21 @@ func (w *WebRTCReceiver) readRTCP() {
 	}
 }
 
-func (w *WebRTCReceiver) fwdRTP() {
+func (w *WebRTCReceiver) writeRTP() {
 	for pkt := range w.rtpCh {
 		w.RLock()
 		for _, sub := range w.senders {
 			sub.WriteRTP(pkt)
 		}
 		w.RUnlock()
+	}
+}
+
+// closeSenders close all senders from Receiver
+func (w *WebRTCReceiver) closeSenders() {
+	w.RLock()
+	defer w.RUnlock()
+	for _, sender := range w.senders {
+		sender.Close()
 	}
 }

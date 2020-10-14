@@ -16,21 +16,6 @@ type queue struct {
 	duration uint32
 }
 
-func (q *queue) nack() *rtcp.NackPair {
-	for i := 0; i < 17; i++ {
-		if q.get(q.counter-i-1) == nil {
-			blp := uint16(0)
-			for j := 1; j < q.counter-i; j++ {
-				if q.get(q.counter-i-j-1) == nil {
-					blp |= 1 << (j - 1)
-				}
-			}
-			return &rtcp.NackPair{PacketID: q.headSN - uint16(q.counter-i-1), LostPackets: rtcp.PacketBitmap(blp)}
-		}
-	}
-	return nil
-}
-
 func (q *queue) AddPacket(pkt *rtp.Packet, latest bool) {
 	diff := pkt.SequenceNumber - q.headSN
 	if !latest {
@@ -108,6 +93,21 @@ func (q *queue) resize() {
 		q.tail = q.size
 		q.pkts = newBuf
 	}
+}
+
+func (q *queue) nack() *rtcp.NackPair {
+	for i := 0; i < 17; i++ {
+		if q.get(q.counter-i-1) == nil {
+			blp := uint16(0)
+			for j := 1; j < q.counter-i; j++ {
+				if q.get(q.counter-i-j-1) == nil {
+					blp |= 1 << (j - 1)
+				}
+			}
+			return &rtcp.NackPair{PacketID: q.headSN - uint16(q.counter-i-1), LostPackets: rtcp.PacketBitmap(blp)}
+		}
+	}
+	return nil
 }
 
 func (q *queue) clean() {

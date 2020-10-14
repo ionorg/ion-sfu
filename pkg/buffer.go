@@ -76,7 +76,6 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 		o.BufferTime = defaultBufferTime
 	}
 	b.pktQueue.duration = uint32(o.BufferTime) * b.clockRate / 1000
-	println(b.pktQueue.duration)
 	log.Debugf("NewBuffer BufferOptions=%v", o)
 	return b
 }
