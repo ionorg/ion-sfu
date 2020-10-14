@@ -7,11 +7,21 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
+// SenderType determines the type of a sender
+type SenderType int
+
+const (
+	SimpleSenderType SenderType = iota + 1
+	SimulcastSenderType
+	SVCSenderType
+)
+
 // Sender defines a interface for a track receivers
 type Sender interface {
 	ID() string
 	Close()
 	Kind() webrtc.RTPCodecType
+	Type() SenderType
 	Mute(val bool)
 	WriteRTP(*rtp.Packet)
 	CurrentSpatialLayer() uint8

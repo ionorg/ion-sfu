@@ -144,6 +144,10 @@ func (s *SimpleSender) Kind() webrtc.RTPCodecType {
 	return s.track.Kind()
 }
 
+func (s *SimpleSender) Type() SenderType {
+	return SimpleSenderType
+}
+
 func (s *SimpleSender) CurrentSpatialLayer() uint8 {
 	return 0
 }

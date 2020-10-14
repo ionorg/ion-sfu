@@ -213,6 +213,10 @@ func (s *SimulcastSender) Kind() webrtc.RTPCodecType {
 	return s.track.Kind()
 }
 
+func (s *SimulcastSender) Type() SenderType {
+	return SimulcastSenderType
+}
+
 func (s *SimulcastSender) Mute(val bool) {
 	if s.enabled.get() != val {
 		return
