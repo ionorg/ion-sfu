@@ -3,7 +3,7 @@ module github.com/pion/ion-sfu
 go 1.13
 
 require (
-	github.com/golang/protobuf v1.4.2
+	github.com/golang/protobuf v1.4.3
 	github.com/gorilla/websocket v1.4.2
 	github.com/lucsky/cuid v1.0.2
 	github.com/pion/rtcp v1.2.4
