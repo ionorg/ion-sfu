@@ -76,7 +76,11 @@ func NewWebRTCReceiver(ctx context.Context, receiver *webrtc.RTPReceiver, track 
 	})
 
 	go w.readRTP()
-	go w.readRTCP()
+	if len(w.track.RID()) > 0 {
+		go w.readSimulcastRTCP(w.track.RID())
+	} else {
+		go w.readRTCP()
+	}
 	go w.writeRTP()
 
 	return w
@@ -171,6 +175,26 @@ func (w *WebRTCReceiver) readRTP() {
 func (w *WebRTCReceiver) readRTCP() {
 	for {
 		pkts, err := w.receiver.ReadRTCP()
+		if err == io.ErrClosedPipe || w.ctx.Err() != nil {
+			return
+		}
+		if err != nil {
+			log.Errorf("rtcp err => %v", err)
+			continue
+		}
+
+		for _, pkt := range pkts {
+			switch pkt := pkt.(type) {
+			case *rtcp.SenderReport:
+				w.buffer.setSenderReportData(pkt.RTPTime, pkt.NTPTime)
+			}
+		}
+	}
+}
+
+func (w *WebRTCReceiver) readSimulcastRTCP(rid string) {
+	for {
+		pkts, err := w.receiver.ReadSimulcastRTCP(rid)
 		if err == io.ErrClosedPipe || w.ctx.Err() != nil {
 			return
 		}

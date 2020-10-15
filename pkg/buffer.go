@@ -24,8 +24,11 @@ type rtpExtInfo struct {
 
 // Buffer contains all packets
 type Buffer struct {
+	mu sync.RWMutex
+
 	pktQueue   queue
 	codecType  webrtc.RTPCodecType
+	simulcast  bool
 	clockRate  uint32
 	maxBitrate uint64
 
@@ -46,8 +49,6 @@ type Buffer struct {
 	maxSeqNo           uint16 // The highest sequence number received in an RTP data packet
 	jitter             uint32 // An estimate of the statistical variance of the RTP data packet inter-arrival time.
 	totalByte          uint64
-
-	mu sync.RWMutex
 }
 
 // BufferOptions provides configuration options for the buffer
@@ -59,9 +60,11 @@ type BufferOptions struct {
 // NewBuffer constructs a new Buffer
 func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 	b := &Buffer{
-		ssrc:      track.SSRC(),
-		clockRate: track.Codec().ClockRate,
-		codecType: track.Codec().Type,
+		ssrc:       track.SSRC(),
+		clockRate:  track.Codec().ClockRate,
+		codecType:  track.Codec().Type,
+		maxBitrate: o.MaxBitRate,
+		simulcast:  len(track.RID()) > 0,
 	}
 
 	if o.BufferTime <= 0 {
@@ -82,13 +85,11 @@ func (b *Buffer) Push(p *rtp.Packet) {
 		b.baseSN = p.SequenceNumber
 		b.maxSeqNo = p.SequenceNumber
 		b.pktQueue.headSN = p.SequenceNumber - 1
-	} else {
-		if snDiff(b.maxSeqNo, p.SequenceNumber) <= 0 {
-			if p.SequenceNumber < b.maxSeqNo {
-				b.cycles += maxSN
-			}
-			b.maxSeqNo = p.SequenceNumber
+	} else if snDiff(b.maxSeqNo, p.SequenceNumber) <= 0 {
+		if p.SequenceNumber < b.maxSeqNo {
+			b.cycles += maxSN
 		}
+		b.maxSeqNo = p.SequenceNumber
 	}
 	b.packetCount++
 	b.lastPacketTime = time.Now().UnixNano()
@@ -179,11 +180,18 @@ func (b *Buffer) setSenderReportData(rtpTime uint32, ntpTime uint64) {
 func (b *Buffer) getRTCP() []rtcp.Packet {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
+	var pkts []rtcp.Packet
+
 	RReport := &rtcp.ReceiverReport{
 		Reports: []rtcp.ReceptionReport{b.buildReceptionReport()},
 	}
-	remb := b.buildREMBPacket()
-	return []rtcp.Packet{RReport, remb}
+	pkts = append(pkts, RReport)
+
+	if b.codecType == webrtc.RTPCodecTypeVideo && !b.simulcast {
+		pkts = append(pkts, b.buildREMBPacket())
+	}
+
+	return pkts
 }
 
 // WritePacket write buffer packet to requested track. and modify headers
