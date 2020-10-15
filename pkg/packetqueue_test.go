@@ -94,4 +94,52 @@ func Test_queue(t *testing.T) {
 	var expectedSN uint16
 	expectedSN = 6
 	assert.Equal(t, expectedSN, q.GetPacket(6).SequenceNumber)
+
+	np := &rtp.Packet{
+		Header: rtp.Header{
+			SequenceNumber: 8,
+		},
+	}
+	expectedSN = 8
+	q.AddPacket(np, false)
+	assert.Equal(t, expectedSN, q.GetPacket(8).SequenceNumber)
+}
+
+func Test_queue_edges(t *testing.T) {
+	var TestPackets = []*rtp.Packet{
+		{
+			Header: rtp.Header{
+				SequenceNumber: 65533,
+			},
+		},
+		{
+			Header: rtp.Header{
+				SequenceNumber: 65534,
+			},
+		},
+		{
+			Header: rtp.Header{
+				SequenceNumber: 2,
+			},
+		},
+	}
+	q := &queue{}
+	q.headSN = 65532
+	for _, p := range TestPackets {
+		assert.NotPanics(t, func() {
+			q.AddPacket(p, true)
+		})
+	}
+	assert.Equal(t, 6, q.size)
+	var expectedSN uint16
+	expectedSN = 65534
+	assert.Equal(t, expectedSN, q.GetPacket(expectedSN).SequenceNumber)
+
+	np := &rtp.Packet{
+		Header: rtp.Header{
+			SequenceNumber: 65535,
+		},
+	}
+	q.AddPacket(np, false)
+	assert.Equal(t, expectedSN+1, q.GetPacket(expectedSN+1).SequenceNumber)
 }

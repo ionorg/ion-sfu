@@ -19,11 +19,11 @@ type queue struct {
 }
 
 func (q *queue) AddPacket(pkt *rtp.Packet, latest bool) {
-	diff := pkt.SequenceNumber - q.headSN
 	if !latest {
-		q.set(q.head-int(diff), pkt)
+		q.set(int(q.headSN-pkt.SequenceNumber), pkt)
 		return
 	}
+	diff := pkt.SequenceNumber - q.headSN
 	q.headSN = pkt.SequenceNumber
 	for i := uint16(1); i < diff; i++ {
 		q.push(nil)
@@ -44,8 +44,7 @@ func (q *queue) AddPacket(pkt *rtp.Packet, latest bool) {
 }
 
 func (q *queue) GetPacket(sn uint16) *rtp.Packet {
-	diff := q.headSN - sn
-	return q.get(int(diff))
+	return q.get(int(q.headSN - sn))
 }
 
 func (q *queue) push(pkt *rtp.Packet) {

@@ -1,10 +1,7 @@
 package sfu
 
 import (
-	"testing"
-
 	"github.com/pion/rtp"
-	"github.com/stretchr/testify/assert"
 )
 
 func CreateTestPacket(pktStamp *SequenceNumberAndTimeStamp) *rtp.Packet {
@@ -38,40 +35,4 @@ func CreateTestListPackets(snsAndTSs []SequenceNumberAndTimeStamp) (packetList [
 	}
 
 	return packetList
-}
-
-func TestBuffer_tsDelta(t *testing.T) {
-	type args struct {
-		x uint32
-		y uint32
-	}
-	tests := []struct {
-		name string
-		args args
-		want uint32
-	}{
-		{
-			name: "When x is greater than y",
-			args: args{
-				x: 6,
-				y: 1,
-			},
-			want: uint32(5),
-		},
-		{
-			name: "When y is greater than x",
-			args: args{
-				x: 3,
-				y: 9,
-			},
-			want: uint32(6),
-		},
-	}
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			got := tsDelta(tt.args.x, tt.args.y)
-			assert.Equal(t, got, tt.want)
-		})
-	}
 }
