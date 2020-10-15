@@ -8,12 +8,14 @@ import (
 
 type queue struct {
 	pkts     []*rtp.Packet
+	ssrc     uint32
 	head     int
 	tail     int
 	size     int
 	headSN   uint16
 	counter  int
 	duration uint32
+	onLost   func(nack *rtcp.TransportLayerNack)
 }
 
 func (q *queue) AddPacket(pkt *rtp.Packet, latest bool) {
@@ -23,14 +25,19 @@ func (q *queue) AddPacket(pkt *rtp.Packet, latest bool) {
 		return
 	}
 	q.headSN = pkt.SequenceNumber
-	for i := 1; i < int(diff); i++ {
+	for i := uint16(1); i < diff; i++ {
 		q.push(nil)
 		q.counter++
 	}
 	q.counter++
 	q.push(pkt)
 	if q.counter >= 17 {
-		q.nack()
+		if n := q.nack(); n != nil {
+			q.onLost(&rtcp.TransportLayerNack{
+				MediaSSRC: q.ssrc,
+				Nacks:     []rtcp.NackPair{*n},
+			})
+		}
 		q.clean()
 		q.counter -= 17
 	}

@@ -16,13 +16,6 @@ const (
 	defaultBufferTime = 1000
 )
 
-func tsDelta(x, y uint32) uint32 {
-	if x > y {
-		return x - y
-	}
-	return y - x
-}
-
 type rtpExtInfo struct {
 	// transport sequence num
 	TSN       uint16
@@ -36,24 +29,23 @@ type Buffer struct {
 	clockRate  uint32
 	maxBitrate uint64
 
-	lastSRNTPTime        uint64
-	lastSRRTPTime        uint32
-	lastSRRecv           int64 // Represents wall clock of the most recent sender report arrival
-	baseSN               uint16
-	cycles               uint32
-	lastExpected         uint32
-	lastReceived         uint32
-	lostRate             float32
-	ssrc                 uint32
-	lastPacketTime       int64  // Time the last RTP packet from this source was received
-	lastRtcpPacketTime   int64  // Time the last RTCP packet was received.
-	lastRtcpSrTime       int64  // Time the last RTCP SR was received. Required for DLSR computation.
-	packetCount          uint32 // Number of packets received from this source.
-	lastTransit          uint32
-	cumulativePacketLost uint32 // The total of RTP packets that have been lost since the beginning of reception.
-	maxSeqNo             uint16 // The highest sequence number received in an RTP data packet
-	jitter               uint32 // An estimate of the statistical variance of the RTP data packet inter-arrival time.
-	totalByte            uint64
+	lastSRNTPTime      uint64
+	lastSRRTPTime      uint32
+	lastSRRecv         int64 // Represents wall clock of the most recent sender report arrival
+	baseSN             uint16
+	cycles             uint32
+	lastExpected       uint32
+	lastReceived       uint32
+	lostRate           float32
+	ssrc               uint32
+	lastPacketTime     int64  // Time the last RTP packet from this source was received
+	lastRtcpPacketTime int64  // Time the last RTCP packet was received.
+	lastRtcpSrTime     int64  // Time the last RTCP SR was received. Required for DLSR computation.
+	packetCount        uint32 // Number of packets received from this source.
+	lastTransit        uint32
+	maxSeqNo           uint16 // The highest sequence number received in an RTP data packet
+	jitter             uint32 // An estimate of the statistical variance of the RTP data packet inter-arrival time.
+	totalByte          uint64
 
 	mu sync.RWMutex
 }
@@ -76,6 +68,7 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 		o.BufferTime = defaultBufferTime
 	}
 	b.pktQueue.duration = uint32(o.BufferTime) * b.clockRate / 1000
+	b.pktQueue.ssrc = track.SSRC()
 	log.Debugf("NewBuffer BufferOptions=%v", o)
 	return b
 }
@@ -209,4 +202,8 @@ func (b *Buffer) WritePacket(sn uint16, track *webrtc.Track, snOffset uint16, ts
 		return err
 	}
 	return errPacketNotFound
+}
+
+func (b *Buffer) onLostHandler(fn func(nack *rtcp.TransportLayerNack)) {
+	b.pktQueue.onLost = fn
 }

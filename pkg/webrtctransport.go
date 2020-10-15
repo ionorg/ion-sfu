@@ -137,6 +137,15 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 			delete(p.routers, track.ID())
 		})
 
+		if track.Kind() == webrtc.RTPCodecTypeVideo {
+			recv.OnLostHandler(func(nack *rtcp.TransportLayerNack) {
+				log.Debugf("Writing nack to peer: %s, ssrc: %d, missing ssrc: %d, bitmap: %b:", p.id, track.SSRC(), nack.Nacks[0].PacketID, nack.Nacks[0].LostPackets)
+				if err := p.pc.WriteRTCP([]rtcp.Packet{nack}); err != nil {
+					log.Errorf("write nack rtcp err: %v", err)
+				}
+			})
+		}
+
 		if p.onTrackHandler != nil {
 			p.onTrackHandler(track, receiver)
 		}

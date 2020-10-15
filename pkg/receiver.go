@@ -25,6 +25,7 @@ type Receiver interface {
 	SpatialLayer() uint8
 	GetRTCP() []rtcp.Packet
 	OnCloseHandler(fn func())
+	OnLostHandler(fn func(nack *rtcp.TransportLayerNack))
 	WriteBufferedPacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error
 	Close()
 }
@@ -84,6 +85,10 @@ func NewWebRTCReceiver(ctx context.Context, receiver *webrtc.RTPReceiver, track 
 // OnCloseHandler method to be called on remote tracked removed
 func (w *WebRTCReceiver) OnCloseHandler(fn func()) {
 	w.onCloseHandler = fn
+}
+
+func (w *WebRTCReceiver) OnLostHandler(fn func(nack *rtcp.TransportLayerNack)) {
+	w.buffer.onLostHandler(fn)
 }
 
 func (w *WebRTCReceiver) AddSender(sender Sender) {
