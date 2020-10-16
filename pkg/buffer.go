@@ -328,7 +328,7 @@ func (b *Buffer) buildTransportCCPacket() *rtcp.TransportLayerCC {
 				}
 			}
 			rtcpTCC.RecvDeltas = append(rtcpTCC.RecvDeltas, &rtcp.RecvDelta{
-				Type:  0,
+				Type:  rtcp.TypeTCCPacketReceivedLargeDelta,
 				Delta: int64(rDelta),
 			})
 		} else {
