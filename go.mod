@@ -3,6 +3,7 @@ module github.com/pion/ion-sfu
 go 1.13
 
 require (
+	github.com/gammazero/deque v0.0.0-20201010052221-3932da5530cc // indirect
 	github.com/golang/protobuf v1.4.2
 	github.com/gorilla/websocket v1.4.2
 	github.com/lucas-clemente/quic-go v0.18.1 // indirect
