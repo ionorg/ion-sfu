@@ -156,16 +156,26 @@ func (r *router) GetRTCP() []rtcp.Packet {
 
 	if r.kind == SimpleRouter || r.kind == SVCRouter {
 		if r.receivers[0] != nil {
-			return r.receivers[0].GetRTCP()
+			rr, ps := r.receivers[0].GetRTCP()
+			ps = append(ps, &rtcp.ReceiverReport{
+				Reports: []rtcp.ReceptionReport{rr},
+			})
+			return ps
 		}
 		return nil
 	}
 	var rtcpPkts []rtcp.Packet
+	var rReports []rtcp.ReceptionReport
 	for _, recv := range r.receivers {
 		if recv != nil {
-			rtcpPkts = append(rtcpPkts, recv.GetRTCP()...)
+			rr, ps := recv.GetRTCP()
+			rtcpPkts = append(rtcpPkts, ps...)
+			rReports = append(rReports, rr)
 		}
 	}
+	rtcpPkts = append(rtcpPkts, &rtcp.ReceiverReport{
+		Reports: rReports,
+	})
 	return rtcpPkts
 }
 

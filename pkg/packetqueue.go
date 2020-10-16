@@ -32,7 +32,7 @@ func (q *queue) AddPacket(pkt *rtp.Packet, latest bool) {
 	q.counter++
 	q.push(pkt)
 	if q.counter >= 17 {
-		if n := q.nack(); n != nil {
+		if n := q.nack(); n != nil && q.onLost != nil {
 			q.onLost(&rtcp.TransportLayerNack{
 				MediaSSRC: q.ssrc,
 				Nacks:     []rtcp.NackPair{*n},

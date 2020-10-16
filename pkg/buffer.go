@@ -18,10 +18,7 @@ const (
 	// default buffer time by ms
 	defaultBufferTime = 1000
 
-	tccExtMapID      = 3
-	deltaScaleFactor = 250
-	baseScaleFactor  = deltaScaleFactor * (1 << 8)
-	timeWrapPeriodUs = (int64(1) << 24) * baseScaleFactor
+	tccExtMapID = 3
 )
 
 type rtpExtInfo struct {
@@ -56,11 +53,11 @@ type Buffer struct {
 	maxSeqNo           uint16 // The highest sequence number received in an RTP data packet
 	jitter             uint32 // An estimate of the statistical variance of the RTP data packet inter-arrival time.
 	totalByte          uint64
-
-	remb        bool
-	nack        bool
-	transportCC bool
-
+	// supported feedbacks
+	remb bool
+	nack bool
+	tcc  bool
+	// transport-cc
 	tccExtInfo   []rtpExtInfo
 	tccCycles    uint32
 	tccLastExtSN uint32
@@ -84,12 +81,25 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 		maxBitrate: o.MaxBitRate,
 		simulcast:  len(track.RID()) > 0,
 	}
-
 	if o.BufferTime <= 0 {
 		o.BufferTime = defaultBufferTime
 	}
 	b.pktQueue.duration = uint32(o.BufferTime) * b.clockRate / 1000
 	b.pktQueue.ssrc = track.SSRC()
+
+	for _, fb := range track.Codec().RTCPFeedback {
+		switch fb.Type {
+		case webrtc.TypeRTCPFBGoogREMB:
+			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBGoogREMB)
+			b.remb = true
+		case webrtc.TypeRTCPFBTransportCC:
+			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBTransportCC)
+			b.tcc = true
+		case webrtc.TypeRTCPFBNACK:
+			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBNACK)
+			b.nack = true
+		}
+	}
 	log.Debugf("NewBuffer BufferOptions=%v", o)
 	return b
 }
@@ -125,7 +135,7 @@ func (b *Buffer) Push(p *rtp.Packet) {
 		b.pktQueue.AddPacket(p, p.SequenceNumber == b.maxSeqNo)
 	}
 
-	if b.transportCC {
+	if b.tcc {
 		timestampUs := time.Now().UnixNano() / 1e3
 		rtpTCC := rtp.TransportCCExtension{}
 		if err := rtpTCC.Unmarshal(p.GetExtension(tccExtMapID)); err == nil {
@@ -389,21 +399,22 @@ func (b *Buffer) setSenderReportData(rtpTime uint32, ntpTime uint64) {
 	b.lastSRRecv = time.Now().UnixNano()
 }
 
-func (b *Buffer) getRTCP() []rtcp.Packet {
+func (b *Buffer) getRTCP() (rtcp.ReceptionReport, []rtcp.Packet) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	var pkts []rtcp.Packet
 
-	RReport := &rtcp.ReceiverReport{
-		Reports: []rtcp.ReceptionReport{b.buildReceptionReport()},
-	}
-	pkts = append(pkts, RReport)
+	report := b.buildReceptionReport()
 
-	if b.codecType == webrtc.RTPCodecTypeVideo && !b.simulcast {
+	if b.remb && !b.simulcast {
 		pkts = append(pkts, b.buildREMBPacket())
 	}
 
-	return pkts
+	if b.tcc {
+		pkts = append(pkts, b.buildTransportCCPacket())
+	}
+
+	return report, pkts
 }
 
 // WritePacket write buffer packet to requested track. and modify headers
@@ -425,5 +436,7 @@ func (b *Buffer) WritePacket(sn uint16, track *webrtc.Track, snOffset uint16, ts
 }
 
 func (b *Buffer) onLostHandler(fn func(nack *rtcp.TransportLayerNack)) {
-	b.pktQueue.onLost = fn
+	if b.nack {
+		b.pktQueue.onLost = fn
+	}
 }

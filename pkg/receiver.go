@@ -23,7 +23,7 @@ type Receiver interface {
 	AddSender(sender Sender)
 	DeleteSender(pid string)
 	SpatialLayer() uint8
-	GetRTCP() []rtcp.Packet
+	GetRTCP() (rtcp.ReceptionReport, []rtcp.Packet)
 	OnCloseHandler(fn func())
 	OnLostHandler(fn func(nack *rtcp.TransportLayerNack))
 	WriteBufferedPacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error
@@ -117,7 +117,7 @@ func (w *WebRTCReceiver) Track() *webrtc.Track {
 	return w.track
 }
 
-func (w *WebRTCReceiver) GetRTCP() []rtcp.Packet {
+func (w *WebRTCReceiver) GetRTCP() (rtcp.ReceptionReport, []rtcp.Packet) {
 	return w.buffer.getRTCP()
 }
 
