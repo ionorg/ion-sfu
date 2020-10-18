@@ -169,27 +169,6 @@
         const pc = new RTCPeerConnection(config)
         const epc = new RTCPeerConnection(config)
 
-        socket.addEventListener('message', async (event) => {
-            const resp = JSON.parse(event.data)
-            // Listen for server renegotiation notifications
-            if (!resp.id && resp.method === "offer") {
-                log(`Got offer notification`)
-                await pc.setRemoteDescription(resp.params)
-                const answer = await pc.createAnswer()
-                await pc.setLocalDescription(answer)
-
-                const id = Math.random().toString()
-                log(`Sending answer`)
-                socket.send(JSON.stringify({
-                    method: "answer",
-                    params: { desc: answer },
-                    id
-                }))
-            } else if (resp.method === "trickle") {
-                pc.addIceCandidate(resp.params).catch(log);
-            }
-        })
-
         pc.oniceconnectionstatechange = () => log(`ICE connection state: ${pc.iceConnectionState}`)
 
         pc.onicecandidate = event => {
