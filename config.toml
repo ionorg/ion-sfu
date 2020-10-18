@@ -47,6 +47,4 @@ enabletemporallayer = false
 # nat1to1 = ["1.2.3.4"]
 
 [log]
-stats = true
 level = "debug"
-fix = ["proc.go", "asm_amd64.s", "jsonrpc2.go"]

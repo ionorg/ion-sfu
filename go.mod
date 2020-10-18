@@ -6,6 +6,7 @@ require (
 	github.com/golang/protobuf v1.4.3
 	github.com/gorilla/websocket v1.4.2
 	github.com/lucsky/cuid v1.0.2
+	github.com/pion/ion-log v0.0.0-20201018162658-5afa48038e76
 	github.com/pion/rtcp v1.2.4
 	github.com/pion/rtp v1.6.1
 	github.com/pion/sdp/v2 v2.4.0

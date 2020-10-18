@@ -7,8 +7,8 @@ import (
 	"net"
 	"os"
 
+	log "github.com/pion/ion-log"
 	sfu "github.com/pion/ion-sfu/pkg"
-	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
@@ -98,7 +98,9 @@ func main() {
 		os.Exit(-1)
 	}
 
-	log.Init(conf.Log.Level, conf.Log.Fix)
+	fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go"}
+	fixByFunc := []string{}
+	log.Init(conf.Log.Level, fixByFile, fixByFunc)
 
 	log.Infof("--- Starting SFU Node ---")
 	lis, err := net.Listen("tcp", addr)
