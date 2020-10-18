@@ -53,23 +53,22 @@ func NewSFU(c Config) *SFU {
 	// Configure required extensions
 	sdes, _ := url.Parse(sdp.SDESRTPStreamIDURI)
 	sdedMid, _ := url.Parse(sdp.SDESMidURI)
-	rtcpfb = append(rtcpfb, webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBTransportCC})
 	transportCCURL, _ := url.Parse(sdp.TransportCCURI)
+	rtcpfb = append(rtcpfb, webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBTransportCC})
 	rtcpfb = append(rtcpfb, webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBGoogREMB})
-	exts := []sdp.ExtMap{
-		{
-			URI: sdes,
-		},
-		{
-			URI: sdedMid,
-		},
-		{
-			Value: 3,
-			URI:   transportCCURL,
-		},
-	}
 	se := webrtc.SettingEngine{}
-	se.AddSDPExtensions(webrtc.SDPSectionVideo, exts)
+	se.AddSDPExtensions(webrtc.SDPSectionVideo,
+		[]sdp.ExtMap{
+			{
+				URI: sdes,
+			},
+			{
+				URI: sdedMid,
+			},
+			{
+				URI: transportCCURL,
+			},
+		})
 
 	w := WebRTCTransportConfig{
 		configuration: webrtc.Configuration{
