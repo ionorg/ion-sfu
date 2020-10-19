@@ -107,11 +107,11 @@ forLoop:
 			s := &SimpleSender{
 				ctx:     ctx,
 				cancel:  cancel,
+				enabled: atomicBool{1},
 				payload: senderTrack.PayloadType(),
 				track:   senderTrack,
 			}
 			tmr := time.NewTimer(1000 * time.Millisecond)
-			s.Mute(false)
 			s.WriteRTP(fakePkt)
 			for {
 				pkt, err := remoteTrack.ReadRTP()
