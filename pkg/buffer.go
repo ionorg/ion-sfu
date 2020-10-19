@@ -158,17 +158,12 @@ func (b *Buffer) Push(p *rtp.Packet) {
 }
 
 func (b *Buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
-	br := b.totalByte * 8
-	if b.lostRate < 0.02 {
-		br = uint64(float64(br)*1.09) + 5000
+	br := b.maxBitrate
+	if b.rembSteps > 0 {
+		br /= uint64(b.rembSteps)
+		b.rembSteps--
 	}
-	if b.lostRate > .1 {
-		br = uint64(float64(br) * float64(1-0.5*b.lostRate))
-	}
-	if br > b.maxBitrate {
-		br = b.maxBitrate
-	}
-	b.totalByte = 0
+
 	return &rtcp.ReceiverEstimatedMaximumBitrate{
 		SenderSSRC: b.ssrc,
 		Bitrate:    br,
