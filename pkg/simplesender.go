@@ -51,8 +51,6 @@ func NewSimpleSender(ctx context.Context, id string, router Router, sender *webr
 		track:   sender.Track(),
 	}
 
-	s.enabled.set(true)
-
 	go s.receiveRTCP()
 
 	return s
