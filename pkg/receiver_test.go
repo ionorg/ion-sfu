@@ -13,44 +13,6 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-func TestNewWebRTCReceiver(t *testing.T) {
-	me := webrtc.MediaEngine{}
-	me.RegisterDefaultCodecs()
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
-	sfu, err := api.NewPeerConnection(webrtc.Configuration{})
-	assert.NoError(t, err)
-	track, err := sfu.NewTrack(webrtc.DefaultPayloadTypeOpus, 1234, "audio", "pion")
-	assert.NoError(t, err)
-
-	type args struct {
-		ctx      context.Context
-		track    *webrtc.Track
-		config   RouterConfig
-		receiver *webrtc.RTPReceiver
-	}
-	tests := []struct {
-		name string
-		args args
-	}{
-		{
-			name: "Must return a non nil Receiver",
-			args: args{
-				ctx:      context.Background(),
-				track:    track,
-				config:   RouterConfig{},
-				receiver: nil,
-			},
-		},
-	}
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			got := NewWebRTCReceiver(tt.args.ctx, nil, tt.args.track, tt.args.config)
-			assert.NotNil(t, got)
-		})
-	}
-}
-
 func TestWebRTCReceiver_AddSender(t *testing.T) {
 	type fields struct {
 		senders map[string]Sender

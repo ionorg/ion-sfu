@@ -31,7 +31,7 @@ func (q *queue) AddPacket(pkt *rtp.Packet, latest bool) {
 	}
 	q.counter++
 	q.push(pkt)
-	if q.counter >= 17 {
+	if q.counter >= 7 {
 		if n := q.nack(); n != nil && q.onLost != nil {
 			q.onLost(&rtcp.TransportLayerNack{
 				MediaSSRC: q.ssrc,
@@ -39,7 +39,7 @@ func (q *queue) AddPacket(pkt *rtp.Packet, latest bool) {
 			})
 		}
 		q.clean()
-		q.counter -= 17
+		q.counter -= 5
 	}
 }
 
@@ -102,7 +102,7 @@ func (q *queue) resize() {
 }
 
 func (q *queue) nack() *rtcp.NackPair {
-	for i := 0; i < 17; i++ {
+	for i := 0; i < 5; i++ {
 		if q.get(q.counter-i-1) == nil {
 			blp := uint16(0)
 			for j := 1; j < q.counter-i; j++ {
