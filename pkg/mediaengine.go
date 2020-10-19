@@ -62,7 +62,6 @@ func (e *MediaEngine) PopulateFromSDP(sd webrtc.SessionDescription) error {
 			if err != nil {
 				return fmt.Errorf("could not find codec for payload type %d", payloadType)
 			}
-
 			var codec *webrtc.RTPCodec
 			switch {
 			case strings.EqualFold(payloadCodec.Name, webrtc.Opus):
