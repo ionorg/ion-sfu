@@ -17,6 +17,11 @@ const (
 	maxSize = 1024
 )
 
+type ReceiverConfig struct {
+	RouterConfig
+	tccExt int
+}
+
 // Receiver defines a interface for a track receivers
 type Receiver interface {
 	Track() *webrtc.Track
@@ -47,7 +52,7 @@ type WebRTCReceiver struct {
 }
 
 // NewWebRTCReceiver creates a new webrtc track receivers
-func NewWebRTCReceiver(ctx context.Context, receiver *webrtc.RTPReceiver, track *webrtc.Track, config RouterConfig) Receiver {
+func NewWebRTCReceiver(ctx context.Context, receiver *webrtc.RTPReceiver, track *webrtc.Track, config ReceiverConfig) Receiver {
 	ctx, cancel := context.WithCancel(ctx)
 
 	w := &WebRTCReceiver{
@@ -73,6 +78,7 @@ func NewWebRTCReceiver(ctx context.Context, receiver *webrtc.RTPReceiver, track 
 	w.buffer = NewBuffer(track, BufferOptions{
 		BufferTime: config.MaxBufferTime,
 		MaxBitRate: config.MaxBandwidth * 1000,
+		TCCExt:     config.tccExt,
 	})
 
 	go w.readRTP()

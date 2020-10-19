@@ -53,9 +53,12 @@ type Buffer struct {
 	lastRtcpSrTime     int64  // Time the last RTCP SR was received. Required for DLSR computation.
 	packetCount        uint32 // Number of packets received from this source.
 	lastTransit        uint32
-	maxSeqNo           uint16 // The highest sequence number received in an RTP data packet
-	jitter             uint32 // An estimate of the statistical variance of the RTP data packet inter-arrival time.
+	maxSeqNo           uint16  // The highest sequence number received in an RTP data packet
+	jitter             float64 // An estimate of the statistical variance of the RTP data packet inter-arrival time.
 	totalByte          uint64
+
+	// remb
+	rembSteps uint8
 
 	// transport-cc
 	tccExt       uint8
@@ -82,6 +85,7 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 		codecType:  track.Codec().Type,
 		maxBitrate: o.MaxBitRate,
 		simulcast:  len(track.RID()) > 0,
+		rembSteps:  4,
 	}
 	if o.BufferTime <= 0 {
 		o.BufferTime = defaultBufferTime
@@ -97,6 +101,7 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 			b.remb = true
 		case webrtc.TypeRTCPFBTransportCC:
 			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBTransportCC)
+			b.tccExtInfo = make([]rtpExtInfo, 1<<8)
 			b.tcc = true
 		case webrtc.TypeRTCPFBNACK:
 			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBNACK)
@@ -131,7 +136,7 @@ func (b *Buffer) Push(p *rtp.Packet) {
 		if d < 0 {
 			d = -d
 		}
-		b.jitter += uint32(d) - ((b.jitter + 8) >> 4)
+		b.jitter += (float64(d) - b.jitter) / 16
 	}
 	b.lastTransit = transit
 	if b.codecType == webrtc.RTPCodecTypeVideo {
@@ -155,16 +160,13 @@ func (b *Buffer) Push(p *rtp.Packet) {
 func (b *Buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
 	br := b.totalByte * 8
 	if b.lostRate < 0.02 {
-		br = uint64(float64(br)*1.08) + 1000
+		br = uint64(float64(br)*1.09) + 5000
 	}
 	if b.lostRate > .1 {
 		br = uint64(float64(br) * float64(1-0.5*b.lostRate))
 	}
 	if br > b.maxBitrate {
 		br = b.maxBitrate
-	}
-	if br < 250000 {
-		br = 250000
 	}
 	b.totalByte = 0
 	return &rtcp.ReceiverEstimatedMaximumBitrate{
@@ -212,10 +214,10 @@ func (b *Buffer) buildTransportCCPacket() *rtcp.TransportLayerCC {
 	firstRecv := false
 	allSame := true
 	timestamp := int64(0)
+	deltaLen := 0
 	lastStatus := rtcp.TypeTCCPacketReceivedWithoutDelta
 	maxStatus := rtcp.TypeTCCPacketNotReceived
 
-	var deltaList deque.Deque
 	var statusList deque.Deque
 
 	for _, stat := range tccPkts {
@@ -225,21 +227,33 @@ func (b *Buffer) buildTransportCCPacket() *rtcp.TransportLayerCC {
 			if !firstRecv {
 				firstRecv = true
 				timestamp = stat.Timestamp
-				rtcpTCC.ReferenceTime = uint32((stat.Timestamp / 64000) & 0x007FFFFF)
+				rtcpTCC.ReferenceTime = uint32(stat.Timestamp / 64000)
 			}
 
-			if stat.Timestamp > timestamp {
-				delta = (stat.Timestamp - timestamp) / 250
-			} else {
-				delta = -(stat.Timestamp) / 250
-			}
-
+			delta = (stat.Timestamp - timestamp) / 250
 			if delta < 0 || delta > 255 {
 				status = rtcp.TypeTCCPacketReceivedLargeDelta
+				rDelta := int16(delta)
+				if int64(rDelta) != delta {
+					if rDelta > 0 {
+						rDelta = math.MaxInt16
+					} else {
+						rDelta = math.MinInt16
+					}
+				}
+				rtcpTCC.RecvDeltas = append(rtcpTCC.RecvDeltas, &rtcp.RecvDelta{
+					Type:  status,
+					Delta: int64(rDelta) * 250,
+				})
+				deltaLen += 2
 			} else {
 				status = rtcp.TypeTCCPacketReceivedSmallDelta
+				rtcpTCC.RecvDeltas = append(rtcpTCC.RecvDeltas, &rtcp.RecvDelta{
+					Type:  status,
+					Delta: delta * 250,
+				})
+				deltaLen++
 			}
-			deltaList.PushBack(delta)
 			timestamp = stat.Timestamp
 		}
 
@@ -330,38 +344,12 @@ func (b *Buffer) buildTransportCCPacket() *rtcp.TransportLayerCC {
 		}
 	}
 
-	deltaLen := 0
-	for deltaList.Len() > 1 {
-		delta := deltaList.PopFront().(int64)
-		if delta < 0 || delta > 255 {
-			rDelta := int16(delta)
-			if int64(rDelta) != delta {
-				if rDelta > 0 {
-					rDelta = math.MaxInt16
-				} else {
-					rDelta = math.MinInt16
-				}
-			}
-			rtcpTCC.RecvDeltas = append(rtcpTCC.RecvDeltas, &rtcp.RecvDelta{
-				Type:  rtcp.TypeTCCPacketReceivedLargeDelta,
-				Delta: int64(rDelta) * 250,
-			})
-			deltaLen += 2
-		} else {
-			rtcpTCC.RecvDeltas = append(rtcpTCC.RecvDeltas, &rtcp.RecvDelta{
-				Type:  rtcp.TypeTCCPacketReceivedSmallDelta,
-				Delta: delta * 250,
-			})
-			deltaLen++
-		}
-	}
-
 	pLen := uint16(20 + len(rtcpTCC.PacketChunks)*2 + deltaLen)
 	rtcpTCC.Header.Padding = pLen%4 != 0
-	if rtcpTCC.Header.Padding {
-		pLen = (pLen/4 + 1) * 4
+	for pLen%4 != 0 {
+		pLen++
 	}
-	rtcpTCC.Header.Length = pLen/4 - 1
+	rtcpTCC.Header.Length = (pLen / 4) - 1
 	return rtcpTCC
 }
 
@@ -397,7 +385,7 @@ func (b *Buffer) buildReceptionReport() rtcp.ReceptionReport {
 		FractionLost:       fracLost,
 		TotalLost:          lost,
 		LastSequenceNumber: extMaxSeq,
-		Jitter:             b.jitter >> 4,
+		Jitter:             uint32(b.jitter),
 		LastSenderReport:   uint32(b.lastSRNTPTime >> 16),
 		Delay:              dlsr,
 	}
@@ -416,15 +404,18 @@ func (b *Buffer) getRTCP() (rtcp.ReceptionReport, []rtcp.Packet) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	var pkts []rtcp.Packet
+	var report rtcp.ReceptionReport
 
-	report := b.buildReceptionReport()
+	report = b.buildReceptionReport()
 
-	if b.remb && !b.simulcast {
+	if b.remb {
 		pkts = append(pkts, b.buildREMBPacket())
 	}
 
 	if b.tcc {
-		pkts = append(pkts, b.buildTransportCCPacket())
+		if tccPkt := b.buildTransportCCPacket(); tccPkt != nil {
+			pkts = append(pkts, tccPkt)
+		}
 	}
 
 	return report, pkts

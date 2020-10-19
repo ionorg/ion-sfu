@@ -74,6 +74,8 @@ func NewSimulcastSender(ctx context.Context, id string, router Router, sender *w
 		refTlzi:             uint8(rand.Uint32()),
 	}
 
+	s.enabled.set(true)
+
 	go s.receiveRTCP()
 	return s
 }

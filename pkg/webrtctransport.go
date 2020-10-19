@@ -72,27 +72,14 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 		log.Debugf("Peer %s got remote track id: %s ssrc: %d rid :%s streamID: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.Label())
-		recv := NewWebRTCReceiver(ctx, receiver, track, cfg.router)
+		recv := NewWebRTCReceiver(ctx, receiver, track, ReceiverConfig{
+			RouterConfig: cfg.router,
+			tccExt:       me.tCCExt,
+		})
 
 		if router, ok := p.routers[track.ID()]; !ok {
 			if track.RID() != "" {
 				router = newRouter(p, track.Label(), cfg.router, SimulcastRouter)
-				go func() {
-					ticker := time.NewTicker(1 * time.Second)
-					ctr := 0
-					for range ticker.C {
-						ctr++
-						if writeErr := pc.WriteRTCP([]rtcp.Packet{
-							&rtcp.ReceiverEstimatedMaximumBitrate{Bitrate: 1500000, SenderSSRC: track.SSRC()}},
-						); writeErr != nil {
-							return
-						}
-						if ctr > 2 {
-							ticker.Stop()
-							break
-						}
-					}
-				}()
 			} else {
 				router = newRouter(p, track.Label(), cfg.router, SimpleRouter)
 			}
@@ -144,7 +131,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 
 		if track.Kind() == webrtc.RTPCodecTypeVideo {
 			recv.OnLostHandler(func(nack *rtcp.TransportLayerNack) {
-				log.Debugf("Writing nack to peer: %s, ssrc: %d, missing ssrc: %d, bitmap: %b:", p.id, track.SSRC(), nack.Nacks[0].PacketID, nack.Nacks[0].LostPackets)
+				log.Debugf("Writing nack to peer: %s, ssrc: %d, missing sn: %d, bitmap: %b", p.id, track.SSRC(), nack.Nacks[0].PacketID, nack.Nacks[0].LostPackets)
 				if err := p.pc.WriteRTCP([]rtcp.Packet{nack}); err != nil {
 					log.Errorf("write nack rtcp err: %v", err)
 				}
