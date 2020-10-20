@@ -87,6 +87,7 @@ func Test_queue_nack(t *testing.T) {
 func Test_queue(t *testing.T) {
 	q := &queue{}
 	for _, p := range TestPackets {
+		p := p
 		assert.NotPanics(t, func() {
 			q.AddPacket(p, true)
 		})
@@ -126,6 +127,7 @@ func Test_queue_edges(t *testing.T) {
 	q := &queue{}
 	q.headSN = 65532
 	for _, p := range TestPackets {
+		p := p
 		assert.NotPanics(t, func() {
 			q.AddPacket(p, true)
 		})

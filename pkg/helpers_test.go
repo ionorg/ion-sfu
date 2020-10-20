@@ -172,6 +172,7 @@ func Test_timeToNtp(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			gotNTP := timeToNtp(tt.args.ns)
 			if gotNTP != tt.wantNTP {

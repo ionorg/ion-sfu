@@ -135,7 +135,7 @@ func (s *SimulcastSender) WriteRTP(pkt *rtp.Packet) {
 			return
 		}
 		// Switch is done remove sender from previous layer
-		/// and update current layer
+		// and update current layer
 		if pRecv := s.router.GetReceiver(s.currentSpatialLayer); pRecv != nil && s.currentSpatialLayer != s.targetSpatialLayer {
 			pRecv.DeleteSender(s.id)
 		}
@@ -301,7 +301,7 @@ func (s *SimulcastSender) receiveRTCP() {
 						s.tsOffset,
 						s.simulcastSSRC,
 					); err == errPacketNotFound {
-						//TODO handle missing nacks in sfu cache
+						// TODO handle missing nacks in sfu cache
 					}
 				}
 			default:
