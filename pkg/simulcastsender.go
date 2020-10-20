@@ -60,6 +60,7 @@ func NewSimulcastSender(ctx context.Context, id string, router Router, sender *w
 		id:                  id,
 		ctx:                 ctx,
 		cancel:              cancel,
+		enabled:             atomicBool{1},
 		router:              router,
 		sender:              sender,
 		track:               sender.Track(),

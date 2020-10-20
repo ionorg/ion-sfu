@@ -45,6 +45,7 @@ func NewSimpleSender(ctx context.Context, id string, router Router, sender *webr
 		id:      id,
 		ctx:     ctx,
 		cancel:  cancel,
+		enabled: atomicBool{1},
 		payload: sender.Track().Codec().PayloadType,
 		router:  router,
 		sender:  sender,
