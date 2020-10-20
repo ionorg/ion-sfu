@@ -132,12 +132,6 @@
               </div>
             </div>
           </div>
-          <strong class="mt-3 d-block">Local logs:</strong>
-          <div
-            id="local-logs"
-            class="mt-2 d-block"
-            style="background-color: #f8f9fa"
-          ></div>
         </div>
         <div class="col-6 pt-2">
           <span
@@ -215,6 +209,7 @@
                         onclick="controlRemoteVideo(this)"
                         value="high"
                         name="optremotevideo"
+                        checked
                       />
                       Unmute</label
                     >
@@ -226,7 +221,6 @@
                         onclick="controlRemoteVideo(this)"
                         value="none"
                         name="optremotevideo"
-                        checked
                       />
                       Mute</label
                     >
@@ -242,6 +236,7 @@
                       onclick="controlRemoteAudio(this)"
                       value="true"
                       name="optremoteaudio"
+                      checked
                     />
                     Unmute</label
                   >
@@ -253,7 +248,6 @@
                       onclick="controlRemoteAudio(this)"
                       value="false"
                       name="optremoteaudio"
-                      checked
                     />
                     Mute</label
                   >
@@ -267,13 +261,6 @@
               style="background-color: #f8f9fa; height: 117px"
             ></pre>
           </div>
-
-          <strong class="mt-3 d-block">Echo logs:</strong>
-          <div
-            id="echo-logs"
-            class="mt-2 d-block"
-            style="background-color: #f8f9fa"
-          ></div>
         </div>
       </div>
     </div>
@@ -382,6 +369,7 @@
         remoteStream.preferLayer(radio.value);
 
         // update ui
+        api.streamId = remoteStream.id;
         api.video = radio.value;
         const str = JSON.stringify(api, null, 2);
         document.getElementById("api").innerHTML = syntaxHighlight(str);
@@ -395,6 +383,7 @@
         }
 
         // update ui
+        api.streamId = remoteStream.id;
         api.audio = radio.value === "true";
         const str = JSON.stringify(api, null, 2);
         document.getElementById("api").innerHTML = syntaxHighlight(str);
