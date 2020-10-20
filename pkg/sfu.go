@@ -50,19 +50,25 @@ func NewSFU(c Config) *SFU {
 	rand.Seed(time.Now().UnixNano())
 
 	ctx, cancel := context.WithCancel(context.Background())
-	// Configure required extensions for simulcast
+	// Configure required extensions
 	sdes, _ := url.Parse(sdp.SDESRTPStreamIDURI)
 	sdedMid, _ := url.Parse(sdp.SDESMidURI)
-	exts := []sdp.ExtMap{
-		{
-			URI: sdes,
-		},
-		{
-			URI: sdedMid,
-		},
-	}
+	// transportCCURL, _ := url.Parse(sdp.TransportCCURI)
+	// rtcpfb = append(rtcpfb, webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBTransportCC})
+	rtcpfb = append(rtcpfb, webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBGoogREMB})
 	se := webrtc.SettingEngine{}
-	se.AddSDPExtensions(webrtc.SDPSectionVideo, exts)
+	se.AddSDPExtensions(webrtc.SDPSectionVideo,
+		[]sdp.ExtMap{
+			{
+				URI: sdes,
+			},
+			{
+				URI: sdedMid,
+			},
+			//	{
+			//		URI: transportCCURL,
+			//	},
+		})
 
 	w := WebRTCTransportConfig{
 		configuration: webrtc.Configuration{
@@ -100,23 +106,6 @@ func NewSFU(c Config) *SFU {
 
 	if len(c.WebRTC.NAT1To1IPs) > 0 {
 		w.setting.SetNAT1To1IPs(c.WebRTC.NAT1To1IPs, webrtc.ICECandidateTypeHost)
-	}
-
-	// Configure bandwidth estimation support
-	if c.Router.Video.TCCCycle > 0 {
-		rtcpfb = append(rtcpfb, webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBTransportCC})
-		transportCCURL, _ := url.Parse(sdp.TransportCCURI)
-		exts := []sdp.ExtMap{
-			{
-				Value: 3,
-				URI:   transportCCURL,
-			},
-		}
-		w.setting.AddSDPExtensions(webrtc.SDPSectionVideo, exts)
-	}
-
-	if c.Router.Video.REMBCycle > 0 {
-		rtcpfb = append(rtcpfb, webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBGoogREMB})
 	}
 
 	s := &SFU{

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pion/sdp/v2"
+	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -25,6 +25,7 @@ var (
 // MediaEngine handles stream codecs
 type MediaEngine struct {
 	webrtc.MediaEngine
+	tCCExt int
 }
 
 // PopulateFromSDP finds all codecs in sd and adds them to m, using the dynamic
@@ -34,14 +35,20 @@ type MediaEngine struct {
 // PopulateFromSDP allows an answerer to properly match the PayloadTypes from the offerer.
 // A MediaEngine populated by PopulateFromSDP should be used only for a single session.
 func (e *MediaEngine) PopulateFromSDP(sd webrtc.SessionDescription) error {
-	sdp := sdp.SessionDescription{}
-	if err := sdp.Unmarshal([]byte(sd.SDP)); err != nil {
+	s := sdp.SessionDescription{}
+	if err := s.Unmarshal([]byte(sd.SDP)); err != nil {
 		return err
 	}
-
-	for _, md := range sdp.MediaDescriptions {
+	for _, md := range s.MediaDescriptions {
 		if md.MediaName.Media != mediaNameAudio && md.MediaName.Media != mediaNameVideo {
 			continue
+		}
+
+		for _, att := range md.Attributes {
+			if att.Key == sdp.AttrKeyExtMap && strings.HasSuffix(att.Value, sdp.TransportCCURI) {
+				e.tCCExt, _ = strconv.Atoi(att.Value[:1])
+				break
+			}
 		}
 
 		for _, format := range md.MediaName.Formats {
@@ -51,7 +58,7 @@ func (e *MediaEngine) PopulateFromSDP(sd webrtc.SessionDescription) error {
 			}
 
 			payloadType := uint8(pt)
-			payloadCodec, err := sdp.GetCodecForPayloadType(payloadType)
+			payloadCodec, err := s.GetCodecForPayloadType(payloadType)
 			if err != nil {
 				return fmt.Errorf("could not find codec for payload type %d", payloadType)
 			}
@@ -74,7 +81,7 @@ func (e *MediaEngine) PopulateFromSDP(sd webrtc.SessionDescription) error {
 		}
 	}
 
-	// Use defaults for codecs not provided in sdp
+	// Use defaults for codecs not provided in s
 	if len(e.GetCodecsByName(webrtc.Opus)) == 0 {
 		codec := webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000)
 		e.RegisterCodec(codec)

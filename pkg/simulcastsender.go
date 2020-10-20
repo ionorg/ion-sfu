@@ -97,7 +97,9 @@ func (s *SimulcastSender) WriteRTP(pkt *rtp.Packet) {
 		}
 		// Forward pli to request a keyframe at max 1 pli per second
 		if time.Now().Sub(s.lastPli) > time.Second {
-			if err := recv.WriteRTCP(&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC}); err == nil {
+			if err := s.router.SendRTCP([]rtcp.Packet{
+				&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC},
+			}); err == nil {
 				s.lastPli = time.Now()
 			}
 		}
@@ -133,7 +135,7 @@ func (s *SimulcastSender) WriteRTP(pkt *rtp.Packet) {
 			return
 		}
 		// Switch is done remove sender from previous layer
-		/// and update current layer
+		// and update current layer
 		if pRecv := s.router.GetReceiver(s.currentSpatialLayer); pRecv != nil && s.currentSpatialLayer != s.targetSpatialLayer {
 			pRecv.DeleteSender(s.id)
 		}
@@ -211,6 +213,10 @@ func (s *SimulcastSender) Kind() webrtc.RTPCodecType {
 	return s.track.Kind()
 }
 
+func (s *SimulcastSender) Type() SenderType {
+	return SimulcastSenderType
+}
+
 func (s *SimulcastSender) Mute(val bool) {
 	if s.enabled.get() != val {
 		return
@@ -273,20 +279,18 @@ func (s *SimulcastSender) receiveRTCP() {
 			continue
 		}
 
+		var fwdPkts []rtcp.Packet
 		for _, pkt := range pkts {
 			switch pkt := pkt.(type) {
 			case *rtcp.PictureLossIndication:
 				pkt.MediaSSRC = s.lSSRC
 				pkt.SenderSSRC = s.lSSRC
-				if err := recv.WriteRTCP(pkt); err != nil {
-					log.Errorf("writing RTCP err %v", err)
-				}
+				fwdPkts = append(fwdPkts, pkt)
+				s.lastPli = time.Now()
 			case *rtcp.FullIntraRequest:
 				pkt.MediaSSRC = s.lSSRC
 				pkt.SenderSSRC = s.lSSRC
-				if err := recv.WriteRTCP(pkt); err != nil {
-					log.Errorf("writing RTCP err %v", err)
-				}
+				fwdPkts = append(fwdPkts, pkt)
 			case *rtcp.TransportLayerNack:
 				log.Tracef("sender got nack: %+v", pkt)
 				for _, pair := range pkt.Nacks {
@@ -297,11 +301,16 @@ func (s *SimulcastSender) receiveRTCP() {
 						s.tsOffset,
 						s.simulcastSSRC,
 					); err == errPacketNotFound {
-						//TODO handle missing nacks in sfu cache
+						// TODO handle missing nacks in sfu cache
 					}
 				}
 			default:
 				// TODO: Use fb packets for congestion control
+			}
+		}
+		if len(fwdPkts) > 0 {
+			if err := s.router.SendRTCP(fwdPkts); err != nil {
+				log.Errorf("Forwarding rtcp from sender err: %v", err)
 			}
 		}
 	}

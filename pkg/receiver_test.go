@@ -9,46 +9,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
 )
-
-func TestNewWebRTCReceiver(t *testing.T) {
-	me := webrtc.MediaEngine{}
-	me.RegisterDefaultCodecs()
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
-	sfu, err := api.NewPeerConnection(webrtc.Configuration{})
-	assert.NoError(t, err)
-	track, err := sfu.NewTrack(webrtc.DefaultPayloadTypeOpus, 1234, "audio", "pion")
-	assert.NoError(t, err)
-
-	type args struct {
-		ctx    context.Context
-		track  *webrtc.Track
-		config RouterConfig
-	}
-	tests := []struct {
-		name string
-		args args
-	}{
-		{
-			name: "Must return a non nil Receiver",
-			args: args{
-				ctx:    context.Background(),
-				track:  track,
-				config: RouterConfig{},
-			},
-		},
-	}
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			got := NewWebRTCReceiver(tt.args.ctx, tt.args.track, tt.args.config)
-			assert.NotNil(t, got)
-		})
-	}
-}
 
 func TestWebRTCReceiver_AddSender(t *testing.T) {
 	type fields struct {
@@ -178,37 +141,6 @@ func TestWebRTCReceiver_OnCloseHandler(t *testing.T) {
 	}
 }
 
-func TestWebRTCReceiver_ReadRTCP(t *testing.T) {
-	rtcpChan := make(chan rtcp.Packet, 5)
-	type fields struct {
-		rtcpCh chan rtcp.Packet
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		want   chan rtcp.Packet
-	}{
-		{
-			name: "Must return rtcp chan",
-			fields: fields{
-				rtcpCh: rtcpChan,
-			},
-			want: rtcpChan,
-		},
-	}
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			w := &WebRTCReceiver{
-				rtcpCh: tt.fields.rtcpCh,
-			}
-			if got := w.ReadRTCP(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ReadRTCP() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestWebRTCReceiver_SpatialLayer(t *testing.T) {
 	type fields struct {
 		spatialLayer uint8
@@ -277,68 +209,6 @@ func TestWebRTCReceiver_Track(t *testing.T) {
 	}
 }
 
-func TestWebRTCReceiver_WriteRTCP(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	ctxCanceled, cc := context.WithCancel(context.Background())
-	cc()
-	type fields struct {
-		ctx    context.Context
-		cancel context.CancelFunc
-		rtcpCh chan rtcp.Packet
-	}
-	type args struct {
-		pkt rtcp.Packet
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		{
-			name: "Must write rtcp in channel",
-			fields: fields{
-				ctx:    ctx,
-				cancel: cancel,
-				rtcpCh: make(chan rtcp.Packet, 5),
-			},
-			args: args{
-				pkt: &rtcp.PictureLossIndication{},
-			},
-			wantErr: false,
-		},
-		{
-			name: "Must return error if channel is nil or ctx canceled",
-			fields: fields{
-				ctx:    ctxCanceled,
-				cancel: cc,
-				rtcpCh: nil,
-			},
-			args: args{
-				pkt: &rtcp.PictureLossIndication{},
-			},
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			w := &WebRTCReceiver{
-				ctx:    tt.fields.ctx,
-				cancel: tt.fields.cancel,
-				rtcpCh: tt.fields.rtcpCh,
-			}
-			err := w.WriteRTCP(tt.args.pkt)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("WriteRTCP() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if err == nil {
-				assert.Equal(t, 1, len(tt.fields.rtcpCh))
-			}
-		})
-	}
-}
-
 func TestWebRTCReceiver_fwdRTP(t *testing.T) {
 	type fields struct {
 		rtpCh   chan *rtp.Packet
@@ -373,7 +243,7 @@ func TestWebRTCReceiver_fwdRTP(t *testing.T) {
 				senders: tt.fields.senders,
 				rtpCh:   tt.fields.rtpCh,
 			}
-			go w.fwdRTP()
+			go w.writeRTP()
 			for i := 0; i < tt.want; i++ {
 				w.rtpCh <- &rtp.Packet{}
 			}
