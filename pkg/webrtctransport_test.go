@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 	"github.com/stretchr/testify/assert"
 )
@@ -679,112 +678,6 @@ func TestWebRTCTransport_SetRemoteDescription(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestWebRTCTransport_sendRTCP(t *testing.T) {
-	me := webrtc.MediaEngine{}
-	me.RegisterDefaultCodecs()
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
-	sfu, remote, err := newPair(webrtc.Configuration{}, api)
-	assert.NoError(t, err)
-
-	gotTrack := make(chan struct{}, 1)
-	sfu.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
-		gotTrack <- struct{}{}
-	})
-
-	remoteTrack, err := remote.NewTrack(webrtc.DefaultPayloadTypeVP8, 12345, "video", "pion")
-	assert.NoError(t, err)
-	s, err := remote.AddTrack(remoteTrack)
-	assert.NoError(t, err)
-
-	rtcpChan := make(chan rtcp.Packet, 5)
-	fakeReceiver := &ReceiverMock{
-		ReadRTCPFunc: func() chan rtcp.Packet {
-			return rtcpChan
-		},
-	}
-
-	err = signalPair(remote, sfu)
-	assert.NoError(t, err)
-
-forLoop:
-	for {
-		select {
-		case <-time.After(20 * time.Millisecond):
-			pkt := remoteTrack.Packetizer().Packetize([]byte{0x01, 0x02, 0x03, 0x04}, 1)[0]
-			err = remoteTrack.WriteRTP(pkt)
-			assert.NoError(t, err)
-		case <-gotTrack:
-			break forLoop
-		}
-	}
-
-	type fields struct {
-		pc *webrtc.PeerConnection
-	}
-	type args struct {
-		recv Receiver
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-	}{
-		{
-			name: "Must forward rtcp to peer",
-			fields: fields{
-				pc: sfu,
-			},
-			args: args{
-				recv: fakeReceiver,
-			},
-		},
-	}
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			p := &WebRTCTransport{
-				pc: tt.fields.pc,
-			}
-			rtcpChan <- &rtcp.PictureLossIndication{
-				SenderSSRC: 12345,
-				MediaSSRC:  12345,
-			}
-			go p.sendRTCP(tt.args.recv)
-			tmr := time.NewTimer(1000 * time.Millisecond)
-			gotRTCP := make(chan struct{}, 1)
-			go func() {
-				for {
-					pkt, err := s.ReadRTCP()
-					assert.NoError(t, err)
-					if len(pkt) > 0 {
-						gotRTCP <- struct{}{}
-						return
-					}
-				}
-			}()
-
-		testLoop:
-			for {
-				select {
-				case <-time.After(10 * time.Millisecond):
-					rtcpChan <- &rtcp.PictureLossIndication{
-						SenderSSRC: 12345,
-						MediaSSRC:  12345,
-					}
-				case <-gotRTCP:
-					close(rtcpChan)
-					tmr.Stop()
-					break testLoop
-				case <-tmr.C:
-					t.Fatal("onNegotiation not called")
-				}
-			}
-		})
-	}
-	_ = sfu.Close()
-	_ = remote.Close()
 }
 
 func TestWebRTCTransport_AddSender(t *testing.T) {

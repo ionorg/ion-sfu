@@ -8,6 +8,9 @@ import (
 	"time"
 
 	log "github.com/pion/ion-log"
+
+	"github.com/pion/rtcp"
+
 )
 
 const (
@@ -19,25 +22,26 @@ const (
 // Router defines a track rtp/rtcp router
 type Router interface {
 	ID() string
+	Kind() int
 	Config() RouterConfig
 	AddReceiver(recv Receiver)
 	GetReceiver(layer uint8) Receiver
 	AddSender(p *WebRTCTransport) error
+	GetRTCP() []rtcp.Packet
+	SendRTCP(pkts []rtcp.Packet) error
 	SwitchSpatialLayer(targetLayer uint8, sub Sender) bool
 }
 
 // RouterConfig defines router configurations
 type RouterConfig struct {
-	REMBFeedback bool                      `mapstructure:"subrembfeedback"`
-	MaxBandwidth uint64                    `mapstructure:"maxbandwidth"`
-	MaxNackTime  int64                     `mapstructure:"maxnacktime"`
-	Video        WebRTCVideoReceiverConfig `mapstructure:"video"`
-	Simulcast    SimulcastConfig           `mapstructure:"simulcast"`
+	MaxBandwidth  uint64          `mapstructure:"maxbandwidth"`
+	MaxBufferTime int             `mapstructure:"maxbuffertime"`
+	Simulcast     SimulcastConfig `mapstructure:"simulcast"`
 }
 
 type router struct {
 	mu        sync.RWMutex
-	tid       string
+	peer      *WebRTCTransport
 	kind      int
 	config    RouterConfig
 	streamID  string
@@ -45,9 +49,9 @@ type router struct {
 }
 
 // newRouter for routing rtp/rtcp packets
-func newRouter(tid, streamID string, config RouterConfig, kind int) Router {
+func newRouter(peer *WebRTCTransport, streamID string, config RouterConfig, kind int) Router {
 	return &router{
-		tid:      tid,
+		peer:     peer,
 		kind:     kind,
 		config:   config,
 		streamID: streamID,
@@ -55,7 +59,11 @@ func newRouter(tid, streamID string, config RouterConfig, kind int) Router {
 }
 
 func (r *router) ID() string {
-	return r.tid
+	return r.peer.id
+}
+
+func (r *router) Kind() int {
+	return r.kind
 }
 
 func (r *router) Config() RouterConfig {
@@ -138,6 +146,45 @@ func (r *router) AddSender(p *WebRTCTransport) error {
 		recv.AddSender(sender)
 	}()
 	return nil
+}
+
+func (r *router) SendRTCP(pkts []rtcp.Packet) error {
+	return r.peer.pc.WriteRTCP(pkts)
+}
+
+func (r *router) GetRTCP() []rtcp.Packet {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if r.kind == SimpleRouter || r.kind == SVCRouter {
+		if r.receivers[0] != nil {
+			rr, ps := r.receivers[0].GetRTCP()
+			if rr.SSRC != 0 {
+				ps = append(ps, &rtcp.ReceiverReport{
+					Reports: []rtcp.ReceptionReport{rr},
+				})
+			}
+			return ps
+		}
+		return nil
+	}
+	var rtcpPkts []rtcp.Packet
+	var rReports []rtcp.ReceptionReport
+	for _, recv := range r.receivers {
+		if recv != nil {
+			rr, ps := recv.GetRTCP()
+			rtcpPkts = append(rtcpPkts, ps...)
+			if rr.SSRC != 0 {
+				rReports = append(rReports, rr)
+			}
+		}
+	}
+	if len(rReports) > 0 {
+		rtcpPkts = append(rtcpPkts, &rtcp.ReceiverReport{
+			Reports: rReports,
+		})
+	}
+	return rtcpPkts
 }
 
 func (r *router) SwitchSpatialLayer(targetLayer uint8, sub Sender) bool {
