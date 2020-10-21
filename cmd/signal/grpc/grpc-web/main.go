@@ -152,12 +152,6 @@ func main() {
 		logrus.Fatal("Ambiguous --allow_all_origins and --allow_origins configuration. Either set --allow_all_origins=true OR specify one or more origins to whitelist with --allow_origins, not both.")
 	}
 
-	//fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go"}
-	//fixByFunc := []string{}
-
-	//log.Init(conf.Log.Level, fixByFile, fixByFunc)
-	//log.Infof("--- Starting SFU Node ---")
-
 	grpcServer := grpc.NewServer()
 
 	inst := server.GRPCSignal{SFU: sfu.NewSFU(conf.Config)}
@@ -165,7 +159,6 @@ func main() {
 		Signal: inst.Signal,
 	})
 
-	//library.RegisterBookServiceServer(grpcServer, &bookService{})
 	grpclog.SetLogger(log.New(os.Stdout, "ION-SFU: ", log.LstdFlags))
 	grpclog.Info("--- Starting SFU Node (grpc-web) ---")
 
