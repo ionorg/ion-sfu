@@ -45,6 +45,7 @@ func NewSimpleSender(ctx context.Context, id string, router Router, sender *webr
 		id:      id,
 		ctx:     ctx,
 		cancel:  cancel,
+		enabled: atomicBool{1},
 		payload: sender.Track().Codec().PayloadType,
 		router:  router,
 		sender:  sender,
@@ -74,7 +75,9 @@ func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
 				if recv == nil {
 					return
 				}
-				if err := recv.WriteRTCP(&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC}); err == nil {
+				if err := s.router.SendRTCP([]rtcp.Packet{
+					&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC},
+				}); err == nil {
 					s.lastPli = time.Now()
 				}
 			}
@@ -141,6 +144,10 @@ func (s *SimpleSender) Kind() webrtc.RTPCodecType {
 	return s.track.Kind()
 }
 
+func (s *SimpleSender) Type() SenderType {
+	return SimpleSenderType
+}
+
 func (s *SimpleSender) CurrentSpatialLayer() uint8 {
 	return 0
 }
@@ -195,12 +202,12 @@ func (s *SimpleSender) receiveRTCP() {
 			continue
 		}
 
+		var fwdPkts []rtcp.Packet
 		for _, pkt := range pkts {
 			switch pkt := pkt.(type) {
 			case *rtcp.PictureLossIndication, *rtcp.FullIntraRequest:
-				if err := recv.WriteRTCP(pkt); err != nil {
-					log.Errorf("writing RTCP err %v", err)
-				}
+				fwdPkts = append(fwdPkts, pkt)
+				s.lastPli = time.Now()
 			case *rtcp.TransportLayerNack:
 				log.Tracef("sender got nack: %+v", pkt)
 				for _, pair := range pkt.Nacks {
@@ -211,11 +218,16 @@ func (s *SimpleSender) receiveRTCP() {
 						s.tsOffset,
 						s.track.SSRC(),
 					); err == errPacketNotFound {
-						//TODO handle missing nacks in sfu cache
+						// TODO handle missing nacks in sfu cache
 					}
 				}
 			default:
 				// TODO: Use fb packets for congestion control
+			}
+		}
+		if len(fwdPkts) > 0 {
+			if err := s.router.SendRTCP(fwdPkts); err != nil {
+				log.Errorf("Forwarding rtcp from sender err: %v", err)
 			}
 		}
 	}

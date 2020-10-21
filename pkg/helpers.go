@@ -5,6 +5,8 @@ import (
 	"sync/atomic"
 )
 
+const ntpEpoch = 2208988800
+
 type atomicBool struct {
 	val int32
 }
@@ -142,5 +144,28 @@ func setVP8TemporalLayer(pl []byte, s *SimulcastSender) (payload []byte, skip bo
 			payload[pkt.picIDIdx+1] = pid[1]
 		}
 	}
+	return
+}
+
+func snDiff(sn1, sn2 uint16) int {
+	if sn1 == sn2 {
+		return 0
+	}
+	if ((sn2 - sn1) & 0x8000) != 0 {
+		return 1
+	}
+	return -1
+}
+
+func timeToNtp(ns int64) uint64 {
+	seconds := uint64(ns/1e9 + ntpEpoch)
+	fraction := uint64(((ns % 1e9) << 32) / 1e9)
+	return seconds<<32 | fraction
+}
+
+// fromNtp converts a NTP timestamp into GO time
+func fromNtp(seconds, fraction uint32) (tm int64) {
+	n := (int64(fraction) * 1e9) >> 32
+	tm = (int64(seconds)-ntpEpoch)*1e9 + n
 	return
 }

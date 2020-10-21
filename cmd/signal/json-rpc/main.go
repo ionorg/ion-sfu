@@ -84,7 +84,6 @@ func parse() bool {
 	}
 
 	if *help {
-		showHelp()
 		return false
 	}
 	return true

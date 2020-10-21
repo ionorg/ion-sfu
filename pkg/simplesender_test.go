@@ -107,11 +107,11 @@ forLoop:
 			s := &SimpleSender{
 				ctx:     ctx,
 				cancel:  cancel,
+				enabled: atomicBool{1},
 				payload: senderTrack.PayloadType(),
 				track:   senderTrack,
 			}
 			tmr := time.NewTimer(1000 * time.Millisecond)
-			s.Mute(false)
 			s.WriteRTP(fakePkt)
 			for {
 				pkt, err := remoteTrack.ReadRTP()
@@ -155,10 +155,6 @@ func TestSimpleSender_receiveRTCP(t *testing.T) {
 
 	gotRTCP := make(chan rtcp.Packet, 100)
 	fakeReceiver := &ReceiverMock{
-		WriteRTCPFunc: func(in1 rtcp.Packet) error {
-			gotRTCP <- in1
-			return nil
-		},
 		DeleteSenderFunc: func(_ string) {
 		},
 	}
@@ -166,6 +162,12 @@ func TestSimpleSender_receiveRTCP(t *testing.T) {
 	fakeRouter := &RouterMock{
 		GetReceiverFunc: func(_ uint8) Receiver {
 			return fakeReceiver
+		},
+		SendRTCPFunc: func(pkts []rtcp.Packet) error {
+			for _, pkt := range pkts {
+				gotRTCP <- pkt
+			}
+			return nil
 		},
 	}
 
@@ -456,18 +458,19 @@ forLoop:
 	}
 
 	gotPli := make(chan struct{}, 1)
-	fakeRecv := &ReceiverMock{
-		WriteRTCPFunc: func(in1 rtcp.Packet) error {
-			if _, ok := in1.(*rtcp.PictureLossIndication); ok {
-				close(gotPli)
-			}
-			return nil
-		},
-	}
+	fakeRecv := &ReceiverMock{}
 
 	fakeRouter := &RouterMock{
 		GetReceiverFunc: func(_ uint8) Receiver {
 			return fakeRecv
+		},
+		SendRTCPFunc: func(pkts []rtcp.Packet) error {
+			for _, pkt := range pkts {
+				if _, ok := pkt.(*rtcp.PictureLossIndication); ok {
+					gotPli <- struct{}{}
+				}
+			}
+			return nil
 		},
 	}
 

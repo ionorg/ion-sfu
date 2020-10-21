@@ -1,532 +1,463 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-
-<head>
+  <head>
     <!-- Required meta tags -->
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, shrink-to-fit=no"
+    />
 
     <!-- Bootstrap CSS -->
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
-        integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+    <link
+      rel="stylesheet"
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+      integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z"
+      crossorigin="anonymous"
+    />
 
     <style>
-        pre {
-            outline: 1px solid #ccc;
-            padding: 5px;
-            margin: 5px;
-        }
+      pre {
+        outline: 1px solid #ccc;
+        padding: 5px;
+        margin: 5px;
+      }
 
-        .string {
-            color: green;
-        }
+      .string {
+        color: green;
+      }
 
-        .number {
-            color: darkorange;
-        }
+      .number {
+        color: darkorange;
+      }
 
-        .boolean {
-            color: blue;
-        }
+      .boolean {
+        color: blue;
+      }
 
-        .null {
-            color: magenta;
-        }
+      .null {
+        color: magenta;
+      }
 
-        .key {
-            color: red;
-        }
+      .key {
+        color: red;
+      }
     </style>
 
     <title>Pion ion-sfu | Echotest</title>
-</head>
+  </head>
 
-<body>
+  <body>
     <nav class="navbar navbar-light bg-light border-bottom">
-        <h3>Pion</h3>
+      <h3>Pion</h3>
     </nav>
     <div class="container pt-4">
-        <div class="row" id="start-btns">
-            <div class="col-12">
-                <button type="button" class="btn btn-primary" onclick="start(false)">start</button>
-                <button type="button" class="btn btn-primary" onclick="start(true)">start with simulcast</button>
-            </div>
+      <div class="row" id="start-btns">
+        <div class="col-12">
+          <button type="button" class="btn btn-primary" onclick="start(false)">
+            start
+          </button>
+          <button type="button" class="btn btn-primary" onclick="start(true)">
+            start with simulcast
+          </button>
         </div>
-        <div class="row pt-3" id="controls" style="display: none;">
-            <div class="col-3">
+      </div>
+
+      <div class="row">
+        <div class="col-6 pt-2">
+          <span
+            style="position: absolute; margin-left: 5px; margin-top: 5px"
+            class="badge badge-primary"
+            >Local</span
+          >
+          <video
+            id="local-video"
+            style="background-color: black"
+            width="320"
+            height="240"
+          ></video>
+          <div class="controls" style="display: none">
+            <div class="row pt-3">
+              <div class="col-3">
                 <strong>Video</strong>
-                <div id="simulcast-controls" style="display: none;">
-                    <div class="radio">
-                        <label><input type="radio" onclick="controlVideo(this)" value="high" name="optvideos" checked>
-                            High</label>
-                    </div>
-                    <div class="radio">
-                        <label><input type="radio" onclick="controlVideo(this)" value="medium" name="optvideos">
-                            Medium</label>
-                    </div>
-                    <div class="radio">
-                        <label><input type="radio" onclick="controlVideo(this)" value="low" name="optvideos">
-                            Low</label>
-                    </div>
-                    <div class="radio">
-                        <label><input type="radio" onclick="controlVideo(this)" value="none" name="optvideos">
-                            Mute</label>
-                    </div>
+                <div class="radio">
+                  <label
+                    ><input
+                      type="radio"
+                      onclick="controlLocalVideo(this)"
+                      value="true"
+                      name="optlocalvideo"
+                      checked
+                    />
+                    Unmute</label
+                  >
                 </div>
-
-                <div id="simple-controls" style="display: none;">
-                    <div class="radio">
-                        <label><input type="radio" onclick="controlVideo(this)" value="high" name="optvideo" checked>
-                            Unmute</label>
-                    </div>
-                    <div class="radio">
-                        <label><input type="radio" onclick="controlVideo(this)" value="none" name="optvideo">
-                            Mute</label>
-                    </div>
+                <div class="radio">
+                  <label
+                    ><input
+                      type="radio"
+                      onclick="controlLocalVideo(this)"
+                      value="false"
+                      name="optlocalvideo"
+                    />
+                    Mute</label
+                  >
                 </div>
-
-            </div>
-            <div class="col-3">
+              </div>
+              <div class="col-3">
                 <strong>Audio</strong>
                 <div class="radio">
-                    <label><input type="radio" onclick="controlAudio(this)" value="true" name="optaudio" checked>
-                        Unmute</label>
+                  <label
+                    ><input
+                      type="radio"
+                      onclick="controlLocalAudio(this)"
+                      value="true"
+                      name="optlocalaudio"
+                      checked
+                    />
+                    Unmute</label
+                  >
                 </div>
                 <div class="radio">
-                    <label><input type="radio" onclick="controlAudio(this)" value="false" name="optaudio"> Mute</label>
+                  <label
+                    ><input
+                      type="radio"
+                      onclick="controlLocalAudio(this)"
+                      value="false"
+                      name="optlocalaudio"
+                    />
+                    Mute</label
+                  >
                 </div>
+              </div>
             </div>
-            <div class="col-6">
-                <strong>API call</strong>
-                <pre id="api" class="d-block border" style="background-color: #f8f9fa;height:117px;"></pre>
-            </div>
+          </div>
         </div>
-        <div class="row">
-            <div class="col-6 pt-2">
-                <span style="position: absolute;margin-left: 5px;margin-top: 5px;"
-                    class="badge badge-primary">Local</span>
-                <video id="local-video" style="background-color: black;" width="320" height="240"></video>
-                <strong class="d-block">Local logs:</strong>
-                <div id="local-logs" class="mt-2 d-block" style="background-color: #f8f9fa;"></div>
-            </div>
-            <div class="col-6 pt-2">
-                <span style="position: absolute;margin-left: 5px;margin-top: 5px;"
-                    class="badge badge-primary">Remote</span>
-                <span id="size-tag" style="position: absolute;margin-left: 5px;top: 225px;"
-                    class="badge badge-primary"></span>
-                <span id="br-tag" style="position: absolute;left: 270px;top: 225px;" class="badge badge-primary"></span>
-                <video id="remote-video" style="background-color: black;" width="320" height="240"></video>
-                <strong class="d-block">Echo logs:</strong>
-                <div id="echo-logs" class="mt-2 d-block" style="background-color: #f8f9fa;"></div>
-            </div>
+        <div class="col-6 pt-2">
+          <span
+            style="position: absolute; margin-left: 5px; margin-top: 5px"
+            class="badge badge-primary"
+            >Remote</span
+          >
+          <span
+            id="size-tag"
+            style="position: absolute; margin-left: 5px; top: 225px"
+            class="badge badge-primary"
+          ></span>
+          <span
+            id="br-tag"
+            style="position: absolute; left: 270px; top: 225px"
+            class="badge badge-primary"
+          ></span>
+          <video
+            id="remote-video"
+            style="background-color: black"
+            width="320"
+            height="240"
+          ></video>
+          <div class="controls" style="display: none">
+            <div class="row pt-3">
+              <div class="col-3">
+                <strong>Video</strong>
+                <div id="simulcast-controls" style="display: none">
+                  <div class="radio">
+                    <label
+                      ><input type="radio" onclLocal(this)" value="high"
+                      name="optremotevideos" checked /> High</label
+                    >
+                  </div>
+                  <div class="radio">
+                    <label
+                      ><input
+                        type="radio"
+                        onclick="controlRemoteVideo(this)"
+                        value="medium"
+                        name="optremotevideos"
+                      />
+                      Medium</label
+                    >
+                  </div>
+                  <div class="radio">
+                    <label
+                      ><input
+                        type="radio"
+                        onclick="controlRemoteVideo(this)"
+                        value="low"
+                        name="optremotevideos"
+                      />
+                      Low</label
+                    >
+                  </div>
+                  <div class="radio">
+                    <label
+                      ><input
+                        type="radio"
+                        onclick="controlRemoteVideo(this)"
+                        value="none"
+                        name="optremotevideos"
+                      />
+                      Mute</label
+                    >
+                  </div>
+                </div>
 
+                <div id="simple-controls" style="display: none">
+                  <div class="radio">
+                    <label
+                      ><input
+                        type="radio"
+                        onclick="controlRemoteVideo(this)"
+                        value="high"
+                        name="optremotevideo"
+                        checked
+                      />
+                      Unmute</label
+                    >
+                  </div>
+                  <div class="radio">
+                    <label
+                      ><input
+                        type="radio"
+                        onclick="controlRemoteVideo(this)"
+                        value="none"
+                        name="optremotevideo"
+                      />
+                      Mute</label
+                    >
+                  </div>
+                </div>
+              </div>
+              <div class="col-3">
+                <strong>Audio</strong>
+                <div class="radio">
+                  <label
+                    ><input
+                      type="radio"
+                      onclick="controlRemoteAudio(this)"
+                      value="true"
+                      name="optremoteaudio"
+                      checked
+                    />
+                    Unmute</label
+                  >
+                </div>
+                <div class="radio">
+                  <label
+                    ><input
+                      type="radio"
+                      onclick="controlRemoteAudio(this)"
+                      value="false"
+                      name="optremoteaudio"
+                    />
+                    Mute</label
+                  >
+                </div>
+              </div>
+            </div>
+            <strong class="d-block">API call</strong>
+            <pre
+              id="api"
+              class="d-block border"
+              style="background-color: #f8f9fa; height: 117px"
+            ></pre>
+          </div>
         </div>
+      </div>
     </div>
     <!-- Optional JavaScript -->
     <!-- jQuery first, then Popper.js, then Bootstrap JS -->
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
-        integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj"
-        crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"
-        integrity="sha384-9/reFTGAW83EW2RDu2S0VKaIzap3H66lZH81PoYlFhbGU+6BZp6G7niu735Sk7lN"
-        crossorigin="anonymous"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"
-        integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV"
-        crossorigin="anonymous"></script>
+    <script
+      src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
+      integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"
+      integrity="sha384-9/reFTGAW83EW2RDu2S0VKaIzap3H66lZH81PoYlFhbGU+6BZp6G7niu735Sk7lN"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"
+      integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV"
+      crossorigin="anonymous"
+    ></script>
+    <script src="https://unpkg.com/ion-sdk-js@1.0.2/dist/ion-sdk.min.js"></script>
     <script>
+      const localVideo = document.getElementById("local-video");
+      const remoteVideo = document.getElementById("remote-video");
+      const sizeTag = document.getElementById("size-tag");
+      const brTag = document.getElementById("br-tag");
+      let simulcast = false;
 
-        const localVideo = document.getElementById("local-video")
-        const remoteVideo = document.getElementById("remote-video")
-        const sizeTag = document.getElementById("size-tag")
-        const brTag = document.getElementById("br-tag")
-        let simulcast = false
+      remoteVideo.addEventListener("loadedmetadata", function () {
+        sizeTag.innerHTML = `${remoteVideo.videoWidth}x${remoteVideo.videoHeight}`;
+      });
 
-        remoteVideo.addEventListener('loadedmetadata', function () {
-            sizeTag.innerHTML = `${remoteVideo.videoWidth}x${remoteVideo.videoHeight}`
-        });
+      remoteVideo.onresize = function () {
+        sizeTag.innerHTML = `${remoteVideo.videoWidth}x${remoteVideo.videoHeight}`;
+      };
 
-        remoteVideo.onresize = function () {
-            sizeTag.innerHTML = `${remoteVideo.videoWidth}x${remoteVideo.videoHeight}`
-        };
+      /* eslint-env browser */
+      const joinBtns = document.getElementById("start-btns");
 
-        /* eslint-env browser */
-        const log = msg =>
-            document.getElementById('local-logs').innerHTML += msg + '<br>'
-        const echoLog = msg =>
-            document.getElementById('echo-logs').innerHTML += msg + '<br>'
+      const config = {
+        iceServers: [
+          {
+            urls: "stun:stun.l.google.com:19302",
+          },
+        ],
+      };
 
+      const signalLocal = new IonSDK.IonSFUJSONRPCSignal(
+        "ws://localhost:7000/ws"
+      );
+      const signalRemote = new IonSDK.IonSFUJSONRPCSignal(
+        "ws://localhost:7000/ws"
+      );
 
-        const joinBtns = document.getElementById("start-btns")
+      const clientLocal = new IonSDK.Client("test session", signalLocal);
+      const clientRemote = new IonSDK.Client("test session", signalRemote);
 
-        const config = {
-            iceServers: [{
-                urls: 'stun:stun.l.google.com:19302'
-            }]
-        }
-
-        const socket = new WebSocket("ws://localhost:7000/ws");
-        const echoSocket = new WebSocket("ws://localhost:7000/ws");
-        const pc = new RTCPeerConnection(config)
-        const epc = new RTCPeerConnection(config)
-
-        socket.addEventListener('message', async (event) => {
-            const resp = JSON.parse(event.data)
-            // Listen for server renegotiation notifications
-            if (!resp.id && resp.method === "offer") {
-                log(`Got offer notification`)
-                await pc.setRemoteDescription(resp.params)
-                const answer = await pc.createAnswer()
-                await pc.setLocalDescription(answer)
-
-                const id = Math.random().toString()
-                log(`Sending answer`)
-                socket.send(JSON.stringify({
-                    method: "answer",
-                    params: { desc: answer },
-                    id
-                }))
-            } else if (resp.method === "trickle") {
-                pc.addIceCandidate(resp.params).catch(log);
-            }
+      let localStream;
+      const start = (sc) => {
+        simulcast = sc;
+        IonSDK.LocalStream.getUserMedia({
+          resolution: "hd",
+          simulcast: sc,
+          audio: true,
         })
+          .then((stream) => {
+            localStream = stream;
+            localVideo.srcObject = stream;
+            localVideo.autoplay = true;
+            localVideo.controls = true;
+            localVideo.muted = true;
+            joinBtns.style.display = "none";
+            clientLocal.publish(stream);
+          })
+          .catch(console.error);
+      };
 
-        pc.oniceconnectionstatechange = () => log(`ICE connection state: ${pc.iceConnectionState}`)
+      let remoteStream;
+      clientRemote.ontrack = (track, stream) => {
+        if (track.kind === "video") {
+          remoteStream = stream;
+          remoteVideo.srcObject = stream;
+          remoteVideo.autoplay = true;
 
-        pc.onicecandidate = event => {
-            if (event.candidate !== null) {
-                socket.send(JSON.stringify({
-                    method: "trickle",
-                    params: {
-                        candidate: event.candidate,
-                    }
-                }))
+          getStats();
+
+          document
+            .querySelectorAll(".controls")
+            .forEach((el) => (el.style.display = "block"));
+          if (simulcast) {
+            document.getElementById("simulcast-controls").style.display =
+              "block";
+          } else {
+            document.getElementById("simple-controls").style.display = "block";
+          }
+        }
+      };
+
+      const api = {
+        streamId: "",
+        video: "high",
+        audio: true,
+      };
+
+      const controlRemoteVideo = (radio) => {
+        remoteStream.preferLayer(radio.value);
+
+        // update ui
+        api.streamId = remoteStream.id;
+        api.video = radio.value;
+        const str = JSON.stringify(api, null, 2);
+        document.getElementById("api").innerHTML = syntaxHighlight(str);
+      };
+
+      const controlRemoteAudio = (radio) => {
+        if (radio.value === "true") {
+          remoteStream.mute("audio");
+        } else {
+          remoteStream.unmute("audio");
+        }
+
+        // update ui
+        api.streamId = remoteStream.id;
+        api.audio = radio.value === "true";
+        const str = JSON.stringify(api, null, 2);
+        document.getElementById("api").innerHTML = syntaxHighlight(str);
+      };
+
+      const controlLocalVideo = (radio) => {
+        if (radio.value === "false") {
+          localStream.mute("video");
+        } else {
+          localStream.unmute("video");
+        }
+      };
+
+      const controlLocalAudio = (radio) => {
+        if (radio.value === "false") {
+          localStream.mute("audio");
+        } else {
+          localStream.unmute("audio");
+        }
+      };
+
+      function syntaxHighlight(json) {
+        json = json
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+        return json.replace(
+          /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+          function (match) {
+            let cls = "number";
+            if (/^"/.test(match)) {
+              if (/:$/.test(match)) {
+                cls = "key";
+              } else {
+                cls = "string";
+              }
+            } else if (/true|false/.test(match)) {
+              cls = "boolean";
+            } else if (/null/.test(match)) {
+              cls = "null";
             }
-        }
+            return '<span class="' + cls + '">' + match + "</span>";
+          }
+        );
+      }
 
-        socket.addEventListener('message', async (event) => {
-            const resp = JSON.parse(event.data)
-            // Listen for server renegotiation notifications
-            if (!resp.id && resp.method === "offer") {
-                log(`Got offer notification`)
-                await pc.setRemoteDescription(resp.params)
-                const answer = await pc.createAnswer()
-                await pc.setLocalDescription(answer)
+      getStats = () => {
+        let bytesPrev;
+        let timestampPrev;
+        setInterval(() => {
+          clientRemote.getStats(null).then((results) => {
+            results.forEach((report) => {
+              const now = report.timestamp;
 
-                const id = Math.random().toString()
-                log(`Sending answer`)
-                socket.send(JSON.stringify({
-                    method: "answer",
-                    params: {
-                        desc: answer
-                    },
-                    id
-                }))
-            } else if (resp.method === "trickle") {
-                pc.addIceCandidate(resp.params).catch(log);
-            }
-        })
-
-        const join = async () => {
-            joinBtns.style.display = 'none';
-            const offer = await pc.createOffer()
-            await pc.setLocalDescription(offer)
-            const id = Math.random().toString()
-            console.log(offer)
-
-            socket.send(JSON.stringify({
-                method: "join",
-                params: {
-                    sid: "test room",
-                    offer: pc.localDescription
-                },
-                id
-            }))
-
-            socket.addEventListener('message', (event) => {
-                const resp = JSON.parse(event.data)
-                if (resp.id === id) {
-                    log(`Got publish answer`)
-                    // Hook this here so it's not called before joining
-                    pc.onnegotiationneeded = async function () {
-                        log("Renegotiating")
-                        const offer = await pc.createOffer()
-                        await pc.setLocalDescription(offer)
-                        const id = Math.random().toString()
-                        socket.send(JSON.stringify({
-                            method: "offer",
-                            params: {
-                                desc: offer
-                            },
-                            id
-                        }))
-
-                        socket.addEventListener('message', (event) => {
-                            const resp = JSON.parse(event.data)
-                            if (resp.id === id) {
-                                log(`Got renegotiation answer`)
-                                pc.setRemoteDescription(resp.result)
-                            }
-                        })
-                    }
-                    console.log(resp.result)
-                    pc.setRemoteDescription(resp.result)
-                    setTimeout(() => startEcho(), 500)
+              let bitrate;
+              if (
+                report.type === "inbound-rtp" &&
+                report.mediaType === "video"
+              ) {
+                const bytes = report.bytesReceived;
+                if (timestampPrev) {
+                  bitrate = (8 * (bytes - bytesPrev)) / (now - timestampPrev);
+                  bitrate = Math.floor(bitrate);
                 }
-            })
-        }
-
-        const add = () => {
-            pc.addTrack(localStream.getAudioTracks()[0], localStream)
-        }
-
-        const start = (sc) => {
-            simulcast = sc
-            navigator.mediaDevices.getUserMedia({
-                video: {
-                    width: { min: 1024, ideal: 1280, max: 1920 },
-                    height: { min: 576, ideal: 720, max: 1080 },
-                    frameRate: {
-                        ideal: 30,
-                        max: 60
-                    }
-                },
-                audio: true
-            }).then(stream => {
-                localVideo.srcObject = stream
-                localVideo.autoplay = true
-                localVideo.controls = true
-                localVideo.muted = true
-                localStream = stream
-
-
-                log("Publishing stream")
-                if (simulcast) {
-                    pc.addTransceiver(localStream.getVideoTracks()[0], {
-                        streams: [localStream],
-                        direction: 'sendonly',
-                        sendEncodings: [{
-                            rid: 'f',
-                        },
-                        {
-                            rid: 'h',
-                            scaleResolutionDownBy: 2.0,
-                            maxBitrate: 150000
-                        },
-                        {
-                            rid: 'q',
-                            scaleResolutionDownBy: 4.0,
-                            maxBitrate: 100000
-                        },
-
-                        ]
-                    });
-                    pc.addTrack(stream.getAudioTracks()[0], localStream)
-                } else {
-                    localStream.getTracks().forEach((track) => {
-                        pc.addTrack(track, localStream);
-                    });
-                }
-                join()
-            }).catch(log)
-        }
-
-        let localStream
-        let remoteStream
-        let pid
-
-        // remote
-        let sendChannel = epc.createDataChannel('ion-sfu')
-        sendChannel.onclose = () => echoLog('sendChannel has closed')
-        sendChannel.onopen = () => {
-            echoLog('sendChannel has opened');
-        }
-        sendChannel.onmessage = e => echoLog(`Message from DataChannel '${sendChannel.label}' payload '${e.data}'`)
-
-
-        const api = {
-            streamId: "",
-            video: "high",
-            audio: true,
-        }
-
-        const controlVideo = (radio) => {
-            api.video = radio.value
-            const str = JSON.stringify(api, null, 2);
-            sendChannel.send(str)
-            document.getElementById("api").innerHTML = syntaxHighlight(str)
-        }
-
-        const controlAudio = (radio) => {
-            api.audio = radio.value === "true"
-            const str = JSON.stringify(api, null, 2);
-            sendChannel.send(str)
-            document.getElementById("api").innerHTML = syntaxHighlight(str)
-        }
-
-        function syntaxHighlight(json) {
-            json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
-                let cls = 'number';
-                if (/^"/.test(match)) {
-                    if (/:$/.test(match)) {
-                        cls = 'key';
-                    } else {
-                        cls = 'string';
-                    }
-                } else if (/true|false/.test(match)) {
-                    cls = 'boolean';
-                } else if (/null/.test(match)) {
-                    cls = 'null';
-                }
-                return '<span class="' + cls + '">' + match + '</span>';
+                bytesPrev = bytes;
+                timestampPrev = now;
+              }
+              if (bitrate) {
+                brTag.innerHTML = `${bitrate} kbps`;
+              }
             });
-        }
-
-        getStats = () => {
-            let bytesPrev;
-            let timestampPrev;
-            setInterval(() => {
-                epc.getStats(null).then(results => {
-                    results.forEach(report => {
-                        const now = report.timestamp;
-
-                        let bitrate;
-                        if (report.type === 'inbound-rtp' && report.mediaType === 'video') {
-                            const bytes = report.bytesReceived;
-                            if (timestampPrev) {
-                                bitrate = 8 * (bytes - bytesPrev) / (now - timestampPrev);
-                                bitrate = Math.floor(bitrate);
-                            }
-                            bytesPrev = bytes;
-                            timestampPrev = now;
-                        }
-                        if (bitrate) {
-                            brTag.innerHTML = `${bitrate} kbps`;
-                        }
-                    });
-                })
-            }, 1000)
-        }
-
-        epc.ontrack = function ({
-            track,
-            streams
-        }) {
-            echoLog("Got remote track")
-            if (remoteStream === undefined) {
-                getStats()
-                remoteStream = streams[0]
-                remoteVideo.srcObject = remoteStream
-                remoteVideo.autoplay = true
-                api.streamId = remoteStream.id
-                const str = JSON.stringify(api, null, 2);
-                document.getElementById("api").innerHTML = syntaxHighlight(str)
-            }
-        }
-
-        epc.oniceconnectionstatechange = () => echoLog(`ICE connection state: ${epc.iceConnectionState}`)
-
-        epc.onicecandidate = event => {
-            if (event.candidate !== null) {
-                echoSocket.send(JSON.stringify({
-                    method: "trickle",
-                    params: {
-                        candidate: event.candidate,
-                    }
-                }))
-            }
-        }
-
-        echoSocket.addEventListener('message', async (event) => {
-            const resp = JSON.parse(event.data)
-
-            // Listen for server renegotiation notifications
-            if (!resp.id && resp.method === "offer") {
-                echoLog(`Got offer notification`)
-                await epc.setRemoteDescription(resp.params)
-                const answer = await epc.createAnswer()
-                await epc.setLocalDescription(answer)
-
-                const id = Math.random().toString()
-                echoLog(`Sending answer`)
-                echoSocket.send(JSON.stringify({
-                    method: "answer",
-                    params: {
-                        desc: answer
-                    },
-                    id
-                }))
-            } else if (resp.method === "trickle") {
-                epc.addIceCandidate(resp.params).catch(echoLog);
-            }
-        })
-
-        const joinEcho = async () => {
-            const offer = await epc.createOffer()
-            await epc.setLocalDescription(offer)
-            const id = Math.random().toString()
-            console.log(offer)
-
-            echoSocket.send(JSON.stringify({
-                method: "join",
-                params: {
-                    sid: "test room",
-                    offer: epc.localDescription
-                },
-                id
-            }))
-
-
-            echoSocket.addEventListener('message', (event) => {
-                const resp = JSON.parse(event.data)
-                if (resp.id === id) {
-                    echoLog(`Got publish answer`)
-
-                    // Hook this here so it's not called before joining
-                    epc.onnegotiationneeded = async function () {
-                        echoLog("Renegotiating")
-                        const offer = await epc.createOffer()
-                        await epc.setLocalDescription(offer)
-                        const id = Math.random.toString()
-                        echoSocket.send(JSON.stringify({
-                            method: "offer",
-                            params: {
-                                desc: offer
-                            },
-                            id
-                        }))
-
-                        echoSocket.addEventListener('message', (event) => {
-                            const resp = JSON.parse(event.data)
-                            if (resp.id === id) {
-                                echoLog(`Got renegotiation answer`)
-                                epc.setRemoteDescription(resp.result)
-                            }
-                        })
-                    }
-                    console.log(resp)
-                    epc.setRemoteDescription(resp.result)
-                    document.getElementById("controls").style.display = "flex";
-                    if (simulcast) {
-                        document.getElementById("simulcast-controls").style.display = "block";
-                    } else {
-                        document.getElementById("simple-controls").style.display = "block";
-                    }
-                }
-            })
-        }
-
-        const startEcho = () => {
-            epc.addTransceiver("video", {
-                direction: "recvonly"
-            })
-            epc.addTransceiver("audio", {
-                direction: "recvonly"
-            })
-            joinEcho()
-        }
-
+          });
+        }, 1000);
+      };
     </script>
-</body>
-
+  </body>
 </html>
