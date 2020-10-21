@@ -59,9 +59,6 @@ type Buffer struct {
 	jitter             float64 // An estimate of the statistical variance of the RTP data packet inter-arrival time.
 	totalByte          uint64
 
-	// remb
-	rembSteps uint8
-
 	// transport-cc
 	tccExt       uint8
 	tccExtInfo   []rtpExtInfo
@@ -87,7 +84,6 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 		codecType:  track.Codec().Type,
 		maxBitrate: o.MaxBitRate,
 		simulcast:  len(track.RID()) > 0,
-		rembSteps:  4,
 	}
 	if o.BufferTime <= 0 {
 		o.BufferTime = defaultBufferTime
@@ -160,11 +156,20 @@ func (b *Buffer) Push(p *rtp.Packet) {
 }
 
 func (b *Buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
-	br := b.maxBitrate
-	if b.rembSteps > 0 {
-		br /= uint64(b.rembSteps)
-		b.rembSteps--
+	br := b.totalByte * 8
+	if b.lostRate < 0.02 {
+		br = uint64(float64(br)*1.09) + 2000
 	}
+	if b.lostRate > .1 {
+		br = uint64(float64(br) * float64(1-0.5*b.lostRate))
+	}
+	if br > b.maxBitrate {
+		br = b.maxBitrate
+	}
+	if br < 100000 {
+		br = 100000
+	}
+	b.totalByte = 0
 
 	return &rtcp.ReceiverEstimatedMaximumBitrate{
 		SenderSSRC: b.ssrc,
