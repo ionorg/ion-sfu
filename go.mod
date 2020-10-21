@@ -8,6 +8,7 @@ require (
 	github.com/gorilla/websocket v1.4.2
 	github.com/lucas-clemente/quic-go v0.18.1 // indirect
 	github.com/lucsky/cuid v1.0.2
+	github.com/pion/ion-log v0.0.0-20201004082042-b98b485deb46
 	github.com/marten-seemann/qtls-go1-15 v0.1.1 // indirect
 	github.com/pion/rtcp v1.2.4
 	github.com/pion/rtp v1.6.1
