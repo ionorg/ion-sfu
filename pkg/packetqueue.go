@@ -1,7 +1,7 @@
 package sfu
 
 import (
-	"github.com/pion/ion-sfu/pkg/log"
+	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 )
