@@ -17,6 +17,8 @@ const (
 	maxSN = 1 << 16
 	// default buffer time by ms
 	defaultBufferTime = 1000
+
+	reportDelta = 1e9
 )
 
 type rtpExtInfo struct {
@@ -33,6 +35,7 @@ type Buffer struct {
 	simulcast  bool
 	clockRate  uint32
 	maxBitrate uint64
+	lastReport int64
 
 	// supported feedbacks
 	remb bool
@@ -61,13 +64,18 @@ type Buffer struct {
 	rembSteps uint8
 
 	// transport-cc
-	tccExt       uint8
-	tccExtInfo   []rtpExtInfo
-	tccCycles    uint32
-	tccLastExtSN uint32
-	tccPktCtn    uint8
-	tccLastSn    uint16
-	lastExtInfo  uint16
+	tccLastReport int64
+	tccExt        uint8
+	tccExtInfo    []rtpExtInfo
+	tccCycles     uint32
+	tccLastExtSN  uint32
+	tccPktCtn     uint8
+	tccLastSn     uint16
+	lastExtInfo   uint16
+
+	sSSRC uint32
+
+	feedbackCB func([]rtcp.Packet)
 }
 
 // BufferOptions provides configuration options for the buffer
@@ -86,6 +94,7 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 		maxBitrate: o.MaxBitRate,
 		simulcast:  len(track.RID()) > 0,
 		rembSteps:  4,
+		sSSRC:      12345,
 	}
 	if o.BufferTime <= 0 {
 		o.BufferTime = defaultBufferTime
@@ -101,7 +110,7 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 			b.remb = true
 		case webrtc.TypeRTCPFBTransportCC:
 			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBTransportCC)
-			b.tccExtInfo = make([]rtpExtInfo, 1<<8)
+			b.tccExtInfo = make([]rtpExtInfo, 0, 101)
 			b.tcc = true
 		case webrtc.TypeRTCPFBNACK:
 			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBNACK)
@@ -116,11 +125,14 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 func (b *Buffer) Push(p *rtp.Packet) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.lastPacketTime = time.Now().UnixNano()
 	b.totalByte += uint64(p.MarshalSize())
 	if b.packetCount == 0 {
 		b.baseSN = p.SequenceNumber
 		b.maxSeqNo = p.SequenceNumber
 		b.pktQueue.headSN = p.SequenceNumber - 1
+		b.lastReport = b.lastPacketTime
+		b.tccLastReport = b.lastPacketTime
 	} else if snDiff(b.maxSeqNo, p.SequenceNumber) <= 0 {
 		if p.SequenceNumber < b.maxSeqNo {
 			b.cycles += maxSN
@@ -128,7 +140,6 @@ func (b *Buffer) Push(p *rtp.Packet) {
 		b.maxSeqNo = p.SequenceNumber
 	}
 	b.packetCount++
-	b.lastPacketTime = time.Now().UnixNano()
 	arrival := uint32(b.lastPacketTime / 1e6 * int64(b.clockRate/1e3))
 	transit := arrival - p.Timestamp
 	if b.lastTransit != 0 {
@@ -155,6 +166,12 @@ func (b *Buffer) Push(p *rtp.Packet) {
 			})
 		}
 	}
+
+	if b.lastPacketTime-b.lastReport >= reportDelta || b.tcc && len(b.tccExtInfo) >= 100 {
+		b.feedbackCB(b.getRTCP())
+		b.lastReport = b.lastPacketTime
+	}
+
 }
 
 func (b *Buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
@@ -165,7 +182,7 @@ func (b *Buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
 	}
 
 	return &rtcp.ReceiverEstimatedMaximumBitrate{
-		SenderSSRC: b.ssrc,
+		SenderSSRC: b.sSSRC,
 		Bitrate:    br,
 		SSRCs:      []uint32{b.ssrc},
 	}
@@ -199,6 +216,7 @@ func (b *Buffer) buildTransportCCPacket() *rtcp.TransportLayerCC {
 			Count:   rtcp.FormatTCC,
 			Type:    rtcp.TypeTransportSpecificFeedback,
 		},
+		SenderSSRC:         b.sSSRC,
 		MediaSSRC:          b.ssrc,
 		BaseSequenceNumber: uint16(tccPkts[0].ExtTSN),
 		PacketStatusCount:  uint16(len(tccPkts)),
@@ -214,6 +232,7 @@ func (b *Buffer) buildTransportCCPacket() *rtcp.TransportLayerCC {
 	maxStatus := rtcp.TypeTCCPacketNotReceived
 
 	var statusList deque.Deque
+	statusList.SetMinCapacity(3)
 
 	for _, stat := range tccPkts {
 		status := rtcp.TypeTCCPacketNotReceived
@@ -222,7 +241,7 @@ func (b *Buffer) buildTransportCCPacket() *rtcp.TransportLayerCC {
 			if !firstRecv {
 				firstRecv = true
 				timestamp = stat.Timestamp
-				rtcpTCC.ReferenceTime = uint32(stat.Timestamp / 64000)
+				rtcpTCC.ReferenceTime = uint32((stat.Timestamp / 64e3) & 0x007FFFFF)
 			}
 
 			delta = (stat.Timestamp - timestamp) / 250
@@ -252,8 +271,8 @@ func (b *Buffer) buildTransportCCPacket() *rtcp.TransportLayerCC {
 			timestamp = stat.Timestamp
 		}
 
-		if allSame && lastStatus != rtcp.TypeTCCPacketReceivedWithoutDelta && status != lastStatus {
-			if statusList.Len() > 7 {
+		if allSame && status != lastStatus {
+			if statusList.Len() > 7 && lastStatus != rtcp.TypeTCCPacketReceivedWithoutDelta {
 				rtcpTCC.PacketChunks = append(rtcpTCC.PacketChunks, &rtcp.RunLengthChunk{
 					PacketStatusSymbol: lastStatus,
 					RunLength:          uint16(statusList.Len()),
@@ -272,53 +291,52 @@ func (b *Buffer) buildTransportCCPacket() *rtcp.TransportLayerCC {
 		}
 		lastStatus = status
 
-		if !allSame {
-			if maxStatus == rtcp.TypeTCCPacketReceivedLargeDelta && statusList.Len() > 6 {
-				symbolList := make([]uint16, 7)
-				for i := 0; i < 7; i++ {
-					symbolList[i] = statusList.PopFront().(uint16)
-				}
-				rtcpTCC.PacketChunks = append(rtcpTCC.PacketChunks, &rtcp.StatusVectorChunk{
-					SymbolSize: rtcp.TypeTCCSymbolSizeTwoBit,
-					SymbolList: symbolList,
-				})
-				lastStatus = rtcp.TypeTCCPacketReceivedWithoutDelta
-				maxStatus = rtcp.TypeTCCPacketNotReceived
-				allSame = true
-
-				for i := 0; i < statusList.Len(); i++ {
-					status = statusList.At(i).(uint16)
-					if status > maxStatus {
-						maxStatus = status
-					}
-					if allSame && lastStatus != rtcp.TypeTCCPacketReceivedWithoutDelta && status != lastStatus {
-						allSame = false
-					}
-					lastStatus = status
-				}
-			} else if statusList.Len() > 13 {
-				symbolList := make([]uint16, 14)
-				for i := 0; i < 14; i++ {
-					symbolList[i] = statusList.PopFront().(uint16)
-				}
-				rtcpTCC.PacketChunks = append(rtcpTCC.PacketChunks, &rtcp.StatusVectorChunk{
-					SymbolSize: rtcp.TypeTCCSymbolSizeOneBit,
-					SymbolList: symbolList,
-				})
-				lastStatus = rtcp.TypeTCCPacketReceivedWithoutDelta
-				maxStatus = rtcp.TypeTCCPacketNotReceived
-				allSame = true
+		if !allSame && maxStatus == rtcp.TypeTCCPacketReceivedLargeDelta && statusList.Len() > 6 {
+			symbolList := make([]uint16, 7)
+			for i := 0; i < 7; i++ {
+				symbolList[i] = statusList.PopFront().(uint16)
 			}
+			rtcpTCC.PacketChunks = append(rtcpTCC.PacketChunks, &rtcp.StatusVectorChunk{
+				SymbolSize: rtcp.TypeTCCSymbolSizeTwoBit,
+				SymbolList: symbolList,
+			})
+			lastStatus = rtcp.TypeTCCPacketReceivedWithoutDelta
+			maxStatus = rtcp.TypeTCCPacketNotReceived
+			allSame = true
+
+			for i := 0; i < statusList.Len(); i++ {
+				status = statusList.At(i).(uint16)
+				if status > maxStatus {
+					maxStatus = status
+				}
+				if allSame && lastStatus != rtcp.TypeTCCPacketReceivedWithoutDelta && status != lastStatus {
+					allSame = false
+				}
+				lastStatus = status
+			}
+		} else if !allSame && statusList.Len() > 13 {
+			symbolList := make([]uint16, 14)
+			for i := 0; i < 14; i++ {
+				symbolList[i] = statusList.PopFront().(uint16)
+			}
+			rtcpTCC.PacketChunks = append(rtcpTCC.PacketChunks, &rtcp.StatusVectorChunk{
+				SymbolSize: rtcp.TypeTCCSymbolSizeOneBit,
+				SymbolList: symbolList,
+			})
+			lastStatus = rtcp.TypeTCCPacketReceivedWithoutDelta
+			maxStatus = rtcp.TypeTCCPacketNotReceived
+			allSame = true
 		}
+
 	}
 
 	if statusList.Len() > 0 {
-		if allSame {
+		if allSame && lastStatus != rtcp.TypeTCCPacketReceivedWithoutDelta {
 			rtcpTCC.PacketChunks = append(rtcpTCC.PacketChunks, &rtcp.RunLengthChunk{
 				PacketStatusSymbol: lastStatus,
 				RunLength:          uint16(statusList.Len()),
 			})
-		} else if maxStatus == rtcp.TypeTCCPacketReceivedLargeDelta {
+		} else if maxStatus > rtcp.TypeTCCPacketReceivedSmallDelta {
 			symbolList := make([]uint16, statusList.Len())
 			for i := 0; i < statusList.Len(); i++ {
 				symbolList[i] = statusList.PopFront().(uint16)
@@ -395,13 +413,13 @@ func (b *Buffer) setSenderReportData(rtpTime uint32, ntpTime uint64) {
 	b.lastSRRecv = time.Now().UnixNano()
 }
 
-func (b *Buffer) getRTCP() (rtcp.ReceptionReport, []rtcp.Packet) {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
+func (b *Buffer) getRTCP() []rtcp.Packet {
 	var pkts []rtcp.Packet
-	var report rtcp.ReceptionReport
 
-	report = b.buildReceptionReport()
+	pkts = append(pkts, &rtcp.ReceiverReport{
+		SSRC:    b.sSSRC,
+		Reports: []rtcp.ReceptionReport{b.buildReceptionReport()},
+	})
 
 	if b.remb {
 		pkts = append(pkts, b.buildREMBPacket())
@@ -413,7 +431,7 @@ func (b *Buffer) getRTCP() (rtcp.ReceptionReport, []rtcp.Packet) {
 		}
 	}
 
-	return report, pkts
+	return pkts
 }
 
 // WritePacket write buffer packet to requested track. and modify headers
@@ -438,4 +456,8 @@ func (b *Buffer) onLostHandler(fn func(nack *rtcp.TransportLayerNack)) {
 	if b.nack {
 		b.pktQueue.onLost = fn
 	}
+}
+
+func (b *Buffer) onFeedback(fn func(fb []rtcp.Packet)) {
+	b.feedbackCB = fn
 }

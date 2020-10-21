@@ -4,8 +4,7 @@ package sfu
 // that media can be sent over
 type Transport interface {
 	ID() string
-	GetRouter(string) Router
-	Routers() map[string]Router
+	GetRouter() Router
 	AddSender(streamID string, sender Sender)
 	GetSenders(streamID string) []Sender
 }

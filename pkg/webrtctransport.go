@@ -3,11 +3,9 @@ package sfu
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/lucsky/cuid"
 	"github.com/pion/ion-sfu/pkg/log"
-	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -29,7 +27,7 @@ type WebRTCTransport struct {
 	candidates     []webrtc.ICECandidateInit
 	session        *Session
 	senders        map[string][]Sender
-	routers        map[string]Router
+	router         Router
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
 }
 
@@ -44,109 +42,40 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
+	id := cuid.New()
 	p := &WebRTCTransport{
-		id:      cuid.New(),
+		id:      id,
 		ctx:     ctx,
 		cancel:  cancel,
 		pc:      pc,
 		me:      me,
 		session: session,
-		routers: make(map[string]Router),
+		router:  newRouter(pc, id, cfg.router),
 		senders: make(map[string][]Sender),
 	}
 	// Subscribe to existing transports
 	defer func() {
 		for _, t := range session.Transports() {
-			for _, router := range t.Routers() {
-				err := router.AddSender(p)
-				// log.Infof("Init add router ssrc %d to %s", router.receivers[0].Track().SSRC(), p.id)
-				if err != nil {
-					log.Errorf("Subscribing to router err: %v", err)
-					continue
-				}
+			err := t.GetRouter().AddSender(p)
+			if err != nil {
+				log.Errorf("Subscribing to router err: %v", err)
+				continue
 			}
 		}
 	}()
 	// Add transport to the session
 	session.AddTransport(p)
-	// Simulcast flag to add router to session
-	simulcastToSessionJoined := false
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 		log.Debugf("Peer %s got remote track id: %s ssrc: %d rid :%s streamID: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.Label())
-		recv := NewWebRTCReceiver(ctx, receiver, track, ReceiverConfig{
-			RouterConfig: cfg.router,
-			tccExt:       me.tCCExt,
-		})
-
-		if router, ok := p.routers[track.ID()]; !ok {
-			if track.RID() != "" {
-				router = newRouter(p, track.Label(), cfg.router, SimulcastRouter)
-			} else {
-				router = newRouter(p, track.Label(), cfg.router, SimpleRouter)
-			}
-			router.AddReceiver(recv)
-			// If track is simulcast and BestQualityFirst is true and current track is full resolution subscribe to router
-			if router.Kind() == SimulcastRouter && router.Config().Simulcast.BestQualityFirst && track.RID() == fullResolution {
-				simulcastToSessionJoined = true
-				p.session.AddRouter(router)
-				// If track is simulcast AND BestQualityFirst is false and track is full resolution
-			} else if router.Kind() == SimulcastRouter && !router.Config().Simulcast.BestQualityFirst && track.RID() == fullResolution {
-				// Wait one second to receive the quarter resolution, if not received it may be not supported or disabled
-				// and only half or full resolution was sent.
-				go func() {
-					select {
-					case <-time.After(time.Second):
-						if !simulcastToSessionJoined {
-							simulcastToSessionJoined = true
-							p.session.AddRouter(router)
-							return
-						}
-					}
-				}()
-				// If track is not simulcast OR is simulcast and BestQualityFirst is false and current track is not full
-				// resolution subscribe to router
-			} else if router.Kind() != SimulcastRouter || router.Kind() == SimulcastRouter &&
-				!router.Config().Simulcast.BestQualityFirst && track.RID() != fullResolution {
-				simulcastToSessionJoined = true
-				p.session.AddRouter(router)
-			}
-			p.mu.Lock()
-			p.routers[recv.Track().ID()] = router
-			p.mu.Unlock()
-			log.Debugf("Created router %s %d", p.id, recv.Track().SSRC())
-		} else {
-			if !simulcastToSessionJoined &&
-				(router.Config().Simulcast.BestQualityFirst && track.RID() == fullResolution ||
-					!router.Config().Simulcast.BestQualityFirst && track.RID() == quarterResolution) {
-				simulcastToSessionJoined = true
-				p.session.AddRouter(router)
-			}
-			router.AddReceiver(recv)
-		}
-
-		recv.OnCloseHandler(func() {
-			p.mu.Lock()
-			defer p.mu.Unlock()
-			delete(p.routers, track.ID())
-		})
-
-		if track.Kind() == webrtc.RTPCodecTypeVideo {
-			recv.OnLostHandler(func(nack *rtcp.TransportLayerNack) {
-				log.Debugf("Writing nack to peer: %s, ssrc: %d, missing sn: %d, bitmap: %b", p.id, track.SSRC(), nack.Nacks[0].PacketID, nack.Nacks[0].LostPackets)
-				if err := p.pc.WriteRTCP([]rtcp.Packet{nack}); err != nil {
-					log.Errorf("write nack rtcp err: %v", err)
-				}
-			})
-		}
-
+		p.router.AddReceiver(ctx, track, receiver)
 		if p.onTrackHandler != nil {
 			p.onTrackHandler(track, receiver)
 		}
 	})
 
 	pc.OnDataChannel(func(d *webrtc.DataChannel) {
-		log.Debugf("New DataChannel %s %d\n", d.Label(), d.ID())
+		log.Debugf("New DataChannel %s %d", d.Label(), d.ID())
 		// Register text message handling
 		if d.Label() == channelLabel {
 			handleAPICommand(p, d)
@@ -172,8 +101,6 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 			}
 		}
 	})
-
-	go p.sendRTCP()
 
 	return p, nil
 }
@@ -277,18 +204,9 @@ func (p *WebRTCTransport) ID() string {
 	return p.id
 }
 
-// Routers returns routers for this peer
-func (p *WebRTCTransport) Routers() map[string]Router {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return p.routers
-}
-
 // GetRouter returns router with ssrc
-func (p *WebRTCTransport) GetRouter(trackID string) Router {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return p.routers[trackID]
+func (p *WebRTCTransport) GetRouter() Router {
+	return p.router
 }
 
 func (p *WebRTCTransport) AddSender(streamID string, sender Sender) {
@@ -313,27 +231,4 @@ func (p *WebRTCTransport) Close() error {
 	p.session.RemoveTransport(p.id)
 	p.cancel()
 	return p.pc.Close()
-}
-
-func (p *WebRTCTransport) sendRTCP() {
-	t := time.NewTicker(time.Second)
-	for {
-		select {
-		case <-t.C:
-			pkts := make([]rtcp.Packet, 0)
-			p.mu.RLock()
-			for _, r := range p.routers {
-				pkts = append(pkts, r.GetRTCP()...)
-			}
-			p.mu.RUnlock()
-			if len(pkts) > 0 {
-				if err := p.pc.WriteRTCP(pkts); err != nil {
-					log.Errorf("write rtcp err: %v", err)
-				}
-			}
-		case <-p.ctx.Done():
-			t.Stop()
-			return
-		}
-	}
 }

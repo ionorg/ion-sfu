@@ -17,20 +17,15 @@ const (
 	maxSize = 1024
 )
 
-type ReceiverConfig struct {
-	RouterConfig
-	tccExt int
-}
-
 // Receiver defines a interface for a track receivers
 type Receiver interface {
 	Track() *webrtc.Track
 	AddSender(sender Sender)
 	DeleteSender(pid string)
 	SpatialLayer() uint8
-	GetRTCP() (rtcp.ReceptionReport, []rtcp.Packet)
 	OnCloseHandler(fn func())
-	OnLostHandler(fn func(nack *rtcp.TransportLayerNack))
+	SendRTCP(p []rtcp.Packet)
+	SetRTCPCh(ch chan []rtcp.Packet)
 	WriteBufferedPacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error
 	Close()
 }
@@ -45,6 +40,7 @@ type WebRTCReceiver struct {
 	buffer         *Buffer
 	bandwidth      uint64
 	rtpCh          chan *rtp.Packet
+	rtcpCh         chan []rtcp.Packet
 	senders        map[string]Sender
 	onCloseHandler func()
 
@@ -52,7 +48,7 @@ type WebRTCReceiver struct {
 }
 
 // NewWebRTCReceiver creates a new webrtc track receivers
-func NewWebRTCReceiver(ctx context.Context, receiver *webrtc.RTPReceiver, track *webrtc.Track, config ReceiverConfig) Receiver {
+func NewWebRTCReceiver(ctx context.Context, receiver *webrtc.RTPReceiver, track *webrtc.Track, config RouterConfig) Receiver {
 	ctx, cancel := context.WithCancel(ctx)
 
 	w := &WebRTCReceiver{
@@ -66,11 +62,11 @@ func NewWebRTCReceiver(ctx context.Context, receiver *webrtc.RTPReceiver, track 
 
 	switch w.track.RID() {
 	case quarterResolution:
-		w.spatialLayer = 1
+		w.spatialLayer = 0
 	case halfResolution:
-		w.spatialLayer = 2
+		w.spatialLayer = 1
 	case fullResolution:
-		w.spatialLayer = 3
+		w.spatialLayer = 2
 	default:
 		w.spatialLayer = 0
 	}
@@ -78,7 +74,16 @@ func NewWebRTCReceiver(ctx context.Context, receiver *webrtc.RTPReceiver, track 
 	w.buffer = NewBuffer(track, BufferOptions{
 		BufferTime: config.MaxBufferTime,
 		MaxBitRate: config.MaxBandwidth * 1000,
-		TCCExt:     config.tccExt,
+		TCCExt:     4,
+	})
+
+	w.buffer.onFeedback(func(packets []rtcp.Packet) {
+		w.rtcpCh <- packets
+	})
+
+	w.buffer.onLostHandler(func(nack *rtcp.TransportLayerNack) {
+		log.Debugf("Writing nack to ssrc: %d, missing sn: %d, bitmap: %b", track.SSRC(), nack.Nacks[0].PacketID, nack.Nacks[0].LostPackets)
+		w.rtcpCh <- []rtcp.Packet{nack}
 	})
 
 	go w.readRTP()
@@ -97,10 +102,6 @@ func (w *WebRTCReceiver) OnCloseHandler(fn func()) {
 	w.onCloseHandler = fn
 }
 
-func (w *WebRTCReceiver) OnLostHandler(fn func(nack *rtcp.TransportLayerNack)) {
-	w.buffer.onLostHandler(fn)
-}
-
 func (w *WebRTCReceiver) AddSender(sender Sender) {
 	w.Lock()
 	defer w.Unlock()
@@ -114,6 +115,10 @@ func (w *WebRTCReceiver) DeleteSender(pid string) {
 	delete(w.senders, pid)
 }
 
+func (w *WebRTCReceiver) SendRTCP(p []rtcp.Packet) {
+	w.rtcpCh <- p
+}
+
 func (w *WebRTCReceiver) SpatialLayer() uint8 {
 	return w.spatialLayer
 }
@@ -123,16 +128,16 @@ func (w *WebRTCReceiver) Track() *webrtc.Track {
 	return w.track
 }
 
-func (w *WebRTCReceiver) GetRTCP() (rtcp.ReceptionReport, []rtcp.Packet) {
-	return w.buffer.getRTCP()
-}
-
 // WriteBufferedPacket writes buffered packet to track, return error if packet not found
 func (w *WebRTCReceiver) WriteBufferedPacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error {
 	if w.buffer == nil || w.ctx.Err() != nil {
 		return nil
 	}
 	return w.buffer.WritePacket(sn, track, snOffset, tsOffset, ssrc)
+}
+
+func (w *WebRTCReceiver) SetRTCPCh(ch chan []rtcp.Packet) {
+	w.rtcpCh = ch
 }
 
 // Close gracefully close the track
@@ -192,6 +197,7 @@ func (w *WebRTCReceiver) readRTCP() {
 		for _, pkt := range pkts {
 			switch pkt := pkt.(type) {
 			case *rtcp.SenderReport:
+				println(w.track.SSRC(), pkt.SSRC, pkt.DestinationSSRC())
 				w.buffer.setSenderReportData(pkt.RTPTime, pkt.NTPTime)
 			}
 		}
