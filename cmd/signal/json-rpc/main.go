@@ -12,9 +12,9 @@ import (
 	websocketjsonrpc2 "github.com/sourcegraph/jsonrpc2/websocket"
 	"github.com/spf13/viper"
 
+	log "github.com/pion/ion-log"
 	"github.com/pion/ion-sfu/cmd/signal/json-rpc/server"
 	sfu "github.com/pion/ion-sfu/pkg"
-	"github.com/pion/ion-sfu/pkg/log"
 )
 
 var (
@@ -94,7 +94,10 @@ func main() {
 		showHelp()
 		os.Exit(-1)
 	}
-	log.Init(conf.Log.Level, conf.Log.Fix)
+
+	fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go", "jsonrpc2"}
+	fixByFunc := []string{"Handle"}
+	log.Init(conf.Log.Level, fixByFile, fixByFunc)
 
 	log.Infof("--- Starting SFU Node ---")
 	s := sfu.NewSFU(conf)

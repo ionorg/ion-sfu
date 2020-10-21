@@ -11,6 +11,7 @@ import (
 	sfu "github.com/pion/ion-sfu/pkg"
 	"google.golang.org/grpc"
 
+	// pprof
 	_ "net/http/pprof"
 
 	"github.com/gorilla/websocket"

@@ -7,8 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pion/ion-sfu/pkg/log"
+	log "github.com/pion/ion-log"
+
 	"github.com/pion/rtcp"
+
 )
 
 const (
