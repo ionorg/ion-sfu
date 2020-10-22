@@ -54,9 +54,19 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 		routers: make(map[string]Router),
 		senders: make(map[string][]Sender),
 	}
+
+	// Add transport to the session
+	session.AddTransport(p)
+	// Simulcast flag to add router to session
+	simulcastToSessionJoined := false
+
 	// Subscribe to existing transports
 	defer func() {
 		for _, t := range session.Transports() {
+			if t.ID() == p.id {
+				continue
+			}
+
 			for _, router := range t.Routers() {
 				err := router.AddSender(p)
 				// log.Infof("Init add router ssrc %d to %s", router.receivers[0].Track().SSRC(), p.id)
@@ -67,10 +77,6 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 			}
 		}
 	}()
-	// Add transport to the session
-	session.AddTransport(p)
-	// Simulcast flag to add router to session
-	simulcastToSessionJoined := false
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 		log.Debugf("Peer %s got remote track id: %s ssrc: %d rid :%s streamID: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.Label())
