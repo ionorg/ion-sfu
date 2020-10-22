@@ -1,12 +1,9 @@
 package sfu
 
 import (
-	"math"
-	"sort"
 	"sync"
 	"time"
 
-	"github.com/gammazero/deque"
 	"github.com/pion/ion-sfu/pkg/log"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
@@ -20,11 +17,6 @@ const (
 
 	reportDelta = 1e9
 )
-
-type rtpExtInfo struct {
-	ExtTSN    uint32
-	Timestamp int64
-}
 
 // Buffer contains all packets
 type Buffer struct {
@@ -64,14 +56,6 @@ type Buffer struct {
 	rembSteps uint8
 
 	// transport-cc
-	tccLastReport int64
-	tccExt        uint8
-	tccExtInfo    []rtpExtInfo
-	tccCycles     uint32
-	tccLastExtSN  uint32
-	tccPktCtn     uint8
-	tccLastSn     uint16
-	lastExtInfo   uint16
 
 	sSSRC uint32
 
@@ -101,7 +85,6 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 	}
 	b.pktQueue.duration = uint32(o.BufferTime) * b.clockRate / 1000
 	b.pktQueue.ssrc = track.SSRC()
-	b.tccExt = uint8(o.TCCExt)
 
 	for _, fb := range track.Codec().RTCPFeedback {
 		switch fb.Type {
@@ -110,7 +93,6 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 			b.remb = true
 		case webrtc.TypeRTCPFBTransportCC:
 			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBTransportCC)
-			b.tccExtInfo = make([]rtpExtInfo, 0, 101)
 			b.tcc = true
 		case webrtc.TypeRTCPFBNACK:
 			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBNACK)
@@ -132,7 +114,6 @@ func (b *Buffer) Push(p *rtp.Packet) {
 		b.maxSeqNo = p.SequenceNumber
 		b.pktQueue.headSN = p.SequenceNumber - 1
 		b.lastReport = b.lastPacketTime
-		b.tccLastReport = b.lastPacketTime
 	} else if snDiff(b.maxSeqNo, p.SequenceNumber) <= 0 {
 		if p.SequenceNumber < b.maxSeqNo {
 			b.cycles += maxSN
@@ -156,18 +137,12 @@ func (b *Buffer) Push(p *rtp.Packet) {
 
 	if b.tcc {
 		rtpTCC := rtp.TransportCCExtension{}
-		if err := rtpTCC.Unmarshal(p.GetExtension(b.tccExt)); err == nil {
-			if rtpTCC.TransportSequence < 0x0fff && (b.tccLastSn&0xffff) > 0xf000 {
-				b.tccCycles += maxSN
-			}
-			b.tccExtInfo = append(b.tccExtInfo, rtpExtInfo{
-				ExtTSN:    b.tccCycles | uint32(rtpTCC.TransportSequence),
-				Timestamp: b.lastPacketTime / 1e3,
-			})
+		if err := rtpTCC.Unmarshal(p.GetExtension(4)); err == nil {
+
 		}
 	}
 
-	if b.lastPacketTime-b.lastReport >= reportDelta || b.tcc && len(b.tccExtInfo) >= 100 {
+	if b.lastPacketTime-b.lastReport >= reportDelta {
 		b.feedbackCB(b.getRTCP())
 		b.lastReport = b.lastPacketTime
 	}
@@ -186,184 +161,6 @@ func (b *Buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
 		Bitrate:    br,
 		SSRCs:      []uint32{b.ssrc},
 	}
-}
-
-func (b *Buffer) buildTransportCCPacket() *rtcp.TransportLayerCC {
-	if len(b.tccExtInfo) == 0 {
-		return nil
-	}
-	sort.Slice(b.tccExtInfo, func(i, j int) bool {
-		return b.tccExtInfo[i].ExtTSN < b.tccExtInfo[j].ExtTSN
-	})
-	tccPkts := make([]rtpExtInfo, 0, int(float64(len(b.tccExtInfo))*1.2))
-	for _, tccExtInfo := range b.tccExtInfo {
-		if tccExtInfo.ExtTSN < b.tccLastExtSN {
-			continue
-		}
-		if b.tccLastExtSN != 0 {
-			for j := b.tccLastExtSN + 1; j < tccExtInfo.ExtTSN; j++ {
-				tccPkts = append(tccPkts, rtpExtInfo{ExtTSN: j})
-			}
-		}
-		b.tccLastExtSN = tccExtInfo.ExtTSN
-		tccPkts = append(tccPkts, tccExtInfo)
-	}
-	b.tccExtInfo = b.tccExtInfo[:0]
-
-	rtcpTCC := &rtcp.TransportLayerCC{
-		Header: rtcp.Header{
-			Padding: true,
-			Count:   rtcp.FormatTCC,
-			Type:    rtcp.TypeTransportSpecificFeedback,
-		},
-		SenderSSRC:         b.sSSRC,
-		MediaSSRC:          b.ssrc,
-		BaseSequenceNumber: uint16(tccPkts[0].ExtTSN),
-		PacketStatusCount:  uint16(len(tccPkts)),
-		FbPktCount:         b.tccPktCtn,
-	}
-	b.tccPktCtn++
-
-	firstRecv := false
-	allSame := true
-	timestamp := int64(0)
-	deltaLen := 0
-	lastStatus := rtcp.TypeTCCPacketReceivedWithoutDelta
-	maxStatus := rtcp.TypeTCCPacketNotReceived
-
-	var statusList deque.Deque
-	statusList.SetMinCapacity(3)
-
-	for _, stat := range tccPkts {
-		status := rtcp.TypeTCCPacketNotReceived
-		if stat.Timestamp != 0 {
-			var delta int64
-			if !firstRecv {
-				firstRecv = true
-				timestamp = stat.Timestamp
-				rtcpTCC.ReferenceTime = uint32((stat.Timestamp / 64e3) & 0x007FFFFF)
-			}
-
-			delta = (stat.Timestamp - timestamp) / 250
-			if delta < 0 || delta > 255 {
-				status = rtcp.TypeTCCPacketReceivedLargeDelta
-				rDelta := int16(delta)
-				if int64(rDelta) != delta {
-					if rDelta > 0 {
-						rDelta = math.MaxInt16
-					} else {
-						rDelta = math.MinInt16
-					}
-				}
-				rtcpTCC.RecvDeltas = append(rtcpTCC.RecvDeltas, &rtcp.RecvDelta{
-					Type:  status,
-					Delta: int64(rDelta) * 250,
-				})
-				deltaLen += 2
-			} else {
-				status = rtcp.TypeTCCPacketReceivedSmallDelta
-				rtcpTCC.RecvDeltas = append(rtcpTCC.RecvDeltas, &rtcp.RecvDelta{
-					Type:  status,
-					Delta: delta * 250,
-				})
-				deltaLen++
-			}
-			timestamp = stat.Timestamp
-		}
-
-		if allSame && status != lastStatus {
-			if statusList.Len() > 7 && lastStatus != rtcp.TypeTCCPacketReceivedWithoutDelta {
-				rtcpTCC.PacketChunks = append(rtcpTCC.PacketChunks, &rtcp.RunLengthChunk{
-					PacketStatusSymbol: lastStatus,
-					RunLength:          uint16(statusList.Len()),
-				})
-				statusList.Clear()
-				lastStatus = rtcp.TypeTCCPacketReceivedWithoutDelta
-				maxStatus = rtcp.TypeTCCPacketNotReceived
-				allSame = true
-			} else {
-				allSame = false
-			}
-		}
-		statusList.PushBack(status)
-		if status > maxStatus {
-			maxStatus = status
-		}
-		lastStatus = status
-
-		if !allSame && maxStatus == rtcp.TypeTCCPacketReceivedLargeDelta && statusList.Len() > 6 {
-			symbolList := make([]uint16, 7)
-			for i := 0; i < 7; i++ {
-				symbolList[i] = statusList.PopFront().(uint16)
-			}
-			rtcpTCC.PacketChunks = append(rtcpTCC.PacketChunks, &rtcp.StatusVectorChunk{
-				SymbolSize: rtcp.TypeTCCSymbolSizeTwoBit,
-				SymbolList: symbolList,
-			})
-			lastStatus = rtcp.TypeTCCPacketReceivedWithoutDelta
-			maxStatus = rtcp.TypeTCCPacketNotReceived
-			allSame = true
-
-			for i := 0; i < statusList.Len(); i++ {
-				status = statusList.At(i).(uint16)
-				if status > maxStatus {
-					maxStatus = status
-				}
-				if allSame && lastStatus != rtcp.TypeTCCPacketReceivedWithoutDelta && status != lastStatus {
-					allSame = false
-				}
-				lastStatus = status
-			}
-		} else if !allSame && statusList.Len() > 13 {
-			symbolList := make([]uint16, 14)
-			for i := 0; i < 14; i++ {
-				symbolList[i] = statusList.PopFront().(uint16)
-			}
-			rtcpTCC.PacketChunks = append(rtcpTCC.PacketChunks, &rtcp.StatusVectorChunk{
-				SymbolSize: rtcp.TypeTCCSymbolSizeOneBit,
-				SymbolList: symbolList,
-			})
-			lastStatus = rtcp.TypeTCCPacketReceivedWithoutDelta
-			maxStatus = rtcp.TypeTCCPacketNotReceived
-			allSame = true
-		}
-
-	}
-
-	if statusList.Len() > 0 {
-		if allSame && lastStatus != rtcp.TypeTCCPacketReceivedWithoutDelta {
-			rtcpTCC.PacketChunks = append(rtcpTCC.PacketChunks, &rtcp.RunLengthChunk{
-				PacketStatusSymbol: lastStatus,
-				RunLength:          uint16(statusList.Len()),
-			})
-		} else if maxStatus > rtcp.TypeTCCPacketReceivedSmallDelta {
-			symbolList := make([]uint16, statusList.Len())
-			for i := 0; i < statusList.Len(); i++ {
-				symbolList[i] = statusList.PopFront().(uint16)
-			}
-			rtcpTCC.PacketChunks = append(rtcpTCC.PacketChunks, &rtcp.StatusVectorChunk{
-				SymbolSize: rtcp.TypeTCCSymbolSizeTwoBit,
-				SymbolList: symbolList,
-			})
-		} else {
-			symbolList := make([]uint16, statusList.Len())
-			for i := 0; i < statusList.Len(); i++ {
-				symbolList[i] = statusList.PopFront().(uint16)
-			}
-			rtcpTCC.PacketChunks = append(rtcpTCC.PacketChunks, &rtcp.StatusVectorChunk{
-				SymbolSize: rtcp.TypeTCCSymbolSizeOneBit,
-				SymbolList: symbolList,
-			})
-		}
-	}
-
-	pLen := uint16(20 + len(rtcpTCC.PacketChunks)*2 + deltaLen)
-	rtcpTCC.Header.Padding = pLen%4 != 0
-	for pLen%4 != 0 {
-		pLen++
-	}
-	rtcpTCC.Header.Length = (pLen / 4) - 1
-	return rtcpTCC
 }
 
 func (b *Buffer) buildReceptionReport() rtcp.ReceptionReport {
@@ -423,12 +220,6 @@ func (b *Buffer) getRTCP() []rtcp.Packet {
 
 	if b.remb {
 		pkts = append(pkts, b.buildREMBPacket())
-	}
-
-	if b.tcc {
-		if tccPkt := b.buildTransportCCPacket(); tccPkt != nil {
-			pkts = append(pkts, tccPkt)
-		}
 	}
 
 	return pkts

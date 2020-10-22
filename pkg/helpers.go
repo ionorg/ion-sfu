@@ -169,3 +169,20 @@ func fromNtp(seconds, fraction uint32) (tm int64) {
 	tm = (int64(seconds)-ntpEpoch)*1e9 + n
 	return
 }
+
+// appendBit32 will left-shift and append n bits of val
+func appendNBitsToUint32(src, n, val uint32) uint32 {
+	return (src << n) | (val & (0xFFFFFFFF >> (32 - n)))
+}
+
+// setNBitsOfUint16 will truncate the value to size, left-shift to startIndex position and set
+func setNBitsOfUint16(src, size, startIndex, val uint16) (uint16, error) {
+	if startIndex+size > 16 {
+		return 0, errInvalidSizeOrStartIndex
+	}
+
+	// truncate val to size bits
+	val &= (1 << size) - 1
+
+	return src | (val << (16 - size - startIndex)), nil
+}
