@@ -56,6 +56,9 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 	// Subscribe to existing transports
 	defer func() {
 		for _, t := range session.Transports() {
+			if t.ID() == p.id {
+				continue
+			}
 			err := t.GetRouter().AddSender(p)
 			if err != nil {
 				log.Errorf("Subscribing to router err: %v", err)
@@ -98,6 +101,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 				if err := p.Close(); err != nil {
 					log.Errorf("webrtc transport close err: %v", err)
 				}
+				p.router.Stop()
 			}
 		}
 	})

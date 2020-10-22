@@ -50,8 +50,6 @@ type router struct {
 	rtcpCh    chan []rtcp.Packet
 	config    RouterConfig
 	receivers map[string]receiverRouter
-
-	once sync.Once
 }
 
 // newRouter for routing rtp/rtcp packets
@@ -171,10 +169,6 @@ func (r *router) SendRTCP(pkts []rtcp.Packet) {
 }
 
 func (r *router) Stop() {
-	r.once.Do(r.stop)
-}
-
-func (r *router) stop() {
 	close(r.rtcpCh)
 }
 
