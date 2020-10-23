@@ -26,7 +26,6 @@ type Peer struct {
 	OnOffer        func(*webrtc.SessionDescription)
 
 	makingOffer                  atomicBool
-	ignoreOffer                  atomicBool
 	isSettingRemoteAnswerPending atomicBool
 }
 
@@ -64,6 +63,7 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 
 	pc.OnNegotiationNeeded(func() {
 		p.makingOffer.set(true)
+		defer p.makingOffer.set(false)
 
 		log.Debugf("on negotiation needed called")
 		offer, err := pc.CreateOffer()
@@ -81,8 +81,6 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		if p.OnOffer != nil {
 			p.OnOffer(&offer)
 		}
-
-		p.makingOffer.set(false)
 	})
 
 	pc.OnICECandidate(func(c *webrtc.ICECandidate) {
@@ -111,9 +109,8 @@ func (p *Peer) Answer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription
 
 	readyForOffer := !p.makingOffer.get() &&
 		(p.pc.SignalingState() == webrtc.SignalingStateStable || p.isSettingRemoteAnswerPending.get())
-	offerCollision := sdp.Type == webrtc.SDPTypeOffer && !readyForOffer
 
-	if offerCollision {
+	if !readyForOffer {
 		return nil, ErrOfferIgnored
 	}
 
