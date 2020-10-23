@@ -13,6 +13,8 @@ var (
 	ErrTransportExists = errors.New("rtc transport already exists for this connection")
 	// ErrNoTransportEstablished cannot signal before join
 	ErrNoTransportEstablished = errors.New("no rtc transport exists for this Peer")
+	// ErrOfferIgnored if offer received in unstable state
+	ErrOfferIgnored = errors.New("offered ignored")
 )
 
 // Peer represents a single peer signal session
@@ -22,6 +24,9 @@ type Peer struct {
 
 	OnIceCandidate func(*webrtc.ICECandidateInit)
 	OnOffer        func(*webrtc.SessionDescription)
+
+	makingOffer                  atomicBool
+	isSettingRemoteAnswerPending atomicBool
 }
 
 // NewPeer creates a new Peer for signaling with the given SFU
@@ -57,6 +62,9 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 	}
 
 	pc.OnNegotiationNeeded(func() {
+		p.makingOffer.set(true)
+		defer p.makingOffer.set(false)
+
 		log.Debugf("on negotiation needed called")
 		offer, err := pc.CreateOffer()
 		if err != nil {
@@ -99,6 +107,13 @@ func (p *Peer) Answer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription
 	}
 	log.Infof("peer %s offer", p.pc.ID())
 
+	readyForOffer := !p.makingOffer.get() &&
+		(p.pc.SignalingState() == webrtc.SignalingStateStable || p.isSettingRemoteAnswerPending.get())
+
+	if !readyForOffer {
+		return nil, ErrOfferIgnored
+	}
+
 	if err := p.pc.SetRemoteDescription(sdp); err != nil {
 		return nil, fmt.Errorf("error setting remote description: %v", err)
 	}
@@ -121,10 +136,15 @@ func (p *Peer) SetRemoteDescription(sdp webrtc.SessionDescription) error {
 	if p.pc == nil {
 		return ErrNoTransportEstablished
 	}
+
+	p.isSettingRemoteAnswerPending.set(true)
+	defer p.isSettingRemoteAnswerPending.set(false)
+
 	log.Infof("peer %s answer", p.pc.ID())
 	if err := p.pc.SetRemoteDescription(sdp); err != nil {
 		return fmt.Errorf("error setting remote description: %v", err)
 	}
+
 	return nil
 }
 

@@ -278,6 +278,10 @@ func (p *WebRTCTransport) AddTransceiverFromKind(kind webrtc.RTPCodecType, init 
 	return p.pc.AddTransceiverFromKind(kind, init...)
 }
 
+func (p *WebRTCTransport) SignalingState() webrtc.SignalingState {
+	return p.pc.SignalingState()
+}
+
 // ID of peer
 func (p *WebRTCTransport) ID() string {
 	return p.id
