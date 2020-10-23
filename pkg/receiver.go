@@ -185,7 +185,7 @@ func (w *WebRTCReceiver) readRTCP() {
 			return
 		}
 		if err != nil {
-			log.Errorf("rtcp err => %v", err)
+			log.Errorf("rtcp err on track %s => %v", w.Track().ID(), err)
 			continue
 		}
 
