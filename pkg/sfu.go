@@ -10,7 +10,7 @@ import (
 	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 
-	"github.com/pion/ion-sfu/pkg/log"
+	log "github.com/pion/ion-log"
 )
 
 // ICEServerConfig defines parameters for ice servers
@@ -77,7 +77,6 @@ func NewSFU(c Config) *SFU {
 		setting: se,
 		router:  c.Router,
 	}
-	log.Init(c.Log.Level, c.Log.Fix)
 
 	var icePortStart, icePortEnd uint16
 

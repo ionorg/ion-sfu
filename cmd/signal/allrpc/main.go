@@ -1,40 +1,45 @@
-// Package cmd contains an entrypoint for running an ion-sfu instance.
 package main
 
 import (
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 
-	"github.com/gorilla/websocket"
-	"github.com/sourcegraph/jsonrpc2"
-	websocketjsonrpc2 "github.com/sourcegraph/jsonrpc2/websocket"
-	"github.com/spf13/viper"
-
 	log "github.com/pion/ion-log"
-	"github.com/pion/ion-sfu/cmd/signal/json-rpc/server"
+	"github.com/pion/ion-sfu/cmd/signal/allrpc/server"
 	sfu "github.com/pion/ion-sfu/pkg"
-)
-
-var (
-	conf = sfu.Config{}
-	file string
-	cert string
-	key  string
-	addr string
+	"github.com/spf13/viper"
 )
 
 const (
-	portRangeLimit = 100
+	portRangeLimit = 1024
+)
+
+var (
+	file                string
+	cert                string
+	key                 string
+	gaddr, jaddr, paddr string
+)
+
+// Config defines parameters for configuring the sfu instance
+type Config struct {
+	sfu.Config `mapstructure:",squash"`
+}
+
+var (
+	conf = Config{}
 )
 
 func showHelp() {
 	fmt.Printf("Usage:%s {params}\n", os.Args[0])
 	fmt.Println("      -c {config file}")
-	fmt.Println("      -cert {cert file}")
-	fmt.Println("      -key {key file}")
-	fmt.Println("      -a {listen addr}")
+	fmt.Println("      -cert {cert file used by jsonrpc}")
+	fmt.Println("      -key {key file used by jsonrpc}")
+	fmt.Println("      -gaddr {grpc listen addr}")
+	fmt.Println("      -jaddr {jsonrpc listen addr}")
+	fmt.Println("      -paddr {pprof listen addr}")
+	fmt.Println("             {grpc and jsonrpc addrs should be set at least one}")
 	fmt.Println("      -h (show help info)")
 }
 
@@ -76,9 +81,17 @@ func parse() bool {
 	flag.StringVar(&file, "c", "config.toml", "config file")
 	flag.StringVar(&cert, "cert", "", "cert file")
 	flag.StringVar(&key, "key", "", "key file")
-	flag.StringVar(&addr, "a", ":7000", "address to use")
+	flag.StringVar(&jaddr, "jaddr", "", "jsonrpc listening address")
+	flag.StringVar(&gaddr, "gaddr", "", "grpc listening address")
+	flag.StringVar(&paddr, "paddr", "", "pprof listening address")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
+
+	//at least set one
+	if gaddr == "" && jaddr == "" {
+		return false
+	}
+
 	if !load() {
 		return false
 	}
@@ -94,44 +107,24 @@ func main() {
 		showHelp()
 		os.Exit(-1)
 	}
-
 	fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go", "jsonrpc2"}
 	fixByFunc := []string{"Handle"}
 	log.Init(conf.Log.Level, fixByFile, fixByFunc)
-
 	log.Infof("--- Starting SFU Node ---")
-	s := sfu.NewSFU(conf)
-	upgrader := websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
-			return true
-		},
-		ReadBufferSize:  1024,
-		WriteBufferSize: 1024,
+
+	node := server.New(conf.Config)
+
+	if gaddr != "" {
+		go node.ServeGRPC(gaddr)
 	}
 
-	http.Handle("/ws", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			panic(err)
-		}
-		defer c.Close()
-
-		p := server.NewJSONSignal(sfu.NewPeer(s))
-		defer p.Close()
-
-		jc := jsonrpc2.NewConn(r.Context(), websocketjsonrpc2.NewObjectStream(c), p)
-		<-jc.DisconnectNotify()
-	}))
-
-	var err error
-	if key != "" && cert != "" {
-		log.Infof("Listening at https://[%s]", addr)
-		err = http.ListenAndServeTLS(addr, cert, key, nil)
-	} else {
-		log.Infof("Listening at http://[%s]", addr)
-		err = http.ListenAndServe(addr, nil)
+	if jaddr != "" {
+		go node.ServeJSONRPC(jaddr, cert, key)
 	}
-	if err != nil {
-		panic(err)
+
+	if paddr != "" {
+		go node.ServePProf(paddr)
 	}
+
+	select {}
 }

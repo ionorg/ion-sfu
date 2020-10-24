@@ -3,7 +3,7 @@ package sfu
 import (
 	"encoding/json"
 
-	"github.com/pion/ion-sfu/pkg/log"
+	log "github.com/pion/ion-log"
 	"github.com/pion/webrtc/v3"
 )
 

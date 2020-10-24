@@ -3,7 +3,7 @@ package sfu
 import (
 	"sync"
 
-	"github.com/pion/ion-sfu/pkg/log"
+	log "github.com/pion/ion-log"
 )
 
 // Session represents a set of transports. Transports inside a session

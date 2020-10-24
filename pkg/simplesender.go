@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pion/ion-sfu/pkg/log"
+	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
@@ -52,6 +52,7 @@ func NewSimpleSender(ctx context.Context, id string, router *receiverRouter, sen
 		track:   sender.Track(),
 	}
 
+	s.enabled.set(true)
 	go s.receiveRTCP()
 
 	return s
