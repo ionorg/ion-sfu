@@ -99,8 +99,8 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 	return b
 }
 
-// Push adds a RTP Packet, out of order, new packet may be arrived later
-func (b *Buffer) Push(p *rtp.Packet) {
+// push adds a RTP Packet, out of order, new packet may be arrived later
+func (b *Buffer) push(p *rtp.Packet) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.lastPacketTime = time.Now().UnixNano()
@@ -146,11 +146,20 @@ func (b *Buffer) Push(p *rtp.Packet) {
 }
 
 func (b *Buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
-	br := b.maxBitrate
-	if b.rembSteps > 0 {
-		br /= uint64(b.rembSteps)
-		b.rembSteps--
+	br := b.totalByte * 8
+	if b.lostRate < 0.02 {
+		br = uint64(float64(br)*1.09) + 2000
 	}
+	if b.lostRate > .1 {
+		br = uint64(float64(br) * float64(1-0.5*b.lostRate))
+	}
+	if br > b.maxBitrate {
+		br = b.maxBitrate
+	}
+	if br < 100000 {
+		br = 100000
+	}
+	b.totalByte = 0
 
 	return &rtcp.ReceiverEstimatedMaximumBitrate{
 		Bitrate: br,
@@ -212,7 +221,7 @@ func (b *Buffer) getRTCP() []rtcp.Packet {
 		Reports: []rtcp.ReceptionReport{b.buildReceptionReport()},
 	})
 
-	if b.remb {
+	if b.remb && !b.tcc {
 		pkts = append(pkts, b.buildREMBPacket())
 	}
 
@@ -225,10 +234,13 @@ func (b *Buffer) WritePacket(sn uint16, track *webrtc.Track, snOffset uint16, ts
 	defer b.mu.RUnlock()
 	if bufferPkt := b.pktQueue.GetPacket(sn); bufferPkt != nil {
 		bSsrc := bufferPkt.SSRC
+		bPT := bufferPkt.PayloadType
+		bufferPkt.PayloadType = track.PayloadType()
 		bufferPkt.SequenceNumber -= snOffset
 		bufferPkt.Timestamp -= tsOffset
 		bufferPkt.SSRC = ssrc
 		err := track.WriteRTP(bufferPkt)
+		bufferPkt.PayloadType = bPT
 		bufferPkt.Timestamp += tsOffset
 		bufferPkt.SequenceNumber += snOffset
 		bufferPkt.SSRC = bSsrc

@@ -180,7 +180,7 @@ func (w *WebRTCReceiver) readRTP() {
 			continue
 		}
 
-		w.buffer.Push(pkt)
+		w.buffer.push(pkt)
 
 		select {
 		case <-w.ctx.Done():

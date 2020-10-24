@@ -33,10 +33,10 @@ a=rtpmap:105 VP8/90000
 a=rtpmap:115 H264/90000
 a=fmtp:115 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f
 a=rtpmap:135 VP9/90000
-a=mediaSSRC:2949882636 cname:pion2
-a=mediaSSRC:2949882636 msid:pion2 video
-a=mediaSSRC:2949882636 mslabel:pion2
-a=mediaSSRC:2949882636 label:video
+a=ssrc:2949882636 cname:pion2
+a=ssrc:2949882636 msid:pion2 video
+a=ssrc:2949882636 mslabel:pion2
+a=ssrc:2949882636 label:video
 a=msid:pion2 video
 m=application 9 DTLS/SCTP 5000
 c=IN IP4 0.0.0.0
