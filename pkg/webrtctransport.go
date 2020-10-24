@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/lucsky/cuid"
-	"github.com/pion/ion-sfu/pkg/log"
+	log "github.com/pion/ion-log"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -201,6 +201,10 @@ func (p *WebRTCTransport) OnDataChannel(f func(*webrtc.DataChannel)) {
 // AddTransceiverFromKind adds RtpTransceiver on WebRTC Transport
 func (p *WebRTCTransport) AddTransceiverFromKind(kind webrtc.RTPCodecType, init ...webrtc.RtpTransceiverInit) (*webrtc.RTPTransceiver, error) {
 	return p.pc.AddTransceiverFromKind(kind, init...)
+}
+
+func (p *WebRTCTransport) SignalingState() webrtc.SignalingState {
+	return p.pc.SignalingState()
 }
 
 // ID of peer

@@ -21,10 +21,10 @@ a=rtpmap:8 PCMA/8000
 a=rtpmap:111 opus/48000/2
 a=fmtp:111 minptime=10;useinbandfec=1
 a=rtpmap:9 G722/8000
-a=mediaSSRC:1823804162 cname:pion1
-a=mediaSSRC:1823804162 msid:pion1 audio
-a=mediaSSRC:1823804162 mslabel:pion1
-a=mediaSSRC:1823804162 label:audio
+a=ssrc:1823804162 cname:pion1
+a=ssrc:1823804162 msid:pion1 audio
+a=ssrc:1823804162 mslabel:pion1
+a=ssrc:1823804162 label:audio
 a=msid:pion1 audio
 m=video 9 UDP/TLS/RTP/SAVPF 105 115 135
 c=IN IP4 0.0.0.0
