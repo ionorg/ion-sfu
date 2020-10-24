@@ -29,7 +29,7 @@ go build ./cmd/signal/json-rpc/main.go && ./main -c config.toml
 If you prefer a containerized environment, you can use the included Docker image
 
 ```
-docker run -p 50051:50051 -p 5000-5020:5000-5020/udp pionwebrtc/ion-sfu:latest-jsonrpc
+docker run -p 7000:7000 -p 5000-5020:5000-5020/udp pionwebrtc/ion-sfu:latest-jsonrpc
 ```
 
 ### Running the grpc signaling server
