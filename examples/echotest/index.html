@@ -300,14 +300,6 @@
       /* eslint-env browser */
       const joinBtns = document.getElementById("start-btns");
 
-      const config = {
-        iceServers: [
-          {
-            urls: "stun:stun.l.google.com:19302",
-          },
-        ],
-      };
-
       const signalLocal = new IonSDK.IonSFUJSONRPCSignal(
         "ws://localhost:7000/ws"
       );
