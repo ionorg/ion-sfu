@@ -54,7 +54,7 @@ func (r *Session) AddRouter(router Router) {
 			continue
 		}
 
-		log.Infof("AddRouter ssrc to %s", tid)
+		log.Infof("AddRouter mediaSSRC to %s", tid)
 
 		if t, ok := t.(*WebRTCTransport); ok {
 			if err := router.AddSender(t); err != nil {

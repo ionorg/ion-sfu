@@ -26,7 +26,7 @@ func TestNewSimpleSender(t *testing.T) {
 	type args struct {
 		ctx    context.Context
 		id     string
-		router Router
+		router *receiverRouter
 		sender *webrtc.RTPSender
 	}
 	tests := []struct {
@@ -159,18 +159,6 @@ func TestSimpleSender_receiveRTCP(t *testing.T) {
 		},
 	}
 
-	fakeRouter := &RouterMock{
-		GetReceiverFunc: func(_ uint8) Receiver {
-			return fakeReceiver
-		},
-		SendRTCPFunc: func(pkts []rtcp.Packet) error {
-			for _, pkt := range pkts {
-				gotRTCP <- pkt
-			}
-			return nil
-		},
-	}
-
 	err = signalPair(sfu, remote)
 	assert.NoError(t, err)
 
@@ -212,7 +200,11 @@ forLoop:
 			wss := &SimpleSender{
 				ctx:    ctx,
 				cancel: cancel,
-				router: fakeRouter,
+				router: &receiverRouter{
+					kind:      SimpleReceiver,
+					stream:    "123",
+					receivers: [3]Receiver{fakeReceiver},
+				},
 				sender: s,
 				track:  senderTrack,
 			}
@@ -250,16 +242,11 @@ forLoop:
 func TestSimpleSender_Close(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	closeCtr := 0
-	fakeRouter := &RouterMock{
-		GetReceiverFunc: func(_ uint8) Receiver {
-			return nil
-		},
-	}
 
 	type fields struct {
 		ctx            context.Context
 		cancel         context.CancelFunc
-		router         Router
+		router         *receiverRouter
 		onCloseHandler func()
 	}
 	tests := []struct {
@@ -272,7 +259,7 @@ func TestSimpleSender_Close(t *testing.T) {
 			fields: fields{
 				ctx:            ctx,
 				cancel:         cancel,
-				router:         fakeRouter,
+				router:         nil,
 				onCloseHandler: nil,
 			},
 		},
@@ -282,7 +269,7 @@ func TestSimpleSender_Close(t *testing.T) {
 			fields: fields{
 				ctx:    ctx,
 				cancel: cancel,
-				router: fakeRouter,
+				router: nil,
 				onCloseHandler: func() {
 					closeCtr++
 				},
@@ -460,24 +447,15 @@ forLoop:
 	gotPli := make(chan struct{}, 1)
 	fakeRecv := &ReceiverMock{}
 
-	fakeRouter := &RouterMock{
-		GetReceiverFunc: func(_ uint8) Receiver {
-			return fakeRecv
-		},
-		SendRTCPFunc: func(pkts []rtcp.Packet) error {
-			for _, pkt := range pkts {
-				if _, ok := pkt.(*rtcp.PictureLossIndication); ok {
-					gotPli <- struct{}{}
-				}
-			}
-			return nil
-		},
+	r := &receiverRouter{
+		kind:      SimpleReceiver,
+		receivers: [3]Receiver{fakeRecv},
 	}
 
 	simpleSdr := SimpleSender{
 		ctx:     context.Background(),
 		enabled: atomicBool{1},
-		router:  fakeRouter,
+		router:  r,
 		track:   senderTrack,
 		payload: senderTrack.PayloadType(),
 	}

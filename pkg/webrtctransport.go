@@ -70,7 +70,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 	session.AddTransport(p)
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
-		log.Debugf("Peer %s got remote track id: %s ssrc: %d rid :%s streamID: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.Label())
+		log.Debugf("Peer %s got remote track id: %s mediaSSRC: %d rid :%s streamID: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.Label())
 		p.router.AddReceiver(ctx, track, receiver)
 		if p.onTrackHandler != nil {
 			p.onTrackHandler(track, receiver)
@@ -208,7 +208,7 @@ func (p *WebRTCTransport) ID() string {
 	return p.id
 }
 
-// GetRouter returns router with ssrc
+// GetRouter returns router with mediaSSRC
 func (p *WebRTCTransport) GetRouter() Router {
 	return p.router
 }

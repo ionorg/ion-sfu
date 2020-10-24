@@ -225,7 +225,7 @@ func (s *SimulcastSender) Mute(val bool) {
 	}
 	s.enabled.set(!val)
 	if !val {
-		// reset last ssrc to force a re-sync
+		// reset last mediaSSRC to force a re-sync
 		s.lSSRC = 0
 	}
 }

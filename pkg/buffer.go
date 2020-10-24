@@ -25,6 +25,7 @@ type Buffer struct {
 	pktQueue   queue
 	codecType  webrtc.RTPCodecType
 	simulcast  bool
+	mediaSSRC  uint32
 	clockRate  uint32
 	maxBitrate uint64
 	lastReport int64
@@ -42,7 +43,6 @@ type Buffer struct {
 	lastExpected       uint32
 	lastReceived       uint32
 	lostRate           float32
-	ssrc               uint32
 	lastPacketTime     int64  // Time the last RTP packet from this source was received
 	lastRtcpPacketTime int64  // Time the last RTCP packet was received.
 	lastRtcpSrTime     int64  // Time the last RTCP SR was received. Required for DLSR computation.
@@ -54,12 +54,9 @@ type Buffer struct {
 
 	// remb
 	rembSteps uint8
-
-	// transport-cc
-
-	sSSRC uint32
-
-	feedbackCB func([]rtcp.Packet)
+	// callbacks
+	feedbackTCC func(sn uint16, timeNS int64, marker bool)
+	feedbackCB  func([]rtcp.Packet)
 }
 
 // BufferOptions provides configuration options for the buffer
@@ -72,13 +69,12 @@ type BufferOptions struct {
 // NewBuffer constructs a new Buffer
 func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 	b := &Buffer{
-		ssrc:       track.SSRC(),
+		mediaSSRC:  track.SSRC(),
 		clockRate:  track.Codec().ClockRate,
 		codecType:  track.Codec().Type,
 		maxBitrate: o.MaxBitRate,
 		simulcast:  len(track.RID()) > 0,
 		rembSteps:  4,
-		sSSRC:      12345,
 	}
 	if o.BufferTime <= 0 {
 		o.BufferTime = defaultBufferTime
@@ -138,7 +134,7 @@ func (b *Buffer) Push(p *rtp.Packet) {
 	if b.tcc {
 		rtpTCC := rtp.TransportCCExtension{}
 		if err := rtpTCC.Unmarshal(p.GetExtension(4)); err == nil {
-
+			b.feedbackTCC(rtpTCC.TransportSequence, b.lastPacketTime, p.Marker)
 		}
 	}
 
@@ -157,9 +153,8 @@ func (b *Buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
 	}
 
 	return &rtcp.ReceiverEstimatedMaximumBitrate{
-		SenderSSRC: b.sSSRC,
-		Bitrate:    br,
-		SSRCs:      []uint32{b.ssrc},
+		Bitrate: br,
+		SSRCs:   []uint32{b.mediaSSRC},
 	}
 }
 
@@ -191,7 +186,7 @@ func (b *Buffer) buildReceptionReport() rtcp.ReceptionReport {
 	}
 
 	rr := rtcp.ReceptionReport{
-		SSRC:               b.ssrc,
+		SSRC:               b.mediaSSRC,
 		FractionLost:       fracLost,
 		TotalLost:          lost,
 		LastSequenceNumber: extMaxSeq,
@@ -214,7 +209,6 @@ func (b *Buffer) getRTCP() []rtcp.Packet {
 	var pkts []rtcp.Packet
 
 	pkts = append(pkts, &rtcp.ReceiverReport{
-		SSRC:    b.sSSRC,
 		Reports: []rtcp.ReceptionReport{b.buildReceptionReport()},
 	})
 
@@ -251,4 +245,8 @@ func (b *Buffer) onLostHandler(fn func(nack *rtcp.TransportLayerNack)) {
 
 func (b *Buffer) onFeedback(fn func(fb []rtcp.Packet)) {
 	b.feedbackCB = fn
+}
+
+func (b *Buffer) onTransportCC(fn func(sn uint16, timeNS int64, marker bool)) {
+	b.feedbackTCC = fn
 }

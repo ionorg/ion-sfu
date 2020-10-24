@@ -47,18 +47,22 @@ type router struct {
 	id        string
 	mu        sync.RWMutex
 	peer      *webrtc.PeerConnection
+	twcc      *TransportWideCC
 	rtcpCh    chan []rtcp.Packet
 	config    RouterConfig
-	receivers map[string]receiverRouter
+	receivers map[string]*receiverRouter
 }
 
 // newRouter for routing rtp/rtcp packets
 func newRouter(peer *webrtc.PeerConnection, id string, config RouterConfig) Router {
+	ch := make(chan []rtcp.Packet, 10)
 	r := &router{
-		id:     id,
-		peer:   peer,
-		config: config,
-		rtcpCh: make(chan []rtcp.Packet, 10),
+		id:        id,
+		peer:      peer,
+		twcc:      newTransportWideCC(ch),
+		config:    config,
+		rtcpCh:    ch,
+		receivers: make(map[string]*receiverRouter),
 	}
 	go r.sendRTCP()
 	return r
@@ -76,13 +80,25 @@ func (r *router) AddReceiver(ctx context.Context, track *webrtc.Track, receiver 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	recv := NewWebRTCReceiver(ctx, receiver, track, r.config)
+	recv.OnTransportCC(func(sn uint16, timeNS int64, marker bool) {
+		r.twcc.push(sn, timeNS, marker)
+	})
 	recv.SetRTCPCh(r.rtcpCh)
+	recv.OnCloseHandler(func() {
+		r.deleteReceiver(recv.Track().ID())
+	})
+	if track.Kind() == webrtc.RTPCodecTypeVideo {
+		r.twcc.mSSRC = track.SSRC()
+		r.twcc.tccLastReport = time.Now().UnixNano()
+	}
+	recv.Start()
+
 	if rr, ok := r.receivers[track.ID()]; ok {
 		rr.receivers[recv.SpatialLayer()] = recv
 		return
 	}
 
-	rr := receiverRouter{
+	rr := &receiverRouter{
 		stream:    track.Label(),
 		receivers: [3]Receiver{},
 	}
@@ -93,6 +109,8 @@ func (r *router) AddReceiver(ctx context.Context, track *webrtc.Track, receiver 
 	} else {
 		rr.kind = SimpleReceiver
 	}
+
+	r.receivers[track.ID()] = rr
 }
 
 // AddWebRTCSender to router
@@ -142,9 +160,9 @@ func (r *router) AddSender(p *WebRTCTransport) error {
 			return err
 		}
 		if rr.kind == SimulcastReceiver {
-			sender = NewSimulcastSender(p.ctx, p.id, &rr, s, recv.SpatialLayer(), r.config.Simulcast)
+			sender = NewSimulcastSender(p.ctx, p.id, rr, s, recv.SpatialLayer(), r.config.Simulcast)
 		} else {
-			sender = NewSimpleSender(p.ctx, p.id, &rr, s)
+			sender = NewSimpleSender(p.ctx, p.id, rr, s)
 		}
 		sender.OnCloseHandler(func() {
 			if err := p.pc.RemoveTrack(s); err != nil {
@@ -170,6 +188,12 @@ func (r *router) SendRTCP(pkts []rtcp.Packet) {
 
 func (r *router) Stop() {
 	close(r.rtcpCh)
+}
+
+func (r *router) deleteReceiver(track string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.receivers, track)
 }
 
 func (r *router) sendRTCP() {

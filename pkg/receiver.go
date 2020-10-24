@@ -19,11 +19,13 @@ const (
 
 // Receiver defines a interface for a track receivers
 type Receiver interface {
+	Start()
 	Track() *webrtc.Track
 	AddSender(sender Sender)
 	DeleteSender(pid string)
 	SpatialLayer() uint8
 	OnCloseHandler(fn func())
+	OnTransportCC(fn func(sn uint16, timeNS int64, marker bool))
 	SendRTCP(p []rtcp.Packet)
 	SetRTCPCh(ch chan []rtcp.Packet)
 	WriteBufferedPacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error
@@ -82,10 +84,14 @@ func NewWebRTCReceiver(ctx context.Context, receiver *webrtc.RTPReceiver, track 
 	})
 
 	w.buffer.onLostHandler(func(nack *rtcp.TransportLayerNack) {
-		log.Debugf("Writing nack to ssrc: %d, missing sn: %d, bitmap: %b", track.SSRC(), nack.Nacks[0].PacketID, nack.Nacks[0].LostPackets)
+		log.Debugf("Writing nack to mediaSSRC: %d, missing sn: %d, bitmap: %b", track.SSRC(), nack.Nacks[0].PacketID, nack.Nacks[0].LostPackets)
 		w.rtcpCh <- []rtcp.Packet{nack}
 	})
 
+	return w
+}
+
+func (w *WebRTCReceiver) Start() {
 	go w.readRTP()
 	if len(w.track.RID()) > 0 {
 		go w.readSimulcastRTCP(w.track.RID())
@@ -93,13 +99,15 @@ func NewWebRTCReceiver(ctx context.Context, receiver *webrtc.RTPReceiver, track 
 		go w.readRTCP()
 	}
 	go w.writeRTP()
-
-	return w
 }
 
 // OnCloseHandler method to be called on remote tracked removed
 func (w *WebRTCReceiver) OnCloseHandler(fn func()) {
 	w.onCloseHandler = fn
+}
+
+func (w *WebRTCReceiver) OnTransportCC(fn func(sn uint16, timeNS int64, marker bool)) {
+	w.buffer.onTransportCC(fn)
 }
 
 func (w *WebRTCReceiver) AddSender(sender Sender) {
@@ -197,7 +205,6 @@ func (w *WebRTCReceiver) readRTCP() {
 		for _, pkt := range pkts {
 			switch pkt := pkt.(type) {
 			case *rtcp.SenderReport:
-				println(w.track.SSRC(), pkt.SSRC, pkt.DestinationSSRC())
 				w.buffer.setSenderReportData(pkt.RTPTime, pkt.NTPTime)
 			}
 		}
