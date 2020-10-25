@@ -44,12 +44,13 @@ func TestTransportWideCC_writeRunLengthChunk(t1 *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t1.Run(tt.name, func(t1 *testing.T) {
 			t := &TransportWideCC{
 				len: tt.fields.len,
 			}
 			t.writeRunLengthChunk(tt.args.symbol, tt.args.runLength)
-			assert.Equal(t1, tt.wantBytes, t.payload)
+			assert.Equal(t1, tt.wantBytes, t.payload[:t.len])
 		})
 	}
 }
@@ -109,6 +110,7 @@ func TestTransportWideCC_writeStatusSymbolChunk(t1 *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t1.Run(tt.name, func(t1 *testing.T) {
 			t := &TransportWideCC{
 				len: tt.fields.len,
@@ -177,6 +179,7 @@ func TestTransportWideCC_writeDelta(t1 *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t1.Run(tt.name, func(t1 *testing.T) {
 			t := &TransportWideCC{
 				deltaLen: tt.fields.deltaLen,
@@ -225,6 +228,7 @@ func TestTransportWideCC_writeHeader(t1 *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t1.Run(tt.name, func(t1 *testing.T) {
 			t := &TransportWideCC{
 				tccPktCtn: tt.fields.tccPktCtn,

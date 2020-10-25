@@ -639,6 +639,10 @@ func TestWebRTCTransport_SetRemoteDescription(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &WebRTCTransport{
 				pc: tt.fields.pc,
+				router: &RouterMock{
+					AddTWCCExtFunc: func(_ string, _ int) {
+					},
+				},
 			}
 			if err := p.SetRemoteDescription(tt.args.desc); (err != nil) != tt.wantErr {
 				t.Errorf("SetRemoteDescription() error = %v, wantErr %v", err, tt.wantErr)

@@ -90,6 +90,13 @@ func TestSimulcastSender_WriteRTP(t *testing.T) {
 		TrackFunc: func() *webrtc.Track {
 			return fakeRecvTrack
 		},
+		SendRTCPFunc: func(p []rtcp.Packet) {
+			for _, pp := range p {
+				if _, ok := pp.(*rtcp.PictureLossIndication); ok {
+					gotPli <- struct{}{}
+				}
+			}
+		},
 	}
 
 	r := &receiverRouter{
@@ -213,6 +220,11 @@ func TestSimulcastSender_receiveRTCP(t *testing.T) {
 	gotRTCP := make(chan rtcp.Packet, 100)
 	fakeReceiver := &ReceiverMock{
 		DeleteSenderFunc: func(_ string) {
+		},
+		SendRTCPFunc: func(p []rtcp.Packet) {
+			for _, pp := range p {
+				gotRTCP <- pp
+			}
 		},
 	}
 
@@ -524,6 +536,13 @@ forLoop:
 	fakeReceiver := &ReceiverMock{
 		TrackFunc: func() *webrtc.Track {
 			return senderTrack
+		},
+		SendRTCPFunc: func(p []rtcp.Packet) {
+			for _, pp := range p {
+				if _, ok := pp.(*rtcp.PictureLossIndication); ok {
+					gotPli <- struct{}{}
+				}
+			}
 		},
 	}
 

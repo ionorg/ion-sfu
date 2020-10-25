@@ -157,6 +157,11 @@ func TestSimpleSender_receiveRTCP(t *testing.T) {
 	fakeReceiver := &ReceiverMock{
 		DeleteSenderFunc: func(_ string) {
 		},
+		SendRTCPFunc: func(p []rtcp.Packet) {
+			for _, pp := range p {
+				gotRTCP <- pp
+			}
+		},
 	}
 
 	err = signalPair(sfu, remote)
@@ -191,7 +196,6 @@ forLoop:
 				MediaSSRC:  1234,
 			},
 		},
-		// TODO: Add test cases.
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -445,7 +449,15 @@ forLoop:
 	}
 
 	gotPli := make(chan struct{}, 1)
-	fakeRecv := &ReceiverMock{}
+	fakeRecv := &ReceiverMock{
+		SendRTCPFunc: func(p []rtcp.Packet) {
+			for _, pp := range p {
+				if _, ok := pp.(*rtcp.PictureLossIndication); ok {
+					gotPli <- struct{}{}
+				}
+			}
+		},
+	}
 
 	r := &receiverRouter{
 		kind:      SimpleReceiver,
