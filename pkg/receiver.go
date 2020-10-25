@@ -190,7 +190,7 @@ func (w *WebRTCReceiver) readRTP() {
 func (w *WebRTCReceiver) readRTCP() {
 	for {
 		pkts, err := w.receiver.ReadRTCP()
-		if err == io.ErrClosedPipe || w.ctx.Err() != nil {
+		if err == io.ErrClosedPipe || err == io.EOF || w.ctx.Err() != nil {
 			return
 		}
 		if err != nil {
