@@ -9,7 +9,7 @@ import (
 	"github.com/lucsky/cuid"
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
-	"github.com/pion/sdp/v2"
+	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 )
 
