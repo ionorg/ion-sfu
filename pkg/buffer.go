@@ -29,6 +29,7 @@ type Buffer struct {
 	clockRate  uint32
 	maxBitrate uint64
 	lastReport int64
+	twccExt    uint8
 
 	// supported feedbacks
 	remb bool
@@ -51,17 +52,14 @@ type Buffer struct {
 	maxSeqNo           uint16  // The highest sequence number received in an RTP data packet
 	jitter             float64 // An estimate of the statistical variance of the RTP data packet inter-arrival time.
 	totalByte          uint64
-
-	// remb
-	rembSteps uint8
 	// callbacks
-	feedbackTCC func(sn uint16, timeNS int64, marker bool)
-	feedbackCB  func([]rtcp.Packet)
+	feedbackTWCC func(sn uint16, timeNS int64, marker bool)
+	feedbackCB   func([]rtcp.Packet)
 }
 
 // BufferOptions provides configuration options for the buffer
 type BufferOptions struct {
-	TCCExt     int
+	TWCCExt    int
 	BufferTime int
 	MaxBitRate uint64
 }
@@ -74,7 +72,7 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 		codecType:  track.Codec().Type,
 		maxBitrate: o.MaxBitRate,
 		simulcast:  len(track.RID()) > 0,
-		rembSteps:  4,
+		twccExt:    uint8(o.TWCCExt),
 	}
 	if o.BufferTime <= 0 {
 		o.BufferTime = defaultBufferTime
@@ -133,8 +131,8 @@ func (b *Buffer) push(p *rtp.Packet) {
 
 	if b.tcc {
 		rtpTCC := rtp.TransportCCExtension{}
-		if err := rtpTCC.Unmarshal(p.GetExtension(4)); err == nil {
-			b.feedbackTCC(rtpTCC.TransportSequence, b.lastPacketTime, p.Marker)
+		if err := rtpTCC.Unmarshal(p.GetExtension(b.twccExt)); err == nil {
+			b.feedbackTWCC(rtpTCC.TransportSequence, b.lastPacketTime, p.Marker)
 		}
 	}
 
@@ -259,6 +257,6 @@ func (b *Buffer) onFeedback(fn func(fb []rtcp.Packet)) {
 	b.feedbackCB = fn
 }
 
-func (b *Buffer) onTransportCC(fn func(sn uint16, timeNS int64, marker bool)) {
-	b.feedbackTCC = fn
+func (b *Buffer) onTransportWideCC(fn func(sn uint16, timeNS int64, marker bool)) {
+	b.feedbackTWCC = fn
 }

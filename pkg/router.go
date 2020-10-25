@@ -26,6 +26,7 @@ type Router interface {
 	Config() RouterConfig
 	AddReceiver(ctx context.Context, track *webrtc.Track, receiver *webrtc.RTPReceiver)
 	AddSender(p *WebRTCTransport) error
+	AddTWCCExt(id string, ext int)
 	SendRTCP(pkts []rtcp.Packet)
 	Stop()
 }
@@ -50,6 +51,7 @@ type router struct {
 	twcc      *TransportWideCC
 	rtcpCh    chan []rtcp.Packet
 	config    RouterConfig
+	twccExts  map[string]int
 	receivers map[string]*receiverRouter
 }
 
@@ -62,6 +64,7 @@ func newRouter(peer *webrtc.PeerConnection, id string, config RouterConfig) Rout
 		twcc:      newTransportWideCC(ch),
 		config:    config,
 		rtcpCh:    ch,
+		twccExts:  make(map[string]int),
 		receivers: make(map[string]*receiverRouter),
 	}
 	go r.sendRTCP()
@@ -79,13 +82,19 @@ func (r *router) Config() RouterConfig {
 func (r *router) AddReceiver(ctx context.Context, track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	recv := NewWebRTCReceiver(ctx, receiver, track, r.config)
-	recv.OnTransportCC(func(sn uint16, timeNS int64, marker bool) {
+
+	trackID := track.ID()
+	recv := NewWebRTCReceiver(ctx, receiver, track, BufferOptions{
+		BufferTime: r.config.MaxBufferTime,
+		MaxBitRate: r.config.MaxBandwidth * 1000,
+		TWCCExt:    r.twccExts[trackID],
+	})
+	recv.OnTransportWideCC(func(sn uint16, timeNS int64, marker bool) {
 		r.twcc.push(sn, timeNS, marker)
 	})
 	recv.SetRTCPCh(r.rtcpCh)
 	recv.OnCloseHandler(func() {
-		r.deleteReceiver(recv.Track().ID())
+		r.deleteReceiver(trackID)
 	})
 	if track.Kind() == webrtc.RTPCodecTypeVideo {
 		r.twcc.mSSRC = track.SSRC()
@@ -93,7 +102,7 @@ func (r *router) AddReceiver(ctx context.Context, track *webrtc.Track, receiver 
 	}
 	recv.Start()
 
-	if rr, ok := r.receivers[track.ID()]; ok {
+	if rr, ok := r.receivers[trackID]; ok {
 		rr.receivers[recv.SpatialLayer()] = recv
 		return
 	}
@@ -110,7 +119,7 @@ func (r *router) AddReceiver(ctx context.Context, track *webrtc.Track, receiver 
 		rr.kind = SimpleReceiver
 	}
 
-	r.receivers[track.ID()] = rr
+	r.receivers[trackID] = rr
 }
 
 // AddWebRTCSender to router
@@ -180,6 +189,10 @@ func (r *router) AddSender(p *WebRTCTransport) error {
 		}()
 	}
 	return nil
+}
+
+func (r *router) AddTWCCExt(id string, ext int) {
+	r.twccExts[id] = ext
 }
 
 func (r *router) SendRTCP(pkts []rtcp.Packet) {

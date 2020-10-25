@@ -25,7 +25,7 @@ type Receiver interface {
 	DeleteSender(pid string)
 	SpatialLayer() uint8
 	OnCloseHandler(fn func())
-	OnTransportCC(fn func(sn uint16, timeNS int64, marker bool))
+	OnTransportWideCC(fn func(sn uint16, timeNS int64, marker bool))
 	SendRTCP(p []rtcp.Packet)
 	SetRTCPCh(ch chan []rtcp.Packet)
 	WriteBufferedPacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error
@@ -50,7 +50,7 @@ type WebRTCReceiver struct {
 }
 
 // NewWebRTCReceiver creates a new webrtc track receivers
-func NewWebRTCReceiver(ctx context.Context, receiver *webrtc.RTPReceiver, track *webrtc.Track, config RouterConfig) Receiver {
+func NewWebRTCReceiver(ctx context.Context, receiver *webrtc.RTPReceiver, track *webrtc.Track, config BufferOptions) Receiver {
 	ctx, cancel := context.WithCancel(ctx)
 
 	w := &WebRTCReceiver{
@@ -73,11 +73,7 @@ func NewWebRTCReceiver(ctx context.Context, receiver *webrtc.RTPReceiver, track 
 		w.spatialLayer = 0
 	}
 
-	w.buffer = NewBuffer(track, BufferOptions{
-		BufferTime: config.MaxBufferTime,
-		MaxBitRate: config.MaxBandwidth * 1000,
-		TCCExt:     4,
-	})
+	w.buffer = NewBuffer(track, config)
 
 	w.buffer.onFeedback(func(packets []rtcp.Packet) {
 		w.rtcpCh <- packets
@@ -106,8 +102,8 @@ func (w *WebRTCReceiver) OnCloseHandler(fn func()) {
 	w.onCloseHandler = fn
 }
 
-func (w *WebRTCReceiver) OnTransportCC(fn func(sn uint16, timeNS int64, marker bool)) {
-	w.buffer.onTransportCC(fn)
+func (w *WebRTCReceiver) OnTransportWideCC(fn func(sn uint16, timeNS int64, marker bool)) {
+	w.buffer.onTransportWideCC(fn)
 }
 
 func (w *WebRTCReceiver) AddSender(sender Sender) {

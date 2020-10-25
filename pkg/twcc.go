@@ -241,7 +241,7 @@ func (t *TransportWideCC) writeHeader(bSN, packetCount uint16, refTime uint32) {
 	   |                 reference time                | fb pkt. count |
 	   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 	*/
-	binary.BigEndian.PutUint32(t.payload[0:], 0)
+	binary.BigEndian.PutUint32(t.payload[0:], t.sSSRC)
 	binary.BigEndian.PutUint32(t.payload[4:], t.mSSRC)
 	binary.BigEndian.PutUint16(t.payload[baseSequenceNumberOffset:], bSN)
 	binary.BigEndian.PutUint16(t.payload[packetStatusCountOffset:], packetCount)
