@@ -2,12 +2,14 @@ package sfu
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/lucsky/cuid"
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
+	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -27,6 +29,7 @@ type WebRTCTransport struct {
 	me             MediaEngine
 	mu             sync.RWMutex
 	candidates     []webrtc.ICECandidateInit
+	mids           map[string]Sender
 	session        *Session
 	senders        map[string][]Sender
 	routers        map[string]Router
@@ -52,6 +55,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 		me:      me,
 		session: session,
 		routers: make(map[string]Router),
+		mids:    make(map[string]Sender),
 		senders: make(map[string][]Sender),
 	}
 
@@ -186,7 +190,37 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 
 // CreateOffer generates the localDescription
 func (p *WebRTCTransport) CreateOffer() (webrtc.SessionDescription, error) {
-	return p.pc.CreateOffer(nil)
+	offer, err := p.pc.CreateOffer(nil)
+	if err != nil {
+		return webrtc.SessionDescription{}, err
+	}
+
+	parsed := sdp.SessionDescription{}
+	if err := parsed.Unmarshal([]byte(offer.SDP)); err == nil {
+		for _, md := range parsed.MediaDescriptions {
+			if mid, ok := md.Attribute(sdp.AttrKeyMID); ok {
+				if msid, ok := md.Attribute(sdp.AttrKeyMsid); ok {
+					split := strings.Split(msid, " ")
+					if len(split) != 2 {
+						log.Errorf("Invalid msid: %s", msid)
+						continue
+					}
+
+					msid := split[0]
+					tid := split[1]
+
+					// find sender for mid
+					for _, sender := range p.senders[msid] {
+						if sender.Track().ID() == tid {
+							p.mids[mid] = sender
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return offer, nil
 }
 
 // SetLocalDescription sets the SessionDescription of the remote peer
@@ -227,6 +261,19 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 			}
 		}
 		p.candidates = nil
+	}
+
+	parsed := sdp.SessionDescription{}
+	if err := parsed.Unmarshal([]byte(desc.SDP)); err == nil {
+		for _, md := range parsed.MediaDescriptions {
+			if mid, ok := md.Attribute(sdp.AttrKeyMID); ok {
+				if p.mids[mid] != nil {
+					p.mids[mid].Start()
+					// remove mid mapping incase transceiver is reused later
+					p.mids[mid] = nil
+				}
+			}
+		}
 	}
 
 	return nil

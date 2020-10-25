@@ -50,7 +50,8 @@ type SimulcastSender struct {
 	refTlzi   uint8
 	lastTlzi  uint8
 
-	once sync.Once
+	start sync.Once
+	close sync.Once
 }
 
 // NewSimulcastSender creates a new track sender instance
@@ -60,7 +61,6 @@ func NewSimulcastSender(ctx context.Context, id string, router Router, sender *w
 		id:                  id,
 		ctx:                 ctx,
 		cancel:              cancel,
-		enabled:             atomicBool{1},
 		router:              router,
 		sender:              sender,
 		track:               sender.Track(),
@@ -81,6 +81,12 @@ func NewSimulcastSender(ctx context.Context, id string, router Router, sender *w
 
 func (s *SimulcastSender) ID() string {
 	return s.id
+}
+
+func (s *SimulcastSender) Start() {
+	s.start.Do(func() {
+		s.enabled.set(true)
+	})
 }
 
 // WriteRTP to the track
@@ -214,6 +220,10 @@ func (s *SimulcastSender) Kind() webrtc.RTPCodecType {
 	return s.track.Kind()
 }
 
+func (s *SimulcastSender) Track() *webrtc.Track {
+	return s.track
+}
+
 func (s *SimulcastSender) Type() SenderType {
 	return SimulcastSenderType
 }
@@ -239,14 +249,12 @@ func (s *SimulcastSender) CurrentSpatialLayer() uint8 {
 
 // Close track
 func (s *SimulcastSender) Close() {
-	s.once.Do(s.close)
-}
-
-func (s *SimulcastSender) close() {
-	s.cancel()
-	if s.onCloseHandler != nil {
-		s.onCloseHandler()
-	}
+	s.close.Do(func() {
+		s.cancel()
+		if s.onCloseHandler != nil {
+			s.onCloseHandler()
+		}
+	})
 }
 
 // OnCloseHandler method to be called on remote tracked removed
