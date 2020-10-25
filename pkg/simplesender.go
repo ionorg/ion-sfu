@@ -35,7 +35,8 @@ type SimpleSender struct {
 	lastSN   uint16
 	lastTS   uint32
 
-	once sync.Once
+	start sync.Once
+	close sync.Once
 }
 
 // NewSimpleSender creates a new track sender instance
@@ -45,14 +46,12 @@ func NewSimpleSender(ctx context.Context, id string, router *receiverRouter, sen
 		id:      id,
 		ctx:     ctx,
 		cancel:  cancel,
-		enabled: atomicBool{1},
 		payload: sender.Track().Codec().PayloadType,
 		router:  router,
 		sender:  sender,
 		track:   sender.Track(),
 	}
 
-	s.enabled.set(true)
 	go s.receiveRTCP()
 
 	return s
@@ -62,11 +61,18 @@ func (s *SimpleSender) ID() string {
 	return s.id
 }
 
+func (s *SimpleSender) Start() {
+	s.start.Do(func() {
+		s.enabled.set(true)
+	})
+}
+
 // WriteRTP to the track
 func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
 	if s.ctx.Err() != nil || !s.enabled.get() {
 		return
 	}
+
 	if s.reSync.get() {
 		if s.track.Kind() == webrtc.RTPCodecTypeVideo {
 			// Forward pli to request a keyframe at max 1 pli per second
@@ -143,6 +149,10 @@ func (s *SimpleSender) Kind() webrtc.RTPCodecType {
 	return s.track.Kind()
 }
 
+func (s *SimpleSender) Track() *webrtc.Track {
+	return s.track
+}
+
 func (s *SimpleSender) Type() SenderType {
 	return SimpleSenderType
 }
@@ -161,14 +171,12 @@ func (s *SimpleSender) SwitchTemporalLayer(layer uint8) {
 
 // Close track
 func (s *SimpleSender) Close() {
-	s.once.Do(s.close)
-}
-
-func (s *SimpleSender) close() {
-	s.cancel()
-	if s.onCloseHandler != nil {
-		s.onCloseHandler()
-	}
+	s.close.Do(func() {
+		s.cancel()
+		if s.onCloseHandler != nil {
+			s.onCloseHandler()
+		}
+	})
 }
 
 // OnCloseHandler method to be called on remote tracked removed

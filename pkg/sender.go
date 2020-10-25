@@ -19,9 +19,11 @@ const (
 // Sender defines a interface for a track receivers
 type Sender interface {
 	ID() string
+	Start()
 	Close()
 	Kind() webrtc.RTPCodecType
 	Type() SenderType
+	Track() *webrtc.Track
 	Mute(val bool)
 	WriteRTP(*rtp.Packet)
 	CurrentSpatialLayer() uint8

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, shrink-to-fit=no"
+    />
+
+    <!-- Bootstrap CSS -->
+    <link
+      rel="stylesheet"
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+      integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z"
+      crossorigin="anonymous"
+    />
+
+    <style>
+      pre {
+        outline: 1px solid #ccc;
+        padding: 5px;
+        margin: 5px;
+      }
+
+      .string {
+        color: green;
+      }
+
+      .number {
+        color: darkorange;
+      }
+
+      .boolean {
+        color: blue;
+      }
+
+      .null {
+        color: magenta;
+      }
+
+      .key {
+        color: red;
+      }
+
+      #remotes video {
+        width: 160px;
+      }
+    </style>
+
+    <title>Pion ion-sfu | Echotest</title>
+  </head>
+
+  <body>
+    <nav class="navbar navbar-light bg-light border-bottom">
+      <h3>Pion</h3>
+    </nav>
+    <div class="container pt-4">
+      <div class="row">
+        <div class="col-12" id="join-btn">
+          <button type="button" class="btn btn-primary" onclick="join()">
+            join
+          </button>
+        </div>
+        <div class="col-12" style="display: none" id="publish-btn">
+          <button type="button" class="btn btn-primary" onclick="publish()">
+            publish
+          </button>
+          <button type="button" class="btn btn-primary" onclick="unpublish()">
+            unpublish
+          </button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div id="remotes" class="col-12 pt-2">
+          <span
+            style="position: absolute; margin-left: 5px; margin-top: 5px"
+            class="badge badge-primary"
+            >Remotes</span
+          >
+        </div>
+      </div>
+    </div>
+    <!-- Optional JavaScript -->
+    <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+    <script
+      src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
+      integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"
+      integrity="sha384-9/reFTGAW83EW2RDu2S0VKaIzap3H66lZH81PoYlFhbGU+6BZp6G7niu735Sk7lN"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"
+      integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV"
+      crossorigin="anonymous"
+    ></script>
+    <script src="../../../ion-sdk-js/dist/ion-sdk.min.js"></script>
+    <!-- <script src="https://unpkg.com/ion-sdk-js@1.0.16/dist/ion-sdk.min.js"></script> -->
+    <script>
+      const localVideo = document.getElementById("local-video");
+      const remotesDiv = document.getElementById("remotes");
+
+      /* eslint-env browser */
+      const joinBtn = document.getElementById("join-btn");
+      const publishBtn = document.getElementById("publish-btn");
+
+      const config = {
+        iceServers: [
+          {
+            urls: "stun:stun.l.google.com:19302",
+          },
+        ],
+      };
+
+      class Peer {
+        constructor() {
+          this.signal = new IonSDK.IonSFUJSONRPCSignal(
+            "ws://localhost:7000/ws"
+          );
+
+          const videosDiv = document.createElement("div");
+          videosDiv.style.display = "flex";
+          remotesDiv.appendChild(videosDiv);
+
+          this.client = new IonSDK.Client("test session", this.signal);
+          this.client.ontrack = (track, stream) => {
+            if (track.kind === "video") {
+              const remoteVideo = document.createElement("video");
+              remoteVideo.srcObject = stream;
+              remoteVideo.autoplay = true;
+              remoteVideo.muted = true;
+              videosDiv.appendChild(remoteVideo);
+
+              track.onremovetrack = () => videosDiv.removeChild(removeVideo);
+            }
+          };
+        }
+
+        capture() {
+          IonSDK.LocalStream.getUserMedia({
+            resolution: "hd",
+            audio: true,
+          })
+            .then((media) => {
+              this.media = media;
+            })
+            .catch(console.error);
+        }
+
+        publish() {
+          this.client.publish(this.media);
+        }
+      }
+
+      const peers = [];
+      const join = () => {
+        joinBtn.style.display = "none";
+        publishBtn.style.display = "block";
+
+        for (var i = 0; i < 15; i++) {
+          const peer = new Peer();
+          peer.capture();
+          peers.push(peer);
+        }
+      };
+
+      const publish = () => {
+        peers.forEach((peer) => peer.publish());
+      };
+
+      const unpublish = () => {
+        peers.forEach((peer) => peer.unpublish());
+      };
+    </script>
+  </body>
+</html>
