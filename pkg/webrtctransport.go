@@ -6,11 +6,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pion/sdp/v3"
-
 	"github.com/lucsky/cuid"
 	log "github.com/pion/ion-log"
-	"github.com/pion/rtcp"
+	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -30,8 +28,8 @@ type WebRTCTransport struct {
 	me             MediaEngine
 	mu             sync.RWMutex
 	candidates     []webrtc.ICECandidateInit
-	mids           map[string]Sender
 	session        *Session
+	mids           map[string]Sender
 	senders        map[string][]Sender
 	router         Router
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
@@ -122,8 +120,7 @@ func (p *WebRTCTransport) CreateOffer() (webrtc.SessionDescription, error) {
 		return webrtc.SessionDescription{}, err
 	}
 
-	parsed := sdp.SessionDescription{}
-	if err := parsed.Unmarshal([]byte(offer.SDP)); err == nil {
+	if parsed, err := offer.Unmarshal(); err == nil {
 		for _, md := range parsed.MediaDescriptions {
 			if mid, ok := md.Attribute(sdp.AttrKeyMID); ok {
 				if msid, ok := md.Attribute(sdp.AttrKeyMsid); ok {
@@ -179,33 +176,6 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 		log.Errorf("SetRemoteDescription error: %v", err)
 		return err
 	}
-	for _, md := range pd.MediaDescriptions {
-		if md.MediaName.Media != mediaNameAudio && md.MediaName.Media != mediaNameVideo {
-			continue
-		}
-		var (
-			ext int
-			id  string
-		)
-
-		for _, att := range md.Attributes {
-			if att.Key == sdp.AttrKeyExtMap && strings.HasSuffix(att.Value, sdp.TransportCCURI) {
-				ext, _ = strconv.Atoi(att.Value[:1])
-				if len(id) > 0 {
-					break
-				}
-			}
-			if att.Key == sdp.AttrKeyMsid {
-				v := strings.Split(att.Value, " ")
-				id = v[len(v)-1]
-				if ext != 0 {
-					break
-				}
-			}
-		}
-		p.router.AddTWCCExt(id, ext)
-	}
-
 	err = p.pc.SetRemoteDescription(desc)
 	if err != nil {
 		log.Errorf("SetRemoteDescription error: %v", err)
@@ -222,17 +192,40 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 		p.candidates = nil
 	}
 
-	parsed := sdp.SessionDescription{}
-	if err := parsed.Unmarshal([]byte(desc.SDP)); err == nil {
-		for _, md := range parsed.MediaDescriptions {
-			if mid, ok := md.Attribute(sdp.AttrKeyMID); ok {
-				if p.mids[mid] != nil {
-					p.mids[mid].Start()
+	for _, md := range pd.MediaDescriptions {
+		if md.MediaName.Media != mediaNameAudio && md.MediaName.Media != mediaNameVideo {
+			continue
+		}
+		var (
+			ext int
+			id  string
+		)
+
+		for _, att := range md.Attributes {
+			if att.Key == sdp.AttrKeyMID {
+				if p.mids[att.Value] != nil {
+					p.mids[att.Value].Start()
 					// remove mid mapping incase transceiver is reused later
-					p.mids[mid] = nil
+					p.mids[att.Value] = nil
+				}
+			}
+
+			if att.Key == sdp.AttrKeyExtMap && strings.HasSuffix(att.Value, sdp.TransportCCURI) {
+				ext, _ = strconv.Atoi(att.Value[:1])
+				if len(id) > 0 {
+					break
+				}
+			}
+			if att.Key == sdp.AttrKeyMsid {
+				v := strings.Split(att.Value, " ")
+				id = v[len(v)-1]
+				if ext != 0 {
+					break
 				}
 			}
 		}
+		p.router.AddTWCCExt(id, ext)
+
 	}
 
 	return nil
