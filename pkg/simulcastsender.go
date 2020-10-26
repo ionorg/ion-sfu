@@ -266,7 +266,8 @@ func (s *SimulcastSender) OnCloseHandler(fn func()) {
 func (s *SimulcastSender) receiveRTCP() {
 	for {
 		pkts, err := s.sender.ReadRTCP()
-		if err == io.ErrClosedPipe {
+		if err == io.ErrClosedPipe || err == io.EOF {
+			log.Debugf("Sender %s closed due to: %v", s.id, err)
 			// Remove sender from receiver
 			if recv := s.router.receivers[s.currentSpatialLayer]; recv != nil {
 				recv.DeleteSender(s.id)

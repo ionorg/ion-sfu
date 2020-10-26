@@ -41,8 +41,8 @@ type TransportWideCC struct {
 
 	len      uint16
 	deltaLen uint16
-	payload  [50]byte
-	deltas   [100]byte
+	payload  [100]byte
+	deltas   [200]byte
 	chunk    uint16
 }
 

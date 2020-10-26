@@ -187,7 +187,8 @@ func (s *SimpleSender) OnCloseHandler(fn func()) {
 func (s *SimpleSender) receiveRTCP() {
 	for {
 		pkts, err := s.sender.ReadRTCP()
-		if err == io.ErrClosedPipe {
+		if err == io.ErrClosedPipe || err == io.EOF {
+			log.Debugf("Sender %s closed due to: %v", s.id, err)
 			// Remove sender from receiver
 			if recv := s.router.receivers[0]; recv != nil {
 				recv.DeleteSender(s.id)
