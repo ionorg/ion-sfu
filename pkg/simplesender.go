@@ -113,6 +113,7 @@ func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
 		s.tsOffset = pkt.Timestamp - s.lastTS + 1
 		s.reSync.set(false)
 	}
+
 	// Backup payload
 	bSN := pkt.SequenceNumber
 	bTS := pkt.Timestamp
@@ -123,6 +124,7 @@ func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
 	pkt.PayloadType = s.payload
 	pkt.Timestamp = s.lastTS
 	pkt.SequenceNumber = s.lastSN
+
 	err := s.track.WriteRTP(pkt)
 	// Restore packet
 	pkt.PayloadType = bPt
@@ -189,7 +191,6 @@ func (s *SimpleSender) receiveRTCP() {
 	for {
 		pkts, err := s.sender.ReadRTCP()
 		if err == io.ErrClosedPipe || err == io.EOF {
-			log.Debugf("Sender %s closed due to: %v", s.id, err)
 			// Remove sender from receiver
 			if recv := s.router.receivers[0]; recv != nil {
 				recv.DeleteSender(s.id)
