@@ -17,38 +17,12 @@
     />
 
     <style>
-      pre {
-        outline: 1px solid #ccc;
-        padding: 5px;
-        margin: 5px;
-      }
-
-      .string {
-        color: green;
-      }
-
-      .number {
-        color: darkorange;
-      }
-
-      .boolean {
-        color: blue;
-      }
-
-      .null {
-        color: magenta;
-      }
-
-      .key {
-        color: red;
-      }
-
       #remotes video {
         width: 160px;
       }
     </style>
 
-    <title>Pion ion-sfu | Echotest</title>
+    <title>Pion ion-sfu | Racetest</title>
   </head>
 
   <body>
@@ -59,15 +33,15 @@
       <div class="row">
         <div class="col-12" id="join-btn">
           <button type="button" class="btn btn-primary" onclick="join()">
-            join
+            Join
           </button>
         </div>
         <div class="col-12" style="display: none" id="publish-btn">
           <button type="button" class="btn btn-primary" onclick="publish()">
-            publish
+            Publish
           </button>
           <button type="button" class="btn btn-primary" onclick="unpublish()">
-            unpublish
+            Unpublish
           </button>
         </div>
       </div>
@@ -99,8 +73,7 @@
       integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV"
       crossorigin="anonymous"
     ></script>
-    <script src="../../../ion-sdk-js/dist/ion-sdk.min.js"></script>
-    <!-- <script src="https://unpkg.com/ion-sdk-js@1.0.16/dist/ion-sdk.min.js"></script> -->
+    <script src="https://unpkg.com/ion-sdk-js@1.0.17/dist/ion-sdk.min.js"></script>
     <script>
       const localVideo = document.getElementById("local-video");
       const remotesDiv = document.getElementById("remotes");
@@ -155,6 +128,10 @@
         publish() {
           this.client.publish(this.media);
         }
+
+        unpublish() {
+          this.media.unpublish();
+        }
       }
 
       const peers = [];
@@ -162,20 +139,15 @@
         joinBtn.style.display = "none";
         publishBtn.style.display = "block";
 
-        for (var i = 0; i < 15; i++) {
+        for (var i = 0; i < 3; i++) {
           const peer = new Peer();
           peer.capture();
           peers.push(peer);
         }
       };
 
-      const publish = () => {
-        peers.forEach((peer) => peer.publish());
-      };
-
-      const unpublish = () => {
-        peers.forEach((peer) => peer.unpublish());
-      };
+      const publish = () => peers.forEach((peer) => peer.publish());
+      const unpublish = () => peers.forEach((peer) => peer.unpublish());
     </script>
   </body>
 </html>
