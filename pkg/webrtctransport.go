@@ -2,14 +2,13 @@ package sfu
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/bep/debounce"
 	"github.com/lucsky/cuid"
 	log "github.com/pion/ion-log"
-	"github.com/pion/rtcp"
 	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 )
@@ -30,10 +29,10 @@ type WebRTCTransport struct {
 	me             MediaEngine
 	mu             sync.RWMutex
 	candidates     []webrtc.ICECandidateInit
-	mids           map[string]Sender
 	session        *Session
+	mids           map[string]Sender
 	senders        map[string][]Sender
-	routers        map[string]Router
+	router         Router
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
 }
 
@@ -48,116 +47,44 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
+	id := cuid.New()
 	p := &WebRTCTransport{
-		id:      cuid.New(),
+		id:      id,
 		ctx:     ctx,
 		cancel:  cancel,
 		pc:      pc,
 		me:      me,
 		session: session,
-		routers: make(map[string]Router),
+		router:  newRouter(pc, id, cfg.router),
 		mids:    make(map[string]Sender),
 		senders: make(map[string][]Sender),
 	}
-
-	// Add transport to the session
-	session.AddTransport(p)
-	// Simulcast flag to add router to session
-	simulcastToSessionJoined := false
-
 	// Subscribe to existing transports
 	defer func() {
 		for _, t := range session.Transports() {
 			if t.ID() == p.id {
 				continue
 			}
-
-			for _, router := range t.Routers() {
-				err := router.AddSender(p)
-				// log.Infof("Init add router ssrc %d to %s", router.receivers[0].Track().SSRC(), p.id)
-				if err != nil {
-					log.Errorf("Subscribing to router err: %v", err)
-					continue
-				}
+			err := t.GetRouter().AddSender(p)
+			if err != nil {
+				log.Errorf("Subscribing to router err: %v", err)
+				continue
 			}
 		}
 	}()
+	// Add transport to the session
+	session.AddTransport(p)
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
-		log.Debugf("Peer %s got remote track id: %s ssrc: %d rid :%s streamID: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.Label())
-		recv := NewWebRTCReceiver(ctx, receiver, track, ReceiverConfig{
-			RouterConfig: cfg.router,
-			tccExt:       me.tCCExt,
-		})
-
-		if router, ok := p.routers[track.ID()]; !ok {
-			if track.RID() != "" {
-				router = newRouter(p, track.Label(), cfg.router, SimulcastRouter)
-			} else {
-				router = newRouter(p, track.Label(), cfg.router, SimpleRouter)
-			}
-			router.AddReceiver(recv)
-			// If track is simulcast and BestQualityFirst is true and current track is full resolution subscribe to router
-			if router.Kind() == SimulcastRouter && router.Config().Simulcast.BestQualityFirst && track.RID() == fullResolution {
-				simulcastToSessionJoined = true
-				p.session.AddRouter(router)
-				// If track is simulcast AND BestQualityFirst is false and track is full resolution
-			} else if router.Kind() == SimulcastRouter && !router.Config().Simulcast.BestQualityFirst && track.RID() == fullResolution {
-				// Wait one second to receive the quarter resolution, if not received it may be not supported or disabled
-				// and only half or full resolution was sent.
-				go func() {
-					select {
-					case <-time.After(time.Second):
-						if !simulcastToSessionJoined {
-							simulcastToSessionJoined = true
-							p.session.AddRouter(router)
-							return
-						}
-					}
-				}()
-				// If track is not simulcast OR is simulcast and BestQualityFirst is false and current track is not full
-				// resolution subscribe to router
-			} else if router.Kind() != SimulcastRouter || router.Kind() == SimulcastRouter &&
-				!router.Config().Simulcast.BestQualityFirst && track.RID() != fullResolution {
-				simulcastToSessionJoined = true
-				p.session.AddRouter(router)
-			}
-			p.mu.Lock()
-			p.routers[recv.Track().ID()] = router
-			p.mu.Unlock()
-			log.Debugf("Created router %s %d", p.id, recv.Track().SSRC())
-		} else {
-			if !simulcastToSessionJoined &&
-				(router.Config().Simulcast.BestQualityFirst && track.RID() == fullResolution ||
-					!router.Config().Simulcast.BestQualityFirst && track.RID() == quarterResolution) {
-				simulcastToSessionJoined = true
-				p.session.AddRouter(router)
-			}
-			router.AddReceiver(recv)
-		}
-
-		recv.OnCloseHandler(func() {
-			p.mu.Lock()
-			defer p.mu.Unlock()
-			delete(p.routers, track.ID())
-		})
-
-		if track.Kind() == webrtc.RTPCodecTypeVideo {
-			recv.OnLostHandler(func(nack *rtcp.TransportLayerNack) {
-				log.Debugf("Writing nack to peer: %s, ssrc: %d, missing sn: %d, bitmap: %b", p.id, track.SSRC(), nack.Nacks[0].PacketID, nack.Nacks[0].LostPackets)
-				if err := p.pc.WriteRTCP([]rtcp.Packet{nack}); err != nil {
-					log.Errorf("write nack rtcp err: %v", err)
-				}
-			})
-		}
-
+		log.Debugf("Peer %s got remote track id: %s mediaSSRC: %d rid :%s streamID: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.Label())
+		p.router.AddReceiver(ctx, track, receiver)
 		if p.onTrackHandler != nil {
 			p.onTrackHandler(track, receiver)
 		}
 	})
 
 	pc.OnDataChannel(func(d *webrtc.DataChannel) {
-		log.Debugf("New DataChannel %s %d\n", d.Label(), d.ID())
+		log.Debugf("New DataChannel %s %d", d.Label(), d.ID())
 		// Register text message handling
 		if d.Label() == channelLabel {
 			handleAPICommand(p, d)
@@ -180,11 +107,10 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 				if err := p.Close(); err != nil {
 					log.Errorf("webrtc transport close err: %v", err)
 				}
+				p.router.Stop()
 			}
 		}
 	})
-
-	go p.sendRTCP()
 
 	return p, nil
 }
@@ -195,26 +121,36 @@ func (p *WebRTCTransport) CreateOffer() (webrtc.SessionDescription, error) {
 	if err != nil {
 		return webrtc.SessionDescription{}, err
 	}
-
 	parsed := sdp.SessionDescription{}
 	if err := parsed.Unmarshal([]byte(offer.SDP)); err == nil {
 		for _, md := range parsed.MediaDescriptions {
-			if mid, ok := md.Attribute(sdp.AttrKeyMID); ok {
-				if msid, ok := md.Attribute(sdp.AttrKeyMsid); ok {
-					split := strings.Split(msid, " ")
-					if len(split) != 2 {
-						log.Errorf("Invalid msid: %s", msid)
-						continue
+			if md.MediaName.Media != mediaNameAudio && md.MediaName.Media != mediaNameVideo {
+				continue
+			}
+			var msid, mid string
+
+			for _, att := range md.Attributes {
+				switch att.Key {
+				case sdp.AttrKeyMID:
+					mid = att.Value
+					if len(msid) > 0 {
+						break
 					}
-
-					msid := split[0]
-					tid := split[1]
-
-					// find sender for mid
-					for _, sender := range p.senders[msid] {
-						if sender.Track().ID() == tid {
-							p.mids[mid] = sender
-						}
+				case sdp.AttrKeyMsid:
+					msid = att.Value
+					if len(mid) > 0 {
+						break
+					}
+				}
+			}
+			if len(msid) > 0 && len(mid) > 0 {
+				split := strings.Split(msid, " ")
+				sid := split[0]
+				tid := split[1]
+				// find sender for mid
+				for _, sender := range p.senders[sid] {
+					if sender.Track().ID() == tid {
+						p.mids[mid] = sender
 					}
 				}
 			}
@@ -248,7 +184,12 @@ func (p *WebRTCTransport) CreateAnswer() (webrtc.SessionDescription, error) {
 
 // SetRemoteDescription sets the SessionDescription of the remote peer
 func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) error {
-	err := p.pc.SetRemoteDescription(desc)
+	pd, err := desc.Unmarshal()
+	if err != nil {
+		log.Errorf("SetRemoteDescription error: %v", err)
+		return err
+	}
+	err = p.pc.SetRemoteDescription(desc)
 	if err != nil {
 		log.Errorf("SetRemoteDescription error: %v", err)
 		return err
@@ -264,17 +205,40 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 		p.candidates = nil
 	}
 
-	parsed := sdp.SessionDescription{}
-	if err := parsed.Unmarshal([]byte(desc.SDP)); err == nil {
-		for _, md := range parsed.MediaDescriptions {
-			if mid, ok := md.Attribute(sdp.AttrKeyMID); ok {
-				if p.mids[mid] != nil {
-					p.mids[mid].Start()
-					// remove mid mapping incase transceiver is reused later
-					p.mids[mid] = nil
+	for _, md := range pd.MediaDescriptions {
+		if md.MediaName.Media != mediaNameAudio && md.MediaName.Media != mediaNameVideo {
+			continue
+		}
+		var (
+			ext int
+			id  string
+		)
+
+		for _, att := range md.Attributes {
+			if att.Key == sdp.AttrKeyMID {
+				if p.mids[att.Value] != nil {
+					p.mids[att.Value].Start()
+					// remove mid mapping in case transceiver is reused later
+					p.mids[att.Value] = nil
+				}
+			}
+
+			if att.Key == sdp.AttrKeyExtMap && strings.HasSuffix(att.Value, sdp.TransportCCURI) {
+				ext, _ = strconv.Atoi(att.Value[:1])
+				if len(id) > 0 {
+					break
+				}
+			}
+			if att.Key == sdp.AttrKeyMsid {
+				v := strings.Split(att.Value, " ")
+				id = v[len(v)-1]
+				if ext != 0 {
+					break
 				}
 			}
 		}
+		p.router.AddTWCCExt(id, ext)
+
 	}
 
 	return nil
@@ -338,18 +302,9 @@ func (p *WebRTCTransport) ID() string {
 	return p.id
 }
 
-// Routers returns routers for this peer
-func (p *WebRTCTransport) Routers() map[string]Router {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return p.routers
-}
-
-// GetRouter returns router with ssrc
-func (p *WebRTCTransport) GetRouter(trackID string) Router {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return p.routers[trackID]
+// GetRouter returns router with mediaSSRC
+func (p *WebRTCTransport) GetRouter() Router {
+	return p.router
 }
 
 func (p *WebRTCTransport) AddSender(streamID string, sender Sender) {
@@ -374,27 +329,4 @@ func (p *WebRTCTransport) Close() error {
 	p.session.RemoveTransport(p.id)
 	p.cancel()
 	return p.pc.Close()
-}
-
-func (p *WebRTCTransport) sendRTCP() {
-	t := time.NewTicker(time.Second)
-	for {
-		select {
-		case <-t.C:
-			pkts := make([]rtcp.Packet, 0)
-			p.mu.RLock()
-			for _, r := range p.routers {
-				pkts = append(pkts, r.GetRTCP()...)
-			}
-			p.mu.RUnlock()
-			if len(pkts) > 0 {
-				if err := p.pc.WriteRTCP(pkts); err != nil {
-					log.Errorf("write rtcp err: %v", err)
-				}
-			}
-		case <-p.ctx.Done():
-			t.Stop()
-			return
-		}
-	}
 }

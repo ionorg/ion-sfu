@@ -21,7 +21,7 @@ type SimpleSender struct {
 	cancel         context.CancelFunc
 	sender         *webrtc.RTPSender
 	track          *webrtc.Track
-	router         Router
+	router         *receiverRouter
 	enabled        atomicBool
 	payload        uint8
 	maxBitrate     uint64
@@ -40,7 +40,7 @@ type SimpleSender struct {
 }
 
 // NewSimpleSender creates a new track sender instance
-func NewSimpleSender(ctx context.Context, id string, router Router, sender *webrtc.RTPSender) Sender {
+func NewSimpleSender(ctx context.Context, id string, router *receiverRouter, sender *webrtc.RTPSender) Sender {
 	ctx, cancel := context.WithCancel(ctx)
 	s := &SimpleSender{
 		id:      id,
@@ -77,15 +77,14 @@ func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
 		if s.track.Kind() == webrtc.RTPCodecTypeVideo {
 			// Forward pli to request a keyframe at max 1 pli per second
 			if time.Now().Sub(s.lastPli) > time.Second {
-				recv := s.router.GetReceiver(0)
+				recv := s.router.receivers[0]
 				if recv == nil {
 					return
 				}
-				if err := s.router.SendRTCP([]rtcp.Packet{
+				recv.SendRTCP([]rtcp.Packet{
 					&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC},
-				}); err == nil {
-					s.lastPli = time.Now()
-				}
+				})
+				s.lastPli = time.Now()
 			}
 			relay := false
 			// Wait for a keyframe to sync new source
@@ -190,7 +189,7 @@ func (s *SimpleSender) receiveRTCP() {
 		pkts, err := s.sender.ReadRTCP()
 		if err == io.ErrClosedPipe {
 			// Remove sender from receiver
-			if recv := s.router.GetReceiver(0); recv != nil {
+			if recv := s.router.receivers[0]; recv != nil {
 				recv.DeleteSender(s.id)
 			}
 			s.Close()
@@ -205,7 +204,7 @@ func (s *SimpleSender) receiveRTCP() {
 			log.Errorf("rtcp err => %v", err)
 		}
 
-		recv := s.router.GetReceiver(0)
+		recv := s.router.receivers[0]
 		if recv == nil {
 			continue
 		}
@@ -234,9 +233,7 @@ func (s *SimpleSender) receiveRTCP() {
 			}
 		}
 		if len(fwdPkts) > 0 {
-			if err := s.router.SendRTCP(fwdPkts); err != nil {
-				log.Errorf("Forwarding rtcp from sender err: %v", err)
-			}
+			recv.SendRTCP(fwdPkts)
 		}
 	}
 }

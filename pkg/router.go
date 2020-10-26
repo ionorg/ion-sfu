@@ -3,31 +3,32 @@ package sfu
 //go:generate go run github.com/matryer/moq -out router_mock_test.generated.go . Router
 
 import (
+	"context"
 	"math/rand"
 	"sync"
+	"time"
+
+	"github.com/pion/webrtc/v3"
 
 	log "github.com/pion/ion-log"
-
 	"github.com/pion/rtcp"
 )
 
 const (
-	SimpleRouter = iota + 1
-	SimulcastRouter
-	SVCRouter
+	SimpleReceiver = iota + 1
+	SimulcastReceiver
+	SVCReceiver
 )
 
 // Router defines a track rtp/rtcp router
 type Router interface {
 	ID() string
-	Kind() int
 	Config() RouterConfig
-	AddReceiver(recv Receiver)
-	GetReceiver(layer uint8) Receiver
+	AddReceiver(ctx context.Context, track *webrtc.Track, receiver *webrtc.RTPReceiver)
 	AddSender(p *WebRTCTransport) error
-	GetRTCP() []rtcp.Packet
-	SendRTCP(pkts []rtcp.Packet) error
-	SwitchSpatialLayer(targetLayer uint8, sub Sender) bool
+	AddTWCCExt(id string, ext int)
+	SendRTCP(pkts []rtcp.Packet)
+	Stop()
 }
 
 // RouterConfig defines router configurations
@@ -37,151 +38,174 @@ type RouterConfig struct {
 	Simulcast     SimulcastConfig `mapstructure:"simulcast"`
 }
 
-type router struct {
-	mu        sync.RWMutex
-	peer      *WebRTCTransport
+type receiverRouter struct {
 	kind      int
+	stream    string
+	receivers [3]Receiver
+}
+
+type router struct {
+	id        string
+	mu        sync.RWMutex
+	peer      *webrtc.PeerConnection
+	twcc      *TransportWideCC
+	rtcpCh    chan []rtcp.Packet
 	config    RouterConfig
-	streamID  string
-	receivers [3 + 1]Receiver
+	twccExts  map[string]int
+	receivers map[string]*receiverRouter
 }
 
 // newRouter for routing rtp/rtcp packets
-func newRouter(peer *WebRTCTransport, streamID string, config RouterConfig, kind int) Router {
-	return &router{
-		peer:     peer,
-		kind:     kind,
-		config:   config,
-		streamID: streamID,
+func newRouter(peer *webrtc.PeerConnection, id string, config RouterConfig) Router {
+	ch := make(chan []rtcp.Packet, 10)
+	r := &router{
+		id:        id,
+		peer:      peer,
+		twcc:      newTransportWideCC(ch),
+		config:    config,
+		rtcpCh:    ch,
+		twccExts:  make(map[string]int),
+		receivers: make(map[string]*receiverRouter),
 	}
+	go r.sendRTCP()
+	return r
 }
 
 func (r *router) ID() string {
-	return r.peer.id
-}
-
-func (r *router) Kind() int {
-	return r.kind
+	return r.id
 }
 
 func (r *router) Config() RouterConfig {
 	return r.config
 }
 
-func (r *router) AddReceiver(recv Receiver) {
+func (r *router) AddReceiver(ctx context.Context, track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.receivers[recv.SpatialLayer()] = recv
-}
 
-func (r *router) GetReceiver(layer uint8) Receiver {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.receivers[layer]
+	trackID := track.ID()
+	recv := NewWebRTCReceiver(ctx, receiver, track, BufferOptions{
+		BufferTime: r.config.MaxBufferTime,
+		MaxBitRate: r.config.MaxBandwidth * 1000,
+		TWCCExt:    r.twccExts[trackID],
+	})
+	recv.OnTransportWideCC(func(sn uint16, timeNS int64, marker bool) {
+		r.twcc.push(sn, timeNS, marker)
+	})
+	recv.SetRTCPCh(r.rtcpCh)
+	recv.OnCloseHandler(func() {
+		r.deleteReceiver(trackID)
+	})
+	if track.Kind() == webrtc.RTPCodecTypeVideo {
+		r.twcc.mSSRC = track.SSRC()
+		r.twcc.tccLastReport = time.Now().UnixNano()
+	}
+	recv.Start()
+
+	if rr, ok := r.receivers[trackID]; ok {
+		rr.receivers[recv.SpatialLayer()] = recv
+		return
+	}
+
+	rr := &receiverRouter{
+		stream:    track.Label(),
+		receivers: [3]Receiver{},
+	}
+	rr.receivers[recv.SpatialLayer()] = recv
+
+	if len(track.RID()) > 0 {
+		rr.kind = SimulcastReceiver
+	} else {
+		rr.kind = SimpleReceiver
+	}
+
+	r.receivers[trackID] = rr
 }
 
 // AddWebRTCSender to router
 func (r *router) AddSender(p *WebRTCTransport) error {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	var (
-		recv   Receiver
-		sender Sender
-		ssrc   uint32
-	)
 
-	if r.kind == SimpleRouter {
-		recv = r.receivers[0]
-		ssrc = recv.Track().SSRC()
-	} else {
-		for _, rcv := range r.receivers {
-			if rcv != nil {
-				recv = rcv
+	for _, rr := range r.receivers {
+		var (
+			recv   Receiver
+			sender Sender
+			ssrc   uint32
+		)
+
+		if rr.kind == SimpleReceiver {
+			recv = rr.receivers[0]
+			ssrc = recv.Track().SSRC()
+		} else {
+			for _, rcv := range rr.receivers {
+				if rcv != nil {
+					recv = rcv
+				}
+				if !r.config.Simulcast.BestQualityFirst && rcv != nil {
+					break
+				}
 			}
-			if !r.config.Simulcast.BestQualityFirst && rcv != nil {
-				break
+			ssrc = rand.Uint32()
+		}
+
+		if recv == nil {
+			return errNoReceiverFound
+		}
+
+		inTrack := recv.Track()
+		to := p.me.GetCodecsByName(recv.Track().Codec().Name)
+		if len(to) == 0 {
+			return errPtNotSupported
+		}
+		pt := to[0].PayloadType
+		outTrack, err := p.pc.NewTrack(pt, ssrc, inTrack.ID(), inTrack.Label())
+		if err != nil {
+			return err
+		}
+		// Create webrtc sender for the peer we are sending track to
+		s, err := p.pc.AddTrack(outTrack)
+		if err != nil {
+			return err
+		}
+		if rr.kind == SimulcastReceiver {
+			sender = NewSimulcastSender(p.ctx, p.id, rr, s, recv.SpatialLayer(), r.config.Simulcast)
+		} else {
+			sender = NewSimpleSender(p.ctx, p.id, rr, s)
+		}
+		sender.OnCloseHandler(func() {
+			if err := p.pc.RemoveTrack(s); err != nil {
+				log.Errorf("Error closing sender: %s", err)
 			}
-		}
-		ssrc = rand.Uint32()
+		})
+		p.AddSender(rr.stream, sender)
+		recv.AddSender(sender)
 	}
-
-	if recv == nil {
-		return errNoReceiverFound
-	}
-
-	inTrack := recv.Track()
-	to := p.me.GetCodecsByName(recv.Track().Codec().Name)
-	if len(to) == 0 {
-		return errPtNotSupported
-	}
-	pt := to[0].PayloadType
-	outTrack, err := p.pc.NewTrack(pt, ssrc, inTrack.ID(), inTrack.Label())
-	if err != nil {
-		return err
-	}
-	// Create webrtc sender for the peer we are sending track to
-	s, err := p.pc.AddTrack(outTrack)
-	if err != nil {
-		return err
-	}
-	if r.kind == SimulcastRouter {
-		sender = NewSimulcastSender(p.ctx, p.id, r, s, recv.SpatialLayer())
-	} else {
-		sender = NewSimpleSender(p.ctx, p.id, r, s)
-	}
-	sender.OnCloseHandler(func() {
-		if err := p.pc.RemoveTrack(s); err != nil {
-			log.Errorf("Error closing sender: %s", err)
-		}
-	})
-	p.AddSender(r.streamID, sender)
-	recv.AddSender(sender)
 	return nil
 }
 
-func (r *router) SendRTCP(pkts []rtcp.Packet) error {
-	return r.peer.pc.WriteRTCP(pkts)
+func (r *router) AddTWCCExt(id string, ext int) {
+	r.twccExts[id] = ext
 }
 
-func (r *router) GetRTCP() []rtcp.Packet {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	if r.kind == SimpleRouter || r.kind == SVCRouter {
-		if r.receivers[0] != nil {
-			rr, ps := r.receivers[0].GetRTCP()
-			if rr.SSRC != 0 {
-				ps = append(ps, &rtcp.ReceiverReport{
-					Reports: []rtcp.ReceptionReport{rr},
-				})
-			}
-			return ps
-		}
-		return nil
-	}
-	var rtcpPkts []rtcp.Packet
-	var rReports []rtcp.ReceptionReport
-	for _, recv := range r.receivers {
-		if recv != nil {
-			rr, ps := recv.GetRTCP()
-			rtcpPkts = append(rtcpPkts, ps...)
-			if rr.SSRC != 0 {
-				rReports = append(rReports, rr)
-			}
-		}
-	}
-	if len(rReports) > 0 {
-		rtcpPkts = append(rtcpPkts, &rtcp.ReceiverReport{
-			Reports: rReports,
-		})
-	}
-	return rtcpPkts
+func (r *router) SendRTCP(pkts []rtcp.Packet) {
+	r.rtcpCh <- pkts
 }
 
-func (r *router) SwitchSpatialLayer(targetLayer uint8, sub Sender) bool {
-	if targetRecv := r.GetReceiver(targetLayer); targetRecv != nil {
-		targetRecv.AddSender(sub)
-		return true
+func (r *router) Stop() {
+	close(r.rtcpCh)
+}
+
+func (r *router) deleteReceiver(track string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.receivers, track)
+}
+
+func (r *router) sendRTCP() {
+	for pkts := range r.rtcpCh {
+		if err := r.peer.WriteRTCP(pkts); err != nil {
+			log.Errorf("Write rtcp to peer %s err :%v", r.id, err)
+		}
 	}
-	return false
 }

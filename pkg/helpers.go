@@ -163,9 +163,12 @@ func timeToNtp(ns int64) uint64 {
 	return seconds<<32 | fraction
 }
 
-// fromNtp converts a NTP timestamp into GO time
-func fromNtp(seconds, fraction uint32) (tm int64) {
-	n := (int64(fraction) * 1e9) >> 32
-	tm = (int64(seconds)-ntpEpoch)*1e9 + n
-	return
+// setNBitsOfUint16 will truncate the value to size, left-shift to startIndex position and set
+func setNBitsOfUint16(src, size, startIndex, val uint16) uint16 {
+	if startIndex+size > 16 {
+		return 0
+	}
+	// truncate val to size bits
+	val &= (1 << size) - 1
+	return src | (val << (16 - size - startIndex))
 }

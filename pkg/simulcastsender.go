@@ -20,7 +20,7 @@ type SimulcastSender struct {
 	id             string
 	ctx            context.Context
 	cancel         context.CancelFunc
-	router         Router
+	router         *receiverRouter
 	sender         *webrtc.RTPSender
 	track          *webrtc.Track
 	enabled        atomicBool
@@ -55,7 +55,7 @@ type SimulcastSender struct {
 }
 
 // NewSimulcastSender creates a new track sender instance
-func NewSimulcastSender(ctx context.Context, id string, router Router, sender *webrtc.RTPSender, layer uint8) Sender {
+func NewSimulcastSender(ctx context.Context, id string, router *receiverRouter, sender *webrtc.RTPSender, layer uint8, conf SimulcastConfig) Sender {
 	ctx, cancel := context.WithCancel(ctx)
 	s := &SimulcastSender{
 		id:                  id,
@@ -70,7 +70,7 @@ func NewSimulcastSender(ctx context.Context, id string, router Router, sender *w
 		currentSpatialLayer: layer,
 		targetSpatialLayer:  layer,
 		simulcastSSRC:       sender.Track().SSRC(),
-		temporalEnabled:     router.Config().Simulcast.EnableTemporalLayer,
+		temporalEnabled:     conf.EnableTemporalLayer,
 		refPicID:            uint16(rand.Uint32()),
 		refTlzi:             uint8(rand.Uint32()),
 	}
@@ -98,17 +98,17 @@ func (s *SimulcastSender) WriteRTP(pkt *rtp.Packet) {
 	// Check if packet SSRC is different from before
 	// if true, the video source changed
 	if s.lSSRC != pkt.SSRC {
-		recv := s.router.GetReceiver(s.targetSpatialLayer)
+		recv := s.router.receivers[s.targetSpatialLayer]
 		if recv == nil || recv.Track().SSRC() != pkt.SSRC {
 			return
 		}
 		// Forward pli to request a keyframe at max 1 pli per second
 		if time.Now().Sub(s.lastPli) > time.Second {
-			if err := s.router.SendRTCP([]rtcp.Packet{
+			recv.SendRTCP([]rtcp.Packet{
 				&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC},
-			}); err == nil {
-				s.lastPli = time.Now()
-			}
+			})
+			s.lastPli = time.Now()
+
 		}
 		relay := false
 		// Wait for a keyframe to sync new source
@@ -143,7 +143,7 @@ func (s *SimulcastSender) WriteRTP(pkt *rtp.Packet) {
 		}
 		// Switch is done remove sender from previous layer
 		// and update current layer
-		if pRecv := s.router.GetReceiver(s.currentSpatialLayer); pRecv != nil && s.currentSpatialLayer != s.targetSpatialLayer {
+		if pRecv := s.router.receivers[s.currentSpatialLayer]; pRecv != nil && s.currentSpatialLayer != s.targetSpatialLayer {
 			pRecv.DeleteSender(s.id)
 		}
 		s.currentSpatialLayer = s.targetSpatialLayer
@@ -211,7 +211,8 @@ func (s *SimulcastSender) SwitchSpatialLayer(targetLayer uint8) {
 	if s.currentSpatialLayer != s.targetSpatialLayer {
 		return
 	}
-	if ok := s.router.SwitchSpatialLayer(targetLayer, s); ok {
+	if recv := s.router.receivers[targetLayer]; recv != nil {
+		recv.AddSender(s)
 		s.targetSpatialLayer = targetLayer
 	}
 }
@@ -234,7 +235,7 @@ func (s *SimulcastSender) Mute(val bool) {
 	}
 	s.enabled.set(!val)
 	if !val {
-		// reset last ssrc to force a re-sync
+		// reset last mediaSSRC to force a re-sync
 		s.lSSRC = 0
 	}
 }
@@ -267,7 +268,7 @@ func (s *SimulcastSender) receiveRTCP() {
 		pkts, err := s.sender.ReadRTCP()
 		if err == io.ErrClosedPipe {
 			// Remove sender from receiver
-			if recv := s.router.GetReceiver(s.currentSpatialLayer); recv != nil {
+			if recv := s.router.receivers[s.currentSpatialLayer]; recv != nil {
 				recv.DeleteSender(s.id)
 			}
 			s.Close()
@@ -283,7 +284,7 @@ func (s *SimulcastSender) receiveRTCP() {
 			continue
 		}
 
-		recv := s.router.GetReceiver(s.currentSpatialLayer)
+		recv := s.router.receivers[s.currentSpatialLayer]
 		if recv == nil {
 			continue
 		}
@@ -318,9 +319,7 @@ func (s *SimulcastSender) receiveRTCP() {
 			}
 		}
 		if len(fwdPkts) > 0 {
-			if err := s.router.SendRTCP(fwdPkts); err != nil {
-				log.Errorf("Forwarding rtcp from sender err: %v", err)
-			}
+			recv.SendRTCP(fwdPkts)
 		}
 	}
 }

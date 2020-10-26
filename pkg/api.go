@@ -40,17 +40,17 @@ func handleAPICommand(t Transport, dc *webrtc.DataChannel) {
 				case videoHighQuality:
 					sender.Mute(false)
 					if sender.Type() != SimpleSenderType {
-						sender.SwitchSpatialLayer(3)
+						sender.SwitchSpatialLayer(2)
 					}
 				case videoMediumQuality:
 					sender.Mute(false)
 					if sender.Type() != SimpleSenderType {
-						sender.SwitchSpatialLayer(2)
+						sender.SwitchSpatialLayer(1)
 					}
 				case videoLowQuality:
 					sender.Mute(false)
 					if sender.Type() != SimpleSenderType {
-						sender.SwitchSpatialLayer(1)
+						sender.SwitchSpatialLayer(0)
 					}
 				case videoMuted:
 					sender.Mute(true)

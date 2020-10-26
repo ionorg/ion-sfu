@@ -231,7 +231,7 @@ func TestWebRTCTransport_CreateOffer(t *testing.T) {
 
 func TestWebRTCTransport_GetRouter(t *testing.T) {
 	type fields struct {
-		routers map[string]Router
+		router Router
 	}
 	type args struct {
 		trackID string
@@ -248,7 +248,7 @@ func TestWebRTCTransport_GetRouter(t *testing.T) {
 		{
 			name: "Must return router by ID",
 			fields: fields{
-				routers: map[string]Router{"test": router},
+				router: router,
 			},
 			args: args{
 				trackID: "test",
@@ -260,9 +260,9 @@ func TestWebRTCTransport_GetRouter(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			p := &WebRTCTransport{
-				routers: tt.fields.routers,
+				router: tt.fields.router,
 			}
-			if got := p.GetRouter(tt.args.trackID); !reflect.DeepEqual(got, tt.want) {
+			if got := p.GetRouter(); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("GetRouter() = %v, want %v", got, tt.want)
 			}
 		})
@@ -544,39 +544,6 @@ func TestWebRTCTransport_OnTrack(t *testing.T) {
 	}
 }
 
-func TestWebRTCTransport_Routers(t *testing.T) {
-	type fields struct {
-		routers map[string]Router
-	}
-
-	routers := map[string]Router{"test": &router{}}
-
-	tests := []struct {
-		name   string
-		fields fields
-		want   map[string]Router
-	}{
-		{
-			name: "Must return current map of routers",
-			fields: fields{
-				routers: routers,
-			},
-			want: routers,
-		},
-	}
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			p := &WebRTCTransport{
-				routers: tt.fields.routers,
-			}
-			if got := p.Routers(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Routers() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestWebRTCTransport_SetLocalDescription(t *testing.T) {
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
@@ -672,6 +639,10 @@ func TestWebRTCTransport_SetRemoteDescription(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &WebRTCTransport{
 				pc: tt.fields.pc,
+				router: &RouterMock{
+					AddTWCCExtFunc: func(_ string, _ int) {
+					},
+				},
 			}
 			if err := p.SetRemoteDescription(tt.args.desc); (err != nil) != tt.wantErr {
 				t.Errorf("SetRemoteDescription() error = %v, wantErr %v", err, tt.wantErr)
