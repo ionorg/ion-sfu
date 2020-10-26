@@ -24,8 +24,8 @@ const (
 type Router interface {
 	ID() string
 	Config() RouterConfig
-	AddReceiver(ctx context.Context, track *webrtc.Track, receiver *webrtc.RTPReceiver)
-	AddSender(p *WebRTCTransport) error
+	AddReceiver(ctx context.Context, track *webrtc.Track, receiver *webrtc.RTPReceiver) *receiverRouter
+	AddSender(p *WebRTCTransport, rr *receiverRouter) error
 	AddTWCCExt(id string, ext int)
 	SendRTCP(pkts []rtcp.Packet)
 	Stop()
@@ -79,7 +79,7 @@ func (r *router) Config() RouterConfig {
 	return r.config
 }
 
-func (r *router) AddReceiver(ctx context.Context, track *webrtc.Track, receiver *webrtc.RTPReceiver) {
+func (r *router) AddReceiver(ctx context.Context, track *webrtc.Track, receiver *webrtc.RTPReceiver) *receiverRouter {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -104,7 +104,7 @@ func (r *router) AddReceiver(ctx context.Context, track *webrtc.Track, receiver 
 
 	if rr, ok := r.receivers[trackID]; ok {
 		rr.receivers[recv.SpatialLayer()] = recv
-		return
+		return nil
 	}
 
 	rr := &receiverRouter{
@@ -120,66 +120,21 @@ func (r *router) AddReceiver(ctx context.Context, track *webrtc.Track, receiver 
 	}
 
 	r.receivers[trackID] = rr
+	return rr
 }
 
 // AddWebRTCSender to router
-func (r *router) AddSender(p *WebRTCTransport) error {
+func (r *router) AddSender(p *WebRTCTransport, rr *receiverRouter) error {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	if rr != nil {
+		return r.addSender(p, rr)
+	}
 
-	for _, rr := range r.receivers {
-		var (
-			recv   Receiver
-			sender Sender
-			ssrc   uint32
-		)
-
-		if rr.kind == SimpleReceiver {
-			recv = rr.receivers[0]
-			ssrc = recv.Track().SSRC()
-		} else {
-			for _, rcv := range rr.receivers {
-				if rcv != nil {
-					recv = rcv
-				}
-				if !r.config.Simulcast.BestQualityFirst && rcv != nil {
-					break
-				}
-			}
-			ssrc = rand.Uint32()
-		}
-
-		if recv == nil {
-			return errNoReceiverFound
-		}
-
-		inTrack := recv.Track()
-		to := p.me.GetCodecsByName(recv.Track().Codec().Name)
-		if len(to) == 0 {
-			return errPtNotSupported
-		}
-		pt := to[0].PayloadType
-		outTrack, err := p.pc.NewTrack(pt, ssrc, inTrack.ID(), inTrack.Label())
-		if err != nil {
+	for _, rr = range r.receivers {
+		if err := r.addSender(p, rr); err != nil {
 			return err
 		}
-		// Create webrtc sender for the peer we are sending track to
-		s, err := p.pc.AddTrack(outTrack)
-		if err != nil {
-			return err
-		}
-		if rr.kind == SimulcastReceiver {
-			sender = NewSimulcastSender(p.ctx, p.id, rr, s, recv.SpatialLayer(), r.config.Simulcast)
-		} else {
-			sender = NewSimpleSender(p.ctx, p.id, rr, s)
-		}
-		sender.OnCloseHandler(func() {
-			if err := p.pc.RemoveTrack(s); err != nil {
-				log.Errorf("Error closing sender: %s", err)
-			}
-		})
-		p.AddSender(rr.stream, sender)
-		recv.AddSender(sender)
 	}
 	return nil
 }
@@ -194,6 +149,62 @@ func (r *router) SendRTCP(pkts []rtcp.Packet) {
 
 func (r *router) Stop() {
 	close(r.rtcpCh)
+}
+
+func (r *router) addSender(p *WebRTCTransport, rr *receiverRouter) error {
+	var (
+		recv   Receiver
+		sender Sender
+		ssrc   uint32
+	)
+
+	if rr.kind == SimpleReceiver {
+		recv = rr.receivers[0]
+		ssrc = recv.Track().SSRC()
+	} else {
+		for _, rcv := range rr.receivers {
+			if rcv != nil {
+				recv = rcv
+			}
+			if !r.config.Simulcast.BestQualityFirst && rcv != nil {
+				break
+			}
+		}
+		ssrc = rand.Uint32()
+	}
+
+	if recv == nil {
+		return errNoReceiverFound
+	}
+
+	inTrack := recv.Track()
+	to := p.me.GetCodecsByName(recv.Track().Codec().Name)
+	if len(to) == 0 {
+		return errPtNotSupported
+	}
+	pt := to[0].PayloadType
+	outTrack, err := p.pc.NewTrack(pt, ssrc, inTrack.ID(), inTrack.Label())
+	if err != nil {
+		return err
+	}
+	// Create webrtc sender for the peer we are sending track to
+	s, err := p.pc.AddTrack(outTrack)
+	if err != nil {
+		return err
+	}
+	if rr.kind == SimulcastReceiver {
+		sender = NewSimulcastSender(p.ctx, p.id, rr, s, recv.SpatialLayer(), r.config.Simulcast)
+	} else {
+		sender = NewSimpleSender(p.ctx, p.id, rr, s)
+	}
+	sender.OnCloseHandler(func() {
+		if err := p.pc.RemoveTrack(s); err != nil {
+			log.Errorf("Error closing sender: %s", err)
+		}
+	})
+	p.AddSender(rr.stream, sender)
+	recv.AddSender(sender)
+	return nil
 }
 
 func (r *router) deleteReceiver(track string) {

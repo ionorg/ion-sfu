@@ -45,7 +45,7 @@ func (r *Session) RemoveTransport(tid string) {
 }
 
 // AddRouter adds a router to transports
-func (r *Session) AddRouter(router Router) {
+func (r *Session) AddRouter(router Router, rr *receiverRouter) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for tid, t := range r.transports {
@@ -57,7 +57,7 @@ func (r *Session) AddRouter(router Router) {
 		log.Infof("AddRouter mediaSSRC to %s", tid)
 
 		if t, ok := t.(*WebRTCTransport); ok {
-			if err := router.AddSender(t); err != nil {
+			if err := router.AddSender(t, rr); err != nil {
 				log.Errorf("Error subscribing transport to router: %s", err)
 				continue
 			}

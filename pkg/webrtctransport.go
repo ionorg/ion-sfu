@@ -66,7 +66,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 			if t.ID() == p.id {
 				continue
 			}
-			err := t.GetRouter().AddSender(p)
+			err := t.GetRouter().AddSender(p, nil)
 			if err != nil {
 				log.Errorf("Subscribing to router err: %v", err)
 				continue
@@ -78,7 +78,9 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 		log.Debugf("Peer %s got remote track id: %s mediaSSRC: %d rid :%s streamID: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.Label())
-		p.router.AddReceiver(ctx, track, receiver)
+		if rr := p.router.AddReceiver(ctx, track, receiver); rr != nil {
+			p.session.AddRouter(p.router, rr)
+		}
 		if p.onTrackHandler != nil {
 			p.onTrackHandler(track, receiver)
 		}
