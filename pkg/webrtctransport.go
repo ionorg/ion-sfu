@@ -55,6 +55,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 		me:      me,
 		session: session,
 		router:  newRouter(pc, id, cfg.router),
+		mids:    make(map[string]Sender),
 		senders: make(map[string][]Sender),
 	}
 	// Subscribe to existing transports
@@ -119,25 +120,36 @@ func (p *WebRTCTransport) CreateOffer() (webrtc.SessionDescription, error) {
 	if err != nil {
 		return webrtc.SessionDescription{}, err
 	}
-
-	if parsed, err := offer.Unmarshal(); err == nil {
+	parsed := sdp.SessionDescription{}
+	if err := parsed.Unmarshal([]byte(offer.SDP)); err == nil {
 		for _, md := range parsed.MediaDescriptions {
-			if mid, ok := md.Attribute(sdp.AttrKeyMID); ok {
-				if msid, ok := md.Attribute(sdp.AttrKeyMsid); ok {
-					split := strings.Split(msid, " ")
-					if len(split) != 2 {
-						log.Errorf("Invalid msid: %s", msid)
-						continue
+			if md.MediaName.Media != mediaNameAudio && md.MediaName.Media != mediaNameVideo {
+				continue
+			}
+			var msid, mid string
+
+			for _, att := range md.Attributes {
+				switch att.Key {
+				case sdp.AttrKeyMID:
+					mid = att.Value
+					if len(msid) > 0 {
+						break
 					}
-
-					msid := split[0]
-					tid := split[1]
-
-					// find sender for mid
-					for _, sender := range p.senders[msid] {
-						if sender.Track().ID() == tid {
-							p.mids[mid] = sender
-						}
+				case sdp.AttrKeyMsid:
+					msid = att.Value
+					if len(mid) > 0 {
+						break
+					}
+				}
+			}
+			if len(msid) > 0 && len(mid) > 0 {
+				split := strings.Split(msid, " ")
+				sid := split[0]
+				tid := split[1]
+				// find sender for mid
+				for _, sender := range p.senders[sid] {
+					if sender.Track().ID() == tid {
+						p.mids[mid] = sender
 					}
 				}
 			}
@@ -205,7 +217,7 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 			if att.Key == sdp.AttrKeyMID {
 				if p.mids[att.Value] != nil {
 					p.mids[att.Value].Start()
-					// remove mid mapping incase transceiver is reused later
+					// remove mid mapping in case transceiver is reused later
 					p.mids[att.Value] = nil
 				}
 			}
