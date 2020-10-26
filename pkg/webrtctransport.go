@@ -35,6 +35,8 @@ type WebRTCTransport struct {
 	senders        map[string][]Sender
 	router         Router
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
+
+	subOnce sync.Once
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport
@@ -60,19 +62,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 		mids:    make(map[string]Sender),
 		senders: make(map[string][]Sender),
 	}
-	// Subscribe to existing transports
-	defer func() {
-		for _, t := range session.Transports() {
-			if t.ID() == p.id {
-				continue
-			}
-			err := t.GetRouter().AddSender(p, nil)
-			if err != nil {
-				log.Errorf("Subscribing to router err: %v", err)
-				continue
-			}
-		}
-	}()
+
 	// Add transport to the session
 	session.AddTransport(p)
 
@@ -101,6 +91,20 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 			return
 		default:
 			switch connectionState {
+			case webrtc.ICEConnectionStateConnected:
+				p.subOnce.Do(func() {
+					// Subscribe to existing transports
+					for _, t := range session.Transports() {
+						if t.ID() == p.id {
+							continue
+						}
+						err := t.GetRouter().AddSender(p, nil)
+						if err != nil {
+							log.Errorf("Subscribing to router err: %v", err)
+							continue
+						}
+					}
+				})
 			case webrtc.ICEConnectionStateDisconnected:
 				log.Debugf("webrtc ice disconnected for peer: %s", p.id)
 			case webrtc.ICEConnectionStateFailed:
