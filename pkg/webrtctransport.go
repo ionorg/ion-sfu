@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bep/debounce"
 	"github.com/lucsky/cuid"
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
@@ -300,7 +301,10 @@ func (p *WebRTCTransport) OnICECandidate(f func(c *webrtc.ICECandidate)) {
 
 // OnNegotiationNeeded handler
 func (p *WebRTCTransport) OnNegotiationNeeded(f func()) {
-	p.pc.OnNegotiationNeeded(f)
+	debounced := debounce.New(100 * time.Millisecond)
+	p.pc.OnNegotiationNeeded(func() {
+		debounced(f)
+	})
 }
 
 // OnTrack handler
