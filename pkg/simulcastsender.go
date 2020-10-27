@@ -306,7 +306,7 @@ func (s *SimulcastSender) receiveRTCP() {
 				log.Tracef("sender got nack: %+v", pkt)
 				for _, pair := range pkt.Nacks {
 					if err := recv.WriteBufferedPacket(
-						pair.PacketID,
+						pair.PacketList(),
 						s.track,
 						s.snOffset,
 						s.tsOffset,

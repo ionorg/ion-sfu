@@ -28,7 +28,7 @@ type Receiver interface {
 	OnTransportWideCC(fn func(sn uint16, timeNS int64, marker bool))
 	SendRTCP(p []rtcp.Packet)
 	SetRTCPCh(ch chan []rtcp.Packet)
-	WriteBufferedPacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error
+	WriteBufferedPacket(sn []uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error
 	Close()
 }
 
@@ -133,11 +133,27 @@ func (w *WebRTCReceiver) Track() *webrtc.Track {
 }
 
 // WriteBufferedPacket writes buffered packet to track, return error if packet not found
-func (w *WebRTCReceiver) WriteBufferedPacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error {
+func (w *WebRTCReceiver) WriteBufferedPacket(sn []uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error {
 	if w.buffer == nil || w.ctx.Err() != nil {
 		return nil
 	}
-	return w.buffer.WritePacket(sn, track, snOffset, tsOffset, ssrc)
+	for _, seq := range sn {
+		h, p, err := w.buffer.getPacket(seq + snOffset)
+		if err != nil {
+			continue
+		}
+		h.PayloadType = track.PayloadType()
+		h.SequenceNumber -= snOffset
+		h.Timestamp -= tsOffset
+		h.SSRC = ssrc
+		if err := track.WriteRTP(&rtp.Packet{
+			Header:  h,
+			Payload: p,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (w *WebRTCReceiver) SetRTCPCh(ch chan []rtcp.Packet) {
