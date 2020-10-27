@@ -202,6 +202,15 @@ func (r *router) addSender(p *WebRTCTransport, rr *receiverRouter) error {
 			log.Errorf("Error closing sender: %s", err)
 		}
 	})
+	for _, t := range p.pc.GetTransceivers() {
+		if t.Sender() != nil && t.Sender().Track().SSRC() == ssrc {
+			p.pendingSenders.PushBack(&pendingSender{
+				transceiver: t,
+				sender:      sender,
+			})
+			break
+		}
+	}
 	p.AddSender(rr.stream, sender)
 	recv.AddSender(sender)
 	return nil
