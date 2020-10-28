@@ -24,9 +24,6 @@ type Peer struct {
 
 	OnIceCandidate func(*webrtc.ICECandidateInit)
 	OnOffer        func(*webrtc.SessionDescription)
-
-	makingOffer                  atomicBool
-	isSettingRemoteAnswerPending atomicBool
 }
 
 // NewPeer creates a new Peer for signaling with the given SFU
@@ -61,13 +58,8 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		return nil, err
 	}
 
-	p.makingOffer.set(true)
-
 	// log.Infof("%d", len(pc.session.Transports()))
 	pc.OnNegotiationNeeded(func() {
-		p.makingOffer.set(true)
-		defer p.makingOffer.set(false)
-
 		log.Debugf("on negotiation needed called")
 		offer, err := pc.CreateOffer()
 		if err != nil {
@@ -110,13 +102,6 @@ func (p *Peer) Answer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription
 	}
 	log.Infof("peer %s offer", p.pc.ID())
 
-	readyForOffer := !p.makingOffer.get() &&
-		(p.pc.SignalingState() == webrtc.SignalingStateStable || p.isSettingRemoteAnswerPending.get())
-
-	if !readyForOffer {
-		return nil, ErrOfferIgnored
-	}
-
 	if err := p.pc.SetRemoteDescription(sdp); err != nil {
 		return nil, fmt.Errorf("error setting remote description: %v", err)
 	}
@@ -139,9 +124,6 @@ func (p *Peer) SetRemoteDescription(sdp webrtc.SessionDescription) error {
 	if p.pc == nil {
 		return ErrNoTransportEstablished
 	}
-
-	p.isSettingRemoteAnswerPending.set(true)
-	defer p.isSettingRemoteAnswerPending.set(false)
 
 	log.Infof("peer %s answer", p.pc.ID())
 	if err := p.pc.SetRemoteDescription(sdp); err != nil {

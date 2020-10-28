@@ -38,7 +38,10 @@ type WebRTCTransport struct {
 	pendingSenders deque.Deque
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
 
-	subOnce sync.Once
+	subOnce                      sync.Once
+	makingOffer                  atomicBool
+	initializing                 atomicBool
+	isSettingRemoteAnswerPending atomicBool
 }
 
 type pendingSender struct {
@@ -59,14 +62,15 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 	ctx, cancel := context.WithCancel(ctx)
 	id := cuid.New()
 	p := &WebRTCTransport{
-		id:      id,
-		ctx:     ctx,
-		cancel:  cancel,
-		pc:      pc,
-		me:      me,
-		session: session,
-		router:  newRouter(pc, id, cfg.router),
-		senders: make(map[string][]Sender),
+		id:           id,
+		ctx:          ctx,
+		cancel:       cancel,
+		pc:           pc,
+		initializing: atomicBool{1},
+		me:           me,
+		session:      session,
+		router:       newRouter(pc, id, cfg.router),
+		senders:      make(map[string][]Sender),
 	}
 	p.pendingSenders.SetMinCapacity(2)
 
@@ -111,7 +115,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 							continue
 						}
 					}
-					pc.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo)
+					p.initializing.set(false)
 				})
 			case webrtc.ICEConnectionStateDisconnected:
 				log.Debugf("webrtc ice disconnected for peer: %s", p.id)
@@ -155,12 +159,6 @@ func (p *WebRTCTransport) CreateAnswer() (webrtc.SessionDescription, error) {
 func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) error {
 	pd, err := desc.Unmarshal()
 	if err != nil {
-		log.Errorf("SetRemoteDescription error: %v", err)
-		return err
-	}
-	err = p.pc.SetRemoteDescription(desc)
-	if err != nil {
-		log.Errorf("SetRemoteDescription error: %v", err)
 		return err
 	}
 
@@ -176,6 +174,13 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 
 	switch desc.Type {
 	case webrtc.SDPTypeAnswer:
+		p.isSettingRemoteAnswerPending.set(true)
+		err = p.pc.SetRemoteDescription(desc)
+		if err != nil {
+			return err
+		}
+		p.isSettingRemoteAnswerPending.set(false)
+
 		if p.pendingSenders.Len() != 0 {
 			for _, md := range pd.MediaDescriptions {
 				if mid, ok := md.Attribute(sdp.AttrKeyMID); ok {
@@ -191,6 +196,18 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 			}
 		}
 	case webrtc.SDPTypeOffer:
+		readyForOffer := !p.makingOffer.get() && !p.initializing.get() &&
+			(p.pc.SignalingState() == webrtc.SignalingStateStable || p.isSettingRemoteAnswerPending.get())
+
+		if !readyForOffer {
+			return ErrOfferIgnored
+		}
+
+		err = p.pc.SetRemoteDescription(desc)
+		if err != nil {
+			return err
+		}
+
 		for _, md := range pd.MediaDescriptions {
 			if md.MediaName.Media != mediaNameAudio && md.MediaName.Media != mediaNameVideo {
 				continue
@@ -244,7 +261,11 @@ func (p *WebRTCTransport) OnICECandidate(f func(c *webrtc.ICECandidate)) {
 func (p *WebRTCTransport) OnNegotiationNeeded(f func()) {
 	debounced := debounce.New(100 * time.Millisecond)
 	p.pc.OnNegotiationNeeded(func() {
-		debounced(f)
+		debounced(func() {
+			p.makingOffer.set(true)
+			defer p.makingOffer.set(false)
+			f()
+		})
 	})
 }
 
