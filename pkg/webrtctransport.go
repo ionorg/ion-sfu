@@ -40,7 +40,6 @@ type WebRTCTransport struct {
 
 	subOnce                      sync.Once
 	makingOffer                  atomicBool
-	initializing                 atomicBool
 	isSettingRemoteAnswerPending atomicBool
 }
 
@@ -62,15 +61,14 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 	ctx, cancel := context.WithCancel(ctx)
 	id := cuid.New()
 	p := &WebRTCTransport{
-		id:           id,
-		ctx:          ctx,
-		cancel:       cancel,
-		pc:           pc,
-		initializing: atomicBool{1},
-		me:           me,
-		session:      session,
-		router:       newRouter(pc, id, cfg.router),
-		senders:      make(map[string][]Sender),
+		id:      id,
+		ctx:     ctx,
+		cancel:  cancel,
+		pc:      pc,
+		me:      me,
+		session: session,
+		router:  newRouter(pc, id, cfg.router),
+		senders: make(map[string][]Sender),
 	}
 	p.pendingSenders.SetMinCapacity(2)
 
@@ -115,7 +113,6 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 							continue
 						}
 					}
-					p.initializing.set(false)
 				})
 			case webrtc.ICEConnectionStateDisconnected:
 				log.Debugf("webrtc ice disconnected for peer: %s", p.id)
@@ -196,7 +193,7 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 			}
 		}
 	case webrtc.SDPTypeOffer:
-		readyForOffer := !p.makingOffer.get() && !p.initializing.get() &&
+		readyForOffer := !p.makingOffer.get() &&
 			(p.pc.SignalingState() == webrtc.SignalingStateStable || p.isSettingRemoteAnswerPending.get())
 
 		if !readyForOffer {
