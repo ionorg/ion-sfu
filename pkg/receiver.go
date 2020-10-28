@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 	"sync"
+	"time"
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
@@ -41,6 +42,7 @@ type WebRTCReceiver struct {
 	track          *webrtc.Track
 	buffer         *Buffer
 	bandwidth      uint64
+	lastPli        int64
 	rtpCh          chan *rtp.Packet
 	rtcpCh         chan []rtcp.Packet
 	senders        map[string]Sender
@@ -120,6 +122,12 @@ func (w *WebRTCReceiver) DeleteSender(pid string) {
 }
 
 func (w *WebRTCReceiver) SendRTCP(p []rtcp.Packet) {
+	if _, ok := p[0].(*rtcp.PictureLossIndication); ok {
+		if time.Now().UnixNano()-w.lastPli < 500e6 {
+			return
+		}
+		w.lastPli = time.Now().UnixNano()
+	}
 	w.rtcpCh <- p
 }
 

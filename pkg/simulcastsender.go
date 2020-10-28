@@ -38,7 +38,6 @@ type SimulcastSender struct {
 	simulcastSSRC       uint32
 	tsOffset            uint32
 	snOffset            uint16
-	lastPli             time.Time
 	lTSCalc             time.Time
 	lSSRC               uint32
 	lTS                 uint32
@@ -102,14 +101,6 @@ func (s *SimulcastSender) WriteRTP(pkt *rtp.Packet) {
 		if recv == nil || recv.Track().SSRC() != pkt.SSRC {
 			return
 		}
-		// Forward pli to request a keyframe at max 1 pli per second
-		if time.Now().Sub(s.lastPli) > time.Second {
-			recv.SendRTCP([]rtcp.Packet{
-				&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC},
-			})
-			s.lastPli = time.Now()
-
-		}
 		relay := false
 		// Wait for a keyframe to sync new source
 		switch s.payload {
@@ -139,6 +130,9 @@ func (s *SimulcastSender) WriteRTP(pkt *rtp.Packet) {
 		}
 		// Packet is not a keyframe, discard it
 		if !relay {
+			recv.SendRTCP([]rtcp.Packet{
+				&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC},
+			})
 			return
 		}
 		// Switch is done remove sender from previous layer
@@ -294,18 +288,16 @@ func (s *SimulcastSender) receiveRTCP() {
 		for _, pkt := range pkts {
 			switch pkt := pkt.(type) {
 			case *rtcp.PictureLossIndication:
-				if s.enabled.get() && time.Now().Sub(s.lastPli) > time.Second {
+				if s.enabled.get() {
 					pkt.MediaSSRC = s.lSSRC
 					pkt.SenderSSRC = s.lSSRC
 					fwdPkts = append(fwdPkts, pkt)
-					s.lastPli = time.Now()
 				}
 			case *rtcp.FullIntraRequest:
-				if s.enabled.get() && time.Now().Sub(s.lastPli) > time.Second {
+				if s.enabled.get() {
 					pkt.MediaSSRC = s.lSSRC
 					pkt.SenderSSRC = s.lSSRC
 					fwdPkts = append(fwdPkts, pkt)
-					s.lastPli = time.Now()
 				}
 			case *rtcp.TransportLayerNack:
 				log.Tracef("sender got nack: %+v", pkt)
