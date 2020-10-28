@@ -1,12 +1,15 @@
 package sfu
 
 import (
+	"sync"
+
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 )
 
 type queue struct {
+	sync.Mutex
 	pkts     []*rtp.Packet
 	ssrc     uint32
 	head     int
@@ -19,6 +22,9 @@ type queue struct {
 }
 
 func (q *queue) AddPacket(pkt *rtp.Packet, latest bool) {
+	q.Lock()
+	defer q.Unlock()
+
 	if !latest {
 		q.set(int(q.headSN-pkt.SequenceNumber), pkt)
 		return
@@ -44,6 +50,8 @@ func (q *queue) AddPacket(pkt *rtp.Packet, latest bool) {
 }
 
 func (q *queue) GetPacket(sn uint16) *rtp.Packet {
+	q.Lock()
+	defer q.Unlock()
 	return q.get(int(q.headSN - sn))
 }
 

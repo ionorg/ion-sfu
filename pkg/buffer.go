@@ -2,6 +2,7 @@ package sfu
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	log "github.com/pion/ion-log"
@@ -99,8 +100,6 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 
 // push adds a RTP Packet, out of order, new packet may be arrived later
 func (b *Buffer) push(p *rtp.Packet) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
 	b.lastPacketTime = time.Now().UnixNano()
 	b.totalByte += uint64(p.MarshalSize())
 	if b.packetCount == 0 {
@@ -186,8 +185,11 @@ func (b *Buffer) buildReceptionReport() rtcp.ReceptionReport {
 		fracLost = uint8((lostInterval << 8) / expectedInterval)
 	}
 	var dlsr uint32
-	if b.lastSRRecv != 0 {
-		delayMS := uint32((time.Now().UnixNano() - b.lastSRRecv) / 1e6)
+	lastSRRecv := atomic.LoadInt64(&b.lastSRRecv)
+	lastSRNTPTime := atomic.LoadUint64(&b.lastSRNTPTime)
+
+	if lastSRRecv != 0 {
+		delayMS := uint32((time.Now().UnixNano() - lastSRRecv) / 1e6)
 		dlsr = (delayMS / 1e3) << 16
 		dlsr |= (delayMS % 1e3) * 65536 / 1000
 	}
@@ -198,18 +200,16 @@ func (b *Buffer) buildReceptionReport() rtcp.ReceptionReport {
 		TotalLost:          lost,
 		LastSequenceNumber: extMaxSeq,
 		Jitter:             uint32(b.jitter),
-		LastSenderReport:   uint32(b.lastSRNTPTime >> 16),
+		LastSenderReport:   uint32(lastSRNTPTime >> 16),
 		Delay:              dlsr,
 	}
 	return rr
 }
 
 func (b *Buffer) setSenderReportData(rtpTime uint32, ntpTime uint64) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.lastSRRTPTime = rtpTime
-	b.lastSRNTPTime = ntpTime
-	b.lastSRRecv = time.Now().UnixNano()
+	atomic.StoreUint32(&b.lastSRRTPTime, rtpTime)
+	atomic.StoreUint64(&b.lastSRNTPTime, ntpTime)
+	atomic.StoreInt64(&b.lastSRRecv, time.Now().UnixNano())
 }
 
 func (b *Buffer) getRTCP() []rtcp.Packet {
@@ -226,25 +226,11 @@ func (b *Buffer) getRTCP() []rtcp.Packet {
 	return pkts
 }
 
-// WritePacket write buffer packet to requested track. and modify headers
-func (b *Buffer) WritePacket(sn uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
+func (b *Buffer) getPacket(sn uint16) (rtp.Header, []byte, error) {
 	if bufferPkt := b.pktQueue.GetPacket(sn); bufferPkt != nil {
-		bSsrc := bufferPkt.SSRC
-		bPT := bufferPkt.PayloadType
-		bufferPkt.PayloadType = track.PayloadType()
-		bufferPkt.SequenceNumber -= snOffset
-		bufferPkt.Timestamp -= tsOffset
-		bufferPkt.SSRC = ssrc
-		err := track.WriteRTP(bufferPkt)
-		bufferPkt.PayloadType = bPT
-		bufferPkt.Timestamp += tsOffset
-		bufferPkt.SequenceNumber += snOffset
-		bufferPkt.SSRC = bSsrc
-		return err
+		return bufferPkt.Header, bufferPkt.Payload, nil
 	}
-	return errPacketNotFound
+	return rtp.Header{}, nil, errPacketNotFound
 }
 
 func (b *Buffer) onLostHandler(fn func(nack *rtcp.TransportLayerNack)) {
