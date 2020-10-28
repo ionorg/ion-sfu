@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	log "github.com/pion/ion-log"
@@ -122,11 +123,12 @@ func (w *WebRTCReceiver) DeleteSender(pid string) {
 }
 
 func (w *WebRTCReceiver) SendRTCP(p []rtcp.Packet) {
+	lastPli := atomic.LoadInt64(&w.lastPli)
 	if _, ok := p[0].(*rtcp.PictureLossIndication); ok {
-		if time.Now().UnixNano()-w.lastPli < 500e6 {
+		if time.Now().UnixNano()-lastPli < 500e6 {
 			return
 		}
-		w.lastPli = time.Now().UnixNano()
+		atomic.StoreInt64(&w.lastPli, time.Now().UnixNano())
 	}
 	w.rtcpCh <- p
 }
