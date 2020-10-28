@@ -189,13 +189,6 @@ forLoop:
 				MediaSSRC:  1234,
 			},
 		},
-		{
-			name: "Sender must forward FIR messages",
-			want: &rtcp.FullIntraRequest{
-				SenderSSRC: 1234,
-				MediaSSRC:  1234,
-			},
-		},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -212,12 +205,14 @@ forLoop:
 				sender: s,
 				track:  senderTrack,
 			}
+			wss.enabled.set(true)
+			wss.lastPli = time.Now().Add(-5 * time.Second)
 			go wss.receiveRTCP()
 			tmr := time.NewTimer(5000 * time.Millisecond)
 		testLoop:
 			for {
 				select {
-				case <-time.After(20 * time.Millisecond):
+				case <-time.After(10 * time.Millisecond):
 					err := remote.WriteRTCP([]rtcp.Packet{tt.want, tt.want, tt.want, tt.want})
 					assert.NoError(t, err)
 				case <-tmr.C:
