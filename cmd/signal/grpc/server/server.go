@@ -140,6 +140,9 @@ func (s *GRPCSignal) Signal(stream pb.SFU_SignalServer) error {
 				answer, err := peer.Answer(offer)
 				if err != nil {
 					switch err {
+					case sfu.ErrOfferIgnored:
+						log.Infof("offer ignored")
+						continue
 					case sfu.ErrNoTransportEstablished:
 						log.Errorf("peer hasn't joined")
 						return status.Errorf(codes.FailedPrecondition, err.Error())

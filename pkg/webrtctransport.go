@@ -111,6 +111,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 							continue
 						}
 					}
+					pc.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo)
 				})
 			case webrtc.ICEConnectionStateDisconnected:
 				log.Debugf("webrtc ice disconnected for peer: %s", p.id)

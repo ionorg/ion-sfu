@@ -61,6 +61,9 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		return nil, err
 	}
 
+	p.makingOffer.set(true)
+
+	// log.Infof("%d", len(pc.session.Transports()))
 	pc.OnNegotiationNeeded(func() {
 		p.makingOffer.set(true)
 		defer p.makingOffer.set(false)
