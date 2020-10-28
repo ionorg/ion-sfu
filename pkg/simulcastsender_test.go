@@ -259,13 +259,6 @@ forLoop:
 				MediaSSRC:  simulcastSSRC,
 			},
 		},
-		{
-			name: "Sender must forward FIR messages, with correct SSRC",
-			want: &rtcp.FullIntraRequest{
-				SenderSSRC: simulcastSSRC,
-				MediaSSRC:  simulcastSSRC,
-			},
-		},
 	}
 	for _, tt := range tests {
 		tt := tt
