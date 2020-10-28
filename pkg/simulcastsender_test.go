@@ -134,13 +134,6 @@ forLoop:
 		fields fields
 	}{
 		{
-			name: "On spatial change sender must forward a RTCP PLI request to receiver",
-			fields: fields{
-				checkPli: true,
-				packet:   fakePkt,
-			},
-		},
-		{
 			name: "Sender packet SSRC must be same as simulcast SSRC, and receiver packet must be restored",
 			fields: fields{
 				checkPacket: true,
@@ -151,27 +144,6 @@ forLoop:
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.fields.checkPli {
-				s := &SimulcastSender{
-					ctx:           context.Background(),
-					enabled:       atomicBool{1},
-					router:        r,
-					track:         senderTrack,
-					simulcastSSRC: simulcastSSRC,
-				}
-				tmr := time.NewTimer(100 * time.Millisecond)
-				s.WriteRTP(tt.fields.packet)
-			testLoop:
-				for {
-					select {
-					case <-tmr.C:
-						t.Fatal("PLI packet not received")
-					case <-gotPli:
-						tmr.Stop()
-						break testLoop
-					}
-				}
-			}
 			if tt.fields.checkPacket {
 				s := &SimulcastSender{
 					ctx:           context.Background(),

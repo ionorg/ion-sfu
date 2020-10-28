@@ -206,7 +206,6 @@ forLoop:
 				track:  senderTrack,
 			}
 			wss.enabled.set(true)
-			wss.lastPli = time.Now().Add(-5 * time.Second)
 			go wss.receiveRTCP()
 			tmr := time.NewTimer(5000 * time.Millisecond)
 		testLoop:

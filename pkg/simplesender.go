@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"io"
 	"sync"
-	"time"
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
@@ -28,7 +27,6 @@ type SimpleSender struct {
 	target         uint64
 	onCloseHandler func()
 	// Muting helpers
-	lastPli  time.Time
 	reSync   atomicBool
 	snOffset uint16
 	tsOffset uint32
@@ -78,15 +76,9 @@ func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
 	if s.reSync.get() {
 		if s.track.Kind() == webrtc.RTPCodecTypeVideo {
 			// Forward pli to request a keyframe at max 1 pli per second
-			if time.Now().Sub(s.lastPli) > time.Second {
-				recv := s.router.receivers[0]
-				if recv == nil {
-					return
-				}
-				recv.SendRTCP([]rtcp.Packet{
-					&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC},
-				})
-				s.lastPli = time.Now()
+			recv := s.router.receivers[0]
+			if recv == nil {
+				return
 			}
 			relay := false
 			// Wait for a keyframe to sync new source
@@ -107,6 +99,9 @@ func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
 				}
 			}
 			if !relay {
+				recv.SendRTCP([]rtcp.Packet{
+					&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC},
+				})
 				return
 			}
 		}
@@ -217,9 +212,8 @@ func (s *SimpleSender) receiveRTCP() {
 		for _, pkt := range pkts {
 			switch pkt := pkt.(type) {
 			case *rtcp.PictureLossIndication, *rtcp.FullIntraRequest:
-				if !s.reSync.get() && s.enabled.get() && time.Now().Sub(s.lastPli) > time.Second {
+				if !s.reSync.get() && s.enabled.get() {
 					fwdPkts = append(fwdPkts, pkt)
-					s.lastPli = time.Now()
 				}
 			case *rtcp.TransportLayerNack:
 				log.Tracef("sender got nack: %+v", pkt)
