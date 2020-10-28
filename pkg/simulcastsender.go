@@ -294,14 +294,19 @@ func (s *SimulcastSender) receiveRTCP() {
 		for _, pkt := range pkts {
 			switch pkt := pkt.(type) {
 			case *rtcp.PictureLossIndication:
-				pkt.MediaSSRC = s.lSSRC
-				pkt.SenderSSRC = s.lSSRC
-				fwdPkts = append(fwdPkts, pkt)
-				s.lastPli = time.Now()
+				if s.enabled.get() && time.Now().Sub(s.lastPli) > time.Second {
+					pkt.MediaSSRC = s.lSSRC
+					pkt.SenderSSRC = s.lSSRC
+					fwdPkts = append(fwdPkts, pkt)
+					s.lastPli = time.Now()
+				}
 			case *rtcp.FullIntraRequest:
-				pkt.MediaSSRC = s.lSSRC
-				pkt.SenderSSRC = s.lSSRC
-				fwdPkts = append(fwdPkts, pkt)
+				if s.enabled.get() && time.Now().Sub(s.lastPli) > time.Second {
+					pkt.MediaSSRC = s.lSSRC
+					pkt.SenderSSRC = s.lSSRC
+					fwdPkts = append(fwdPkts, pkt)
+					s.lastPli = time.Now()
+				}
 			case *rtcp.TransportLayerNack:
 				log.Tracef("sender got nack: %+v", pkt)
 				for _, pair := range pkt.Nacks {

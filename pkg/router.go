@@ -188,29 +188,26 @@ func (r *router) addSender(p *WebRTCTransport, rr *receiverRouter) error {
 		return err
 	}
 	// Create webrtc sender for the peer we are sending track to
-	s, err := p.pc.AddTrack(outTrack)
+	t, err := p.pc.AddTransceiverFromTrack(outTrack, webrtc.RtpTransceiverInit{
+		Direction: webrtc.RTPTransceiverDirectionSendonly,
+	})
 	if err != nil {
 		return err
 	}
 	if rr.kind == SimulcastReceiver {
-		sender = NewSimulcastSender(p.ctx, p.id, rr, s, recv.SpatialLayer(), r.config.Simulcast)
+		sender = NewSimulcastSender(p.ctx, p.id, rr, t.Sender(), recv.SpatialLayer(), r.config.Simulcast)
 	} else {
-		sender = NewSimpleSender(p.ctx, p.id, rr, s)
+		sender = NewSimpleSender(p.ctx, p.id, rr, t.Sender())
 	}
 	sender.OnCloseHandler(func() {
-		if err := p.pc.RemoveTrack(s); err != nil {
+		if err := p.pc.RemoveTrack(t.Sender()); err != nil {
 			log.Errorf("Error closing sender: %s", err)
 		}
 	})
-	for _, t := range p.pc.GetTransceivers() {
-		if t.Sender() != nil && t.Sender().Track().SSRC() == ssrc {
-			p.pendingSenders.PushBack(&pendingSender{
-				transceiver: t,
-				sender:      sender,
-			})
-			break
-		}
-	}
+	p.pendingSenders.PushBack(&pendingSender{
+		transceiver: t,
+		sender:      sender,
+	})
 	p.AddSender(rr.stream, sender)
 	recv.AddSender(sender)
 	return nil

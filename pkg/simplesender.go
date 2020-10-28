@@ -64,6 +64,7 @@ func (s *SimpleSender) ID() string {
 func (s *SimpleSender) Start() {
 	s.start.Do(func() {
 		log.Debugf("starting sender %s with ssrc %d", s.id, s.track.SSRC())
+		s.reSync.set(true)
 		s.enabled.set(true)
 	})
 }
@@ -216,8 +217,10 @@ func (s *SimpleSender) receiveRTCP() {
 		for _, pkt := range pkts {
 			switch pkt := pkt.(type) {
 			case *rtcp.PictureLossIndication, *rtcp.FullIntraRequest:
-				fwdPkts = append(fwdPkts, pkt)
-				s.lastPli = time.Now()
+				if !s.reSync.get() && s.enabled.get() && time.Now().Sub(s.lastPli) > time.Second {
+					fwdPkts = append(fwdPkts, pkt)
+					s.lastPli = time.Now()
+				}
 			case *rtcp.TransportLayerNack:
 				log.Tracef("sender got nack: %+v", pkt)
 				for _, pair := range pkt.Nacks {
