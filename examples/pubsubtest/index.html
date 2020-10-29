@@ -134,7 +134,7 @@
       integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV"
       crossorigin="anonymous"
     ></script>
-    <script src="https://unpkg.com/ion-sdk-js@1.0.17/dist/ion-sdk.min.js"></script>
+    <script src="https://unpkg.com/ion-sdk-js@1.0.20/dist/ion-sdk.min.js"></script>
     <script>
       const localVideo = document.getElementById("local-video");
       const remotesDiv = document.getElementById("remotes");
@@ -160,16 +160,16 @@
       const start = () => {
         IonSDK.LocalStream.getUserMedia({
           resolution: "hd",
-          audio: true,
+          audio: false,
         })
-          .then((stream) => {
-            localStream = stream;
-            localVideo.srcObject = stream;
+          .then((media) => {
+            localStream = media;
+            localVideo.srcObject = media.stream;
             localVideo.autoplay = true;
             localVideo.controls = true;
             localVideo.muted = true;
             joinBtns.style.display = "none";
-            clientLocal.publish(stream);
+            clientLocal.publish(media);
           })
           .catch(console.error);
       };
