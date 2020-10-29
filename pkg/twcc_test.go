@@ -1,7 +1,9 @@
 package sfu
 
 import (
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/pion/rtcp"
 	"github.com/stretchr/testify/assert"
@@ -323,4 +325,22 @@ func TestTccPacket(t1 *testing.T) {
 
 	assert.Equal(t1, hdr, ss.Header)
 
+}
+
+func BenchmarkBuildPacket(b *testing.B) {
+	rand.Seed(time.Now().UnixNano())
+	b.ReportAllocs()
+	n := 1 + rand.Intn(4-1+1)
+	var twcc TransportWideCC
+	tm := time.Now()
+	for i := 1; i < 100; i++ {
+		tm := tm.Add(time.Duration(60*n) * time.Millisecond)
+		twcc.tccExtInfo = append(twcc.tccExtInfo, rtpExtInfo{
+			ExtTSN:    uint32(i),
+			Timestamp: tm.UnixNano(),
+		})
+	}
+	for i := 0; i < b.N; i++ {
+		_ = twcc.buildTransportCCPacket()
+	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/rand"
 	"net/url"
+	"runtime"
 	"sync"
 	"time"
 
@@ -29,6 +30,9 @@ type WebRTCConfig struct {
 
 // Config for base SFU
 type Config struct {
+	SFU struct {
+		Ballast int64 `mapstructure:"ballast"`
+	} `mapstructure:"sfu"`
 	WebRTC WebRTCConfig `mapstructure:"webrtc"`
 	Log    log.Config   `mapstructure:"log"`
 	Router RouterConfig `mapstructure:"router"`
@@ -48,7 +52,8 @@ type SFU struct {
 func NewSFU(c Config) *SFU {
 	// Init random seed
 	rand.Seed(time.Now().UnixNano())
-
+	// Init ballast
+	ballast := make([]byte, c.SFU.Ballast*1024*1024)
 	ctx, cancel := context.WithCancel(context.Background())
 	// Configure required extensions
 	sdes, _ := url.Parse(sdp.SDESRTPStreamIDURI)
@@ -114,6 +119,7 @@ func NewSFU(c Config) *SFU {
 		sessions: make(map[string]*Session),
 	}
 
+	runtime.KeepAlive(ballast)
 	return s
 }
 
