@@ -102,10 +102,6 @@ func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportCon
 					}
 				}
 			})
-		case webrtc.ICEConnectionStateDisconnected:
-			log.Debugf("webrtc ice disconnected for peer: %s", p.id)
-		case webrtc.ICEConnectionStateFailed:
-			fallthrough
 		case webrtc.ICEConnectionStateClosed:
 			log.Debugf("webrtc ice closed for peer: %s", p.id)
 			if err := p.Close(); err != nil {
