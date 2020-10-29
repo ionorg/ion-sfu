@@ -14,11 +14,6 @@ import (
 	log "github.com/pion/ion-log"
 )
 
-//SFUConfig defines parameters for SFU server
-type SFUConfig struct {
-	Ballast int64 `mapstructure:"ballast"`
-}
-
 // ICEServerConfig defines parameters for ice servers
 type ICEServerConfig struct {
 	URLs       []string `mapstructure:"urls"`
@@ -35,7 +30,9 @@ type WebRTCConfig struct {
 
 // Config for base SFU
 type Config struct {
-	SFU    SFUConfig    `mapstructure:"sfu"`
+	SFU struct {
+		Ballast int64 `mapstructure:"ballast"`
+	} `mapstructure:"sfu"`
 	WebRTC WebRTCConfig `mapstructure:"webrtc"`
 	Log    log.Config   `mapstructure:"log"`
 	Router RouterConfig `mapstructure:"router"`
