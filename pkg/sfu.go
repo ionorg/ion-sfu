@@ -21,11 +21,17 @@ type ICEServerConfig struct {
 	Credential string   `mapstructure:"credential"`
 }
 
+type Candidates struct {
+	IceLite    bool     `mapstructure:"icelite"`
+	NAT1To1IPs []string `mapstructure:"nat1to1"`
+}
+
 // WebRTCConfig defines parameters for ice
 type WebRTCConfig struct {
 	ICEPortRange []uint16          `mapstructure:"portrange"`
 	ICEServers   []ICEServerConfig `mapstructure:"iceserver"`
-	NAT1To1IPs   []string          `mapstructure:"nat1to1"`
+	Candidates   Candidates        `mapstructure:"candidates"`
+	SDPSemantics string            `mapstructure:"sdpsemantics"`
 }
 
 // Config for base SFU
@@ -55,13 +61,14 @@ func NewSFU(c Config) *SFU {
 	// Init ballast
 	ballast := make([]byte, c.SFU.Ballast*1024*1024)
 	ctx, cancel := context.WithCancel(context.Background())
+	se := webrtc.SettingEngine{}
+
 	// Configure required extensions
 	sdes, _ := url.Parse(sdp.SDESRTPStreamIDURI)
 	sdedMid, _ := url.Parse(sdp.SDESMidURI)
 	transportCCURL, _ := url.Parse(sdp.TransportCCURI)
 	rtcpfb = append(rtcpfb, webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBTransportCC})
 	rtcpfb = append(rtcpfb, webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBGoogREMB})
-	se := webrtc.SettingEngine{}
 	se.AddSDPExtensions(webrtc.SDPSectionVideo,
 		[]sdp.ExtMap{
 			{
@@ -75,14 +82,6 @@ func NewSFU(c Config) *SFU {
 			},
 		})
 
-	w := WebRTCTransportConfig{
-		configuration: webrtc.Configuration{
-			SDPSemantics: webrtc.SDPSemanticsUnifiedPlan,
-		},
-		setting: se,
-		router:  c.Router,
-	}
-
 	var icePortStart, icePortEnd uint16
 
 	if len(c.WebRTC.ICEPortRange) == 2 {
@@ -91,25 +90,44 @@ func NewSFU(c Config) *SFU {
 	}
 
 	if icePortStart != 0 || icePortEnd != 0 {
-		if err := w.setting.SetEphemeralUDPPortRange(icePortStart, icePortEnd); err != nil {
+		if err := se.SetEphemeralUDPPortRange(icePortStart, icePortEnd); err != nil {
 			panic(err)
 		}
 	}
 
 	var iceServers []webrtc.ICEServer
-	for _, iceServer := range c.WebRTC.ICEServers {
-		s := webrtc.ICEServer{
-			URLs:       iceServer.URLs,
-			Username:   iceServer.Username,
-			Credential: iceServer.Credential,
+	if c.WebRTC.Candidates.IceLite {
+		se.SetLite(c.WebRTC.Candidates.IceLite)
+	} else {
+		for _, iceServer := range c.WebRTC.ICEServers {
+			s := webrtc.ICEServer{
+				URLs:       iceServer.URLs,
+				Username:   iceServer.Username,
+				Credential: iceServer.Credential,
+			}
+			iceServers = append(iceServers, s)
 		}
-		iceServers = append(iceServers, s)
 	}
 
-	w.configuration.ICEServers = iceServers
+	sdpsemantics := webrtc.SDPSemanticsUnifiedPlan
+	switch c.WebRTC.SDPSemantics {
+	case "unified-plan-with-fallback":
+		sdpsemantics = webrtc.SDPSemanticsUnifiedPlanWithFallback
+	case "plan-b":
+		sdpsemantics = webrtc.SDPSemanticsPlanB
+	}
 
-	if len(c.WebRTC.NAT1To1IPs) > 0 {
-		w.setting.SetNAT1To1IPs(c.WebRTC.NAT1To1IPs, webrtc.ICECandidateTypeHost)
+	w := WebRTCTransportConfig{
+		configuration: webrtc.Configuration{
+			ICEServers:   iceServers,
+			SDPSemantics: sdpsemantics,
+		},
+		setting: se,
+		router:  c.Router,
+	}
+
+	if len(c.WebRTC.Candidates.NAT1To1IPs) > 0 {
+		w.setting.SetNAT1To1IPs(c.WebRTC.Candidates.NAT1To1IPs, webrtc.ICECandidateTypeHost)
 	}
 
 	s := &SFU{
