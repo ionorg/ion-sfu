@@ -1,7 +1,6 @@
 package sfu
 
 import (
-	"context"
 	"math/rand"
 	"net/url"
 	"runtime"
@@ -46,8 +45,6 @@ type Config struct {
 
 // SFU represents an sfu instance
 type SFU struct {
-	ctx      context.Context
-	cancel   context.CancelFunc
 	webrtc   WebRTCTransportConfig
 	router   RouterConfig
 	mu       sync.RWMutex
@@ -60,7 +57,6 @@ func NewSFU(c Config) *SFU {
 	rand.Seed(time.Now().UnixNano())
 	// Init ballast
 	ballast := make([]byte, c.SFU.Ballast*1024*1024)
-	ctx, cancel := context.WithCancel(context.Background())
 	se := webrtc.SettingEngine{}
 
 	// Configure required extensions
@@ -131,8 +127,6 @@ func NewSFU(c Config) *SFU {
 	}
 
 	s := &SFU{
-		ctx:      ctx,
-		cancel:   cancel,
 		webrtc:   w,
 		sessions: make(map[string]*Session),
 	}
@@ -171,15 +165,10 @@ func (s *SFU) NewWebRTCTransport(sid string, me MediaEngine) (*WebRTCTransport, 
 		session = s.newSession(sid)
 	}
 
-	t, err := NewWebRTCTransport(s.ctx, session, me, s.webrtc)
+	t, err := NewWebRTCTransport(session, me, s.webrtc)
 	if err != nil {
 		return nil, err
 	}
 
 	return t, nil
-}
-
-// Stop the sfu
-func (s *SFU) Stop() {
-	s.cancel()
 }
