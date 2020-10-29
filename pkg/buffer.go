@@ -1,7 +1,6 @@
 package sfu
 
 import (
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -21,8 +20,6 @@ const (
 
 // Buffer contains all packets
 type Buffer struct {
-	mu sync.RWMutex
-
 	pktQueue   queue
 	codecType  webrtc.RTPCodecType
 	simulcast  bool

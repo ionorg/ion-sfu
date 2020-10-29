@@ -157,6 +157,7 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 		log.Errorf("SetRemoteDescription error: %v", err)
 		return err
 	}
+
 	err = p.pc.SetRemoteDescription(desc)
 	if err != nil {
 		log.Errorf("SetRemoteDescription error: %v", err)
