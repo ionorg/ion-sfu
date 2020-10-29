@@ -3,7 +3,6 @@ package sfu
 //go:generate go run github.com/matryer/moq -out router_mock_test.generated.go . Router
 
 import (
-	"context"
 	"math/rand"
 	"sync"
 	"time"
@@ -24,7 +23,7 @@ const (
 type Router interface {
 	ID() string
 	Config() RouterConfig
-	AddReceiver(ctx context.Context, track *webrtc.Track, receiver *webrtc.RTPReceiver) *receiverRouter
+	AddReceiver(track *webrtc.Track, receiver *webrtc.RTPReceiver) *receiverRouter
 	AddSender(p *WebRTCTransport, rr *receiverRouter) error
 	AddTWCCExt(id string, ext int)
 	SendRTCP(pkts []rtcp.Packet)
@@ -79,12 +78,12 @@ func (r *router) Config() RouterConfig {
 	return r.config
 }
 
-func (r *router) AddReceiver(ctx context.Context, track *webrtc.Track, receiver *webrtc.RTPReceiver) *receiverRouter {
+func (r *router) AddReceiver(track *webrtc.Track, receiver *webrtc.RTPReceiver) *receiverRouter {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	trackID := track.ID()
-	recv := NewWebRTCReceiver(ctx, receiver, track, BufferOptions{
+	recv := NewWebRTCReceiver(receiver, track, BufferOptions{
 		BufferTime: r.config.MaxBufferTime,
 		MaxBitRate: r.config.MaxBandwidth * 1000,
 		TWCCExt:    r.twccExts[trackID],
@@ -195,9 +194,9 @@ func (r *router) addSender(p *WebRTCTransport, rr *receiverRouter) error {
 		return err
 	}
 	if rr.kind == SimulcastReceiver {
-		sender = NewSimulcastSender(p.ctx, p.id, rr, t.Sender(), recv.SpatialLayer(), r.config.Simulcast)
+		sender = NewSimulcastSender(p.id, rr, t.Sender(), recv.SpatialLayer(), r.config.Simulcast)
 	} else {
-		sender = NewSimpleSender(p.ctx, p.id, rr, t.Sender())
+		sender = NewSimpleSender(p.id, rr, t.Sender())
 	}
 	sender.OnCloseHandler(func() {
 		if err := p.pc.RemoveTrack(t.Sender()); err != nil {

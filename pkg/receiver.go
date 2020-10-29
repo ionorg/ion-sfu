@@ -3,7 +3,6 @@ package sfu
 //go:generate go run github.com/matryer/moq -out receiver_mock_test.generated.go . Receiver
 
 import (
-	"context"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -31,14 +30,11 @@ type Receiver interface {
 	SendRTCP(p []rtcp.Packet)
 	SetRTCPCh(ch chan []rtcp.Packet)
 	WriteBufferedPacket(sn []uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error
-	Close()
 }
 
 // WebRTCReceiver receives a video track
 type WebRTCReceiver struct {
 	sync.RWMutex
-	ctx            context.Context
-	cancel         context.CancelFunc
 	receiver       *webrtc.RTPReceiver
 	track          *webrtc.Track
 	buffer         *Buffer
@@ -53,12 +49,8 @@ type WebRTCReceiver struct {
 }
 
 // NewWebRTCReceiver creates a new webrtc track receivers
-func NewWebRTCReceiver(ctx context.Context, receiver *webrtc.RTPReceiver, track *webrtc.Track, config BufferOptions) Receiver {
-	ctx, cancel := context.WithCancel(ctx)
-
+func NewWebRTCReceiver(receiver *webrtc.RTPReceiver, track *webrtc.Track, config BufferOptions) Receiver {
 	w := &WebRTCReceiver{
-		ctx:      ctx,
-		cancel:   cancel,
 		receiver: receiver,
 		track:    track,
 		senders:  make(map[string]Sender),
@@ -111,15 +103,15 @@ func (w *WebRTCReceiver) OnTransportWideCC(fn func(sn uint16, timeNS int64, mark
 
 func (w *WebRTCReceiver) AddSender(sender Sender) {
 	w.Lock()
-	defer w.Unlock()
 	w.senders[sender.ID()] = sender
+	w.Unlock()
 }
 
 // DeleteSender removes a Sender from a Receiver
 func (w *WebRTCReceiver) DeleteSender(pid string) {
 	w.Lock()
-	defer w.Unlock()
 	delete(w.senders, pid)
+	w.Unlock()
 }
 
 func (w *WebRTCReceiver) SendRTCP(p []rtcp.Packet) {
@@ -144,7 +136,7 @@ func (w *WebRTCReceiver) Track() *webrtc.Track {
 
 // WriteBufferedPacket writes buffered packet to track, return error if packet not found
 func (w *WebRTCReceiver) WriteBufferedPacket(sn []uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error {
-	if w.buffer == nil || w.ctx.Err() != nil {
+	if w.buffer == nil {
 		return nil
 	}
 	for _, seq := range sn {
@@ -170,14 +162,6 @@ func (w *WebRTCReceiver) SetRTCPCh(ch chan []rtcp.Packet) {
 	w.rtcpCh = ch
 }
 
-// Close gracefully close the track
-func (w *WebRTCReceiver) Close() {
-	if w.ctx.Err() != nil {
-		return
-	}
-	w.cancel()
-}
-
 // readRTP receive all incoming tracks' rtp and sent to one channel
 func (w *WebRTCReceiver) readRTP() {
 	defer func() {
@@ -193,7 +177,6 @@ func (w *WebRTCReceiver) readRTP() {
 		// or the peer has been disconnected. The router must be gracefully shutdown,
 		// waiting for all the receivers routines to stop.
 		if err == io.EOF {
-			w.Close()
 			return
 		}
 
@@ -204,19 +187,14 @@ func (w *WebRTCReceiver) readRTP() {
 
 		w.buffer.push(pkt)
 
-		select {
-		case <-w.ctx.Done():
-			return
-		default:
-			w.rtpCh <- pkt
-		}
+		w.rtpCh <- pkt
 	}
 }
 
 func (w *WebRTCReceiver) readRTCP() {
 	for {
 		pkts, err := w.receiver.ReadRTCP()
-		if err == io.ErrClosedPipe || err == io.EOF || w.ctx.Err() != nil {
+		if err == io.ErrClosedPipe || err == io.EOF {
 			return
 		}
 		if err != nil {
@@ -236,7 +214,7 @@ func (w *WebRTCReceiver) readRTCP() {
 func (w *WebRTCReceiver) readSimulcastRTCP(rid string) {
 	for {
 		pkts, err := w.receiver.ReadSimulcastRTCP(rid)
-		if err == io.ErrClosedPipe || w.ctx.Err() != nil {
+		if err == io.ErrClosedPipe || err == io.EOF {
 			return
 		}
 		if err != nil {

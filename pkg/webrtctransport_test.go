@@ -36,7 +36,7 @@ func TestNewWebRTCTransport(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewWebRTCTransport(tt.args.ctx, tt.args.session, tt.args.me, tt.args.cfg)
+			got, err := NewWebRTCTransport(tt.args.session, tt.args.me, tt.args.cfg)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewWebRTCTransport() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -72,7 +72,7 @@ func TestWebRTCTransport_AddTransceiverFromKind(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			s := NewSession("test")
-			p, err := NewWebRTCTransport(context.Background(), s, me, WebRTCTransportConfig{})
+			p, err := NewWebRTCTransport(s, me, WebRTCTransportConfig{})
 			assert.NoError(t, err)
 			_, err = p.AddTransceiverFromKind(tt.args.kind, tt.args.init...)
 			if (err != nil) != tt.wantErr {
@@ -84,7 +84,6 @@ func TestWebRTCTransport_AddTransceiverFromKind(t *testing.T) {
 }
 
 func TestWebRTCTransport_Close(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
@@ -94,8 +93,6 @@ func TestWebRTCTransport_Close(t *testing.T) {
 
 	type fields struct {
 		id      string
-		ctx     context.Context
-		cancel  context.CancelFunc
 		pc      *webrtc.PeerConnection
 		session *Session
 	}
@@ -108,8 +105,6 @@ func TestWebRTCTransport_Close(t *testing.T) {
 			name: "Must close inner peer connection and cancel context without errors.",
 			fields: fields{
 				id:      "test",
-				ctx:     ctx,
-				cancel:  cancel,
 				pc:      peer,
 				session: s,
 			},
@@ -121,8 +116,6 @@ func TestWebRTCTransport_Close(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &WebRTCTransport{
 				id:      tt.fields.id,
-				ctx:     tt.fields.ctx,
-				cancel:  tt.fields.cancel,
 				pc:      tt.fields.pc,
 				session: tt.fields.session,
 			}
@@ -130,7 +123,6 @@ func TestWebRTCTransport_Close(t *testing.T) {
 			if err := p.Close(); (err != nil) != tt.wantErr {
 				t.Errorf("Close() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			assert.Error(t, ctx.Err())
 			assert.Equal(t, 0, len(s.transports))
 		})
 	}

@@ -54,12 +54,9 @@ type SimulcastSender struct {
 }
 
 // NewSimulcastSender creates a new track sender instance
-func NewSimulcastSender(ctx context.Context, id string, router *receiverRouter, sender *webrtc.RTPSender, layer uint8, conf SimulcastConfig) Sender {
-	ctx, cancel := context.WithCancel(ctx)
+func NewSimulcastSender(id string, router *receiverRouter, sender *webrtc.RTPSender, layer uint8, conf SimulcastConfig) Sender {
 	s := &SimulcastSender{
 		id:                  id,
-		ctx:                 ctx,
-		cancel:              cancel,
 		router:              router,
 		sender:              sender,
 		track:               sender.Track(),

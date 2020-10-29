@@ -1,7 +1,6 @@
 package sfu
 
 import (
-	"context"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,8 +28,6 @@ type WebRTCTransport struct {
 	pc             *webrtc.PeerConnection
 	me             MediaEngine
 	mu             sync.RWMutex
-	ctx            context.Context
-	cancel         context.CancelFunc
 	router         Router
 	session        *Session
 	senders        map[string][]Sender
@@ -47,7 +44,7 @@ type pendingSender struct {
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport
-func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, cfg WebRTCTransportConfig) (*WebRTCTransport, error) {
+func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportConfig) (*WebRTCTransport, error) {
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine), webrtc.WithSettingEngine(cfg.setting))
 	pc, err := api.NewPeerConnection(cfg.configuration)
 
@@ -56,12 +53,9 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 		return nil, errPeerConnectionInitFailed
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
 	id := cuid.New()
 	p := &WebRTCTransport{
 		id:      id,
-		ctx:     ctx,
-		cancel:  cancel,
 		pc:      pc,
 		me:      me,
 		session: session,
@@ -75,7 +69,7 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 		log.Debugf("Peer %s got remote track id: %s mediaSSRC: %d rid :%s streamID: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.Label())
-		if rr := p.router.AddReceiver(ctx, track, receiver); rr != nil {
+		if rr := p.router.AddReceiver(track, receiver); rr != nil {
 			p.session.AddRouter(p.router, rr)
 		}
 		if p.onTrackHandler != nil {
@@ -93,36 +87,31 @@ func NewWebRTCTransport(ctx context.Context, session *Session, me MediaEngine, c
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		log.Debugf("ice connection state: %s", connectionState)
-		select {
-		case <-p.ctx.Done():
-			return
-		default:
-			switch connectionState {
-			case webrtc.ICEConnectionStateConnected:
-				p.subOnce.Do(func() {
-					// Subscribe to existing transports
-					for _, t := range session.Transports() {
-						if t.ID() == p.id {
-							continue
-						}
-						err := t.GetRouter().AddSender(p, nil)
-						if err != nil {
-							log.Errorf("Subscribing to router err: %v", err)
-							continue
-						}
+		switch connectionState {
+		case webrtc.ICEConnectionStateConnected:
+			p.subOnce.Do(func() {
+				// Subscribe to existing transports
+				for _, t := range session.Transports() {
+					if t.ID() == p.id {
+						continue
 					}
-				})
-			case webrtc.ICEConnectionStateDisconnected:
-				log.Debugf("webrtc ice disconnected for peer: %s", p.id)
-			case webrtc.ICEConnectionStateFailed:
-				fallthrough
-			case webrtc.ICEConnectionStateClosed:
-				log.Debugf("webrtc ice closed for peer: %s", p.id)
-				if err := p.Close(); err != nil {
-					log.Errorf("webrtc transport close err: %v", err)
+					err := t.GetRouter().AddSender(p, nil)
+					if err != nil {
+						log.Errorf("Subscribing to router err: %v", err)
+						continue
+					}
 				}
-				p.router.Stop()
+			})
+		case webrtc.ICEConnectionStateDisconnected:
+			log.Debugf("webrtc ice disconnected for peer: %s", p.id)
+		case webrtc.ICEConnectionStateFailed:
+			fallthrough
+		case webrtc.ICEConnectionStateClosed:
+			log.Debugf("webrtc ice closed for peer: %s", p.id)
+			if err := p.Close(); err != nil {
+				log.Errorf("webrtc transport close err: %v", err)
 			}
+			p.router.Stop()
 		}
 	})
 
@@ -304,6 +293,5 @@ func (p *WebRTCTransport) GetSenders(streamID string) []Sender {
 // Close peer
 func (p *WebRTCTransport) Close() error {
 	p.session.RemoveTransport(p.id)
-	p.cancel()
 	return p.pc.Close()
 }

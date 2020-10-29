@@ -2,7 +2,6 @@ package sfu
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"io"
 	"sync"
@@ -16,8 +15,6 @@ import (
 // SimpleSender represents a Sender which writes RTP to a webrtc track
 type SimpleSender struct {
 	id             string
-	ctx            context.Context
-	cancel         context.CancelFunc
 	sender         *webrtc.RTPSender
 	track          *webrtc.Track
 	router         *receiverRouter
@@ -38,12 +35,9 @@ type SimpleSender struct {
 }
 
 // NewSimpleSender creates a new track sender instance
-func NewSimpleSender(ctx context.Context, id string, router *receiverRouter, sender *webrtc.RTPSender) Sender {
-	ctx, cancel := context.WithCancel(ctx)
+func NewSimpleSender(id string, router *receiverRouter, sender *webrtc.RTPSender) Sender {
 	s := &SimpleSender{
 		id:      id,
-		ctx:     ctx,
-		cancel:  cancel,
 		payload: sender.Track().Codec().PayloadType,
 		router:  router,
 		sender:  sender,
@@ -69,7 +63,7 @@ func (s *SimpleSender) Start() {
 
 // WriteRTP to the track
 func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
-	if s.ctx.Err() != nil || !s.enabled.get() {
+	if !s.enabled.get() {
 		return
 	}
 
@@ -171,7 +165,7 @@ func (s *SimpleSender) SwitchTemporalLayer(layer uint8) {
 // Close track
 func (s *SimpleSender) Close() {
 	s.close.Do(func() {
-		s.cancel()
+		log.Debugf("Closing sender %s", s.id)
 		if s.onCloseHandler != nil {
 			s.onCloseHandler()
 		}
@@ -192,10 +186,6 @@ func (s *SimpleSender) receiveRTCP() {
 				recv.DeleteSender(s.id)
 			}
 			s.Close()
-			return
-		}
-
-		if s.ctx.Err() != nil {
 			return
 		}
 

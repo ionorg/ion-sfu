@@ -15,7 +15,6 @@ func TestNewSimpleSender(t *testing.T) {
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
-	ctx := context.Background()
 
 	local, err := api.NewPeerConnection(webrtc.Configuration{})
 	assert.NoError(t, err)
@@ -24,7 +23,6 @@ func TestNewSimpleSender(t *testing.T) {
 	sender, err := local.AddTrack(senderTrack)
 	assert.NoError(t, err)
 	type args struct {
-		ctx    context.Context
 		id     string
 		router *receiverRouter
 		sender *webrtc.RTPSender
@@ -37,7 +35,6 @@ func TestNewSimpleSender(t *testing.T) {
 		{
 			name: "Must return a non nil Sender",
 			args: args{
-				ctx:    ctx,
 				id:     "test",
 				router: nil,
 				sender: sender,
@@ -47,7 +44,7 @@ func TestNewSimpleSender(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewSimpleSender(tt.args.ctx, tt.args.id, tt.args.router, tt.args.sender)
+			got := NewSimpleSender(tt.args.id, tt.args.router, tt.args.sender)
 			assert.NotNil(t, got)
 		})
 	}
@@ -103,10 +100,7 @@ forLoop:
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
 			s := &SimpleSender{
-				ctx:     ctx,
-				cancel:  cancel,
 				enabled: atomicBool{1},
 				payload: senderTrack.PayloadType(),
 				track:   senderTrack,
@@ -193,10 +187,7 @@ forLoop:
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
 			wss := &SimpleSender{
-				ctx:    ctx,
-				cancel: cancel,
 				router: &receiverRouter{
 					kind:      SimpleReceiver,
 					stream:    "123",
@@ -278,8 +269,6 @@ func TestSimpleSender_Close(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			s := &SimpleSender{
-				ctx:            tt.fields.ctx,
-				cancel:         tt.fields.cancel,
 				router:         tt.fields.router,
 				onCloseHandler: tt.fields.onCloseHandler,
 			}
@@ -459,7 +448,6 @@ forLoop:
 	}
 
 	simpleSdr := SimpleSender{
-		ctx:     context.Background(),
 		enabled: atomicBool{1},
 		router:  r,
 		track:   senderTrack,

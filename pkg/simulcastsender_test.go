@@ -16,7 +16,6 @@ func TestNewWebRTCSimulcastSender(t *testing.T) {
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
-	ctx := context.Background()
 
 	local, err := api.NewPeerConnection(webrtc.Configuration{})
 	assert.NoError(t, err)
@@ -39,7 +38,6 @@ func TestNewWebRTCSimulcastSender(t *testing.T) {
 		{
 			name: "Must return a non nil Sender",
 			args: args{
-				ctx:    ctx,
 				id:     "test",
 				router: nil,
 				sender: sender,
@@ -50,7 +48,7 @@ func TestNewWebRTCSimulcastSender(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewSimulcastSender(tt.args.ctx, tt.args.id, tt.args.router, tt.args.sender, tt.args.layer, SimulcastConfig{})
+			got := NewSimulcastSender(tt.args.id, tt.args.router, tt.args.sender, tt.args.layer, SimulcastConfig{})
 			assert.NotNil(t, got)
 		})
 	}
