@@ -82,8 +82,6 @@ func NewSFU(c Config) *SFU {
 			},
 		})
 
-	se.SetLite(c.WebRTC.Candidates.IceLite)
-
 	var icePortStart, icePortEnd uint16
 
 	if len(c.WebRTC.ICEPortRange) == 2 {
@@ -98,13 +96,17 @@ func NewSFU(c Config) *SFU {
 	}
 
 	var iceServers []webrtc.ICEServer
-	for _, iceServer := range c.WebRTC.ICEServers {
-		s := webrtc.ICEServer{
-			URLs:       iceServer.URLs,
-			Username:   iceServer.Username,
-			Credential: iceServer.Credential,
+	if c.WebRTC.Candidates.IceLite {
+		se.SetLite(c.WebRTC.Candidates.IceLite)
+	} else {
+		for _, iceServer := range c.WebRTC.ICEServers {
+			s := webrtc.ICEServer{
+				URLs:       iceServer.URLs,
+				Username:   iceServer.Username,
+				Credential: iceServer.Credential,
+			}
+			iceServers = append(iceServers, s)
 		}
-		iceServers = append(iceServers, s)
 	}
 
 	sdpsemantics := webrtc.SDPSemanticsUnifiedPlan
