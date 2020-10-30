@@ -50,4 +50,4 @@ sdpsemantics = "unified-plan"
 # icelite = true
 
 [log]
-level = "debug"
+level = "trace"

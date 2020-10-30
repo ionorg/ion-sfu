@@ -26,9 +26,8 @@ func NewSession(id string) *Session {
 // AddTransport adds a transport to the session
 func (r *Session) AddTransport(transport Transport) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	r.transports[transport.ID()] = transport
+	r.mu.Unlock()
 }
 
 // RemoveTransport removes a transport from the session
@@ -36,6 +35,7 @@ func (r *Session) RemoveTransport(tid string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	log.Infof("RemoveTransport %s from session %s", tid, r.id)
 	delete(r.transports, tid)
 
 	// Close session if no transports
@@ -46,8 +46,9 @@ func (r *Session) RemoveTransport(tid string) {
 
 // AddRouter adds a router to transports
 func (r *Session) AddRouter(router Router, rr *receiverRouter) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	for tid, t := range r.transports {
 		// Don't sub to self
 		if router.ID() == tid {
