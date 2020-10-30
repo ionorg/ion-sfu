@@ -162,6 +162,16 @@ func TestSFU_SessionScenarios(t *testing.T) {
 						action: "join",
 					}},
 				},
+				{
+					remotes: []*remote{{
+						id:     "remote2",
+						action: "publish",
+						media: []media{
+							{kind: "audio", id: "stream2", tid: cuid.New()},
+							{kind: "video", id: "stream2", tid: cuid.New()},
+						},
+					}},
+				},
 			},
 		},
 	}

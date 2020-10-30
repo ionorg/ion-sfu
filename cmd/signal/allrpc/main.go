@@ -87,7 +87,7 @@ func parse() bool {
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
 
-	//at least set one
+	// at least set one
 	if gaddr == "" && jaddr == "" {
 		return false
 	}
