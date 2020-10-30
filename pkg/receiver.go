@@ -88,7 +88,7 @@ func (w *WebRTCReceiver) Start() {
 	} else {
 		go w.readRTCP()
 	}
-	go w.writeRTP()
+	// go w.writeRTP()
 }
 
 // OnCloseHandler method to be called on remote tracked removed
@@ -189,7 +189,11 @@ func (w *WebRTCReceiver) readRTP() {
 
 		w.buffer.push(pkt)
 
-		w.rtpCh <- pkt
+		w.RLock()
+		for _, sub := range w.senders {
+			sub.WriteRTP(pkt)
+		}
+		w.RUnlock()
 	}
 }
 
