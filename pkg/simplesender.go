@@ -15,7 +15,9 @@ import (
 // SimpleSender represents a Sender which writes RTP to a webrtc track
 type SimpleSender struct {
 	id             string
+	mid            string
 	sender         *webrtc.RTPSender
+	transceiver    *webrtc.RTPTransceiver
 	track          *webrtc.Track
 	router         *receiverRouter
 	enabled        atomicBool
@@ -35,13 +37,15 @@ type SimpleSender struct {
 }
 
 // NewSimpleSender creates a new track sender instance
-func NewSimpleSender(id string, router *receiverRouter, sender *webrtc.RTPSender) Sender {
+func NewSimpleSender(id string, router *receiverRouter, transceiver *webrtc.RTPTransceiver) Sender {
+	sender := transceiver.Sender()
 	s := &SimpleSender{
-		id:      id,
-		payload: sender.Track().Codec().PayloadType,
-		router:  router,
-		sender:  sender,
-		track:   sender.Track(),
+		id:          id,
+		payload:     sender.Track().Codec().PayloadType,
+		router:      router,
+		sender:      sender,
+		transceiver: transceiver,
+		track:       sender.Track(),
 	}
 
 	go s.receiveRTCP()
@@ -148,6 +152,10 @@ func (s *SimpleSender) Kind() webrtc.RTPCodecType {
 
 func (s *SimpleSender) Track() *webrtc.Track {
 	return s.track
+}
+
+func (s *SimpleSender) Transceiver() *webrtc.RTPTransceiver {
+	return s.transceiver
 }
 
 func (s *SimpleSender) Type() SenderType {

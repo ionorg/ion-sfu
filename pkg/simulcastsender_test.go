@@ -21,15 +21,15 @@ func TestNewWebRTCSimulcastSender(t *testing.T) {
 	assert.NoError(t, err)
 	senderTrack, err := local.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "fake_id", "fake_label")
 	assert.NoError(t, err)
-	sender, err := local.AddTrack(senderTrack)
+	transceiver, err := local.AddTransceiverFromTrack(senderTrack)
 	assert.NoError(t, err)
 
 	type args struct {
-		ctx    context.Context
-		id     string
-		router *receiverRouter
-		sender *webrtc.RTPSender
-		layer  uint8
+		ctx         context.Context
+		id          string
+		router      *receiverRouter
+		transceiver *webrtc.RTPTransceiver
+		layer       uint8
 	}
 	tests := []struct {
 		name string
@@ -38,17 +38,17 @@ func TestNewWebRTCSimulcastSender(t *testing.T) {
 		{
 			name: "Must return a non nil Sender",
 			args: args{
-				id:     "test",
-				router: nil,
-				sender: sender,
-				layer:  2,
+				id:          "test",
+				router:      nil,
+				transceiver: transceiver,
+				layer:       2,
 			},
 		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewSimulcastSender(tt.args.id, tt.args.router, tt.args.sender, tt.args.layer, SimulcastConfig{})
+			got := NewSimulcastSender(tt.args.id, tt.args.router, tt.args.transceiver, tt.args.layer, SimulcastConfig{})
 			assert.NotNil(t, got)
 		})
 	}

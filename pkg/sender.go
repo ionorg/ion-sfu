@@ -24,6 +24,7 @@ type Sender interface {
 	Kind() webrtc.RTPCodecType
 	Type() SenderType
 	Track() *webrtc.Track
+	Transceiver() *webrtc.RTPTransceiver
 	Mute(val bool)
 	WriteRTP(*rtp.Packet)
 	CurrentSpatialLayer() uint8
