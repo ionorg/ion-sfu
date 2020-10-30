@@ -6,8 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gammazero/deque"
-
 	"github.com/bep/debounce"
 	"github.com/lucsky/cuid"
 	log "github.com/pion/ion-log"
@@ -32,7 +30,6 @@ type WebRTCTransport struct {
 	session        *Session
 	senders        map[string][]Sender
 	candidates     []webrtc.ICECandidateInit
-	pendingSenders deque.Deque
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
 
 	subOnce sync.Once
@@ -62,7 +59,6 @@ func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportCon
 		router:  newRouter(pc, id, cfg.router),
 		senders: make(map[string][]Sender),
 	}
-	p.pendingSenders.SetMinCapacity(2)
 
 	// Add transport to the session
 	session.AddTransport(p)
@@ -161,20 +157,20 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 
 	switch desc.Type {
 	case webrtc.SDPTypeAnswer:
-		if p.pendingSenders.Len() != 0 {
-			for _, md := range pd.MediaDescriptions {
-				if mid, ok := md.Attribute(sdp.AttrKeyMID); ok {
-					for i := 0; i < p.pendingSenders.Len(); i++ {
-						ps := p.pendingSenders.PopFront().(*pendingSender)
-						if ps.transceiver.Mid() == mid {
-							ps.sender.Start()
-						} else {
-							p.pendingSenders.PushBack(ps)
+		p.mu.RLock()
+		for _, md := range pd.MediaDescriptions {
+			if mid, ok := md.Attribute(sdp.AttrKeyMID); ok {
+				for _, senders := range p.senders {
+					for _, sender := range senders {
+						if sender.Transceiver().Mid() == mid {
+							sender.Start()
 						}
 					}
 				}
 			}
 		}
+		p.mu.RUnlock()
+
 	case webrtc.SDPTypeOffer:
 		for _, md := range pd.MediaDescriptions {
 			if md.MediaName.Media != mediaNameAudio && md.MediaName.Media != mediaNameVideo {

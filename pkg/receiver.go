@@ -34,6 +34,7 @@ type Receiver interface {
 // WebRTCReceiver receives a video track
 type WebRTCReceiver struct {
 	sync.RWMutex
+	rtcpMu         sync.RWMutex
 	receiver       *webrtc.RTPReceiver
 	track          *webrtc.Track
 	buffer         *Buffer
@@ -115,8 +116,8 @@ func (w *WebRTCReceiver) DeleteSender(pid string) {
 
 func (w *WebRTCReceiver) SendRTCP(p []rtcp.Packet) {
 	if _, ok := p[0].(*rtcp.PictureLossIndication); ok {
-		w.Lock()
-		defer w.Unlock()
+		w.rtcpMu.Lock()
+		defer w.rtcpMu.Unlock()
 		if time.Now().UnixNano()-w.lastPli < 500e6 {
 			return
 		}

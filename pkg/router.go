@@ -194,19 +194,16 @@ func (r *router) addSender(p *WebRTCTransport, rr *receiverRouter) error {
 		return err
 	}
 	if rr.kind == SimulcastReceiver {
-		sender = NewSimulcastSender(p.id, rr, t.Sender(), recv.SpatialLayer(), r.config.Simulcast)
+		sender = NewSimulcastSender(p.id, rr, t, recv.SpatialLayer(), r.config.Simulcast)
 	} else {
-		sender = NewSimpleSender(p.id, rr, t.Sender())
+		sender = NewSimpleSender(p.id, rr, t)
 	}
 	sender.OnCloseHandler(func() {
-		if err := p.pc.RemoveTrack(t.Sender()); err != nil {
-			log.Errorf("Error closing sender: %s", err)
+		if err := p.pc.RemoveTrack(t.Sender()); err != nil { // nolint:scopelint
+			log.Errorf("Error closing sender: %s", err) // nolint:scopelint
 		}
 	})
-	p.pendingSenders.PushBack(&pendingSender{
-		transceiver: t,
-		sender:      sender,
-	})
+
 	p.AddSender(rr.stream, sender)
 	recv.AddSender(sender)
 	return nil

@@ -20,12 +20,12 @@ func TestNewSimpleSender(t *testing.T) {
 	assert.NoError(t, err)
 	senderTrack, err := local.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "fake_id", "fake_label")
 	assert.NoError(t, err)
-	sender, err := local.AddTrack(senderTrack)
+	transceiver, err := local.AddTransceiverFromTrack(senderTrack)
 	assert.NoError(t, err)
 	type args struct {
-		id     string
-		router *receiverRouter
-		sender *webrtc.RTPSender
+		id          string
+		router      *receiverRouter
+		transceiver *webrtc.RTPTransceiver
 	}
 	tests := []struct {
 		name string
@@ -35,16 +35,16 @@ func TestNewSimpleSender(t *testing.T) {
 		{
 			name: "Must return a non nil Sender",
 			args: args{
-				id:     "test",
-				router: nil,
-				sender: sender,
+				id:          "test",
+				router:      nil,
+				transceiver: transceiver,
 			},
 		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewSimpleSender(tt.args.id, tt.args.router, tt.args.sender)
+			got := NewSimpleSender(tt.args.id, tt.args.router, tt.args.transceiver)
 			assert.NotNil(t, got)
 		})
 	}

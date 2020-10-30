@@ -22,6 +22,7 @@ type SimulcastSender struct {
 	cancel         context.CancelFunc
 	router         *receiverRouter
 	sender         *webrtc.RTPSender
+	transceiver    *webrtc.RTPTransceiver
 	track          *webrtc.Track
 	enabled        atomicBool
 	target         uint64
@@ -54,11 +55,13 @@ type SimulcastSender struct {
 }
 
 // NewSimulcastSender creates a new track sender instance
-func NewSimulcastSender(id string, router *receiverRouter, sender *webrtc.RTPSender, layer uint8, conf SimulcastConfig) Sender {
+func NewSimulcastSender(id string, router *receiverRouter, transceiver *webrtc.RTPTransceiver, layer uint8, conf SimulcastConfig) Sender {
+	sender := transceiver.Sender()
 	s := &SimulcastSender{
 		id:                  id,
 		router:              router,
 		sender:              sender,
+		transceiver:         transceiver,
 		track:               sender.Track(),
 		payload:             sender.Track().Codec().PayloadType,
 		currentTempLayer:    3,
@@ -214,6 +217,10 @@ func (s *SimulcastSender) Kind() webrtc.RTPCodecType {
 
 func (s *SimulcastSender) Track() *webrtc.Track {
 	return s.track
+}
+
+func (s *SimulcastSender) Transceiver() *webrtc.RTPTransceiver {
+	return s.transceiver
 }
 
 func (s *SimulcastSender) Type() SenderType {
