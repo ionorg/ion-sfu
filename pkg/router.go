@@ -176,6 +176,12 @@ func (r *router) addSender(p *WebRTCTransport, rr *receiverRouter) error {
 		return errNoReceiverFound
 	}
 
+	for _, s := range p.GetSenders(rr.stream) {
+		if s.Track().ID() == recv.Track().ID() {
+			return nil
+		}
+	}
+
 	inTrack := recv.Track()
 	to := p.me.GetCodecsByName(recv.Track().Codec().Name)
 	if len(to) == 0 {
