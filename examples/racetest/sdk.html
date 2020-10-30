@@ -73,7 +73,7 @@
       integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV"
       crossorigin="anonymous"
     ></script>
-    <script src="https://unpkg.com/ion-sdk-js@1.0.17/dist/ion-sdk.min.js"></script>
+    <script src="https://unpkg.com/ion-sdk-js@1.0.20/dist/ion-sdk.min.js"></script>
     <script>
       const localVideo = document.getElementById("local-video");
       const remotesDiv = document.getElementById("remotes");
@@ -139,7 +139,7 @@
         joinBtn.style.display = "none";
         publishBtn.style.display = "block";
 
-        for (var i = 0; i < 3; i++) {
+        for (var i = 0; i < 5; i++) {
           const peer = new Peer();
           peer.capture();
           peers.push(peer);
