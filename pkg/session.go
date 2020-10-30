@@ -24,38 +24,39 @@ func NewSession(id string) *Session {
 }
 
 // AddTransport adds a transport to the session
-func (r *Session) AddTransport(transport Transport) {
-	r.mu.Lock()
-	r.transports[transport.ID()] = transport
-	r.mu.Unlock()
+func (s *Session) AddTransport(transport Transport) {
+	s.mu.Lock()
+	s.transports[transport.ID()] = transport
+	s.mu.Unlock()
 }
 
 // RemoveTransport removes a transport from the session
-func (r *Session) RemoveTransport(tid string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+func (s *Session) RemoveTransport(tid string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	log.Infof("RemoveTransport %s from session %s", tid, r.id)
-	delete(r.transports, tid)
+	log.Infof("RemoveTransport %s from session %s", tid, s.id)
+	delete(s.transports, tid)
 
 	// Close session if no transports
-	if len(r.transports) == 0 && r.onCloseHandler != nil {
-		r.onCloseHandler()
+	if len(s.transports) == 0 && s.onCloseHandler != nil {
+		s.onCloseHandler()
 	}
 }
 
-// AddRouter adds a router to transports
-func (r *Session) AddRouter(router Router, rr *receiverRouter) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+// Publish will add a Sender to all peers in current Session from given
+// Receiver
+func (s *Session) Publish(router Router, rr *receiverRouter) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	for tid, t := range r.transports {
+	for tid, t := range s.transports {
 		// Don't sub to self
 		if router.ID() == tid {
 			continue
 		}
 
-		log.Infof("AddRouter mediaSSRC to %s", tid)
+		log.Infof("Publish mediaSSRC to %s", tid)
 
 		if t, ok := t.(*WebRTCTransport); ok {
 			if err := router.AddSender(t, rr); err != nil {
@@ -66,14 +67,30 @@ func (r *Session) AddRouter(router Router, rr *receiverRouter) {
 	}
 }
 
+// Subscribe will create a Sender for every other Receiver in the session
+func (s *Session) Subscribe(p *WebRTCTransport) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, t := range s.transports {
+		if t.ID() == p.id {
+			continue
+		}
+		err := t.GetRouter().AddSender(p, nil)
+		if err != nil {
+			log.Errorf("Subscribing to router err: %v", err)
+			continue
+		}
+	}
+}
+
 // Transports returns transports in this session
-func (r *Session) Transports() map[string]Transport {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.transports
+func (s *Session) Transports() map[string]Transport {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.transports
 }
 
 // OnClose is called when the session is closed
-func (r *Session) OnClose(f func()) {
-	r.onCloseHandler = f
+func (s *Session) OnClose(f func()) {
+	s.onCloseHandler = f
 }
