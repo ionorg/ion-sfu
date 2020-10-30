@@ -142,12 +142,18 @@ func TestSFU_SessionScenarios(t *testing.T) {
 				},
 				{
 					remotes: []*remote{{
+						id:     "remote1",
+						action: "publish",
+						media: []media{
+							{kind: "audio", id: "stream1", tid: cuid.New()},
+							{kind: "video", id: "stream1", tid: cuid.New()},
+						},
+					}},
+				},
+				{
+					remotes: []*remote{{
 						id:     "remote2",
 						action: "join",
-						media: []media{
-							{kind: "audio", id: "stream2", tid: cuid.New()},
-							{kind: "video", id: "stream2", tid: cuid.New()},
-						},
 					}},
 				},
 			},
@@ -157,7 +163,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			wg := sync.WaitGroup{}
+			pubWg := sync.WaitGroup{}
 			done := make(chan struct{})
 
 			peers := make(map[string]*peer)
@@ -172,7 +178,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 						api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
 						r, err := api.NewPeerConnection(webrtc.Configuration{})
 						r.OnTrack(func(*webrtc.Track, *webrtc.RTPReceiver) {
-							wg.Done()
+							pubWg.Done()
 						})
 						assert.NoError(t, err)
 						_, err = r.CreateDataChannel("ion-sfu", nil)
@@ -193,14 +199,14 @@ func TestSFU_SessionScenarios(t *testing.T) {
 						answer, err := p.local.Join("test", *p.remote.LocalDescription())
 						assert.NoError(t, err)
 						p.remote.SetRemoteDescription(*answer)
-
+					case "publish":
 						addMedia(done, t, p.remote, remote.media)
-						wg.Add(len(remote.media))
+						pubWg.Add(len(remote.media))
 					}
 				}
 			}
 
-			wg.Wait()
+			pubWg.Wait()
 			close(done)
 		})
 	}
