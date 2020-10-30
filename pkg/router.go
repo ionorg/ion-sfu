@@ -128,7 +128,12 @@ func (r *router) AddSender(p *WebRTCTransport, rr *receiverRouter) error {
 	defer r.mu.Unlock()
 
 	if rr != nil {
-		return r.addSender(p, rr)
+		if err := r.addSender(p, rr); err != nil {
+			return err
+		} else {
+			p.negotiate()
+			return nil
+		}
 	}
 
 	for _, rr = range r.receivers {
@@ -136,6 +141,7 @@ func (r *router) AddSender(p *WebRTCTransport, rr *receiverRouter) error {
 			return err
 		}
 	}
+	p.negotiate()
 	return nil
 }
 
@@ -208,6 +214,8 @@ func (r *router) addSender(p *WebRTCTransport, rr *receiverRouter) error {
 	sender.OnCloseHandler(func() {
 		if err := p.pc.RemoveTrack(t.Sender()); err != nil { // nolint:scopelint
 			log.Errorf("Error closing sender: %s", err) // nolint:scopelint
+		} else {
+			p.negotiate()
 		}
 	})
 
