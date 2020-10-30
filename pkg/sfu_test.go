@@ -267,6 +267,8 @@ func TestSFU_SessionScenarios(t *testing.T) {
 
 			for _, p := range peers {
 				p.subs.Wait()
+				p.remote.Close()
+				p.local.Close()
 			}
 			close(done)
 		})
