@@ -5,7 +5,6 @@ package sfu
 import (
 	"io"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	log "github.com/pion/ion-log"
@@ -115,13 +114,15 @@ func (w *WebRTCReceiver) DeleteSender(pid string) {
 }
 
 func (w *WebRTCReceiver) SendRTCP(p []rtcp.Packet) {
-	lastPli := atomic.LoadInt64(&w.lastPli)
 	if _, ok := p[0].(*rtcp.PictureLossIndication); ok {
-		if time.Now().UnixNano()-lastPli < 500e6 {
+		w.Lock()
+		defer w.Unlock()
+		if time.Now().UnixNano()-w.lastPli < 500e6 {
 			return
 		}
-		atomic.StoreInt64(&w.lastPli, time.Now().UnixNano())
+		w.lastPli = time.Now().UnixNano()
 	}
+
 	w.rtcpCh <- p
 }
 
@@ -177,6 +178,7 @@ func (w *WebRTCReceiver) readRTP() {
 		// or the peer has been disconnected. The router must be gracefully shutdown,
 		// waiting for all the receivers routines to stop.
 		if err == io.EOF {
+			log.Debugf("receiver %d readrtp eof", w.track.SSRC())
 			return
 		}
 
@@ -195,6 +197,7 @@ func (w *WebRTCReceiver) readRTCP() {
 	for {
 		pkts, err := w.receiver.ReadRTCP()
 		if err == io.ErrClosedPipe || err == io.EOF {
+			log.Debugf("receiver %d readrtcp eof", w.track.SSRC())
 			return
 		}
 		if err != nil {

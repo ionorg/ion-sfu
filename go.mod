@@ -17,7 +17,6 @@ require (
 	github.com/pion/sdp/v3 v3.0.2
 	github.com/pion/turn/v2 v2.0.5 // indirect
 	github.com/pion/webrtc/v3 v3.0.0-beta.10.0.20201027193323-3e64df35adfa
-	github.com/rs/zerolog v1.20.0 // indirect
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20200429184054-15c2290dcb37
 	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.6.1

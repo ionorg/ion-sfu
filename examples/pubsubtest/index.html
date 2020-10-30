@@ -159,8 +159,8 @@
       let localStream;
       const start = () => {
         IonSDK.LocalStream.getUserMedia({
-          resolution: "hd",
-          audio: false,
+          resolution: "vga",
+          audio: true,
         })
           .then((media) => {
             localStream = media;

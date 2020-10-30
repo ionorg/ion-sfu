@@ -115,6 +115,10 @@ func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
 	pkt.Timestamp = s.lastTS
 	pkt.SequenceNumber = s.lastSN
 
+	if pkt.SequenceNumber%500 == 0 {
+		log.Tracef("rtp write sender %s with ssrc %d", s.id, s.track.SSRC())
+	}
+
 	err := s.track.WriteRTP(pkt)
 	// Restore packet
 	pkt.PayloadType = bPt
@@ -181,6 +185,7 @@ func (s *SimpleSender) receiveRTCP() {
 	for {
 		pkts, err := s.sender.ReadRTCP()
 		if err == io.ErrClosedPipe || err == io.EOF {
+			log.Debugf("Deleting sender %s with ssrc %d", s.id, s.track.SSRC())
 			// Remove sender from receiver
 			if recv := s.router.receivers[0]; recv != nil {
 				recv.DeleteSender(s.id)
@@ -202,6 +207,7 @@ func (s *SimpleSender) receiveRTCP() {
 		for _, pkt := range pkts {
 			switch pkt := pkt.(type) {
 			case *rtcp.PictureLossIndication, *rtcp.FullIntraRequest:
+				log.Tracef("sender got pli: %+v", pkt)
 				if !s.reSync.get() && s.enabled.get() {
 					fwdPkts = append(fwdPkts, pkt)
 				}
