@@ -124,12 +124,13 @@ func (r *router) AddReceiver(track *webrtc.Track, receiver *webrtc.RTPReceiver) 
 
 // AddWebRTCSender to router
 func (r *router) AddSender(p *WebRTCTransport, rr *receiverRouter) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	if rr != nil {
 		return r.addSender(p, rr)
 	}
 
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 	for _, rr = range r.receivers {
 		if err := r.addSender(p, rr); err != nil {
 			return err
