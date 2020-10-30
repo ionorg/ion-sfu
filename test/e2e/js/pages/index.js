@@ -1,0 +1,1 @@
+exports.PubSubPage = require('./PubSubPage');

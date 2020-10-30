@@ -1,0 +1,38 @@
+{
+  "name": "PubSub JS",
+  "callable": true,
+  "grids": [
+    {
+      "type": "local",
+      "url": "http://hub:4444/wd/hub"
+    }
+  ],
+  "tests": [
+    {
+      "name": "PubSub",
+      "description": "This test checks that two clients can pub/sub using ion-sfu",
+      "tupleSize": 2,
+      "testImpl": "PubSub.js",
+      "payload": {
+        "url": "http://pubsub",
+        "port": 30000,
+        "takeScreenshotForEachTest": true,
+        "testTimeout": 60,
+        "getStats": {
+          "enabled": true,
+          "statsCollectionTime": 2,
+          "statsCollectionInterval": 1,
+          "peerConnections": ["appController.call_.pcClient_.pc_"],
+          "selectedStats": ["inbound-rtp", "outbound-rtp", "candidate-pair"]
+        }
+      }
+    }
+  ],
+  "clients": [
+    {
+      "browserName": "chrome",
+      "platform": "localhost",
+      "headless": true
+    }
+  ]
+}

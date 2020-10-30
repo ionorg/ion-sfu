@@ -1,0 +1,44 @@
+version: "3"
+services:
+  hub:
+    image: selenium/hub:3.141.59
+    container_name: hub
+    ports:
+      - 4444:4444
+
+  pubsub:
+    image: nginx
+    volumes:
+      - ../../examples/pubsubtest:/usr/share/nginx/html
+    ports:
+      - 8000:80
+
+  sfu:
+    image: pionwebrtc/ion-sfu:latest-jsonrpc
+    ports:
+      - "5000-5100:5000-5100/udp"
+      - 50051:50051
+
+  chrome:
+    image: selenium/node-chrome:3.141.59
+    depends_on:
+      - hub
+    environment:
+      - HUB_HOST=hub
+
+  kite:
+    build:
+      context: .
+    volumes:
+      - /dev/shm:/dev/shm
+      - ./test:/workspace/test
+      - ./scripts:/workspace/scripts
+    depends_on:
+      - hub
+      - sfu
+      - pubsub
+    environment:
+      - HUB_HOST=hub
+      - HUB_PORT=4444
+      - KITE_TEST_PATH=/workspace/test
+      - KITE_CONFIG_NAME=js.pubsub.config.json

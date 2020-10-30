@@ -1,0 +1,19 @@
+{
+  "name": "apprtc",
+  "version": "0.0.3",
+  "description": "KITE AppRTC-Test Javascript",
+  "main": "",
+  "scripts": {
+    "test": ""
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.15.2",
+    "kite-common": "^0.1.14",
+    "socket.io": "^2.2.0"
+  }
+}
