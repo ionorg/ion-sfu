@@ -54,7 +54,9 @@ func sendRTPUntilDone(done <-chan struct{}, t *testing.T, track *webrtc.Track) {
 	for {
 		select {
 		case <-time.After(20 * time.Millisecond):
-			err := track.WriteRTP(track.Packetizer().Packetize([]byte{0x01, 0x02, 0x03, 0x04}, 1)[0])
+			pkt := track.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]
+			pkt.Payload = []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0x9f, 0x94, 0x1}
+			err := track.WriteRTP(pkt)
 			assert.NoError(t, err)
 		case <-done:
 			return
@@ -126,7 +128,10 @@ func addMedia(done <-chan struct{}, t *testing.T, pc *webrtc.PeerConnection, med
 }
 
 func TestSFU_SessionScenarios(t *testing.T) {
-	sfu := NewSFU(Config{Log: log.Config{Level: "debug"}})
+	fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go", "jsonrpc2"}
+	fixByFunc := []string{"Handle"}
+	log.Init("trace", fixByFile, fixByFunc)
+	sfu := NewSFU(Config{Log: log.Config{Level: "trace"}})
 
 	tests := []struct {
 		name  string
@@ -217,6 +222,8 @@ func TestSFU_SessionScenarios(t *testing.T) {
 							assert.NoError(t, err)
 							a, err := p.remote.CreateAnswer(nil)
 							assert.NoError(t, err)
+							err = p.remote.SetLocalDescription(a)
+							assert.NoError(t, err)
 							err = p.local.SetRemoteDescription(a)
 							assert.NoError(t, err)
 						}
@@ -234,7 +241,6 @@ func TestSFU_SessionScenarios(t *testing.T) {
 						p.mu.Unlock()
 
 					case "publish":
-						addMedia(done, t, p.remote, remote.media)
 						p.pubs = append(p.pubs, remote.media...)
 
 						// all other peers should get sub'd
@@ -243,6 +249,8 @@ func TestSFU_SessionScenarios(t *testing.T) {
 								p.subs.Add(len(remote.media))
 							}
 						}
+
+						addMedia(done, t, p.remote, remote.media)
 					}
 				}
 			}
