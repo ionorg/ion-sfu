@@ -66,7 +66,7 @@ func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportCon
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 		log.Debugf("Peer %s got remote track id: %s mediaSSRC: %d rid :%s streamID: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.Label())
 		if rr := p.router.AddReceiver(track, receiver); rr != nil {
-			p.session.AddRouter(p.router, rr)
+			p.session.Publish(p.router, rr)
 		}
 		if p.onTrackHandler != nil {
 			p.onTrackHandler(track, receiver)
@@ -87,16 +87,7 @@ func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportCon
 		case webrtc.ICEConnectionStateConnected:
 			p.subOnce.Do(func() {
 				// Subscribe to existing transports
-				for _, t := range session.Transports() {
-					if t.ID() == p.id {
-						continue
-					}
-					err := t.GetRouter().AddSender(p, nil)
-					if err != nil {
-						log.Errorf("Subscribing to router err: %v", err)
-						continue
-					}
-				}
+				p.session.Subscribe(p)
 			})
 		case webrtc.ICEConnectionStateClosed:
 			log.Debugf("webrtc ice closed for peer: %s", p.id)
