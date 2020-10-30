@@ -16,8 +16,8 @@ services:
   sfu:
     image: pionwebrtc/ion-sfu:latest-jsonrpc
     ports:
-      - "5000-5100:5000-5100/udp"
-      - 50051:50051
+      - "5000-5200:5000-5200/udp"
+      - 7000:7000
 
   chrome:
     image: selenium/node-chrome:3.141.59
