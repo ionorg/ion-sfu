@@ -18,11 +18,17 @@ var (
 	ErrOfferIgnored = errors.New("offered ignored")
 )
 
+// TransportProvider provides the peerConnection to the sfu.Peer{}
+// This allows the sfu.SFU{} implementation to be customized / wrapped by another package
+type TransportProvider interface {
+	NewWebRTCTransport(sid string, me MediaEngine) (*WebRTCTransport, error)
+}
+
 // Peer represents a single peer signal session
 type Peer struct {
 	sync.Mutex
-	sfu *SFU
-	pc  *WebRTCTransport
+	provider TransportProvider
+	pc       *WebRTCTransport
 
 	OnIceCandidate func(*webrtc.ICECandidateInit)
 	OnOffer        func(*webrtc.SessionDescription)
@@ -32,9 +38,9 @@ type Peer struct {
 }
 
 // NewPeer creates a new Peer for signaling with the given SFU
-func NewPeer(sfu *SFU) Peer {
+func NewPeer(provider TransportProvider) Peer {
 	return Peer{
-		sfu: sfu,
+		provider: provider,
 	}
 }
 
@@ -53,7 +59,7 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		return nil, fmt.Errorf("error parsing sdp: %v", err)
 	}
 
-	pc, err := p.sfu.NewWebRTCTransport(sid, me)
+	pc, err := p.provider.NewWebRTCTransport(sid, me)
 	if err != nil {
 		return nil, fmt.Errorf("error creating transport: %v", err)
 	}
