@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/lucsky/cuid"
+	log "github.com/pion/ion-log"
 	"github.com/pion/webrtc/v3"
 	"github.com/stretchr/testify/assert"
 )
@@ -90,8 +91,12 @@ type remote struct {
 }
 
 type peer struct {
+	id     string
+	mu     sync.Mutex
 	local  *Peer
 	remote *webrtc.PeerConnection
+	subs   sync.WaitGroup
+	pubs   []media
 }
 
 type step struct {
@@ -116,12 +121,12 @@ func addMedia(done <-chan struct{}, t *testing.T, pc *webrtc.PeerConnection, med
 			assert.NoError(t, err)
 		}
 
-		sendRTPUntilDone(done, t, track)
+		go sendRTPUntilDone(done, t, track)
 	}
 }
 
 func TestSFU_SessionScenarios(t *testing.T) {
-	sfu := NewSFU(Config{})
+	sfu := NewSFU(Config{Log: log.Config{Level: "debug"}})
 
 	tests := []struct {
 		name  string
@@ -134,10 +139,6 @@ func TestSFU_SessionScenarios(t *testing.T) {
 					remotes: []*remote{{
 						id:     "remote1",
 						action: "join",
-						media: []media{
-							{kind: "audio", id: "stream1", tid: cuid.New()},
-							{kind: "video", id: "stream1", tid: cuid.New()},
-						},
 					}},
 				},
 				{
@@ -163,7 +164,6 @@ func TestSFU_SessionScenarios(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			pubWg := sync.WaitGroup{}
 			done := make(chan struct{})
 
 			peers := make(map[string]*peer)
@@ -171,25 +171,56 @@ func TestSFU_SessionScenarios(t *testing.T) {
 				for _, remote := range step.remotes {
 					p := peers[remote.id]
 
-					// if new peer, create it
-					if p == nil {
+					switch remote.action {
+					case "join":
+						assert.Nil(t, p)
+
 						me := webrtc.MediaEngine{}
 						me.RegisterDefaultCodecs()
 						api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
 						r, err := api.NewPeerConnection(webrtc.Configuration{})
 						r.OnTrack(func(*webrtc.Track, *webrtc.RTPReceiver) {
-							pubWg.Done()
+							p.subs.Done()
 						})
 						assert.NoError(t, err)
 						_, err = r.CreateDataChannel("ion-sfu", nil)
 						assert.NoError(t, err)
 						local := NewPeer(sfu)
-						p = &peer{remote: r, local: &local}
-						peers[remote.id] = p
-					}
+						p = &peer{id: remote.id, remote: r, local: &local}
 
-					switch remote.action {
-					case "join":
+						for id, existing := range peers {
+							if id != remote.id {
+								p.subs.Add(len(existing.pubs))
+							}
+						}
+
+						peers[remote.id] = p
+
+						p.mu.Lock()
+
+						p.remote.OnNegotiationNeeded(func() {
+							p.mu.Lock()
+							defer p.mu.Unlock()
+							o, err := p.remote.CreateOffer(nil)
+							assert.NoError(t, err)
+							err = p.remote.SetLocalDescription(o)
+							assert.NoError(t, err)
+							a, err := p.local.Answer(o)
+							assert.NoError(t, err)
+							p.remote.SetRemoteDescription(*a)
+						})
+
+						p.local.OnOffer = func(o *webrtc.SessionDescription) {
+							p.mu.Lock()
+							defer p.mu.Unlock()
+							err := p.remote.SetRemoteDescription(*o)
+							assert.NoError(t, err)
+							a, err := p.remote.CreateAnswer(nil)
+							assert.NoError(t, err)
+							err = p.local.SetRemoteDescription(a)
+							assert.NoError(t, err)
+						}
+
 						offer, err := p.remote.CreateOffer(nil)
 						assert.NoError(t, err)
 						gatherComplete := webrtc.GatheringCompletePromise(p.remote)
@@ -199,14 +230,26 @@ func TestSFU_SessionScenarios(t *testing.T) {
 						answer, err := p.local.Join("test", *p.remote.LocalDescription())
 						assert.NoError(t, err)
 						p.remote.SetRemoteDescription(*answer)
+
+						p.mu.Unlock()
+
 					case "publish":
 						addMedia(done, t, p.remote, remote.media)
-						pubWg.Add(len(remote.media))
+						p.pubs = append(p.pubs, remote.media...)
+
+						// all other peers should get sub'd
+						for id, p := range peers {
+							if id != p.id {
+								p.subs.Add(len(remote.media))
+							}
+						}
 					}
 				}
 			}
 
-			pubWg.Wait()
+			for _, p := range peers {
+				p.subs.Wait()
+			}
 			close(done)
 		})
 	}
