@@ -232,6 +232,10 @@ func (p *WebRTCTransport) SignalingState() webrtc.SignalingState {
 	return p.pc.SignalingState()
 }
 
+func (p *WebRTCTransport) OnSignalingState(fn func(s webrtc.SignalingState)) {
+	p.pc.OnSignalingStateChange(fn)
+}
+
 // ID of peer
 func (p *WebRTCTransport) ID() string {
 	return p.id
