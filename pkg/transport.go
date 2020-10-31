@@ -6,5 +6,5 @@ type Transport interface {
 	ID() string
 	GetRouter() Router
 	AddSender(streamID string, sender Sender)
-	GetSenders(streamID string) []Sender
+	GetSenders(streamID string) map[string]Sender
 }

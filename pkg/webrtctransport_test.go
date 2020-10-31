@@ -437,7 +437,7 @@ func TestWebRTCTransport_SetRemoteDescription(t *testing.T) {
 
 func TestWebRTCTransport_AddSender(t *testing.T) {
 	type fields struct {
-		senders map[string][]Sender
+		senders map[string]map[string]Sender
 	}
 	type args struct {
 		streamID string
@@ -450,7 +450,7 @@ func TestWebRTCTransport_AddSender(t *testing.T) {
 	}{
 		{
 			name:   "Must add sender to given stream ID",
-			fields: fields{senders: map[string][]Sender{}},
+			fields: fields{senders: map[string]map[string]Sender{}},
 			args: struct {
 				streamID string
 				sender   Sender
@@ -472,17 +472,17 @@ func TestWebRTCTransport_AddSender(t *testing.T) {
 
 func TestWebRTCTransport_GetSenders(t *testing.T) {
 	type fields struct {
-		senders map[string][]Sender
+		senders map[string]map[string]Sender
 	}
 	type args struct {
 		streamID string
 	}
-	sdrs := map[string][]Sender{"test": {&SimpleSender{}, &SimulcastSender{}}}
+	sdrs := map[string]map[string]Sender{"test": {"simple": &SimpleSender{}, "simulcast": &SimulcastSender{}}}
 	tests := []struct {
 		name   string
 		fields fields
 		args   args
-		want   []Sender
+		want   map[string]Sender
 	}{
 		{
 			name: "Must return an array of senders from given stream ID",

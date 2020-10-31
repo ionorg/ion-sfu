@@ -28,7 +28,7 @@ type WebRTCTransport struct {
 	mu             sync.RWMutex
 	router         Router
 	session        *Session
-	senders        map[string][]Sender
+	senders        map[string]map[string]Sender
 	candidates     []webrtc.ICECandidateInit
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
 	negotiate      func()
@@ -58,7 +58,7 @@ func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportCon
 		me:      me,
 		session: session,
 		router:  newRouter(pc, id, cfg.router),
-		senders: make(map[string][]Sender),
+		senders: make(map[string]map[string]Sender),
 	}
 
 	// Add transport to the session
@@ -147,6 +147,8 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 		p.candidates = nil
 	}
 
+	log.Infof("%+v", p.senders)
+
 	switch desc.Type {
 	case webrtc.SDPTypeAnswer:
 		p.mu.RLock()
@@ -154,6 +156,7 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 			if mid, ok := md.Attribute(sdp.AttrKeyMID); ok {
 				for _, senders := range p.senders {
 					for _, sender := range senders {
+						log.Infof("start send %s", mid)
 						if sender.Transceiver().Mid() == mid {
 							sender.Start()
 						}
@@ -245,15 +248,19 @@ func (p *WebRTCTransport) GetRouter() Router {
 func (p *WebRTCTransport) AddSender(streamID string, sender Sender) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if senders, ok := p.senders[streamID]; ok {
-		senders = append(senders, sender)
-		p.senders[streamID] = senders
-	} else {
-		p.senders[streamID] = []Sender{sender}
+	if p.senders[streamID] == nil {
+		p.senders[streamID] = make(map[string]Sender)
 	}
+	p.senders[streamID][sender.Track().ID()] = sender
 }
 
-func (p *WebRTCTransport) GetSenders(streamID string) []Sender {
+func (p *WebRTCTransport) RemoveSender(streamID string, sender Sender) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.senders[streamID], sender.Track().ID())
+}
+
+func (p *WebRTCTransport) GetSenders(streamID string) map[string]Sender {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.senders[streamID]

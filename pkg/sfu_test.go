@@ -181,243 +181,243 @@ func TestSFU_SessionScenarios(t *testing.T) {
 		name  string
 		steps []step
 	}{
-		// {
-		// 	name: "Sequential join",
-		// 	steps: []step{
-		// {
-		// 	actions: []*action{{
-		// 		id:   "remote1",
-		// 		kind: "join",
-		// 	}},
-		// },
-		// {
-		// 	actions: []*action{{
-		// 		id:   "remote1",
-		// 		kind: "publish",
-		// 		media: []media{
-		// 			{kind: "audio", id: "stream1", tid: "audio"},
-		// 			{kind: "video", id: "stream1", tid: "video"},
-		// 		},
-		// 	}},
-		// },
-		// 		{
-		// 			actions: []*action{{
-		// 				id:   "remote2",
-		// 				kind: "join",
-		// 			}},
-		// 		},
-		// 		{
-		// 			actions: []*action{{
-		// 				id:   "remote2",
-		// 				kind: "publish",
-		// 				media: []media{
-		// 					{kind: "audio", id: "stream2", tid: "audio"},
-		// 					{kind: "video", id: "stream2", tid: "video"},
-		// 				},
-		// 			}},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	name: "Concurrent join + publish",
-		// 	steps: []step{
-		// 		{
-		// 			actions: []*action{{
-		// 				id:   "remote1",
-		// 				kind: "join",
-		// 			}, {
-		// 				id:   "remote2",
-		// 				kind: "join",
-		// 			}, {
-		// 				id:   "remote3",
-		// 				kind: "join",
-		// 			}},
-		// 		},
-		// 		{
-		// 			actions: []*action{{
-		// 				id:   "remote1",
-		// 				kind: "publish",
-		// 				media: []media{
-		// 					{kind: "audio", id: "stream1", tid: "audio"},
-		// 					{kind: "video", id: "stream1", tid: "video"},
-		// 				},
-		// 			}, {
-		// 				id:   "remote2",
-		// 				kind: "publish",
-		// 				media: []media{
-		// 					{kind: "audio", id: "stream2", tid: "audio"},
-		// 					{kind: "video", id: "stream2", tid: "video"},
-		// 				},
-		// 			}, {
-		// 				id:   "remote3",
-		// 				kind: "publish",
-		// 				media: []media{
-		// 					{kind: "audio", id: "stream3", tid: "audio"},
-		// 					{kind: "video", id: "stream3", tid: "video"},
-		// 				},
-		// 			}},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	name: "Multiple stream publish",
-		// 	steps: []step{
-		// 		{
-		// 			actions: []*action{{
-		// 				id:   "remote1",
-		// 				kind: "join",
-		// 			}, {
-		// 				id:   "remote2",
-		// 				kind: "join",
-		// 			}},
-		// 		},
-		// 		{
-		// 			actions: []*action{{
-		// 				id:   "remote1",
-		// 				kind: "publish",
-		// 				media: []media{
-		// 					{kind: "audio", id: "stream1", tid: "audio1"},
-		// 					{kind: "video", id: "stream1", tid: "video1"},
-		// 				},
-		// 			}},
-		// 		}, {
-		// 			actions: []*action{{
-		// 				id:   "remote2",
-		// 				kind: "publish",
-		// 				media: []media{
-		// 					{kind: "audio", id: "stream2", tid: "audio2"},
-		// 					{kind: "video", id: "stream2", tid: "video2"},
-		// 				},
-		// 			}},
-		// 		},
-		// 		{
-		// 			actions: []*action{{
-		// 				id:   "remote1",
-		// 				kind: "publish",
-		// 				media: []media{
-		// 					{kind: "audio", id: "stream3", tid: "audio3"},
-		// 					{kind: "video", id: "stream3", tid: "video3"},
-		// 				},
-		// 			}},
-		// 		},
-		// 		{
-		// 			actions: []*action{{
-		// 				id:   "remote1",
-		// 				kind: "unpublish",
-		// 				media: []media{
-		// 					{kind: "audio", id: "stream1", tid: "audio1"},
-		// 					{kind: "video", id: "stream1", tid: "video1"},
-		// 				},
-		// 			}},
-		// 		}, {
-		// 			actions: []*action{{
-		// 				id:   "remote2",
-		// 				kind: "publish",
-		// 				media: []media{
-		// 					{kind: "audio", id: "stream4", tid: "audio4"},
-		// 					{kind: "video", id: "stream4", tid: "video4"},
-		// 				},
-		// 			}},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	name: "Large session",
-		// 	steps: []step{
-		// 		{
-		// 			actions: []*action{{
-		// 				id:   "remote1",
-		// 				kind: "join",
-		// 			}, {
-		// 				id:   "remote2",
-		// 				kind: "join",
-		// 			}, {
-		// 				id:   "remote3",
-		// 				kind: "join",
-		// 			}},
-		// 		},
-		// 		{
-		// 			actions: []*action{{
-		// 				id:   "remote1",
-		// 				kind: "publish",
-		// 				media: []media{
-		// 					{kind: "audio", id: "stream1", tid: "audio1"},
-		// 					{kind: "video", id: "stream1", tid: "video1"},
-		// 				},
-		// 			}, {
-		// 				id:   "remote2",
-		// 				kind: "publish",
-		// 				media: []media{
-		// 					{kind: "audio", id: "stream2", tid: "audio2"},
-		// 					{kind: "video", id: "stream2", tid: "video2"},
-		// 				},
-		// 			}, {
-		// 				id:   "remote3",
-		// 				kind: "publish",
-		// 				media: []media{
-		// 					{kind: "audio", id: "stream3", tid: "audio3"},
-		// 					{kind: "video", id: "stream3", tid: "video3"},
-		// 				},
-		// 			}},
-		// 		},
-		// 		{
-		// 			actions: []*action{{
-		// 				id:   "remote4",
-		// 				kind: "join",
-		// 			}},
-		// 		},
-		// 		{
-		// 			actions: []*action{{
-		// 				id:   "remote4",
-		// 				kind: "publish",
-		// 				media: []media{
-		// 					{kind: "audio", id: "stream4", tid: "audio4"},
-		// 					{kind: "video", id: "stream4", tid: "video4"},
-		// 				},
-		// 			}},
-		// 		},
-		// 		{
-		// 			actions: []*action{{
-		// 				id:   "remote5",
-		// 				kind: "join",
-		// 			}},
-		// 		},
-		// 		{
-		// 			actions: []*action{{
-		// 				id:   "remote5",
-		// 				kind: "publish",
-		// 				media: []media{
-		// 					{kind: "audio", id: "stream5", tid: "audio5"},
-		// 					{kind: "video", id: "stream5", tid: "video5"},
-		// 				},
-		// 			}},
-		// 		},
-		// 		{
-		// 			actions: []*action{{
-		// 				id:   "remote1",
-		// 				kind: "unpublish",
-		// 				media: []media{
-		// 					{kind: "audio", id: "stream1", tid: "audio1"},
-		// 					{kind: "video", id: "stream1", tid: "video1"},
-		// 				},
-		// 			}, {
-		// 				id:   "remote2",
-		// 				kind: "unpublish",
-		// 				media: []media{
-		// 					{kind: "audio", id: "stream2", tid: "audio2"},
-		// 					{kind: "video", id: "stream2", tid: "video2"},
-		// 				},
-		// 			}, {
-		// 				id:   "remote1",
-		// 				kind: "publish",
-		// 				media: []media{
-		// 					{kind: "audio", id: "stream1.1", tid: "audio1.1"},
-		// 					{kind: "video", id: "stream1.1", tid: "video1.1"},
-		// 				},
-		// 			}},
-		// 		},
-		// 	},
-		// },
+		{
+			name: "Sequential join",
+			steps: []step{
+				{
+					actions: []*action{{
+						id:   "remote1",
+						kind: "join",
+					}},
+				},
+				{
+					actions: []*action{{
+						id:   "remote1",
+						kind: "publish",
+						media: []media{
+							{kind: "audio", id: "stream1", tid: "audio"},
+							{kind: "video", id: "stream1", tid: "video"},
+						},
+					}},
+				},
+				{
+					actions: []*action{{
+						id:   "remote2",
+						kind: "join",
+					}},
+				},
+				{
+					actions: []*action{{
+						id:   "remote2",
+						kind: "publish",
+						media: []media{
+							{kind: "audio", id: "stream2", tid: "audio"},
+							{kind: "video", id: "stream2", tid: "video"},
+						},
+					}},
+				},
+			},
+		},
+		{
+			name: "Concurrent join + publish",
+			steps: []step{
+				{
+					actions: []*action{{
+						id:   "remote1",
+						kind: "join",
+					}, {
+						id:   "remote2",
+						kind: "join",
+					}, {
+						id:   "remote3",
+						kind: "join",
+					}},
+				},
+				{
+					actions: []*action{{
+						id:   "remote1",
+						kind: "publish",
+						media: []media{
+							{kind: "audio", id: "stream1", tid: "audio"},
+							{kind: "video", id: "stream1", tid: "video"},
+						},
+					}, {
+						id:   "remote2",
+						kind: "publish",
+						media: []media{
+							{kind: "audio", id: "stream2", tid: "audio"},
+							{kind: "video", id: "stream2", tid: "video"},
+						},
+					}, {
+						id:   "remote3",
+						kind: "publish",
+						media: []media{
+							{kind: "audio", id: "stream3", tid: "audio"},
+							{kind: "video", id: "stream3", tid: "video"},
+						},
+					}},
+				},
+			},
+		},
+		{
+			name: "Multiple stream publish",
+			steps: []step{
+				{
+					actions: []*action{{
+						id:   "remote1",
+						kind: "join",
+					}, {
+						id:   "remote2",
+						kind: "join",
+					}},
+				},
+				{
+					actions: []*action{{
+						id:   "remote1",
+						kind: "publish",
+						media: []media{
+							{kind: "audio", id: "stream1", tid: "audio1"},
+							{kind: "video", id: "stream1", tid: "video1"},
+						},
+					}},
+				}, {
+					actions: []*action{{
+						id:   "remote2",
+						kind: "publish",
+						media: []media{
+							{kind: "audio", id: "stream2", tid: "audio2"},
+							{kind: "video", id: "stream2", tid: "video2"},
+						},
+					}},
+				},
+				{
+					actions: []*action{{
+						id:   "remote1",
+						kind: "publish",
+						media: []media{
+							{kind: "audio", id: "stream3", tid: "audio3"},
+							{kind: "video", id: "stream3", tid: "video3"},
+						},
+					}},
+				},
+				{
+					actions: []*action{{
+						id:   "remote1",
+						kind: "unpublish",
+						media: []media{
+							{kind: "audio", id: "stream1", tid: "audio1"},
+							{kind: "video", id: "stream1", tid: "video1"},
+						},
+					}},
+				}, {
+					actions: []*action{{
+						id:   "remote2",
+						kind: "publish",
+						media: []media{
+							{kind: "audio", id: "stream4", tid: "audio4"},
+							{kind: "video", id: "stream4", tid: "video4"},
+						},
+					}},
+				},
+			},
+		},
+		{
+			name: "Large session",
+			steps: []step{
+				{
+					actions: []*action{{
+						id:   "remote1",
+						kind: "join",
+					}, {
+						id:   "remote2",
+						kind: "join",
+					}, {
+						id:   "remote3",
+						kind: "join",
+					}},
+				},
+				{
+					actions: []*action{{
+						id:   "remote1",
+						kind: "publish",
+						media: []media{
+							{kind: "audio", id: "stream1", tid: "audio1"},
+							{kind: "video", id: "stream1", tid: "video1"},
+						},
+					}, {
+						id:   "remote2",
+						kind: "publish",
+						media: []media{
+							{kind: "audio", id: "stream2", tid: "audio2"},
+							{kind: "video", id: "stream2", tid: "video2"},
+						},
+					}, {
+						id:   "remote3",
+						kind: "publish",
+						media: []media{
+							{kind: "audio", id: "stream3", tid: "audio3"},
+							{kind: "video", id: "stream3", tid: "video3"},
+						},
+					}},
+				},
+				{
+					actions: []*action{{
+						id:   "remote4",
+						kind: "join",
+					}},
+				},
+				{
+					actions: []*action{{
+						id:   "remote4",
+						kind: "publish",
+						media: []media{
+							{kind: "audio", id: "stream4", tid: "audio4"},
+							{kind: "video", id: "stream4", tid: "video4"},
+						},
+					}},
+				},
+				{
+					actions: []*action{{
+						id:   "remote5",
+						kind: "join",
+					}},
+				},
+				{
+					actions: []*action{{
+						id:   "remote5",
+						kind: "publish",
+						media: []media{
+							{kind: "audio", id: "stream5", tid: "audio5"},
+							{kind: "video", id: "stream5", tid: "video5"},
+						},
+					}},
+				},
+				{
+					actions: []*action{{
+						id:   "remote1",
+						kind: "unpublish",
+						media: []media{
+							{kind: "audio", id: "stream1", tid: "audio1"},
+							{kind: "video", id: "stream1", tid: "video1"},
+						},
+					}, {
+						id:   "remote2",
+						kind: "unpublish",
+						media: []media{
+							{kind: "audio", id: "stream2", tid: "audio2"},
+							{kind: "video", id: "stream2", tid: "video2"},
+						},
+					}, {
+						id:   "remote1",
+						kind: "publish",
+						media: []media{
+							{kind: "audio", id: "stream1.1", tid: "audio1.1"},
+							{kind: "video", id: "stream1.1", tid: "video1.1"},
+						},
+					}},
+				},
+			},
+		},
 		{
 			name: "Pub->unpub->pub",
 			steps: []step{

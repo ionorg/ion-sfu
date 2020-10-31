@@ -93,6 +93,7 @@ func (r *router) AddReceiver(track *webrtc.Track, receiver *webrtc.RTPReceiver) 
 	})
 	recv.SetRTCPCh(r.rtcpCh)
 	recv.OnCloseHandler(func() {
+		log.Infof("Delete recevier")
 		r.deleteReceiver(trackID)
 	})
 	if track.Kind() == webrtc.RTPCodecTypeVideo {
@@ -211,13 +212,14 @@ func (r *router) addSender(p *WebRTCTransport, rr *receiverRouter) error {
 		sender = NewSimpleSender(p.id, rr, t)
 	}
 	sender.OnCloseHandler(func() {
+		p.RemoveSender(rr.stream, sender)
 		if err := p.pc.RemoveTrack(t.Sender()); err != nil { // nolint:scopelint
 			log.Errorf("Error closing sender: %s", err) // nolint:scopelint
 		} else {
 			p.negotiate() // nolint:scopelint
 		}
 	})
-
+	log.Infof("add sender")
 	p.AddSender(rr.stream, sender)
 	recv.AddSender(sender)
 	return nil
