@@ -303,6 +303,10 @@ func (s *SimulcastSender) receiveRTCP() {
 					pkt.SenderSSRC = s.lSSRC
 					fwdPkts = append(fwdPkts, pkt)
 				}
+			case *rtcp.ReceiverReport:
+				if s.enabled.get() && len(pkt.Reports) > 0 && pkt.Reports[0].FractionLost > 25 {
+					log.Tracef("Slow link for sender %s, fraction packet lost %.2f", s.id, float64(pkt.Reports[0].FractionLost)/256)
+				}
 			case *rtcp.TransportLayerNack:
 				log.Tracef("sender got nack: %+v", pkt)
 				for _, pair := range pkt.Nacks {
