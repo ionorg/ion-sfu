@@ -1,6 +1,7 @@
 package sfu
 
 import (
+	"fmt"
 	"io"
 	"math/rand"
 	"sync"
@@ -830,10 +831,13 @@ func TestSFU_NACKFeedback(t *testing.T) {
 				for i := 1; i < 5; i++ {
 					pkt, err := track.ReadRTP()
 					assert.NoError(t, err)
+					sn := pkt.SequenceNumber
+					time.Sleep(10 * time.Millisecond)
+					fmt.Printf("nack %d\n", sn)
 					sub.remote.WriteRTCP([]rtcp.Packet{
 						&rtcp.TransportLayerNack{
 							MediaSSRC: track.SSRC(),
-							Nacks:     []rtcp.NackPair{{PacketID: pkt.SequenceNumber, LostPackets: 1}},
+							Nacks:     []rtcp.NackPair{{PacketID: sn, LostPackets: 0}},
 						},
 					})
 				}
