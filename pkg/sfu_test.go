@@ -56,8 +56,7 @@ func sendRTPUntilDone(start, done <-chan struct{}, t *testing.T, track *webrtc.T
 		case <-time.After(20 * time.Millisecond):
 			pkt := track.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]
 			pkt.Payload = []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0x9f, 0x94, 0x1}
-			err := track.WriteRTP(pkt)
-			assert.NoError(t, err)
+			_ = track.WriteRTP(pkt)
 		case <-done:
 			return
 		}
@@ -248,8 +247,8 @@ func TestSFU_SessionScenarios(t *testing.T) {
 						id:   "remote1",
 						kind: "publish",
 						media: []media{
-							{kind: "audio", id: "stream1", tid: "audio"},
-							{kind: "video", id: "stream1", tid: "video"},
+							{kind: "audio", id: "stream1", tid: "audio1"},
+							{kind: "video", id: "stream1", tid: "video1"},
 						},
 					}},
 				}, {
@@ -257,8 +256,8 @@ func TestSFU_SessionScenarios(t *testing.T) {
 						id:   "remote2",
 						kind: "publish",
 						media: []media{
-							{kind: "audio", id: "stream2", tid: "audio"},
-							{kind: "video", id: "stream2", tid: "video"},
+							{kind: "audio", id: "stream2", tid: "audio2"},
+							{kind: "video", id: "stream2", tid: "video2"},
 						},
 					}},
 				},
@@ -267,8 +266,8 @@ func TestSFU_SessionScenarios(t *testing.T) {
 						id:   "remote1",
 						kind: "publish",
 						media: []media{
-							{kind: "audio", id: "stream3", tid: "audio"},
-							{kind: "video", id: "stream3", tid: "video"},
+							{kind: "audio", id: "stream3", tid: "audio3"},
+							{kind: "video", id: "stream3", tid: "video3"},
 						},
 					}},
 				},
