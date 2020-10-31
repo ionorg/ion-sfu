@@ -49,14 +49,14 @@ func sendRTPWithSenderUntilDone(done <-chan struct{}, t *testing.T, track *webrt
 	}
 }
 
-func sendRTPUntilDone(done <-chan struct{}, t *testing.T, track *webrtc.Track) {
+func sendRTPUntilDone(start, done <-chan struct{}, t *testing.T, track *webrtc.Track) {
+	<-start
 	for {
 		select {
 		case <-time.After(20 * time.Millisecond):
 			pkt := track.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]
 			pkt.Payload = []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0x9f, 0x94, 0x1}
-			err := track.WriteRTP(pkt)
-			assert.NoError(t, err)
+			_ = track.WriteRTP(pkt)
 		case <-done:
 			return
 		}
@@ -98,35 +98,46 @@ type peer struct {
 	local  *Peer
 	remote *webrtc.PeerConnection
 	subs   sync.WaitGroup
-	pubs   []*webrtc.RTPSender
+	pubs   []*sender
 }
 
 type step struct {
 	actions []*action
 }
 
-func addMedia(done <-chan struct{}, t *testing.T, pc *webrtc.PeerConnection, media []media) []*webrtc.RTPSender {
-	var senders []*webrtc.RTPSender
+type sender struct {
+	transceiver *webrtc.RTPTransceiver
+	start       chan struct{}
+}
+
+func addMedia(done <-chan struct{}, t *testing.T, pc *webrtc.PeerConnection, media []media) []*sender {
+	var senders []*sender
 	for _, media := range media {
 		var track *webrtc.Track
 		var err error
+
+		start := make(chan struct{})
 
 		switch media.kind {
 		case "audio":
 			track, err = pc.NewTrack(webrtc.DefaultPayloadTypeOpus, rand.Uint32(), media.tid, media.id)
 			assert.NoError(t, err)
-			sender, err := pc.AddTrack(track)
+			transceiver, err := pc.AddTransceiverFromTrack(track, webrtc.RtpTransceiverInit{
+				Direction: webrtc.RTPTransceiverDirectionSendonly,
+			})
 			assert.NoError(t, err)
-			senders = append(senders, sender)
+			senders = append(senders, &sender{transceiver: transceiver, start: start})
 		case "video":
 			track, err = pc.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), media.tid, media.id)
 			assert.NoError(t, err)
-			sender, err := pc.AddTrack(track)
+			transceiver, err := pc.AddTransceiverFromTrack(track, webrtc.RtpTransceiverInit{
+				Direction: webrtc.RTPTransceiverDirectionSendonly,
+			})
 			assert.NoError(t, err)
-			senders = append(senders, sender)
+			senders = append(senders, &sender{transceiver: transceiver, start: start})
 		}
 
-		go sendRTPUntilDone(done, t, track)
+		go sendRTPUntilDone(start, done, t, track)
 	}
 	return senders
 }
@@ -236,15 +247,17 @@ func TestSFU_SessionScenarios(t *testing.T) {
 						id:   "remote1",
 						kind: "publish",
 						media: []media{
-							{kind: "audio", id: "stream1", tid: "audio"},
-							{kind: "video", id: "stream1", tid: "video"},
+							{kind: "audio", id: "stream1", tid: "audio1"},
+							{kind: "video", id: "stream1", tid: "video1"},
 						},
-					}, {
+					}},
+				}, {
+					actions: []*action{{
 						id:   "remote2",
 						kind: "publish",
 						media: []media{
-							{kind: "audio", id: "stream2", tid: "audio"},
-							{kind: "video", id: "stream2", tid: "video"},
+							{kind: "audio", id: "stream2", tid: "audio2"},
+							{kind: "video", id: "stream2", tid: "video2"},
 						},
 					}},
 				},
@@ -253,8 +266,27 @@ func TestSFU_SessionScenarios(t *testing.T) {
 						id:   "remote1",
 						kind: "publish",
 						media: []media{
-							{kind: "audio", id: "stream3", tid: "audio"},
-							{kind: "video", id: "stream3", tid: "video"},
+							{kind: "audio", id: "stream3", tid: "audio3"},
+							{kind: "video", id: "stream3", tid: "video3"},
+						},
+					}},
+				},
+				{
+					actions: []*action{{
+						id:   "remote1",
+						kind: "unpublish",
+						media: []media{
+							{kind: "audio", id: "stream1", tid: "audio1"},
+							{kind: "video", id: "stream1", tid: "video1"},
+						},
+					}},
+				}, {
+					actions: []*action{{
+						id:   "remote2",
+						kind: "publish",
+						media: []media{
+							{kind: "audio", id: "stream4", tid: "audio4"},
+							{kind: "video", id: "stream4", tid: "video4"},
 						},
 					}},
 				},
@@ -265,38 +297,39 @@ func TestSFU_SessionScenarios(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			var mu sync.RWMutex
 			done := make(chan struct{})
-
 			peers := make(map[string]*peer)
+
 			for _, step := range tt.steps {
 				for _, action := range step.actions {
 					func() {
-						p := peers[action.id]
-
 						switch action.kind {
 						case "join":
-							assert.Nil(t, p)
-
 							me := webrtc.MediaEngine{}
 							me.RegisterDefaultCodecs()
 							api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
 							r, err := api.NewPeerConnection(webrtc.Configuration{})
-							r.OnTrack(func(*webrtc.Track, *webrtc.RTPReceiver) {
-								p.subs.Done()
-							})
+
 							assert.NoError(t, err)
 							_, err = r.CreateDataChannel("ion-sfu", nil)
 							assert.NoError(t, err)
 							local := NewPeer(sfu)
-							p = &peer{id: action.id, remote: r, local: &local}
+							p := &peer{id: action.id, remote: r, local: &local}
+							r.OnTrack(func(track *webrtc.Track, recv *webrtc.RTPReceiver) {
+								mu.Lock()
+								p.subs.Done()
+								mu.Unlock()
+							})
 
+							mu.Lock()
 							for id, existing := range peers {
 								if id != action.id {
 									p.subs.Add(len(existing.pubs))
 								}
 							}
-
 							peers[action.id] = p
+							mu.Unlock()
 
 							p.mu.Lock()
 							p.remote.OnNegotiationNeeded(func() {
@@ -308,8 +341,14 @@ func TestSFU_SessionScenarios(t *testing.T) {
 								assert.NoError(t, err)
 								a, err := p.local.Answer(o)
 								assert.NoError(t, err)
-								log.Infof("%v", a)
 								p.remote.SetRemoteDescription(*a)
+
+								for _, pub := range p.pubs {
+									if pub.start != nil {
+										close(pub.start)
+										pub.start = nil
+									}
+								}
 							})
 
 							p.local.OnOffer = func(o *webrtc.SessionDescription) {
@@ -334,20 +373,40 @@ func TestSFU_SessionScenarios(t *testing.T) {
 							answer, err := p.local.Join("test", *p.remote.LocalDescription())
 							assert.NoError(t, err)
 							p.remote.SetRemoteDescription(*answer)
-
 							p.mu.Unlock()
 
 						case "publish":
+							mu.Lock()
+							peer := peers[action.id]
+							peer.mu.Lock()
 							// all other peers should get sub'd
 							for id, p := range peers {
-								if id != p.id {
+								if id != peer.id {
 									p.subs.Add(len(action.media))
 								}
 							}
 
-							p.pubs = append(p.pubs, addMedia(done, t, p.remote, action.media)...)
+							peer.pubs = append(peer.pubs, addMedia(done, t, peer.remote, action.media)...)
+							peer.mu.Unlock()
+							mu.Unlock()
+
+						case "unpublish":
+							mu.Lock()
+							peer := peers[action.id]
+							peer.mu.Lock()
+							for _, media := range action.media {
+								for _, pub := range peer.pubs {
+									if pub.transceiver != nil && pub.transceiver.Sender().Track().ID() == media.tid {
+										peer.remote.RemoveTrack(pub.transceiver.Sender())
+										pub.transceiver = nil
+									}
+								}
+							}
+							peer.mu.Unlock()
+							mu.Unlock()
 						}
 					}()
+					time.Sleep(1 * time.Second)
 				}
 			}
 
