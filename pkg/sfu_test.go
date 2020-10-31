@@ -171,99 +171,259 @@ func addMedia(done <-chan struct{}, t *testing.T, pc *webrtc.PeerConnection, med
 }
 
 func TestSFU_SessionScenarios(t *testing.T) {
-	sfu := NewSFU(Config{})
+	// sfu := NewSFU(Config{})
+	fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go", "jsonrpc2"}
+	fixByFunc := []string{"Handle"}
+	log.Init("trace", fixByFile, fixByFunc)
+	sfu := NewSFU(Config{Log: log.Config{Level: "trace"}})
 
 	tests := []struct {
 		name  string
 		steps []step
 	}{
+		// {
+		// 	name: "Sequential join",
+		// 	steps: []step{
+		// {
+		// 	actions: []*action{{
+		// 		id:   "remote1",
+		// 		kind: "join",
+		// 	}},
+		// },
+		// {
+		// 	actions: []*action{{
+		// 		id:   "remote1",
+		// 		kind: "publish",
+		// 		media: []media{
+		// 			{kind: "audio", id: "stream1", tid: "audio"},
+		// 			{kind: "video", id: "stream1", tid: "video"},
+		// 		},
+		// 	}},
+		// },
+		// 		{
+		// 			actions: []*action{{
+		// 				id:   "remote2",
+		// 				kind: "join",
+		// 			}},
+		// 		},
+		// 		{
+		// 			actions: []*action{{
+		// 				id:   "remote2",
+		// 				kind: "publish",
+		// 				media: []media{
+		// 					{kind: "audio", id: "stream2", tid: "audio"},
+		// 					{kind: "video", id: "stream2", tid: "video"},
+		// 				},
+		// 			}},
+		// 		},
+		// 	},
+		// },
+		// {
+		// 	name: "Concurrent join + publish",
+		// 	steps: []step{
+		// 		{
+		// 			actions: []*action{{
+		// 				id:   "remote1",
+		// 				kind: "join",
+		// 			}, {
+		// 				id:   "remote2",
+		// 				kind: "join",
+		// 			}, {
+		// 				id:   "remote3",
+		// 				kind: "join",
+		// 			}},
+		// 		},
+		// 		{
+		// 			actions: []*action{{
+		// 				id:   "remote1",
+		// 				kind: "publish",
+		// 				media: []media{
+		// 					{kind: "audio", id: "stream1", tid: "audio"},
+		// 					{kind: "video", id: "stream1", tid: "video"},
+		// 				},
+		// 			}, {
+		// 				id:   "remote2",
+		// 				kind: "publish",
+		// 				media: []media{
+		// 					{kind: "audio", id: "stream2", tid: "audio"},
+		// 					{kind: "video", id: "stream2", tid: "video"},
+		// 				},
+		// 			}, {
+		// 				id:   "remote3",
+		// 				kind: "publish",
+		// 				media: []media{
+		// 					{kind: "audio", id: "stream3", tid: "audio"},
+		// 					{kind: "video", id: "stream3", tid: "video"},
+		// 				},
+		// 			}},
+		// 		},
+		// 	},
+		// },
+		// {
+		// 	name: "Multiple stream publish",
+		// 	steps: []step{
+		// 		{
+		// 			actions: []*action{{
+		// 				id:   "remote1",
+		// 				kind: "join",
+		// 			}, {
+		// 				id:   "remote2",
+		// 				kind: "join",
+		// 			}},
+		// 		},
+		// 		{
+		// 			actions: []*action{{
+		// 				id:   "remote1",
+		// 				kind: "publish",
+		// 				media: []media{
+		// 					{kind: "audio", id: "stream1", tid: "audio1"},
+		// 					{kind: "video", id: "stream1", tid: "video1"},
+		// 				},
+		// 			}},
+		// 		}, {
+		// 			actions: []*action{{
+		// 				id:   "remote2",
+		// 				kind: "publish",
+		// 				media: []media{
+		// 					{kind: "audio", id: "stream2", tid: "audio2"},
+		// 					{kind: "video", id: "stream2", tid: "video2"},
+		// 				},
+		// 			}},
+		// 		},
+		// 		{
+		// 			actions: []*action{{
+		// 				id:   "remote1",
+		// 				kind: "publish",
+		// 				media: []media{
+		// 					{kind: "audio", id: "stream3", tid: "audio3"},
+		// 					{kind: "video", id: "stream3", tid: "video3"},
+		// 				},
+		// 			}},
+		// 		},
+		// 		{
+		// 			actions: []*action{{
+		// 				id:   "remote1",
+		// 				kind: "unpublish",
+		// 				media: []media{
+		// 					{kind: "audio", id: "stream1", tid: "audio1"},
+		// 					{kind: "video", id: "stream1", tid: "video1"},
+		// 				},
+		// 			}},
+		// 		}, {
+		// 			actions: []*action{{
+		// 				id:   "remote2",
+		// 				kind: "publish",
+		// 				media: []media{
+		// 					{kind: "audio", id: "stream4", tid: "audio4"},
+		// 					{kind: "video", id: "stream4", tid: "video4"},
+		// 				},
+		// 			}},
+		// 		},
+		// 	},
+		// },
+		// {
+		// 	name: "Large session",
+		// 	steps: []step{
+		// 		{
+		// 			actions: []*action{{
+		// 				id:   "remote1",
+		// 				kind: "join",
+		// 			}, {
+		// 				id:   "remote2",
+		// 				kind: "join",
+		// 			}, {
+		// 				id:   "remote3",
+		// 				kind: "join",
+		// 			}},
+		// 		},
+		// 		{
+		// 			actions: []*action{{
+		// 				id:   "remote1",
+		// 				kind: "publish",
+		// 				media: []media{
+		// 					{kind: "audio", id: "stream1", tid: "audio1"},
+		// 					{kind: "video", id: "stream1", tid: "video1"},
+		// 				},
+		// 			}, {
+		// 				id:   "remote2",
+		// 				kind: "publish",
+		// 				media: []media{
+		// 					{kind: "audio", id: "stream2", tid: "audio2"},
+		// 					{kind: "video", id: "stream2", tid: "video2"},
+		// 				},
+		// 			}, {
+		// 				id:   "remote3",
+		// 				kind: "publish",
+		// 				media: []media{
+		// 					{kind: "audio", id: "stream3", tid: "audio3"},
+		// 					{kind: "video", id: "stream3", tid: "video3"},
+		// 				},
+		// 			}},
+		// 		},
+		// 		{
+		// 			actions: []*action{{
+		// 				id:   "remote4",
+		// 				kind: "join",
+		// 			}},
+		// 		},
+		// 		{
+		// 			actions: []*action{{
+		// 				id:   "remote4",
+		// 				kind: "publish",
+		// 				media: []media{
+		// 					{kind: "audio", id: "stream4", tid: "audio4"},
+		// 					{kind: "video", id: "stream4", tid: "video4"},
+		// 				},
+		// 			}},
+		// 		},
+		// 		{
+		// 			actions: []*action{{
+		// 				id:   "remote5",
+		// 				kind: "join",
+		// 			}},
+		// 		},
+		// 		{
+		// 			actions: []*action{{
+		// 				id:   "remote5",
+		// 				kind: "publish",
+		// 				media: []media{
+		// 					{kind: "audio", id: "stream5", tid: "audio5"},
+		// 					{kind: "video", id: "stream5", tid: "video5"},
+		// 				},
+		// 			}},
+		// 		},
+		// 		{
+		// 			actions: []*action{{
+		// 				id:   "remote1",
+		// 				kind: "unpublish",
+		// 				media: []media{
+		// 					{kind: "audio", id: "stream1", tid: "audio1"},
+		// 					{kind: "video", id: "stream1", tid: "video1"},
+		// 				},
+		// 			}, {
+		// 				id:   "remote2",
+		// 				kind: "unpublish",
+		// 				media: []media{
+		// 					{kind: "audio", id: "stream2", tid: "audio2"},
+		// 					{kind: "video", id: "stream2", tid: "video2"},
+		// 				},
+		// 			}, {
+		// 				id:   "remote1",
+		// 				kind: "publish",
+		// 				media: []media{
+		// 					{kind: "audio", id: "stream1.1", tid: "audio1.1"},
+		// 					{kind: "video", id: "stream1.1", tid: "video1.1"},
+		// 				},
+		// 			}},
+		// 		},
+		// 	},
+		// },
 		{
-			name: "Sequential join",
+			name: "Pub->unpub->pub",
 			steps: []step{
 				{
 					actions: []*action{{
 						id:   "remote1",
-						kind: "join",
-					}},
-				},
-				{
-					actions: []*action{{
-						id:   "remote1",
-						kind: "publish",
-						media: []media{
-							{kind: "audio", id: "stream1", tid: "audio"},
-							{kind: "video", id: "stream1", tid: "video"},
-						},
-					}},
-				},
-				{
-					actions: []*action{{
-						id:   "remote2",
-						kind: "join",
-					}},
-				},
-				{
-					actions: []*action{{
-						id:   "remote2",
-						kind: "publish",
-						media: []media{
-							{kind: "audio", id: "stream2", tid: "audio"},
-							{kind: "video", id: "stream2", tid: "video"},
-						},
-					}},
-				},
-			},
-		},
-		{
-			name: "Concurrent join + publish",
-			steps: []step{
-				{
-					actions: []*action{{
-						id:   "remote1",
-						kind: "join",
-					}, {
-						id:   "remote2",
-						kind: "join",
-					}, {
-						id:   "remote3",
-						kind: "join",
-					}},
-				},
-				{
-					actions: []*action{{
-						id:   "remote1",
-						kind: "publish",
-						media: []media{
-							{kind: "audio", id: "stream1", tid: "audio"},
-							{kind: "video", id: "stream1", tid: "video"},
-						},
-					}, {
-						id:   "remote2",
-						kind: "publish",
-						media: []media{
-							{kind: "audio", id: "stream2", tid: "audio"},
-							{kind: "video", id: "stream2", tid: "video"},
-						},
-					}, {
-						id:   "remote3",
-						kind: "publish",
-						media: []media{
-							{kind: "audio", id: "stream3", tid: "audio"},
-							{kind: "video", id: "stream3", tid: "video"},
-						},
-					}},
-				},
-			},
-		},
-		{
-			name: "Multiple stream publish",
-			steps: []step{
-				{
-					actions: []*action{{
-						id:   "remote1",
-						kind: "join",
-					}, {
-						id:   "remote2",
 						kind: "join",
 					}},
 				},
@@ -276,24 +436,11 @@ func TestSFU_SessionScenarios(t *testing.T) {
 							{kind: "video", id: "stream1", tid: "video1"},
 						},
 					}},
-				}, {
-					actions: []*action{{
-						id:   "remote2",
-						kind: "publish",
-						media: []media{
-							{kind: "audio", id: "stream2", tid: "audio2"},
-							{kind: "video", id: "stream2", tid: "video2"},
-						},
-					}},
 				},
 				{
 					actions: []*action{{
-						id:   "remote1",
-						kind: "publish",
-						media: []media{
-							{kind: "audio", id: "stream3", tid: "audio3"},
-							{kind: "video", id: "stream3", tid: "video3"},
-						},
+						id:   "remote2",
+						kind: "join",
 					}},
 				},
 				{
@@ -305,13 +452,14 @@ func TestSFU_SessionScenarios(t *testing.T) {
 							{kind: "video", id: "stream1", tid: "video1"},
 						},
 					}},
-				}, {
+				},
+				{
 					actions: []*action{{
-						id:   "remote2",
+						id:   "remote1",
 						kind: "publish",
 						media: []media{
-							{kind: "audio", id: "stream4", tid: "audio4"},
-							{kind: "video", id: "stream4", tid: "video4"},
+							{kind: "audio", id: "stream1", tid: "audio1"},
+							{kind: "video", id: "stream1", tid: "video1"},
 						},
 					}},
 				},
@@ -507,12 +655,8 @@ func join(t *testing.T, sfu *SFU) *peer {
 	return p
 }
 
-func TestSFU_Feedback(t *testing.T) {
-	// sfu := NewSFU(Config{})
-	fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go", "jsonrpc2"}
-	fixByFunc := []string{"Handle"}
-	log.Init("trace", fixByFile, fixByFunc)
-	sfu := NewSFU(Config{Log: log.Config{Level: "trace"}})
+func TestSFU_PLIFeedback(t *testing.T) {
+	sfu := NewSFU(Config{})
 
 	tests := []struct {
 		name  string
@@ -521,7 +665,6 @@ func TestSFU_Feedback(t *testing.T) {
 	}{
 		{
 			name:  "Single PLI on sub",
-			pkt:   "pli",
 			count: 1,
 		},
 	}
@@ -577,9 +720,7 @@ func TestSFU_Feedback(t *testing.T) {
 							pkt := track.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]
 							pkt.Payload = []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0x9f, 0x94, 0x1}
 							_ = track.WriteRTP(pkt)
-							if tt.pkt == "pli" {
-								expect.Done()
-							}
+							expect.Done()
 						}
 					case <-done:
 						return
@@ -596,6 +737,106 @@ func TestSFU_Feedback(t *testing.T) {
 			})
 			sub2 := join(t, sfu)
 			sub2.remote.OnTrack(func(*webrtc.Track, *webrtc.RTPReceiver) {
+				wg.Done()
+			})
+
+			wg.Wait()
+			time.Sleep(1 * time.Second)
+			expect.Wait()
+			close(done)
+		})
+	}
+}
+
+func TestSFU_NACKFeedback(t *testing.T) {
+	// sfu := NewSFU(Config{})
+	fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go", "jsonrpc2"}
+	fixByFunc := []string{"Handle"}
+	log.Init("trace", fixByFile, fixByFunc)
+	sfu := NewSFU(Config{Log: log.Config{Level: "trace"}})
+
+	tests := []struct {
+		name  string
+		pkt   string
+		count int
+	}{
+		{
+			name:  "NACK out of range",
+			count: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			start := make(chan struct{})
+			done := make(chan struct{})
+			pub := join(t, sfu)
+
+			track, err := pub.remote.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pub")
+			assert.NoError(t, err)
+			transceiver, err := pub.remote.AddTransceiverFromTrack(track, webrtc.RtpTransceiverInit{
+				Direction: webrtc.RTPTransceiverDirectionSendonly,
+			})
+			assert.NoError(t, err)
+			s := &sender{transceiver: transceiver, start: start}
+			pub.mu.Lock()
+			pub.pubs = append(pub.pubs, s)
+			pub.mu.Unlock()
+
+			var expect sync.WaitGroup
+			expect.Add(tt.count)
+
+			go func() {
+				<-start
+				rtcpCh := make(chan rtcp.Packet)
+
+				go func() {
+					for {
+						select {
+						case <-done:
+							return
+						default:
+							pkts, err := transceiver.Sender().ReadRTCP()
+							assert.NoError(t, err)
+							for _, pkt := range pkts {
+								rtcpCh <- pkt
+							}
+						}
+					}
+				}()
+
+				for {
+					select {
+					case <-time.After(20 * time.Millisecond):
+						pkt := track.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]
+						_ = track.WriteRTP(pkt)
+					case pkt := <-rtcpCh:
+						switch pkt.(type) {
+						case *rtcp.PictureLossIndication:
+							pkt := track.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]
+							pkt.Payload = []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0x9f, 0x94, 0x1}
+							_ = track.WriteRTP(pkt)
+						case *rtcp.TransportLayerNack:
+							expect.Done()
+						}
+					case <-done:
+						return
+					}
+				}
+			}()
+
+			var wg sync.WaitGroup
+			wg.Add(1)
+
+			sub := join(t, sfu)
+			sub.remote.OnTrack(func(t *webrtc.Track, r *webrtc.RTPReceiver) {
+				sub.remote.WriteRTCP([]rtcp.Packet{
+					&rtcp.TransportLayerNack{
+						MediaSSRC: t.SSRC(),
+						Nacks:     []rtcp.NackPair{{PacketID: 2, LostPackets: 1}},
+					},
+				})
 				wg.Done()
 			})
 
