@@ -27,6 +27,7 @@ type Peer struct {
 
 	makingOffer                  atomicBool
 	isSettingRemoteAnswerPending atomicBool
+	negotiationPending           atomicBool
 }
 
 // NewPeer creates a new Peer for signaling with the given SFU
@@ -62,8 +63,19 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 	}
 
 	pc.OnNegotiationNeeded(func() {
+		if p.makingOffer.get() {
+			p.negotiationPending.set(true)
+			return
+		}
+
 		p.makingOffer.set(true)
-		defer p.makingOffer.set(false)
+		defer func() {
+			p.makingOffer.set(false)
+			if p.negotiationPending.get() {
+				p.negotiationPending.set(false)
+				pc.negotiate()
+			}
+		}()
 
 		log.Debugf("on negotiation needed called")
 		offer, err := pc.CreateOffer()
@@ -93,10 +105,8 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 			json := c.ToJSON()
 			p.OnIceCandidate(&json)
 		}
-
 	})
 
-	p.pc = pc
 	return answer, nil
 }
 
@@ -142,7 +152,6 @@ func (p *Peer) SetRemoteDescription(sdp webrtc.SessionDescription) error {
 	if err := p.pc.SetRemoteDescription(sdp); err != nil {
 		return fmt.Errorf("error setting remote description: %v", err)
 	}
-
 	return nil
 }
 

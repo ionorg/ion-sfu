@@ -31,6 +31,7 @@ type WebRTCTransport struct {
 	senders        map[string][]Sender
 	candidates     []webrtc.ICECandidateInit
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
+	negotiate      func()
 
 	subOnce sync.Once
 }
@@ -215,9 +216,9 @@ func (p *WebRTCTransport) OnICECandidate(f func(c *webrtc.ICECandidate)) {
 // OnNegotiationNeeded handler
 func (p *WebRTCTransport) OnNegotiationNeeded(f func()) {
 	debounced := debounce.New(100 * time.Millisecond)
-	p.pc.OnNegotiationNeeded(func() {
+	p.negotiate = func() {
 		debounced(f)
-	})
+	}
 }
 
 // OnTrack handler
@@ -225,21 +226,6 @@ func (p *WebRTCTransport) OnTrack(f func(*webrtc.Track, *webrtc.RTPReceiver)) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.onTrackHandler = f
-}
-
-// OnConnectionStateChange handler
-func (p *WebRTCTransport) OnConnectionStateChange(f func(webrtc.PeerConnectionState)) {
-	p.pc.OnConnectionStateChange(f)
-}
-
-// OnDataChannel handler
-func (p *WebRTCTransport) OnDataChannel(f func(*webrtc.DataChannel)) {
-	p.pc.OnDataChannel(f)
-}
-
-// AddTransceiverFromKind adds RtpTransceiver on WebRTC Transport
-func (p *WebRTCTransport) AddTransceiverFromKind(kind webrtc.RTPCodecType, init ...webrtc.RtpTransceiverInit) (*webrtc.RTPTransceiver, error) {
-	return p.pc.AddTransceiverFromKind(kind, init...)
 }
 
 func (p *WebRTCTransport) SignalingState() webrtc.SignalingState {
