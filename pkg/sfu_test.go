@@ -271,6 +271,25 @@ func TestSFU_SessionScenarios(t *testing.T) {
 						},
 					}},
 				},
+				{
+					actions: []*action{{
+						id:   "remote1",
+						kind: "unpublish",
+						media: []media{
+							{kind: "audio", id: "stream1", tid: "audio1"},
+							{kind: "video", id: "stream1", tid: "video1"},
+						},
+					}},
+				}, {
+					actions: []*action{{
+						id:   "remote2",
+						kind: "publish",
+						media: []media{
+							{kind: "audio", id: "stream4", tid: "audio4"},
+							{kind: "video", id: "stream4", tid: "video4"},
+						},
+					}},
+				},
 			},
 		},
 	}
@@ -368,6 +387,21 @@ func TestSFU_SessionScenarios(t *testing.T) {
 							}
 
 							peer.pubs = append(peer.pubs, addMedia(done, t, peer.remote, action.media)...)
+							peer.mu.Unlock()
+							mu.Unlock()
+
+						case "unpublish":
+							mu.Lock()
+							peer := peers[action.id]
+							peer.mu.Lock()
+							for _, media := range action.media {
+								for _, pub := range peer.pubs {
+									if pub.transceiver != nil && pub.transceiver.Sender().Track().ID() == media.tid {
+										peer.remote.RemoveTrack(pub.transceiver.Sender())
+										pub.transceiver = nil
+									}
+								}
+							}
 							peer.mu.Unlock()
 							mu.Unlock()
 						}
