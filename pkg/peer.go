@@ -69,7 +69,13 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		}
 
 		p.makingOffer.set(true)
-		defer p.makingOffer.set(false)
+		defer func() {
+			p.makingOffer.set(false)
+			if p.negotiationPending.get() {
+				p.negotiationPending.set(false)
+				pc.negotiate()
+			}
+		}()
 
 		log.Debugf("on negotiation needed called")
 		offer, err := pc.CreateOffer()
@@ -98,15 +104,6 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		if p.OnIceCandidate != nil {
 			json := c.ToJSON()
 			p.OnIceCandidate(&json)
-		}
-	})
-
-	pc.OnSignalingState(func(s webrtc.SignalingState) {
-		if s == webrtc.SignalingStateStable {
-			if !p.makingOffer.get() && p.negotiationPending.get() {
-				p.negotiationPending.set(false)
-				pc.negotiate()
-			}
 		}
 	})
 
@@ -154,10 +151,6 @@ func (p *Peer) SetRemoteDescription(sdp webrtc.SessionDescription) error {
 	log.Infof("peer %s answer", p.pc.ID())
 	if err := p.pc.SetRemoteDescription(sdp); err != nil {
 		return fmt.Errorf("error setting remote description: %v", err)
-	}
-	if !p.makingOffer.get() && p.negotiationPending.get() {
-		p.negotiationPending.set(false)
-		p.pc.negotiate()
 	}
 	return nil
 }
