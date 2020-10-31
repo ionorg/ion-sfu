@@ -175,6 +175,7 @@ func (w *WebRTCReceiver) readRTP() {
 	}()
 	for {
 		pkt, err := w.track.ReadRTP()
+
 		// EOF signal received, this means that the remote track has been removed
 		// or the peer has been disconnected. The router must be gracefully shutdown,
 		// waiting for all the receivers routines to stop.
