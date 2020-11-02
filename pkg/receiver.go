@@ -116,12 +116,7 @@ func (w *WebRTCReceiver) DeleteSender(pid string) {
 
 func (w *WebRTCReceiver) SendRTCP(p []rtcp.Packet) {
 	if _, ok := p[0].(*rtcp.PictureLossIndication); ok {
-		w.rtcpMu.Lock()
-		defer w.rtcpMu.Unlock()
-		if time.Now().UnixNano()-w.lastPli < 500e6 {
-			return
-		}
-		w.lastPli = time.Now().UnixNano()
+		return
 	}
 
 	w.rtcpCh <- p
@@ -195,6 +190,17 @@ func (w *WebRTCReceiver) readRTP() {
 }
 
 func (w *WebRTCReceiver) readRTCP() {
+	t := time.NewTicker(time.Second)
+	go func() {
+		for _ = range t.C {
+			w.rtcpCh <- []rtcp.Packet{
+				&rtcp.PictureLossIndication{SenderSSRC: w.track.SSRC(), MediaSSRC: w.track.SSRC()},
+			}
+		}
+	}()
+
+	defer t.Stop()
+
 	for {
 		pkts, err := w.receiver.ReadRTCP()
 		if err == io.ErrClosedPipe || err == io.EOF {
