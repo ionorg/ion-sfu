@@ -97,9 +97,9 @@ func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
 				}
 			}
 			if !relay {
-				recv.SendRTCP([]rtcp.Packet{
-					&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC},
-				})
+				// recv.SendRTCP([]rtcp.Packet{
+				//	&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC},
+				// })
 				return
 			}
 		}
@@ -216,9 +216,9 @@ func (s *SimpleSender) receiveRTCP() {
 			switch pkt := pkt.(type) {
 			case *rtcp.PictureLossIndication, *rtcp.FullIntraRequest:
 				log.Tracef("sender got pli: %+v", pkt)
-				if !s.reSync.get() && s.enabled.get() {
-					fwdPkts = append(fwdPkts, pkt)
-				}
+				//if !s.reSync.get() && s.enabled.get() {
+				//	fwdPkts = append(fwdPkts, pkt)
+				//}
 			case *rtcp.ReceiverReport:
 				if s.enabled.get() && len(pkt.Reports) > 0 && pkt.Reports[0].FractionLost > 25 {
 					log.Tracef("Slow link for sender %s, fraction packet lost %.2f", s.id, float64(pkt.Reports[0].FractionLost)/256)
