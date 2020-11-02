@@ -2,7 +2,6 @@ package sfu
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"io"
 	"math/rand"
@@ -18,8 +17,6 @@ import (
 // SimulcastSender represents a Sender which writes RTP to a webrtc track
 type SimulcastSender struct {
 	id             string
-	ctx            context.Context
-	cancel         context.CancelFunc
 	router         *receiverRouter
 	sender         *webrtc.RTPSender
 	transceiver    *webrtc.RTPTransceiver
@@ -91,7 +88,7 @@ func (s *SimulcastSender) Start() {
 // WriteRTP to the track
 func (s *SimulcastSender) WriteRTP(pkt *rtp.Packet) {
 	// Simulcast write RTP is sync, so the packet can be safely modified and restored
-	if s.ctx.Err() != nil || !s.enabled.get() {
+	if !s.enabled.get() {
 		return
 	}
 	// Check if packet SSRC is different from before
@@ -249,7 +246,6 @@ func (s *SimulcastSender) CurrentSpatialLayer() uint8 {
 // Close track
 func (s *SimulcastSender) Close() {
 	s.close.Do(func() {
-		s.cancel()
 		if s.onCloseHandler != nil {
 			s.onCloseHandler()
 		}
@@ -271,10 +267,6 @@ func (s *SimulcastSender) receiveRTCP() {
 				recv.DeleteSender(s.id)
 			}
 			s.Close()
-			return
-		}
-
-		if s.ctx.Err() != nil {
 			return
 		}
 

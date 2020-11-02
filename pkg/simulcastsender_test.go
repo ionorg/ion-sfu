@@ -144,7 +144,6 @@ forLoop:
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.fields.checkPacket {
 				s := &SimulcastSender{
-					ctx:           context.Background(),
 					enabled:       atomicBool{1},
 					router:        r,
 					track:         senderTrack,
@@ -233,10 +232,7 @@ forLoop:
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
 			wss := &SimulcastSender{
-				ctx:           ctx,
-				cancel:        cancel,
 				enabled:       atomicBool{1},
 				router:        r,
 				sender:        s,
@@ -323,8 +319,6 @@ func TestSimulcastSender_Close(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			s := &SimulcastSender{
-				ctx:            tt.fields.ctx,
-				cancel:         tt.fields.cancel,
 				router:         tt.fields.router,
 				onCloseHandler: tt.fields.onCloseHandler,
 			}
@@ -515,7 +509,6 @@ forLoop:
 	}
 
 	simpleSdr := SimulcastSender{
-		ctx:           context.Background(),
 		enabled:       atomicBool{1},
 		simulcastSSRC: 1234,
 		router:        r,
