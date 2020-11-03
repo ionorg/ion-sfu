@@ -9,7 +9,7 @@ services:
   pubsub:
     image: nginx
     volumes:
-      - ../../examples/pubsubtest:/usr/share/nginx/html
+      - ./client:/usr/share/nginx/html
     ports:
       - 8000:80
 
@@ -31,8 +31,7 @@ services:
       context: .
     volumes:
       - /dev/shm:/dev/shm
-      - ./test:/workspace/test
-      - ./scripts:/workspace/scripts
+      - ./:/workspace/test
     depends_on:
       - hub
       - sfu
