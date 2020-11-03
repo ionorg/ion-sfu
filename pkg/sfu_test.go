@@ -1,7 +1,6 @@
 package sfu
 
 import (
-	"fmt"
 	"io"
 	"math/rand"
 	"sync"
@@ -595,10 +594,14 @@ func TestSFU_SessionScenarios(t *testing.T) {
 	}
 }
 
-func join(t *testing.T, sfu *SFU) *peer {
+func pub(t *testing.T, sfu *SFU) *peer {
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+
+	se := webrtc.SettingEngine{}
+	se.DisableSRTCPReplayProtection(true)
+
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me), webrtc.WithSettingEngine(se))
 	r, err := api.NewPeerConnection(webrtc.Configuration{})
 
 	assert.NoError(t, err)
@@ -652,18 +655,100 @@ func join(t *testing.T, sfu *SFU) *peer {
 	return p
 }
 
-func TestSFU_PLIFeedback(t *testing.T) {
-	sfu := NewSFU(Config{})
+func sub(t *testing.T, sfu *SFU, ontrack func(*webrtc.PeerConnection)) *peer {
+	me := webrtc.MediaEngine{}
+	me.RegisterDefaultCodecs()
 
+	se := webrtc.SettingEngine{}
+	se.DisableSRTCPReplayProtection(true)
+
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me), webrtc.WithSettingEngine(se))
+	r, err := api.NewPeerConnection(webrtc.Configuration{})
+
+	assert.NoError(t, err)
+	_, err = r.CreateDataChannel("ion-sfu", nil)
+	assert.NoError(t, err)
+	local := NewPeer(sfu)
+	p := &peer{remote: r, local: &local}
+
+	p.local.OnOffer = func(o *webrtc.SessionDescription) {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		err := p.remote.SetRemoteDescription(*o)
+		assert.NoError(t, err)
+		a, err := p.remote.CreateAnswer(nil)
+		assert.NoError(t, err)
+		err = p.remote.SetLocalDescription(a)
+		assert.NoError(t, err)
+		err = p.local.SetRemoteDescription(a)
+		assert.NoError(t, err)
+	}
+
+	p.remote.OnTrack(func(track *webrtc.Track, _ *webrtc.RTPReceiver) {
+		log.Infof("here!!!!!!!!!")
+		_, _ = track.ReadRTP()
+		time.Sleep(501 * time.Millisecond)
+		ontrack(p.remote)
+	})
+
+	offer, err := p.remote.CreateOffer(nil)
+	assert.NoError(t, err)
+	gatherComplete := webrtc.GatheringCompletePromise(p.remote)
+	err = p.remote.SetLocalDescription(offer)
+	assert.NoError(t, err)
+	<-gatherComplete
+	answer, err := p.local.Join("test", *p.remote.LocalDescription())
+	assert.NoError(t, err)
+	p.remote.SetRemoteDescription(*answer)
+
+	p.remote.OnNegotiationNeeded(func() {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		o, err := p.remote.CreateOffer(nil)
+		assert.NoError(t, err)
+		err = p.remote.SetLocalDescription(o)
+		assert.NoError(t, err)
+		a, err := p.local.Answer(o)
+		assert.NoError(t, err)
+		p.remote.SetRemoteDescription(*a)
+
+		for _, pub := range p.pubs {
+			if pub.start != nil {
+				close(pub.start)
+				pub.start = nil
+			}
+		}
+	})
+
+	return p
+}
+
+func TestSFU_PLIFeedback(t *testing.T) {
 	tests := []struct {
-		name  string
-		pkt   string
-		count int
+		name   string
+		pkt    string
+		count  int
+		period time.Duration
+		expect int
 	}{
+		// {
+		// 	name:   "PLI on sub",
+		// 	count:  0,
+		// 	period: 0,
+		// 	expect: 1,
+		// },
 		{
-			name:  "Single PLI on sub",
-			count: 1,
+			name:   "PLI on sub request in first second",
+			count:  3,
+			period: 10,
+			expect: 2,
 		},
+		// {
+		// 	name:   "PLI on sub request",
+		// 	count:  1,
+		// 	period: 0,
+		// 	expect: 2,
+		// },
 	}
 
 	for _, tt := range tests {
@@ -671,7 +756,13 @@ func TestSFU_PLIFeedback(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			start := make(chan struct{})
 			done := make(chan struct{})
-			pub := join(t, sfu)
+
+			fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go", "jsonrpc2"}
+			fixByFunc := []string{"Handle"}
+			log.Init("trace", fixByFile, fixByFunc)
+			sfu := NewSFU(Config{Log: log.Config{Level: "trace"}})
+
+			pub := pub(t, sfu)
 
 			track, err := pub.remote.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pub")
 			assert.NoError(t, err)
@@ -685,27 +776,11 @@ func TestSFU_PLIFeedback(t *testing.T) {
 			pub.mu.Unlock()
 
 			var expect sync.WaitGroup
-			expect.Add(tt.count)
+			expect.Add(tt.expect)
 
+			rtcpCh := make(chan rtcp.Packet)
 			go func() {
 				<-start
-				rtcpCh := make(chan rtcp.Packet)
-
-				go func() {
-					for {
-						select {
-						case <-done:
-							return
-						default:
-							pkts, err := transceiver.Sender().ReadRTCP()
-							assert.NoError(t, err)
-							for _, pkt := range pkts {
-								rtcpCh <- pkt
-							}
-						}
-					}
-				}()
-
 				for {
 					select {
 					case <-time.After(20 * time.Millisecond):
@@ -721,6 +796,25 @@ func TestSFU_PLIFeedback(t *testing.T) {
 						}
 					case <-done:
 						return
+					}
+				}
+			}()
+
+			go func() {
+				<-start
+				for {
+					select {
+					case <-done:
+						return
+					default:
+						pkts, err := transceiver.Sender().ReadRTCP()
+						assert.NoError(t, err)
+						for _, pkt := range pkts {
+							if _, ok := pkt.(*rtcp.PictureLossIndication); ok {
+								log.Infof("read rtcp %v", pkt)
+							}
+							rtcpCh <- pkt
+						}
 					}
 				}
 			}()
@@ -728,116 +822,26 @@ func TestSFU_PLIFeedback(t *testing.T) {
 			var wg sync.WaitGroup
 			wg.Add(2)
 
-			sub1 := join(t, sfu)
-			sub1.remote.OnTrack(func(*webrtc.Track, *webrtc.RTPReceiver) {
-				wg.Done()
-			})
-			sub2 := join(t, sfu)
-			sub2.remote.OnTrack(func(*webrtc.Track, *webrtc.RTPReceiver) {
-				wg.Done()
-			})
-
-			wg.Wait()
-			time.Sleep(1 * time.Second)
-			expect.Wait()
-			close(done)
-		})
-	}
-}
-
-func TestSFU_NACKFeedback(t *testing.T) {
-	// sfu := NewSFU(Config{})
-	fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go", "jsonrpc2"}
-	fixByFunc := []string{"Handle"}
-	log.Init("trace", fixByFile, fixByFunc)
-	sfu := NewSFU(Config{Log: log.Config{Level: "trace"}})
-
-	tests := []struct {
-		name  string
-		pkt   string
-		count int
-	}{
-		{
-			name:  "NACK out of range",
-			count: 5,
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			start := make(chan struct{})
-			done := make(chan struct{})
-			pub := join(t, sfu)
-
-			track, err := pub.remote.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pub")
-			assert.NoError(t, err)
-			transceiver, err := pub.remote.AddTransceiverFromTrack(track, webrtc.RtpTransceiverInit{
-				Direction: webrtc.RTPTransceiverDirectionSendonly,
-			})
-			assert.NoError(t, err)
-			s := &sender{transceiver: transceiver, start: start}
-			pub.mu.Lock()
-			pub.pubs = append(pub.pubs, s)
-			pub.mu.Unlock()
-
-			var expect sync.WaitGroup
-			expect.Add(tt.count)
-
-			go func() {
-				<-start
-				rtcpCh := make(chan rtcp.Packet)
-
-				go func() {
-					for {
-						select {
-						case <-done:
-							return
-						default:
-							pkts, err := transceiver.Sender().ReadRTCP()
-							assert.NoError(t, err)
-							for _, pkt := range pkts {
-								rtcpCh <- pkt
-							}
-						}
-					}
-				}()
-
-				for {
-					select {
-					case <-time.After(20 * time.Millisecond):
-						pkt := track.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]
-						_ = track.WriteRTP(pkt)
-					case pkt := <-rtcpCh:
-						switch pkt.(type) {
-						case *rtcp.PictureLossIndication:
-							pkt := track.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]
-							pkt.Payload = []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0x9f, 0x94, 0x1}
-							_ = track.WriteRTP(pkt)
-						case *rtcp.TransportLayerNack:
-							expect.Done()
-						}
-					case <-done:
-						return
-					}
-				}
-			}()
-
-			var wg sync.WaitGroup
-			wg.Add(1)
-
-			sub := join(t, sfu)
-			sub.remote.OnTrack(func(track *webrtc.Track, r *webrtc.RTPReceiver) {
-				for i := 1; i < 5; i++ {
-					pkt, err := track.ReadRTP()
+			_ = sub(t, sfu, func(remote *webrtc.PeerConnection) {
+				for i := 0; i < tt.count; i++ {
 					assert.NoError(t, err)
-					sn := pkt.SequenceNumber
-					time.Sleep(10 * time.Millisecond)
-					fmt.Printf("nack %d\n", sn)
-					sub.remote.WriteRTCP([]rtcp.Packet{
-						&rtcp.TransportLayerNack{
+					time.Sleep(tt.period * time.Millisecond)
+					remote.WriteRTCP([]rtcp.Packet{
+						&rtcp.PictureLossIndication{
 							MediaSSRC: track.SSRC(),
-							Nacks:     []rtcp.NackPair{{PacketID: sn, LostPackets: 0}},
+						},
+					})
+				}
+				wg.Done()
+			})
+
+			_ = sub(t, sfu, func(remote *webrtc.PeerConnection) {
+				for i := 0; i < tt.count; i++ {
+					assert.NoError(t, err)
+					time.Sleep(tt.period * time.Millisecond)
+					remote.WriteRTCP([]rtcp.Packet{
+						&rtcp.PictureLossIndication{
+							MediaSSRC: track.SSRC(),
 						},
 					})
 				}
@@ -845,9 +849,115 @@ func TestSFU_NACKFeedback(t *testing.T) {
 			})
 
 			wg.Wait()
-			time.Sleep(1 * time.Second)
 			expect.Wait()
 			close(done)
 		})
 	}
 }
+
+// func TestSFU_NACKFeedback(t *testing.T) {
+// 	// sfu := NewSFU(Config{})
+// 	fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go", "jsonrpc2"}
+// 	fixByFunc := []string{"Handle"}
+// 	log.Init("trace", fixByFile, fixByFunc)
+// 	sfu := NewSFU(Config{Log: log.Config{Level: "trace"}})
+
+// 	tests := []struct {
+// 		name  string
+// 		pkt   string
+// 		count int
+// 	}{
+// 		{
+// 			name:  "NACK out of range",
+// 			count: 5,
+// 		},
+// 	}
+
+// 	for _, tt := range tests {
+// 		tt := tt
+// 		t.Run(tt.name, func(t *testing.T) {
+// 			start := make(chan struct{})
+// 			done := make(chan struct{})
+// 			pub := join(t, sfu)
+
+// 			track, err := pub.remote.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "video", "pub")
+// 			assert.NoError(t, err)
+// 			transceiver, err := pub.remote.AddTransceiverFromTrack(track, webrtc.RtpTransceiverInit{
+// 				Direction: webrtc.RTPTransceiverDirectionSendonly,
+// 			})
+// 			assert.NoError(t, err)
+// 			s := &sender{transceiver: transceiver, start: start}
+// 			pub.mu.Lock()
+// 			pub.pubs = append(pub.pubs, s)
+// 			pub.mu.Unlock()
+
+// 			var expect sync.WaitGroup
+// 			expect.Add(tt.count)
+
+// 			go func() {
+// 				<-start
+// 				rtcpCh := make(chan rtcp.Packet)
+
+// 				go func() {
+// 					for {
+// 						select {
+// 						case <-done:
+// 							return
+// 						default:
+// 							pkts, err := transceiver.Sender().ReadRTCP()
+// 							assert.NoError(t, err)
+// 							for _, pkt := range pkts {
+// 								rtcpCh <- pkt
+// 							}
+// 						}
+// 					}
+// 				}()
+
+// 				for {
+// 					select {
+// 					case <-time.After(20 * time.Millisecond):
+// 						pkt := track.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]
+// 						_ = track.WriteRTP(pkt)
+// 					case pkt := <-rtcpCh:
+// 						switch pkt.(type) {
+// 						case *rtcp.PictureLossIndication:
+// 							pkt := track.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]
+// 							pkt.Payload = []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0x9f, 0x94, 0x1}
+// 							_ = track.WriteRTP(pkt)
+// 						case *rtcp.TransportLayerNack:
+// 							expect.Done()
+// 						}
+// 					case <-done:
+// 						return
+// 					}
+// 				}
+// 			}()
+
+// 			var wg sync.WaitGroup
+// 			wg.Add(1)
+
+// 			sub := join(t, sfu)
+// 			sub.remote.OnTrack(func(track *webrtc.Track, r *webrtc.RTPReceiver) {
+// 				for i := 1; i < 5; i++ {
+// 					pkt, err := track.ReadRTP()
+// 					assert.NoError(t, err)
+// 					sn := pkt.SequenceNumber
+// 					time.Sleep(10 * time.Millisecond)
+// 					fmt.Printf("nack %d\n", sn)
+// 					sub.remote.WriteRTCP([]rtcp.Packet{
+// 						&rtcp.TransportLayerNack{
+// 							MediaSSRC: track.SSRC(),
+// 							Nacks:     []rtcp.NackPair{{PacketID: sn, LostPackets: 0}},
+// 						},
+// 					})
+// 				}
+// 				wg.Done()
+// 			})
+
+// 			wg.Wait()
+// 			time.Sleep(1 * time.Second)
+// 			expect.Wait()
+// 			close(done)
+// 		})
+// 	}
+// }

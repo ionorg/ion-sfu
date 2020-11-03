@@ -59,6 +59,8 @@ func NewSFU(c Config) *SFU {
 	ballast := make([]byte, c.SFU.Ballast*1024*1024)
 	se := webrtc.SettingEngine{}
 
+	se.DisableSRTCPReplayProtection(true)
+
 	// Configure required extensions
 	sdes, _ := url.Parse(sdp.SDESRTPStreamIDURI)
 	sdedMid, _ := url.Parse(sdp.SDESMidURI)

@@ -147,8 +147,6 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 		p.candidates = nil
 	}
 
-	log.Infof("%+v", p.senders)
-
 	switch desc.Type {
 	case webrtc.SDPTypeAnswer:
 		p.mu.RLock()
@@ -156,7 +154,6 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 			if mid, ok := md.Attribute(sdp.AttrKeyMID); ok {
 				for _, senders := range p.senders {
 					for _, sender := range senders {
-						log.Infof("start send %s", mid)
 						if sender.Transceiver().Mid() == mid {
 							sender.Start()
 						}

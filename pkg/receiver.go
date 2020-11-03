@@ -122,6 +122,7 @@ func (w *WebRTCReceiver) SendRTCP(p []rtcp.Packet) {
 			return
 		}
 		w.lastPli = time.Now().UnixNano()
+		log.Infof("receiver send pli")
 	}
 
 	w.rtcpCh <- p

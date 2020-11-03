@@ -97,9 +97,7 @@ func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
 				}
 			}
 			if !relay {
-				recv.SendRTCP([]rtcp.Packet{
-					&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC},
-				})
+				recv.SendRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: pkt.SSRC}})
 				return
 			}
 		}

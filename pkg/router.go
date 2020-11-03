@@ -233,6 +233,10 @@ func (r *router) deleteReceiver(track string) {
 
 func (r *router) sendRTCP() {
 	for pkts := range r.rtcpCh {
+		if _, ok := pkts[0].(*rtcp.PictureLossIndication); ok {
+			log.Infof("write rtcp %v", pkts)
+			log.Infof("%v, %v, %v", r.peer.ICEConnectionState(), r.peer.ConnectionState(), r.peer.SignalingState())
+		}
 		if err := r.peer.WriteRTCP(pkts); err != nil {
 			log.Errorf("Write rtcp to peer %s err :%v", r.id, err)
 		}
