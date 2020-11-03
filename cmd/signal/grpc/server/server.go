@@ -8,11 +8,18 @@ import (
 	log "github.com/pion/ion-log"
 	sfu "github.com/pion/ion-sfu/pkg"
 	"github.com/pion/webrtc/v3"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	pb "github.com/pion/ion-sfu/cmd/signal/grpc/proto"
 )
+
+func NewServer(sfu *sfu.SFU) *grpc.Server {
+	s := grpc.NewServer()
+	pb.RegisterSFUServer(s, &SFUServer{SFU: sfu})
+	return s
+}
 
 type SFUServer struct {
 	pb.UnimplementedSFUServer

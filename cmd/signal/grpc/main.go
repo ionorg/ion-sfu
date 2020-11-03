@@ -10,9 +10,7 @@ import (
 	log "github.com/pion/ion-log"
 	sfu "github.com/pion/ion-sfu/pkg"
 	"github.com/spf13/viper"
-	"google.golang.org/grpc"
 
-	pb "github.com/pion/ion-sfu/cmd/signal/grpc/proto"
 	"github.com/pion/ion-sfu/cmd/signal/grpc/server"
 )
 
@@ -108,8 +106,7 @@ func main() {
 		log.Panicf("failed to listen: %v", err)
 	}
 	log.Infof("SFU Listening at %s", addr)
-	s := grpc.NewServer()
-	pb.RegisterSFUServer(s, &server.SFUServer{SFU: sfu.NewSFU(conf.Config)})
+	s := server.NewServer(sfu.NewSFU(conf.Config))
 	if err := s.Serve(lis); err != nil {
 		log.Panicf("failed to serve: %v", err)
 	}
