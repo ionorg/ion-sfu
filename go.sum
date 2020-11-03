@@ -260,6 +260,8 @@ github.com/pion/webrtc/v3 v3.0.0-beta.10.0.20201027193323-3e64df35adfa h1:eyg97N
 github.com/pion/webrtc/v3 v3.0.0-beta.10.0.20201027193323-3e64df35adfa/go.mod h1:GlriYYHJ5KkNsCunm3oFDPql4TDTrrNoI9iSWWSnafA=
 github.com/pion/webrtc/v3 v3.0.0-beta.10.0.20201030205602-60db5090fc93 h1:h6kVKATdkUm7sFZQ//Q5t/2VKd7BZpO0Ozc9q94D4RI=
 github.com/pion/webrtc/v3 v3.0.0-beta.10.0.20201030205602-60db5090fc93/go.mod h1:GlriYYHJ5KkNsCunm3oFDPql4TDTrrNoI9iSWWSnafA=
+github.com/pion/webrtc/v3 v3.0.0-beta.10.0.20201103052241-78f7c978fe51 h1:croACaiFnjNtvUG8SirC+wTkQ8Y1/QxP+5e9J9VXLQ8=
+github.com/pion/webrtc/v3 v3.0.0-beta.10.0.20201103052241-78f7c978fe51/go.mod h1:UbmDN5G82nXLXAiSIo0HYU68GN6z09jeKSNEaDUzFvY=
 github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
@@ -421,6 +423,8 @@ golang.org/x/net v0.0.0-20200822124328-c89045814202/go.mod h1:/O7V0waA8r7cgGh81R
 golang.org/x/net v0.0.0-20201002202402-0a1ea396d57c/go.mod h1:iQL9McJNjoIa5mjH6nYTCTZXUN6RP+XW3eib7Ya3XcI=
 golang.org/x/net v0.0.0-20201024042810-be3efd7ff127 h1:pZPp9+iYUqwYKLjht0SDBbRCRK/9gAXDy7pz5fRDpjo=
 golang.org/x/net v0.0.0-20201024042810-be3efd7ff127/go.mod h1:sp8m0HH+o8qH0wwXwYZr8TS3Oi6o0r6Gce1SSxlDquU=
+golang.org/x/net v0.0.0-20201031054903-ff519b6c9102 h1:42cLlJJdEh+ySyeUUbEQ5bsTiq8voBeTuweGVkY6Puw=
+golang.org/x/net v0.0.0-20201031054903-ff519b6c9102/go.mod h1:sp8m0HH+o8qH0wwXwYZr8TS3Oi6o0r6Gce1SSxlDquU=
 golang.org/x/oauth2 v0.0.0-20180821212333-d2e6202438be/go.mod h1:N/0e6XlmueqKjAGxoOufVs8QHGRruUQn6yWY3a++T0U=
 golang.org/x/oauth2 v0.0.0-20181017192945-9dcd33a902f4/go.mod h1:N/0e6XlmueqKjAGxoOufVs8QHGRruUQn6yWY3a++T0U=
 golang.org/x/oauth2 v0.0.0-20181203162652-d668ce993890/go.mod h1:N/0e6XlmueqKjAGxoOufVs8QHGRruUQn6yWY3a++T0U=
