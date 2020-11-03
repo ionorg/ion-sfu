@@ -119,9 +119,11 @@ func (p *Peer) Answer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription
 
 	readyForOffer := !p.makingOffer.get() &&
 		(p.pc.SignalingState() == webrtc.SignalingStateStable || p.isSettingRemoteAnswerPending.get())
+
 	if !readyForOffer {
 		return nil, ErrOfferIgnored
 	}
+
 	if err := p.pc.SetRemoteDescription(sdp); err != nil {
 		return nil, fmt.Errorf("error setting remote description: %v", err)
 	}
