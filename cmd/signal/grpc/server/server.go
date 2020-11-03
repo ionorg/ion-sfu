@@ -106,7 +106,7 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 
 			// Notify user of new offer
 			peer.OnOffer = func(o *webrtc.SessionDescription) {
-				marshalled, err := json.Marshal(answer)
+				marshalled, err := json.Marshal(o)
 				if err != nil {
 					log.Errorf("sdp marshal error: %v", err)
 					return
