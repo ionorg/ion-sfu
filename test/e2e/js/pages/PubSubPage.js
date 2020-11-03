@@ -3,7 +3,7 @@ const {TestUtils, KiteTestError, Status} = require('kite-common');
 const waitAround = TestUtils.waitAround;
 const verifyVideoDisplayByIndex = TestUtils.verifyVideoDisplayByIndex;
 
-const meetingRoom = By.id('enter_room_field');
+const startButton = By.id('start');
 const videoElements = By.css('video');
 
 
@@ -24,10 +24,9 @@ class PubSubPage {
     await TestUtils.open(stepInfo);
   }
 
-  async enterRoom(roomId) {
-    let meeting = await this.driver.findElement(meetingRoom);
-    await meeting.sendKeys(roomId); // Fill out the field and add some random numbers
-    await meeting.sendKeys(Key.ENTER); // Press ENTER to enter in the room
+  async start() {
+    let start = await this.driver.findElement(startButton);
+    await start.click();
   }
 
   // VideoCheck with verifyVideoDisplayByIndex
@@ -60,8 +59,6 @@ class PubSubPage {
     return checked.result;
   }
 
-  // GetStats for jitsi
-  // Todo: doc
   async getStats(stepInfo) {
     await stepInfo.driver.executeScript(getPeerConnectionScript());
     let stats = await TestUtils.getStats(stepInfo, 'kite', stepInfo.peerConnections[0]);

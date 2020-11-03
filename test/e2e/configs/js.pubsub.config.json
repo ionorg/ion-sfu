@@ -15,7 +15,6 @@
       "testImpl": "PubSub.js",
       "payload": {
         "url": "http://pubsub",
-        "port": 30000,
         "takeScreenshotForEachTest": true,
         "testTimeout": 60,
         "getStats": {

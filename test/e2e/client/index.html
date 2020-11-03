@@ -30,9 +30,14 @@
       <h3>Pion</h3>
     </nav>
     <div class="container pt-4">
-      <div class="row" id="start-btns">
+      <div class="row">
         <div class="col-12">
-          <button type="button" class="btn btn-primary" onclick="start(false)">
+          <button
+            id="start"
+            type="button"
+            class="btn btn-primary"
+            onclick="start()"
+          >
             start
           </button>
         </div>
@@ -140,8 +145,6 @@
       const remotesDiv = document.getElementById("remotes");
 
       /* eslint-env browser */
-      const joinBtns = document.getElementById("start-btns");
-
       const config = {
         iceServers: [
           {
@@ -149,13 +152,11 @@
           },
         ],
       };
-
-      const signalLocal = new IonSDK.IonSFUJSONRPCSignal(
-        "ws://sfu:7000/ws"
-      );
+      console.log("okkkk")
+      const signalLocal = new IonSDK.IonSFUJSONRPCSignal("ws://sfu:7000/ws");
 
       const clientLocal = new IonSDK.Client("test session", signalLocal);
-
+      setTimeout(() => start(), 1000)
       let localStream;
       const start = () => {
         IonSDK.LocalStream.getUserMedia({
@@ -168,7 +169,6 @@
             localVideo.autoplay = true;
             localVideo.controls = true;
             localVideo.muted = true;
-            joinBtns.style.display = "none";
             clientLocal.publish(media);
           })
           .catch(console.error);

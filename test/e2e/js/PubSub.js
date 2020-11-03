@@ -4,11 +4,15 @@ const {
   KiteBaseTest,
   ScreenshotStep,
 } = require("./node_modules/kite-common");
-const { OpenPubSubUrlStep, GetStatsStep } = require("./steps");
+const { OpenPubSubUrlStep, StartStep, GetStatsStep } = require("./steps");
 const { SentVideoCheck, ReceivedVideoCheck } = require("./checks");
 const { PubSubPage } = require("./pages");
 
-class Jitsi extends KiteBaseTest {
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+class PubSub extends KiteBaseTest {
   constructor(name, kiteConfig) {
     super(name, kiteConfig);
   }
@@ -18,8 +22,18 @@ class Jitsi extends KiteBaseTest {
       this.driver = await WebDriverFactory.getDriver(this.capabilities);
       this.page = new PubSubPage(this.driver);
 
-      let openJitsiUrlStep = new OpenPubSubUrlStep(this);
-      await openJitsiUrlStep.execute(this);
+      let openPubSubUrlStep = new OpenPubSubUrlStep(this);
+      await openPubSubUrlStep.execute(this);
+
+      await sleep(1000);
+
+      let screenshotStep = new ScreenshotStep(this);
+      await screenshotStep.execute(this);
+
+      let startStep = new StartStep(this);
+      await startStep.execute(this);
+
+      await screenshotStep.execute(this);
 
       let sentVideoCheck = new SentVideoCheck(this);
       await sentVideoCheck.execute(this);
@@ -32,10 +46,10 @@ class Jitsi extends KiteBaseTest {
         await getStatsStep.execute(this);
       }
 
-      if (this.takeScreenshot) {
-        let screenshotStep = new ScreenshotStep(this);
-        await screenshotStep.execute(this);
-      }
+      // if (this.takeScreenshot) {
+      //   let screenshotStep = new ScreenshotStep(this);
+      //   await screenshotStep.execute(this);
+      // }
 
       await this.waitAllSteps();
     } catch (e) {
