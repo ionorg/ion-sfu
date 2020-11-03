@@ -28,14 +28,8 @@ func NewSFUClient(cc grpc.ClientConnInterface) SFUClient {
 	return &sFUClient{cc}
 }
 
-var sFUSignalStreamDesc = &grpc.StreamDesc{
-	StreamName:    "Signal",
-	ServerStreams: true,
-	ClientStreams: true,
-}
-
 func (c *sFUClient) Signal(ctx context.Context, opts ...grpc.CallOption) (SFU_SignalClient, error) {
-	stream, err := c.cc.NewStream(ctx, sFUSignalStreamDesc, "/sfu.SFU/Signal", opts...)
+	stream, err := c.cc.NewStream(ctx, &_SFU_serviceDesc.Streams[0], "/sfu.SFU/Signal", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -65,16 +59,36 @@ func (x *sFUSignalClient) Recv() (*SignalReply, error) {
 	return m, nil
 }
 
-// SFUService is the service API for SFU service.
-// Fields should be assigned to their respective handler implementations only before
-// RegisterSFUService is called.  Any unassigned fields will result in the
-// handler for that method returning an Unimplemented error.
-type SFUService struct {
-	Signal func(SFU_SignalServer) error
+// SFUServer is the server API for SFU service.
+// All implementations must embed UnimplementedSFUServer
+// for forward compatibility
+type SFUServer interface {
+	Signal(SFU_SignalServer) error
+	mustEmbedUnimplementedSFUServer()
 }
 
-func (s *SFUService) signal(_ interface{}, stream grpc.ServerStream) error {
-	return s.Signal(&sFUSignalServer{stream})
+// UnimplementedSFUServer must be embedded to have forward compatible implementations.
+type UnimplementedSFUServer struct {
+}
+
+func (UnimplementedSFUServer) Signal(SFU_SignalServer) error {
+	return status.Errorf(codes.Unimplemented, "method Signal not implemented")
+}
+func (UnimplementedSFUServer) mustEmbedUnimplementedSFUServer() {}
+
+// UnsafeSFUServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to SFUServer will
+// result in compilation errors.
+type UnsafeSFUServer interface {
+	mustEmbedUnimplementedSFUServer()
+}
+
+func RegisterSFUServer(s grpc.ServiceRegistrar, srv SFUServer) {
+	s.RegisterService(&_SFU_serviceDesc, srv)
+}
+
+func _SFU_Signal_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(SFUServer).Signal(&sFUSignalServer{stream})
 }
 
 type SFU_SignalServer interface {
@@ -99,49 +113,17 @@ func (x *sFUSignalServer) Recv() (*SignalRequest, error) {
 	return m, nil
 }
 
-// RegisterSFUService registers a service implementation with a gRPC server.
-func RegisterSFUService(s grpc.ServiceRegistrar, srv *SFUService) {
-	srvCopy := *srv
-	if srvCopy.Signal == nil {
-		srvCopy.Signal = func(SFU_SignalServer) error {
-			return status.Errorf(codes.Unimplemented, "method Signal not implemented")
-		}
-	}
-	sd := grpc.ServiceDesc{
-		ServiceName: "sfu.SFU",
-		Methods:     []grpc.MethodDesc{},
-		Streams: []grpc.StreamDesc{
-			{
-				StreamName:    "Signal",
-				Handler:       srvCopy.signal,
-				ServerStreams: true,
-				ClientStreams: true,
-			},
+var _SFU_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "sfu.SFU",
+	HandlerType: (*SFUServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Signal",
+			Handler:       _SFU_Signal_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
 		},
-		Metadata: "cmd/signal/grpc/proto/sfu.proto",
-	}
-
-	s.RegisterService(&sd, nil)
-}
-
-// NewSFUService creates a new SFUService containing the
-// implemented methods of the SFU service in s.  Any unimplemented
-// methods will result in the gRPC server returning an UNIMPLEMENTED status to the client.
-// This includes situations where the method handler is misspelled or has the wrong
-// signature.  For this reason, this function should be used with great care and
-// is not recommended to be used by most users.
-func NewSFUService(s interface{}) *SFUService {
-	ns := &SFUService{}
-	if h, ok := s.(interface{ Signal(SFU_SignalServer) error }); ok {
-		ns.Signal = h.Signal
-	}
-	return ns
-}
-
-// UnstableSFUService is the service API for SFU service.
-// New methods may be added to this interface if they are added to the service
-// definition, which is not a backward-compatible change.  For this reason,
-// use of this type is not recommended.
-type UnstableSFUService interface {
-	Signal(SFU_SignalServer) error
+	},
+	Metadata: "cmd/signal/grpc/proto/sfu.proto",
 }
