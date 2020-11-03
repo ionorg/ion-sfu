@@ -28,7 +28,7 @@ type Receiver interface {
 	OnTransportWideCC(fn func(sn uint16, timeNS int64, marker bool))
 	SendRTCP(p []rtcp.Packet)
 	SetRTCPCh(ch chan []rtcp.Packet)
-	WriteBufferedPacket(sn []uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error
+	WriteBufferedPacket(sn []uint16, track *webrtc.Track, lastSN, snOffset uint16, tsOffset, ssrc uint32) error
 }
 
 // WebRTCReceiver receives a video track
@@ -137,11 +137,16 @@ func (w *WebRTCReceiver) Track() *webrtc.Track {
 }
 
 // WriteBufferedPacket writes buffered packet to track, return error if packet not found
-func (w *WebRTCReceiver) WriteBufferedPacket(sn []uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error {
+func (w *WebRTCReceiver) WriteBufferedPacket(sn []uint16, track *webrtc.Track, lastSN, snOffset uint16, tsOffset, ssrc uint32) error {
 	if w.buffer == nil {
 		return nil
 	}
 	for _, seq := range sn {
+		if lastSN-seq > 120 {
+			log.Warnf("Requested packet SN: %d, bigger or very old than last written SN: %d", seq, lastSN)
+			continue
+		}
+
 		h, p, err := w.buffer.getPacket(seq + snOffset)
 		if err != nil {
 			continue
