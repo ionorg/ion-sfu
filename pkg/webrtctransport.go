@@ -22,23 +22,20 @@ type WebRTCTransportConfig struct {
 
 // WebRTCTransport represents a sfu peer connection
 type WebRTCTransport struct {
-	id             string
-	pc             *webrtc.PeerConnection
-	me             MediaEngine
-	mu             sync.RWMutex
-	router         Router
-	session        *Session
+	id      string
+	api     *webrtc.API
+	pc      *webrtc.PeerConnection
+	me      MediaEngine
+	mu      sync.RWMutex
+	router  Router
+	session *Session
+
 	senders        map[string][]Sender
 	candidates     []webrtc.ICECandidateInit
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
 	negotiate      func()
 
 	subOnce sync.Once
-}
-
-type pendingSender struct {
-	transceiver *webrtc.RTPTransceiver
-	sender      Sender
 }
 
 // NewWebRTCTransport creates a new WebRTCTransport
@@ -55,6 +52,7 @@ func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportCon
 	p := &WebRTCTransport{
 		id:      id,
 		pc:      pc,
+		api:     api,
 		me:      me,
 		session: session,
 		router:  newRouter(pc, id, cfg.router),

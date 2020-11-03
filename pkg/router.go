@@ -199,11 +199,28 @@ func (r *router) addSender(p *WebRTCTransport, rr *receiverRouter) error {
 		return err
 	}
 	// Create webrtc sender for the peer we are sending track to
-	t, err := p.pc.AddTransceiverFromTrack(outTrack, webrtc.RtpTransceiverInit{
-		Direction: webrtc.RTPTransceiverDirectionSendonly,
-	})
-	if err != nil {
-		return err
+	var t *webrtc.RTPTransceiver
+	for _, tr := range p.pc.GetTransceivers() {
+		if tr.Direction() == webrtc.RTPTransceiverDirectionInactive {
+			t = tr
+			break
+		}
+	}
+	if t != nil {
+		s, err := p.api.NewRTPSender(outTrack, p.pc.DTLS())
+		if err != nil {
+			return err
+		}
+		if err = t.SetSender(s, outTrack); err != nil {
+			return err
+		}
+	} else {
+		t, err = p.pc.AddTransceiverFromTrack(outTrack, webrtc.RtpTransceiverInit{
+			Direction: webrtc.RTPTransceiverDirectionSendonly,
+		})
+		if err != nil {
+			return err
+		}
 	}
 	if rr.kind == SimulcastReceiver {
 		sender = NewSimulcastSender(p.id, rr, t, recv.SpatialLayer(), r.config.Simulcast)
