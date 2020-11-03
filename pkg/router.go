@@ -135,12 +135,14 @@ func (r *router) AddSender(p *WebRTCTransport, rr *receiverRouter) error {
 		return nil
 	}
 
-	for _, rr = range r.receivers {
-		if err := r.addSender(p, rr); err != nil {
-			return err
+	if len(r.receivers) > 0 {
+		for _, rr = range r.receivers {
+			if err := r.addSender(p, rr); err != nil {
+				return err
+			}
 		}
+		p.negotiate()
 	}
-	p.negotiate()
 	return nil
 }
 
