@@ -140,12 +140,6 @@ func (s *SimulcastSender) WriteRTP(pkt *rtp.Packet) {
 		}
 		s.currentSpatialLayer = s.targetSpatialLayer
 	}
-	// Backup pkt original data
-	origPT := pkt.Header.PayloadType
-	origSSRC := pkt.SSRC
-	origPl := pkt.Payload
-	origSeq := pkt.SequenceNumber
-	origTS := pkt.Timestamp
 	// Compute how much time passed between the old RTP pkt
 	// and the current packet, and fix timestamp on source change
 	if !s.lTSCalc.IsZero() && s.lSSRC != pkt.SSRC {
@@ -180,18 +174,16 @@ func (s *SimulcastSender) WriteRTP(pkt *rtp.Packet) {
 	lSN := pkt.SequenceNumber - s.snOffset
 	atomic.StoreUint32(&s.lSN, uint32(lSN))
 	// Update pkt headers
-	pkt.SSRC = s.simulcastSSRC
-	pkt.SequenceNumber = lSN
-	pkt.Timestamp = s.lTS
+	h := pkt.Header
+	h.SSRC = s.simulcastSSRC
+	h.SequenceNumber = lSN
+	h.Timestamp = s.lTS
+	h.PayloadType = s.payload
 	// Write packet to client
-	err := s.track.WriteRTP(pkt)
-	// Reset packet data
-	pkt.Timestamp = origTS
-	pkt.SSRC = origSSRC
-	pkt.Payload = origPl
-	pkt.SequenceNumber = origSeq
-	pkt.PayloadType = origPT
-	if err != nil {
+	if err := s.track.WriteRTP(&rtp.Packet{
+		Header:  h,
+		Payload: pkt.Payload,
+	}); err != nil {
 		if err == io.ErrClosedPipe {
 			return
 		}
