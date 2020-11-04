@@ -207,7 +207,7 @@ func (r *router) addSender(p *WebRTCTransport, rr *receiverRouter) error {
 		}
 	}
 	if t != nil {
-		s, err := p.api.NewRTPSender(outTrack, p.pc.DTLS())
+		s, err := p.api.NewRTPSender(outTrack, p.pc.SCTP().Transport())
 		if err != nil {
 			return err
 		}
