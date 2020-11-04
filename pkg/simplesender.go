@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"io"
 	"sync"
+	"sync/atomic"
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
@@ -29,7 +30,7 @@ type SimpleSender struct {
 	reSync   atomicBool
 	snOffset uint16
 	tsOffset uint32
-	lastSN   uint16
+	lastSN   uint32
 	lastTS   uint32
 
 	start sync.Once
@@ -103,7 +104,7 @@ func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
 				return
 			}
 		}
-		s.snOffset = pkt.SequenceNumber - s.lastSN - 1
+		s.snOffset = pkt.SequenceNumber - uint16(s.lastSN) - 1
 		s.tsOffset = pkt.Timestamp - s.lastTS + 1
 		s.reSync.set(false)
 	}
@@ -113,11 +114,12 @@ func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
 	bTS := pkt.Timestamp
 	bPt := pkt.PayloadType
 	// Transform payload type
-	s.lastSN = pkt.SequenceNumber - s.snOffset
+	lSN := pkt.SequenceNumber - s.snOffset
+	atomic.StoreUint32(&s.lastSN, uint32(lSN))
 	s.lastTS = pkt.Timestamp - s.tsOffset
 	pkt.PayloadType = s.payload
 	pkt.Timestamp = s.lastTS
-	pkt.SequenceNumber = s.lastSN
+	pkt.SequenceNumber = lSN
 
 	if pkt.SequenceNumber%500 == 0 {
 		log.Tracef("rtp write sender %s with ssrc %d", s.id, s.track.SSRC())
@@ -225,10 +227,12 @@ func (s *SimpleSender) receiveRTCP() {
 				}
 			case *rtcp.TransportLayerNack:
 				log.Tracef("sender got nack: %+v", pkt)
+				lSN := atomic.LoadUint32(&s.lastSN)
 				for _, pair := range pkt.Nacks {
 					if err := recv.WriteBufferedPacket(
 						pair.PacketList(),
 						s.track,
+						uint16(lSN),
 						s.snOffset,
 						s.tsOffset,
 						s.track.SSRC(),

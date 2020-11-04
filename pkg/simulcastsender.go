@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	log "github.com/pion/ion-log"
@@ -39,7 +40,7 @@ type SimulcastSender struct {
 	lTSCalc             time.Time
 	lSSRC               uint32
 	lTS                 uint32
-	lSN                 uint16
+	lSN                 uint32
 
 	// VP8Helper temporal helpers
 	refPicID  uint16
@@ -154,10 +155,10 @@ func (s *SimulcastSender) WriteRTP(pkt *rtp.Packet) {
 			td = 1
 		}
 		s.tsOffset = pkt.Timestamp - (s.lTS + td)
-		s.snOffset = pkt.SequenceNumber - s.lSN - 1
+		s.snOffset = pkt.SequenceNumber - uint16(s.lSN) - 1
 	} else if s.lTSCalc.IsZero() {
 		s.lTS = pkt.Timestamp
-		s.lSN = pkt.SequenceNumber
+		s.lSN = uint32(pkt.SequenceNumber)
 	}
 	if s.temporalEnabled && s.temporalSupported {
 		if s.payload == webrtc.DefaultPayloadTypeVP8 {
@@ -176,10 +177,11 @@ func (s *SimulcastSender) WriteRTP(pkt *rtp.Packet) {
 	s.lTSCalc = time.Now()
 	s.lSSRC = pkt.SSRC
 	s.lTS = pkt.Timestamp - s.tsOffset
-	s.lSN = pkt.SequenceNumber - s.snOffset
+	lSN := pkt.SequenceNumber - s.snOffset
+	atomic.StoreUint32(&s.lSN, uint32(lSN))
 	// Update pkt headers
 	pkt.SSRC = s.simulcastSSRC
-	pkt.SequenceNumber = s.lSN
+	pkt.SequenceNumber = lSN
 	pkt.Timestamp = s.lTS
 	// Write packet to client
 	err := s.track.WriteRTP(pkt)
@@ -301,10 +303,12 @@ func (s *SimulcastSender) receiveRTCP() {
 				}
 			case *rtcp.TransportLayerNack:
 				log.Tracef("sender got nack: %+v", pkt)
+				lSN := atomic.LoadUint32(&s.lSN)
 				for _, pair := range pkt.Nacks {
 					if err := recv.WriteBufferedPacket(
 						pair.PacketList(),
 						s.track,
+						uint16(lSN),
 						s.snOffset,
 						s.tsOffset,
 						s.simulcastSSRC,
