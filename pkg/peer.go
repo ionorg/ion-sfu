@@ -113,7 +113,7 @@ func (p *Peer) Answer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription
 	log.Infof("peer %s offer", p.pc.ID())
 
 	readyForOffer := !p.makingOffer.get() &&
-		(p.pc.SignalingState() == webrtc.SignalingStateStable || p.remoteAnswerPending.get())
+		(p.pc.SignalingState() == webrtc.SignalingStateStable && !p.remoteAnswerPending.get())
 
 	if !readyForOffer {
 		return nil, ErrOfferIgnored
