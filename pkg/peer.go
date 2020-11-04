@@ -25,9 +25,9 @@ type Peer struct {
 	OnIceCandidate func(*webrtc.ICECandidateInit)
 	OnOffer        func(*webrtc.SessionDescription)
 
-	makingOffer                  atomicBool
-	isSettingRemoteAnswerPending atomicBool
-	negotiationPending           atomicBool
+	makingOffer         atomicBool
+	remoteAnswerPending atomicBool
+	negotiationPending  atomicBool
 }
 
 // NewPeer creates a new Peer for signaling with the given SFU
@@ -63,19 +63,13 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 	}
 
 	pc.OnNegotiationNeeded(func() {
-		if p.makingOffer.get() {
+		if p.makingOffer.get() || p.remoteAnswerPending.get() {
 			p.negotiationPending.set(true)
 			return
 		}
 
 		p.makingOffer.set(true)
-		defer func() {
-			p.makingOffer.set(false)
-			if p.negotiationPending.get() {
-				p.negotiationPending.set(false)
-				pc.negotiate()
-			}
-		}()
+		defer p.makingOffer.set(false)
 
 		log.Debugf("on negotiation needed called")
 		offer, err := pc.CreateOffer()
@@ -90,6 +84,7 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 			return
 		}
 
+		p.remoteAnswerPending.set(true)
 		if p.OnOffer != nil {
 			p.OnOffer(&offer)
 		}
@@ -118,7 +113,7 @@ func (p *Peer) Answer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription
 	log.Infof("peer %s offer", p.pc.ID())
 
 	readyForOffer := !p.makingOffer.get() &&
-		(p.pc.SignalingState() == webrtc.SignalingStateStable || p.isSettingRemoteAnswerPending.get())
+		(p.pc.SignalingState() == webrtc.SignalingStateStable || p.remoteAnswerPending.get())
 
 	if !readyForOffer {
 		return nil, ErrOfferIgnored
@@ -147,13 +142,18 @@ func (p *Peer) SetRemoteDescription(sdp webrtc.SessionDescription) error {
 		return ErrNoTransportEstablished
 	}
 
-	p.isSettingRemoteAnswerPending.set(true)
-	defer p.isSettingRemoteAnswerPending.set(false)
-
 	log.Infof("peer %s answer", p.pc.ID())
 	if err := p.pc.SetRemoteDescription(sdp); err != nil {
 		return fmt.Errorf("error setting remote description: %v", err)
 	}
+
+	p.remoteAnswerPending.set(false)
+
+	if p.negotiationPending.get() {
+		p.negotiationPending.set(false)
+		p.pc.negotiate()
+	}
+
 	return nil
 }
 
