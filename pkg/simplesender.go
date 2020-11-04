@@ -109,28 +109,23 @@ func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
 		s.reSync.set(false)
 	}
 
-	// Backup payload
-	bSN := pkt.SequenceNumber
-	bTS := pkt.Timestamp
-	bPt := pkt.PayloadType
-	// Transform payload type
 	lSN := pkt.SequenceNumber - s.snOffset
 	atomic.StoreUint32(&s.lastSN, uint32(lSN))
 	s.lastTS = pkt.Timestamp - s.tsOffset
-	pkt.PayloadType = s.payload
-	pkt.Timestamp = s.lastTS
-	pkt.SequenceNumber = lSN
+	h := pkt.Header
+	h.PayloadType = s.payload
+	h.Timestamp = s.lastTS
+	h.SequenceNumber = lSN
 
 	if pkt.SequenceNumber%500 == 0 {
 		log.Tracef("rtp write sender %s with ssrc %d", s.id, s.track.SSRC())
 	}
 
-	err := s.track.WriteRTP(pkt)
-	// Restore packet
-	pkt.PayloadType = bPt
-	pkt.Timestamp = bTS
-	pkt.SequenceNumber = bSN
-	if err != nil {
+	if err := s.track.WriteRTP(
+		&rtp.Packet{
+			Header:  h,
+			Payload: pkt.Payload,
+		}); err != nil {
 		if err == io.ErrClosedPipe {
 			return
 		}
