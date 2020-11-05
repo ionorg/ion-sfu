@@ -1,8 +1,6 @@
 package sfu
 
 import (
-	"bytes"
-	"encoding/binary"
 	"io"
 	"sync"
 
@@ -66,60 +64,39 @@ func (s *SimpleSender) Start() {
 }
 
 // WriteRTP to the track
-func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
+func (s *SimpleSender) WriteRTP(p extPacket) {
 	if !s.enabled.get() {
 		return
 	}
-
 	if s.reSync.get() {
 		if s.track.Kind() == webrtc.RTPCodecTypeVideo {
-			// Forward pli to request a keyframe at max 1 pli per second
-			recv := s.router.receivers[0]
-			if recv == nil {
-				return
-			}
-			relay := false
 			// Wait for a keyframe to sync new source
-			switch s.payload {
-			case webrtc.DefaultPayloadTypeVP8:
-				vp8Packet := VP8Helper{}
-				if err := vp8Packet.Unmarshal(pkt.Payload); err == nil {
-					relay = vp8Packet.IsKeyFrame
+			if !p.keyframe {
+				if recv := s.router.receivers[0]; recv != nil {
+					recv.SendRTCP([]rtcp.Packet{
+						&rtcp.PictureLossIndication{SenderSSRC: p.packet.SSRC, MediaSSRC: p.packet.SSRC},
+					})
 				}
-			case webrtc.DefaultPayloadTypeH264:
-				var word uint32
-				payload := bytes.NewReader(pkt.Payload)
-				err := binary.Read(payload, binary.BigEndian, &word)
-				if err != nil || (word&0x1F000000)>>24 != 24 {
-					relay = false
-				} else {
-					relay = word&0x1F == 7
-				}
-			}
-			if !relay {
-				recv.SendRTCP([]rtcp.Packet{
-					&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC},
-				})
 				return
 			}
 		}
-		s.snOffset = pkt.SequenceNumber - s.lastSN - 1
-		s.tsOffset = pkt.Timestamp - s.lastTS + 1
+		s.snOffset = p.packet.SequenceNumber - s.lastSN - 1
+		s.tsOffset = p.packet.Timestamp - s.lastTS + 1
 		s.reSync.set(false)
 	}
 
-	s.lastSN = pkt.SequenceNumber - s.snOffset
-	s.lastTS = pkt.Timestamp - s.tsOffset
-	h := pkt.Header
+	s.lastSN = p.packet.SequenceNumber - s.snOffset
+	s.lastTS = p.packet.Timestamp - s.tsOffset
+	h := p.packet.Header
 	h.PayloadType = s.payload
 	h.Timestamp = s.lastTS
 	h.SequenceNumber = s.lastSN
 
-	if pkt.SequenceNumber%500 == 0 {
+	if p.packet.SequenceNumber%500 == 0 {
 		log.Tracef("rtp write sender %s with ssrc %d", s.id, s.track.SSRC())
 	}
 
-	if err := s.track.WriteRTP(&rtp.Packet{Header: h, Payload: pkt.Payload}); err != nil {
+	if err := s.track.WriteRTP(&rtp.Packet{Header: h, Payload: p.packet.Payload}); err != nil {
 		if err == io.ErrClosedPipe {
 			return
 		}

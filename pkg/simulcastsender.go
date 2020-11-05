@@ -1,12 +1,9 @@
 package sfu
 
 import (
-	"bytes"
-	"encoding/binary"
 	"io"
 	"math/rand"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	log "github.com/pion/ion-log"
@@ -40,7 +37,7 @@ type SimulcastSender struct {
 	lTSCalc             time.Time
 	lSSRC               uint32
 	lTS                 uint32
-	lSN                 uint32
+	lSN                 uint16
 
 	// VP8Helper temporal helpers
 	refPicID  uint16
@@ -87,51 +84,34 @@ func (s *SimulcastSender) Start() {
 }
 
 // WriteRTP to the track
-func (s *SimulcastSender) WriteRTP(pkt *rtp.Packet) {
+func (s *SimulcastSender) WriteRTP(p extPacket) {
 	// Simulcast write RTP is sync, so the packet can be safely modified and restored
 	if !s.enabled.get() {
 		return
 	}
 	// Check if packet SSRC is different from before
 	// if true, the video source changed
-	if s.lSSRC != pkt.SSRC {
+	if s.lSSRC != p.packet.SSRC {
 		recv := s.router.receivers[s.targetSpatialLayer]
-		if recv == nil || recv.Track().SSRC() != pkt.SSRC {
+		if recv == nil || recv.Track().SSRC() != p.packet.SSRC {
 			return
 		}
-		relay := false
 		// Wait for a keyframe to sync new source
+		if !p.keyframe {
+			recv.SendRTCP([]rtcp.Packet{
+				&rtcp.PictureLossIndication{SenderSSRC: p.packet.SSRC, MediaSSRC: p.packet.SSRC},
+			})
+			return
+		}
 		switch s.payload {
 		case webrtc.DefaultPayloadTypeVP8:
 			vp8Packet := VP8Helper{}
-			if err := vp8Packet.Unmarshal(pkt.Payload); err == nil {
-				if vp8Packet.IsKeyFrame {
-					relay = true
-					// Set VP8Helper temporal info
-					s.temporalSupported = vp8Packet.TemporalSupported
-					s.refPicID += vp8Packet.PictureID - s.lastPicID
-					s.refTlzi += vp8Packet.TL0PICIDX - s.lastTlzi
-				}
+			if err := vp8Packet.Unmarshal(p.packet.Payload); err == nil {
+				// Set VP8Helper temporal info
+				s.temporalSupported = vp8Packet.TemporalSupported
+				s.refPicID += vp8Packet.PictureID - s.lastPicID
+				s.refTlzi += vp8Packet.TL0PICIDX - s.lastTlzi
 			}
-		case webrtc.DefaultPayloadTypeH264:
-			var word uint32
-			payload := bytes.NewReader(pkt.Payload)
-			err := binary.Read(payload, binary.BigEndian, &word)
-			if err != nil || (word&0x1F000000)>>24 != 24 {
-				relay = false
-			} else {
-				relay = word&0x1F == 7
-			}
-		default:
-			log.Warnf("codec payload don't support simulcast: %d", s.track.Codec().PayloadType)
-			return
-		}
-		// Packet is not a keyframe, discard it
-		if !relay {
-			recv.SendRTCP([]rtcp.Packet{
-				&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC},
-			})
-			return
 		}
 		// Switch is done remove sender from previous layer
 		// and update current layer
@@ -140,47 +120,46 @@ func (s *SimulcastSender) WriteRTP(pkt *rtp.Packet) {
 		}
 		s.currentSpatialLayer = s.targetSpatialLayer
 	}
-	// Compute how much time passed between the old RTP pkt
+	// Compute how much time passed between the old RTP p
 	// and the current packet, and fix timestamp on source change
-	if !s.lTSCalc.IsZero() && s.lSSRC != pkt.SSRC {
+	if !s.lTSCalc.IsZero() && s.lSSRC != p.packet.SSRC {
 		tDiff := time.Now().Sub(s.lTSCalc)
 		td := uint32((tDiff.Milliseconds() * 90) / 1000)
 		if td == 0 {
 			td = 1
 		}
-		s.tsOffset = pkt.Timestamp - (s.lTS + td)
-		s.snOffset = pkt.SequenceNumber - uint16(s.lSN) - 1
+		s.tsOffset = p.packet.Timestamp - (s.lTS + td)
+		s.snOffset = p.packet.SequenceNumber - s.lSN - 1
 	} else if s.lTSCalc.IsZero() {
-		s.lTS = pkt.Timestamp
-		s.lSN = uint32(pkt.SequenceNumber)
+		s.lTS = p.packet.Timestamp
+		s.lSN = p.packet.SequenceNumber
 	}
 	if s.temporalEnabled && s.temporalSupported {
 		if s.payload == webrtc.DefaultPayloadTypeVP8 {
-			pl, skip := setVP8TemporalLayer(pkt.Payload, s)
+			pl, skip := setVP8TemporalLayer(p.packet.Payload, s)
 			if skip {
 				// Pkt not in temporal layer update sequence number offset to avoid gaps
 				s.snOffset++
 				return
 			}
 			if pl != nil {
-				pkt.Payload = pl
+				p.packet.Payload = pl
 			}
 		}
 	}
 	// Update base
 	s.lTSCalc = time.Now()
-	s.lSSRC = pkt.SSRC
-	s.lTS = pkt.Timestamp - s.tsOffset
-	lSN := pkt.SequenceNumber - s.snOffset
-	atomic.StoreUint32(&s.lSN, uint32(lSN))
-	// Update pkt headers
-	h := pkt.Header
+	s.lSSRC = p.packet.SSRC
+	s.lTS = p.packet.Timestamp - s.tsOffset
+	s.lSN = p.packet.SequenceNumber - s.snOffset
+	// Update p headers
+	h := p.packet.Header
 	h.SSRC = s.simulcastSSRC
-	h.SequenceNumber = lSN
+	h.SequenceNumber = s.lSN
 	h.Timestamp = s.lTS
 	h.PayloadType = s.payload
 	// Write packet to client
-	if err := s.track.WriteRTP(&rtp.Packet{Header: h, Payload: pkt.Payload}); err != nil {
+	if err := s.track.WriteRTP(&rtp.Packet{Header: h, Payload: p.packet.Payload}); err != nil {
 		if err == io.ErrClosedPipe {
 			return
 		}
