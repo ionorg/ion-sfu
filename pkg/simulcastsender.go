@@ -180,10 +180,7 @@ func (s *SimulcastSender) WriteRTP(pkt *rtp.Packet) {
 	h.Timestamp = s.lTS
 	h.PayloadType = s.payload
 	// Write packet to client
-	if err := s.track.WriteRTP(&rtp.Packet{
-		Header:  h,
-		Payload: pkt.Payload,
-	}); err != nil {
+	if _, err := s.sender.SendRTP(&h, pkt.Payload); err != nil {
 		if err == io.ErrClosedPipe {
 			return
 		}
@@ -295,12 +292,10 @@ func (s *SimulcastSender) receiveRTCP() {
 				}
 			case *rtcp.TransportLayerNack:
 				log.Tracef("sender got nack: %+v", pkt)
-				lSN := atomic.LoadUint32(&s.lSN)
 				for _, pair := range pkt.Nacks {
 					if err := recv.WriteBufferedPacket(
 						pair.PacketList(),
 						s.track,
-						uint16(lSN),
 						s.snOffset,
 						s.tsOffset,
 						s.simulcastSSRC,
