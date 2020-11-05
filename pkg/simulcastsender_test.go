@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/pion/rtcp"
-	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
 	"github.com/stretchr/testify/assert"
 )
@@ -120,8 +119,8 @@ forLoop:
 	type fields struct {
 		checkPli    bool
 		checkPacket bool
-		packet      *rtp.Packet
-		wantPacket  *rtp.Packet
+		packet      extPacket
+		wantPacket  extPacket
 	}
 
 	fakePkt := senderTrack.Packetizer().Packetize([]byte{0x01, 0x02, 0x03, 0x04}, 1)[0]
@@ -135,7 +134,7 @@ forLoop:
 			name: "Sender packet SSRC must be same as simulcast SSRC, and receiver packet must be restored",
 			fields: fields{
 				checkPacket: true,
-				packet:      fakePkt,
+				packet:      extPacket{packet: fakePkt},
 			},
 		},
 	}
@@ -154,7 +153,7 @@ forLoop:
 				pkt, err := remoteTrack.ReadRTP()
 				assert.NoError(t, err)
 				assert.Equal(t, simulcastSSRC, pkt.SSRC)
-				assert.Equal(t, fakeRecvTrack.SSRC(), tt.fields.packet.SSRC)
+				assert.Equal(t, fakeRecvTrack.SSRC(), tt.fields.packet.packet.SSRC)
 			}
 
 		})
@@ -518,23 +517,23 @@ forLoop:
 	}
 	// Simple sender must forward packets while the sender is not muted
 	fakePkt := senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]
-	simpleSdr.WriteRTP(fakePkt)
+	simpleSdr.WriteRTP(extPacket{packet: fakePkt})
 	packet, err := remoteTrack.ReadRTP()
 	assert.NoError(t, err)
 	assert.Equal(t, fakePkt.Payload, packet.Payload)
 	// Mute track will prevent tracks to reach the subscriber
 	simpleSdr.Mute(true)
 	for i := 0; i <= 5; i++ {
-		simpleSdr.WriteRTP(senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0])
+		simpleSdr.WriteRTP(extPacket{packet: senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]})
 	}
 	simpleSdr.Mute(false)
 	// Now that is un-muted sender will request a key frame
-	simpleSdr.WriteRTP(senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0])
+	simpleSdr.WriteRTP(extPacket{packet: senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]})
 	<-gotPli
 	// Write VP8 keyframe
 	keyFramePkt := senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]
 	keyFramePkt.Payload = []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0x9f, 0x94, 0x1}
-	simpleSdr.WriteRTP(keyFramePkt)
+	simpleSdr.WriteRTP(extPacket{keyframe: true, packet: keyFramePkt})
 	packet2, err := remoteTrack.ReadRTP()
 	assert.NoError(t, err)
 	assert.Equal(t, keyFramePkt.Payload, packet2.Payload)

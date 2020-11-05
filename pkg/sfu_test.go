@@ -42,7 +42,7 @@ func sendRTPWithSenderUntilDone(done <-chan struct{}, t *testing.T, track *webrt
 		select {
 		case <-time.After(20 * time.Millisecond):
 			pkt := track.Packetizer().Packetize([]byte{0x01, 0x02, 0x03, 0x04}, 1)[0]
-			sender.WriteRTP(pkt)
+			sender.WriteRTP(extPacket{keyframe: false, packet: pkt})
 		case <-done:
 			return
 		}

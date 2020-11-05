@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -179,13 +178,13 @@ func TestWebRTCReceiver_Track(t *testing.T) {
 
 func TestWebRTCReceiver_fwdRTP(t *testing.T) {
 	type fields struct {
-		rtpCh   chan *rtp.Packet
+		rtpCh   chan extPacket
 		senders map[string]Sender
 	}
 
 	var ctr int64
 	fakeSender := SenderMock{
-		WriteRTPFunc: func(_ *rtp.Packet) {
+		WriteRTPFunc: func(_ extPacket) {
 			atomic.AddInt64(&ctr, 1)
 		},
 	}
@@ -198,7 +197,7 @@ func TestWebRTCReceiver_fwdRTP(t *testing.T) {
 		{
 			name: "Receiver must fwd the pkts to every sender",
 			fields: fields{
-				rtpCh:   make(chan *rtp.Packet),
+				rtpCh:   make(chan extPacket),
 				senders: map[string]Sender{"test": &fakeSender},
 			},
 			want: 10,
@@ -213,7 +212,7 @@ func TestWebRTCReceiver_fwdRTP(t *testing.T) {
 			}
 			go w.writeRTP()
 			for i := 0; i < tt.want; i++ {
-				w.rtpCh <- &rtp.Packet{}
+				w.rtpCh <- extPacket{}
 			}
 			time.Sleep(50 * time.Millisecond)
 			refCtr := atomic.LoadInt64(&ctr)

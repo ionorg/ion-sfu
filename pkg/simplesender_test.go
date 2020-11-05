@@ -106,7 +106,7 @@ forLoop:
 				track:   senderTrack,
 			}
 			tmr := time.NewTimer(1000 * time.Millisecond)
-			s.WriteRTP(fakePkt)
+			s.WriteRTP(extPacket{keyframe: false, packet: fakePkt})
 			for {
 				pkt, err := remoteTrack.ReadRTP()
 				assert.NoError(t, err)
@@ -455,23 +455,23 @@ forLoop:
 	}
 	// Simple sender must forward packets while the sender is not muted
 	fakePkt := senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]
-	simpleSdr.WriteRTP(fakePkt)
+	simpleSdr.WriteRTP(extPacket{keyframe: false, packet: fakePkt})
 	packet, err := remoteTrack.ReadRTP()
 	assert.NoError(t, err)
 	assert.Equal(t, fakePkt.Payload, packet.Payload)
 	// Mute track will prevent tracks to reach the subscriber
 	simpleSdr.Mute(true)
 	for i := 0; i <= 5; i++ {
-		simpleSdr.WriteRTP(senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0])
+		simpleSdr.WriteRTP(extPacket{keyframe: false, packet: senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]})
 	}
 	simpleSdr.Mute(false)
 	// Now that is un-muted sender will request a key frame
-	simpleSdr.WriteRTP(senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0])
+	simpleSdr.WriteRTP(extPacket{keyframe: false, packet: senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]})
 	<-gotPli
 	// Write VP8 keyframe
 	keyFramePkt := senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]
 	keyFramePkt.Payload = []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0x9f, 0x94, 0x1}
-	simpleSdr.WriteRTP(keyFramePkt)
+	simpleSdr.WriteRTP(extPacket{keyframe: true, packet: keyFramePkt})
 	packet2, err := remoteTrack.ReadRTP()
 	assert.NoError(t, err)
 	assert.Equal(t, keyFramePkt.Payload, packet2.Payload)

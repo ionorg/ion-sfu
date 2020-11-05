@@ -49,8 +49,9 @@ func TestNewBuffer(t *testing.T) {
 	track, _ := p.NewTrack(webrtc.DefaultPayloadTypeVP8, 1234, "test", "pion")
 
 	type args struct {
-		track *webrtc.Track
-		o     BufferOptions
+		track   *webrtc.Track
+		rtpChan chan extPacket
+		o       BufferOptions
 	}
 	tests := []struct {
 		name string
@@ -59,7 +60,8 @@ func TestNewBuffer(t *testing.T) {
 		{
 			name: "Must not be nil and add packets in sequence",
 			args: args{
-				track: track,
+				track:   track,
+				rtpChan: make(chan extPacket, 10),
 				o: BufferOptions{
 					TWCCExt:    0,
 					BufferTime: 1e3,
@@ -76,24 +78,28 @@ func TestNewBuffer(t *testing.T) {
 					Header: rtp.Header{
 						SequenceNumber: 65533,
 					},
+					Payload: []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0x9f, 0x94, 0x1},
 				},
 				{
 					Header: rtp.Header{
 						SequenceNumber: 65534,
 					},
+					Payload: []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0x9f, 0x94, 0x1},
 				},
 				{
 					Header: rtp.Header{
 						SequenceNumber: 2,
 					},
+					Payload: []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0x9f, 0x94, 0x1},
 				},
 				{
 					Header: rtp.Header{
 						SequenceNumber: 65535,
 					},
+					Payload: []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0x9f, 0x94, 0x1},
 				},
 			}
-			buff := NewBuffer(tt.args.track, tt.args.o)
+			buff := NewBuffer(tt.args.track, tt.args.rtpChan, tt.args.o)
 			assert.NotNil(t, buff)
 
 			for _, p := range TestPackets {
