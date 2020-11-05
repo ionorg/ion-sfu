@@ -180,7 +180,7 @@ func (s *SimulcastSender) WriteRTP(pkt *rtp.Packet) {
 	h.Timestamp = s.lTS
 	h.PayloadType = s.payload
 	// Write packet to client
-	if _, err := s.sender.SendRTP(&h, pkt.Payload); err != nil {
+	if err := s.track.WriteRTP(&rtp.Packet{Header: h, Payload: pkt.Payload}); err != nil {
 		if err == io.ErrClosedPipe {
 			return
 		}

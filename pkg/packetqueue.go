@@ -124,7 +124,7 @@ func (q *queue) nack() *rtcp.NackPair {
 }
 
 func (q *queue) clean() {
-	for q.size < 500 {
+	for q.size > 1000 {
 		q.shift()
 	}
 }
