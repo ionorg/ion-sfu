@@ -13,6 +13,7 @@ type Session struct {
 	mu             sync.RWMutex
 	transports     map[string]Transport
 	onCloseHandler func()
+	closed         bool
 }
 
 // NewSession creates a new session
@@ -20,6 +21,7 @@ func NewSession(id string) *Session {
 	return &Session{
 		id:         id,
 		transports: make(map[string]Transport),
+		closed:     false,
 	}
 }
 
@@ -39,8 +41,9 @@ func (s *Session) RemoveTransport(tid string) {
 	delete(s.transports, tid)
 
 	// Close session if no transports
-	if len(s.transports) == 0 && s.onCloseHandler != nil {
+	if len(s.transports) == 0 && s.onCloseHandler != nil && !s.closed {
 		s.onCloseHandler()
+		s.closed = true
 	}
 }
 
