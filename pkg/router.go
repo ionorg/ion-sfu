@@ -219,7 +219,12 @@ func (r *router) addSender(p *WebRTCTransport, rr *receiverRouter) error {
 			p.negotiate() // nolint:scopelint
 		}
 	})
-
+	p.mu.Lock()
+	p.pendingSenders.PushBack(pendingSender{
+		transceiver: t,
+		sender:      sender,
+	})
+	p.mu.Unlock()
 	p.AddSender(rr.stream, sender)
 	recv.AddSender(sender)
 	return nil
