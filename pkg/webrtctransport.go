@@ -33,7 +33,8 @@ type WebRTCTransport struct {
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
 	negotiate      func()
 
-	subOnce sync.Once
+	subOnce   sync.Once
+	closeOnce sync.Once
 }
 
 type pendingSender struct {
@@ -93,11 +94,13 @@ func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportCon
 		case webrtc.ICEConnectionStateFailed:
 			fallthrough
 		case webrtc.ICEConnectionStateClosed:
-			log.Debugf("webrtc ice closed for peer: %s", p.id)
-			if err := p.Close(); err != nil {
-				log.Errorf("webrtc transport close err: %v", err)
-			}
-			p.router.Stop()
+			p.closeOnce.Do(func() {
+				log.Debugf("webrtc ice closed for peer: %s", p.id)
+				if err := p.Close(); err != nil {
+					log.Errorf("webrtc transport close err: %v", err)
+				}
+				p.router.Stop()
+			})
 		}
 	})
 

@@ -71,6 +71,7 @@ func (p *VP8Helper) Unmarshal(payload []byte) error {
 	}
 
 	var idx uint8
+	S := payload[idx]&0x10 > 0
 	// Check for extended bit control
 	if payload[idx]&0x80 > 0 {
 		idx++
@@ -107,11 +108,11 @@ func (p *VP8Helper) Unmarshal(payload []byte) error {
 		}
 		idx++
 		// Check is packet is a keyframe by looking at P bit in vp8 payload
-		p.IsKeyFrame = payload[idx]&0x01 == 0
+		p.IsKeyFrame = payload[idx]&0x01 == 0 && S
 	} else {
 		idx++
 		// Check is packet is a keyframe by looking at P bit in vp8 payload
-		p.IsKeyFrame = payload[idx]&0x01 == 0
+		p.IsKeyFrame = payload[idx]&0x01 == 0 && S
 	}
 	return nil
 }
