@@ -76,6 +76,7 @@ func (p *VP8Helper) Unmarshal(payload []byte) error {
 		idx++
 		// Check if T is present, if not, no temporal layer is available
 		p.TemporalSupported = payload[idx]&0x20 > 0
+		K := payload[idx]&0x10 > 0
 		L := payload[idx]&0x40 > 0
 		// Check for PictureID
 		if payload[idx]&0x80 > 0 {
@@ -97,13 +98,18 @@ func (p *VP8Helper) Unmarshal(payload []byte) error {
 			p.tlzIdx = idx
 			p.TL0PICIDX = payload[idx]
 		}
-		idx++
-		// Set TID
-		p.TID = (payload[idx] & 0xc0) >> 6
-		idx++
+		if p.TemporalSupported || K {
+			idx++
+			p.TID = (payload[idx] & 0xc0) >> 6
+		}
 		if int(idx) >= payloadLen {
 			return errShortPacket
 		}
+		idx++
+		// Check is packet is a keyframe by looking at P bit in vp8 payload
+		p.IsKeyFrame = payload[idx]&0x01 == 0
+	} else {
+		idx++
 		// Check is packet is a keyframe by looking at P bit in vp8 payload
 		p.IsKeyFrame = payload[idx]&0x01 == 0
 	}
