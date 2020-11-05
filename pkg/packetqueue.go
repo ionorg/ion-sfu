@@ -92,7 +92,7 @@ func (q *queue) set(i int, pkt *rtp.Packet) {
 
 func (q *queue) resize() {
 	if len(q.pkts) == 0 {
-		q.pkts = make([]*rtp.Packet, 1024)
+		q.pkts = make([]*rtp.Packet, 1<<7)
 		return
 	}
 	if q.size == len(q.pkts) {
