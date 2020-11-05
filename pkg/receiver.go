@@ -40,7 +40,7 @@ type WebRTCReceiver struct {
 	buffer         *Buffer
 	bandwidth      uint64
 	lastPli        int64
-	rtpCh          chan *rtp.Packet
+	rtpCh          chan extPacket
 	rtcpCh         chan []rtcp.Packet
 	senders        map[string]Sender
 	onCloseHandler func()
@@ -54,7 +54,7 @@ func NewWebRTCReceiver(receiver *webrtc.RTPReceiver, track *webrtc.Track, config
 		receiver: receiver,
 		track:    track,
 		senders:  make(map[string]Sender),
-		rtpCh:    make(chan *rtp.Packet, maxSize),
+		rtpCh:    make(chan extPacket, maxSize),
 	}
 
 	switch w.track.RID() {
@@ -68,7 +68,7 @@ func NewWebRTCReceiver(receiver *webrtc.RTPReceiver, track *webrtc.Track, config
 		w.spatialLayer = 0
 	}
 
-	w.buffer = NewBuffer(track, config)
+	w.buffer = NewBuffer(track, w.rtpCh, config)
 
 	w.buffer.onFeedback(func(packets []rtcp.Packet) {
 		w.rtcpCh <- packets
@@ -189,8 +189,6 @@ func (w *WebRTCReceiver) readRTP() {
 		}
 
 		w.buffer.push(pkt)
-
-		w.rtpCh <- pkt
 	}
 }
 
