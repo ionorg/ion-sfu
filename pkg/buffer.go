@@ -1,6 +1,8 @@
 package sfu
 
 import (
+	"bytes"
+	"encoding/binary"
 	"sync/atomic"
 	"time"
 
@@ -18,16 +20,23 @@ const (
 	reportDelta = 1e9
 )
 
+type extPacket struct {
+	keyframe bool
+	packet   *rtp.Packet
+}
+
 // Buffer contains all packets
 type Buffer struct {
-	pktQueue   queue
-	codecType  webrtc.RTPCodecType
-	simulcast  bool
-	mediaSSRC  uint32
-	clockRate  uint32
-	maxBitrate uint64
-	lastReport int64
-	twccExt    uint8
+	packetCh    chan extPacket
+	pktQueue    queue
+	codecType   webrtc.RTPCodecType
+	payloadType uint8
+	simulcast   bool
+	mediaSSRC   uint32
+	clockRate   uint32
+	maxBitrate  uint64
+	lastReport  int64
+	twccExt     uint8
 
 	// supported feedbacks
 	remb bool
@@ -63,14 +72,16 @@ type BufferOptions struct {
 }
 
 // NewBuffer constructs a new Buffer
-func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
+func NewBuffer(track *webrtc.Track, pktChan chan extPacket, o BufferOptions) *Buffer {
 	b := &Buffer{
-		mediaSSRC:  track.SSRC(),
-		clockRate:  track.Codec().ClockRate,
-		codecType:  track.Codec().Type,
-		maxBitrate: o.MaxBitRate,
-		simulcast:  len(track.RID()) > 0,
-		twccExt:    uint8(o.TWCCExt),
+		packetCh:    pktChan,
+		mediaSSRC:   track.SSRC(),
+		clockRate:   track.Codec().ClockRate,
+		payloadType: track.Codec().PayloadType,
+		codecType:   track.Codec().Type,
+		maxBitrate:  o.MaxBitRate,
+		simulcast:   len(track.RID()) > 0,
+		twccExt:     uint8(o.TWCCExt),
 	}
 	if o.BufferTime <= 0 {
 		o.BufferTime = defaultBufferTime
@@ -96,6 +107,7 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 
 // push adds a RTP Packet, out of order, new packet may be arrived later
 func (b *Buffer) push(p *rtp.Packet) {
+	isKeyFrame := false
 	b.lastPacketTime = time.Now().UnixNano()
 	b.totalByte += uint64(p.MarshalSize())
 	if b.packetCount == 0 {
@@ -121,7 +133,23 @@ func (b *Buffer) push(p *rtp.Packet) {
 	}
 	b.lastTransit = transit
 	if b.codecType == webrtc.RTPCodecTypeVideo {
-		b.pktQueue.AddPacket(p, p.SequenceNumber == b.maxSeqNo)
+		switch b.payloadType {
+		case webrtc.DefaultPayloadTypeVP8:
+			vp8Packet := VP8Helper{}
+			if err := vp8Packet.Unmarshal(p.Payload); err == nil {
+				isKeyFrame = vp8Packet.IsKeyFrame
+			}
+		case webrtc.DefaultPayloadTypeH264:
+			var word uint32
+			payload := bytes.NewReader(p.Payload)
+			err := binary.Read(payload, binary.BigEndian, &word)
+			if err != nil || (word&0x1F000000)>>24 != 24 {
+				isKeyFrame = false
+			} else {
+				isKeyFrame = word&0x1F == 7
+			}
+		}
+		b.pktQueue.AddPacket(p, p.SequenceNumber == b.maxSeqNo, isKeyFrame)
 	}
 
 	if b.tcc {
@@ -134,6 +162,11 @@ func (b *Buffer) push(p *rtp.Packet) {
 	if b.lastPacketTime-b.lastReport >= reportDelta {
 		b.feedbackCB(b.getRTCP())
 		b.lastReport = b.lastPacketTime
+	}
+
+	b.packetCh <- extPacket{
+		keyframe: isKeyFrame,
+		packet:   p,
 	}
 
 }

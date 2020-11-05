@@ -3,7 +3,6 @@ package sfu
 //go:generate go run github.com/matryer/moq -out sender_mock_test.generated.go . Sender
 
 import (
-	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -26,7 +25,7 @@ type Sender interface {
 	Track() *webrtc.Track
 	Transceiver() *webrtc.RTPTransceiver
 	Mute(val bool)
-	WriteRTP(*rtp.Packet)
+	WriteRTP(packet extPacket)
 	CurrentSpatialLayer() uint8
 	OnCloseHandler(fn func())
 	// Simulcast/SVC events

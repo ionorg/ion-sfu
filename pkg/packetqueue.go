@@ -20,7 +20,7 @@ type queue struct {
 	onLost  func(nack *rtcp.TransportLayerNack)
 }
 
-func (q *queue) AddPacket(pkt *rtp.Packet, latest bool) {
+func (q *queue) AddPacket(pkt *rtp.Packet, latest, keyframe bool) {
 	q.Lock()
 	defer q.Unlock()
 
