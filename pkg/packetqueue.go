@@ -10,15 +10,14 @@ import (
 
 type queue struct {
 	sync.Mutex
-	pkts     []*rtp.Packet
-	ssrc     uint32
-	head     int
-	tail     int
-	size     int
-	headSN   uint16
-	counter  int
-	duration uint32
-	onLost   func(nack *rtcp.TransportLayerNack)
+	pkts    []*rtp.Packet
+	ssrc    uint32
+	head    int
+	tail    int
+	size    int
+	headSN  uint16
+	counter int
+	onLost  func(nack *rtcp.TransportLayerNack)
 }
 
 func (q *queue) AddPacket(pkt *rtp.Packet, latest bool) {
@@ -125,8 +124,7 @@ func (q *queue) nack() *rtcp.NackPair {
 }
 
 func (q *queue) clean() {
-	last := q.last()
-	for q.size > 120 && (last == nil || q.pkts[q.head].Timestamp-last.Timestamp > q.duration) {
+	for q.size < 500 {
 		q.shift()
 	}
 }
