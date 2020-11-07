@@ -3,6 +3,7 @@ package sfu
 //go:generate go run github.com/matryer/moq -out receiver_mock_test.generated.go . Receiver
 
 import (
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v3/pkg/media/oggwriter"
 )
 
 const (
@@ -46,6 +48,8 @@ type WebRTCReceiver struct {
 	onCloseHandler func()
 
 	spatialLayer uint8
+
+	writer *oggwriter.OggWriter
 }
 
 // NewWebRTCReceiver creates a new webrtc track receivers
@@ -78,6 +82,13 @@ func NewWebRTCReceiver(receiver *webrtc.RTPReceiver, track *webrtc.Track, config
 		log.Debugf("Writing nack to mediaSSRC: %d, missing sn: %d, bitmap: %b", track.SSRC(), nack.Nacks[0].PacketID, nack.Nacks[0].LostPackets)
 		w.rtcpCh <- []rtcp.Packet{nack}
 	})
+
+	writer, err := oggwriter.New(fmt.Sprintf("recording-receiver-%d.ogg", track.SSRC()), 48000, 2)
+	if err != nil {
+		log.Errorf("error creating ogg writer %v", err)
+	}
+
+	w.writer = writer
 
 	return w
 }
@@ -194,6 +205,13 @@ func (w *WebRTCReceiver) readRTP() {
 		}
 
 		w.buffer.push(pkt)
+
+		codec := w.track.Codec()
+		if codec.Name == webrtc.Opus {
+			log.Infof("%v+", pkt)
+
+			w.writer.WriteRTP(pkt)
+		}
 
 		w.rtpCh <- pkt
 	}

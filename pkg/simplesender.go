@@ -53,12 +53,7 @@ func NewSimpleSender(id string, router *receiverRouter, transceiver *webrtc.RTPT
 		track:       sender.Track(),
 	}
 
-	// f, err := os.OpenFile(fmt.Sprintf("recording+%s-%d.ogg", id, sender.Track().SSRC()), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0655)
-	// if err != nil {
-	// 	panic(err)
-	// }
-
-	w, err := oggwriter.New(fmt.Sprintf("recording+%s-%d.ogg", id, sender.Track().SSRC()), 48000, 2)
+	w, err := oggwriter.New(fmt.Sprintf("recording-sender+%s-%d.ogg", id, sender.Track().SSRC()), 48000, 2)
 	if err != nil {
 		log.Errorf("error creating ogg writer %v", err)
 	}

@@ -15,7 +15,7 @@ require (
 	github.com/pion/rtp v1.6.1
 	github.com/pion/sdp/v3 v3.0.2
 	github.com/pion/turn/v2 v2.0.5 // indirect
-	github.com/pion/webrtc/v3 v3.0.0-beta.11
+	github.com/pion/webrtc/v3 v3.0.0-beta.12.0.20201107043359-ae5c0046dac9
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20200429184054-15c2290dcb37
 	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.6.1
