@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"os"
 	"sync"
 	"sync/atomic"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v3/pkg/media/oggwriter"
 )
 
 // SimpleSender represents a Sender which writes RTP to a webrtc track
@@ -35,6 +37,8 @@ type SimpleSender struct {
 
 	start sync.Once
 	close sync.Once
+
+	writer *oggwriter.OggWriter
 }
 
 // NewSimpleSender creates a new track sender instance
@@ -49,6 +53,18 @@ func NewSimpleSender(id string, router *receiverRouter, transceiver *webrtc.RTPT
 		track:       sender.Track(),
 	}
 
+	f, err := os.OpenFile("recording.ogg", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+	if err != nil {
+		panic(err)
+	}
+
+	w, err := oggwriter.NewWith(f, 48000, 1)
+	if err != nil {
+		log.Errorf("error creating ogg writer %v", err)
+	}
+
+	s.writer = w
+
 	go s.receiveRTCP()
 
 	return s
@@ -61,7 +77,7 @@ func (s *SimpleSender) ID() string {
 func (s *SimpleSender) Start() {
 	s.start.Do(func() {
 		log.Debugf("starting sender %s with ssrc %d", s.id, s.track.SSRC())
-		s.reSync.set(true)
+		s.reSync.set(false)
 		s.enabled.set(true)
 	})
 }
@@ -121,6 +137,11 @@ func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
 		log.Tracef("rtp write sender %s with ssrc %d", s.id, s.track.SSRC())
 	}
 
+	codec := s.track.Codec()
+	if codec.Name == webrtc.Opus {
+		s.writer.WriteRTP(&rtp.Packet{Header: h, Payload: pkt.Payload})
+	}
+
 	if err := s.track.WriteRTP(
 		&rtp.Packet{
 			Header:  h,
@@ -174,6 +195,7 @@ func (s *SimpleSender) SwitchTemporalLayer(layer uint8) {
 // Close track
 func (s *SimpleSender) Close() {
 	s.close.Do(func() {
+		s.writer.Close()
 		log.Debugf("Closing sender %s", s.id)
 		if s.onCloseHandler != nil {
 			s.onCloseHandler()
