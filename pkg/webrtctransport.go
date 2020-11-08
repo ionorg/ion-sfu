@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gammazero/deque"
+
 	"github.com/bep/debounce"
 	"github.com/lucsky/cuid"
 	log "github.com/pion/ion-log"
@@ -31,9 +33,11 @@ type WebRTCTransport struct {
 	senders        map[string][]Sender
 	candidates     []webrtc.ICECandidateInit
 	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
+	pendingSenders deque.Deque
 	negotiate      func()
 
-	subOnce sync.Once
+	subOnce   sync.Once
+	closeOnce sync.Once
 }
 
 type pendingSender struct {
@@ -60,6 +64,7 @@ func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportCon
 		router:  newRouter(pc, id, cfg.router),
 		senders: make(map[string][]Sender),
 	}
+	p.pendingSenders.SetMinCapacity(2)
 
 	// Add transport to the session
 	session.AddTransport(p)
@@ -93,11 +98,13 @@ func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportCon
 		case webrtc.ICEConnectionStateFailed:
 			fallthrough
 		case webrtc.ICEConnectionStateClosed:
-			log.Debugf("webrtc ice closed for peer: %s", p.id)
-			if err := p.Close(); err != nil {
-				log.Errorf("webrtc transport close err: %v", err)
-			}
-			p.router.Stop()
+			p.closeOnce.Do(func() {
+				log.Debugf("webrtc ice closed for peer: %s", p.id)
+				if err := p.Close(); err != nil {
+					log.Errorf("webrtc transport close err: %v", err)
+				}
+				p.router.Stop()
+			})
 		}
 	})
 
@@ -127,43 +134,52 @@ func (p *WebRTCTransport) CreateAnswer() (webrtc.SessionDescription, error) {
 
 // SetRemoteDescription sets the SessionDescription of the remote peer
 func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) error {
+	var err error
 	pd, err := desc.Unmarshal()
 	if err != nil {
 		log.Errorf("SetRemoteDescription error: %v", err)
 		return err
 	}
 
-	err = p.pc.SetRemoteDescription(desc)
-	if err != nil {
-		log.Errorf("SetRemoteDescription error: %v", err)
-		return err
-	}
-
-	if len(p.candidates) > 0 {
-		for _, candidate := range p.candidates {
-			err := p.pc.AddICECandidate(candidate)
-			if err != nil {
-				log.Errorf("Error adding ice candidate %s", err)
-			}
-		}
-		p.candidates = nil
-	}
-
 	switch desc.Type {
 	case webrtc.SDPTypeAnswer:
-		p.mu.RLock()
-		for _, md := range pd.MediaDescriptions {
-			if mid, ok := md.Attribute(sdp.AttrKeyMID); ok {
-				for _, senders := range p.senders {
-					for _, sender := range senders {
-						if sender.Transceiver().Mid() == mid {
-							sender.Start()
-						}
+		if p.pendingSenders.Len() > 0 {
+			p.mu.Lock()
+			pendingStart := make([]pendingSender, 0, p.pendingSenders.Len())
+			for _, md := range pd.MediaDescriptions {
+				if p.pendingSenders.Len() == 0 {
+					break
+				}
+				mid, ok := md.Attribute(sdp.AttrKeyMID)
+				if !ok {
+					continue
+				}
+				for i := 0; i < p.pendingSenders.Len(); i++ {
+					pd := p.pendingSenders.PopFront().(pendingSender)
+					if pd.transceiver.Mid() == mid {
+						pendingStart = append(pendingStart, pd)
+					} else {
+						p.pendingSenders.PushBack(pd)
 					}
 				}
 			}
+			p.mu.Unlock()
+			if len(pendingStart) > 0 {
+				defer func() {
+					if err == nil {
+						for _, ps := range pendingStart {
+							ps.sender.Start()
+						}
+					} else {
+						p.mu.Lock()
+						for _, ps := range pendingStart {
+							p.pendingSenders.PushBack(ps)
+						}
+						p.mu.Unlock()
+					}
+				}()
+			}
 		}
-		p.mu.RUnlock()
 
 	case webrtc.SDPTypeOffer:
 		for _, md := range pd.MediaDescriptions {
@@ -193,6 +209,13 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 
 		}
 	}
+
+	err = p.pc.SetRemoteDescription(desc)
+	if err != nil {
+		log.Errorf("SetRemoteDescription error: %v", err)
+		return err
+	}
+
 	return nil
 }
 
