@@ -4,8 +4,12 @@ package sfu
 
 import (
 	"math/rand"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/pion/sdp/v3"
 
 	"github.com/pion/webrtc/v3"
 
@@ -25,7 +29,8 @@ type Router interface {
 	Config() RouterConfig
 	AddReceiver(track *webrtc.Track, receiver *webrtc.RTPReceiver) *receiverRouter
 	AddSender(p *WebRTCTransport, rr *receiverRouter) error
-	AddTWCCExt(id string, ext int)
+	SetExtMap(pd *sdp.SessionDescription)
+	GetExtMap(mid string, ext int) uint8
 	SendRTCP(pkts []rtcp.Packet)
 	Stop()
 }
@@ -44,27 +49,27 @@ type receiverRouter struct {
 }
 
 type router struct {
-	id        string
-	mu        sync.RWMutex
-	peer      *webrtc.PeerConnection
-	twcc      *TransportWideCC
-	rtcpCh    chan []rtcp.Packet
-	config    RouterConfig
-	twccExts  map[string]int
-	receivers map[string]*receiverRouter
+	id         string
+	mu         sync.RWMutex
+	peer       *webrtc.PeerConnection
+	twcc       *TransportWideCC
+	rtcpCh     chan []rtcp.Packet
+	config     RouterConfig
+	receivers  map[string]*receiverRouter
+	extensions map[string]map[int]uint8
 }
 
 // newRouter for routing rtp/rtcp packets
 func newRouter(peer *webrtc.PeerConnection, id string, config RouterConfig) Router {
 	ch := make(chan []rtcp.Packet, 10)
 	r := &router{
-		id:        id,
-		peer:      peer,
-		twcc:      newTransportWideCC(ch),
-		config:    config,
-		rtcpCh:    ch,
-		twccExts:  make(map[string]int),
-		receivers: make(map[string]*receiverRouter),
+		id:         id,
+		peer:       peer,
+		twcc:       newTransportWideCC(ch),
+		config:     config,
+		rtcpCh:     ch,
+		receivers:  make(map[string]*receiverRouter),
+		extensions: make(map[string]map[int]uint8),
 	}
 	go r.sendRTCP()
 	return r
@@ -82,11 +87,17 @@ func (r *router) AddReceiver(track *webrtc.Track, receiver *webrtc.RTPReceiver) 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	var mid string
+	for _, t := range r.peer.GetTransceivers() {
+		if t.Receiver() == receiver {
+			mid = t.Mid()
+		}
+	}
 	trackID := track.ID()
 	recv := NewWebRTCReceiver(receiver, track, BufferOptions{
 		BufferTime: r.config.MaxBufferTime,
 		MaxBitRate: r.config.MaxBandwidth * 1000,
-		TWCCExt:    r.twccExts[trackID],
+		TWCCExt:    r.extensions[mid][twccExt],
 	})
 	recv.OnTransportWideCC(func(sn uint16, timeNS int64, marker bool) {
 		r.twcc.push(sn, timeNS, marker)
@@ -144,10 +155,6 @@ func (r *router) AddSender(p *WebRTCTransport, rr *receiverRouter) error {
 		p.negotiate()
 	}
 	return nil
-}
-
-func (r *router) AddTWCCExt(id string, ext int) {
-	r.twccExts[id] = ext
 }
 
 func (r *router) SendRTCP(pkts []rtcp.Packet) {
@@ -241,5 +248,59 @@ func (r *router) sendRTCP() {
 		if err := r.peer.WriteRTCP(pkts); err != nil {
 			log.Errorf("Write rtcp to peer %s err :%v", r.id, err)
 		}
+	}
+}
+
+func (r *router) GetExtMap(mid string, ext int) uint8 {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if e, ok := r.extensions[mid]; ok {
+		return e[ext]
+	} else {
+		return 0
+	}
+}
+
+func (r *router) SetExtMap(pd *sdp.SessionDescription) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, md := range pd.MediaDescriptions {
+		if md.MediaName.Media != mediaNameAudio && md.MediaName.Media != mediaNameVideo {
+			continue
+		}
+
+		mid, ok := md.Attribute(sdp.AttrKeyMID)
+		if !ok {
+			continue
+		}
+		if _, ok := r.extensions[mid]; !ok {
+			r.extensions[mid] = make(map[int]uint8)
+		}
+
+		var enterExtMap bool
+		for _, att := range md.Attributes {
+			isExtMap := false
+			if att.Key == sdp.AttrKeyExtMap {
+				enterExtMap = true
+				isExtMap = true
+				if strings.HasSuffix(att.Value, sdp.TransportCCURI) {
+					extID := strings.Split(att.Value, " ")
+					if ext, err := strconv.Atoi(extID[0]); err == nil {
+						r.extensions[mid][twccExt] = uint8(ext)
+					}
+				}
+				if strings.HasSuffix(att.Value, sdp.SDESMidURI) {
+					extID := strings.Split(att.Value, " ")
+					if ext, err := strconv.Atoi(extID[0]); err == nil {
+						r.extensions[mid][sdesMidExt] = uint8(ext)
+					}
+				}
+			}
+			if enterExtMap && !isExtMap {
+				break
+			}
+		}
+
 	}
 }
