@@ -257,9 +257,8 @@ func (r *router) GetExtMap(mid string, ext int) uint8 {
 
 	if e, ok := r.extensions[mid]; ok {
 		return e[ext]
-	} else {
-		return 0
 	}
+	return 0
 }
 
 func (r *router) SetExtMap(pd *sdp.SessionDescription) {
