@@ -146,8 +146,8 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 	switch desc.Type {
 	case webrtc.SDPTypeAnswer:
 		p.router.SetExtMap(pd)
+		p.mu.Lock()
 		if p.pendingSenders.Len() > 0 {
-			p.mu.Lock()
 			pendingStart := make([]pendingSender, 0, p.pendingSenders.Len())
 			for _, md := range pd.MediaDescriptions {
 				if p.pendingSenders.Len() == 0 {
@@ -168,7 +168,6 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 					}
 				}
 			}
-			p.mu.Unlock()
 			if len(pendingStart) > 0 {
 				defer func() {
 					if err == nil {
@@ -185,7 +184,7 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 				}()
 			}
 		}
-
+		p.mu.Unlock()
 	case webrtc.SDPTypeOffer:
 		p.router.SetExtMap(pd)
 	}
