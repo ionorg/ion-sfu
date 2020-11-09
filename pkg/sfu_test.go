@@ -297,6 +297,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			testDone := false
 			var mu sync.RWMutex
 			done := make(chan struct{})
 			peers := make(map[string]*peer)
@@ -361,6 +362,9 @@ func TestSFU_SessionScenarios(t *testing.T) {
 								err = p.remote.SetLocalDescription(a)
 								assert.NoError(t, err)
 								go func() {
+									if testDone {
+										return
+									}
 									err = p.local.SetRemoteDescription(a)
 									assert.NoError(t, err)
 								}()
@@ -415,6 +419,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 			for _, p := range peers {
 				p.subs.Wait()
 			}
+			testDone = true
 			close(done)
 
 			for _, p := range peers {
