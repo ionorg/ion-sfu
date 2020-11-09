@@ -352,16 +352,18 @@ func TestSFU_SessionScenarios(t *testing.T) {
 							})
 
 							p.local.OnOffer = func(o *webrtc.SessionDescription) {
-								p.mu.Lock()
-								defer p.mu.Unlock()
-								err := p.remote.SetRemoteDescription(*o)
-								assert.NoError(t, err)
-								a, err := p.remote.CreateAnswer(nil)
-								assert.NoError(t, err)
-								err = p.remote.SetLocalDescription(a)
-								assert.NoError(t, err)
-								err = p.local.SetRemoteDescription(a)
-								assert.NoError(t, err)
+								go func() {
+									p.mu.Lock()
+									defer p.mu.Unlock()
+									err := p.remote.SetRemoteDescription(*o)
+									assert.NoError(t, err)
+									a, err := p.remote.CreateAnswer(nil)
+									assert.NoError(t, err)
+									err = p.remote.SetLocalDescription(a)
+									assert.NoError(t, err)
+									err = p.local.SetRemoteDescription(a)
+									assert.NoError(t, err)
+								}()
 							}
 
 							offer, err := p.remote.CreateOffer(nil)
