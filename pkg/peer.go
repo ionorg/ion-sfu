@@ -3,6 +3,7 @@ package sfu
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/webrtc/v3"
@@ -19,15 +20,15 @@ var (
 
 // Peer represents a single peer signal session
 type Peer struct {
+	sync.Mutex
 	sfu *SFU
 	pc  *WebRTCTransport
 
 	OnIceCandidate func(*webrtc.ICECandidateInit)
 	OnOffer        func(*webrtc.SessionDescription)
 
-	makingOffer         atomicBool
-	remoteAnswerPending atomicBool
-	negotiationPending  atomicBool
+	remoteAnswerPending bool
+	negotiationPending  bool
 }
 
 // NewPeer creates a new Peer for signaling with the given SFU
@@ -43,6 +44,8 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		log.Debugf("peer already exists")
 		return nil, ErrTransportExists
 	}
+	p.Lock()
+	defer p.Unlock()
 
 	me := MediaEngine{}
 	err := me.PopulateFromSDP(sdp)
@@ -63,13 +66,13 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 	}
 
 	pc.OnNegotiationNeeded(func() {
-		if p.makingOffer.get() || p.remoteAnswerPending.get() {
-			p.negotiationPending.set(true)
+		p.Lock()
+		defer p.Unlock()
+
+		if p.remoteAnswerPending {
+			p.negotiationPending = true
 			return
 		}
-
-		p.makingOffer.set(true)
-		defer p.makingOffer.set(false)
 
 		log.Debugf("peer %s negotiation needed", p.pc.ID())
 		offer, err := pc.CreateOffer()
@@ -84,7 +87,7 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 			return
 		}
 
-		p.remoteAnswerPending.set(true)
+		p.remoteAnswerPending = true
 		if p.OnOffer != nil {
 			log.Infof("peer %s send offer", p.pc.ID())
 			p.OnOffer(&offer)
@@ -111,10 +114,11 @@ func (p *Peer) Answer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription
 	if p.pc == nil {
 		return nil, ErrNoTransportEstablished
 	}
+	p.Lock()
+	defer p.Unlock()
 	log.Infof("peer %s got offer", p.pc.ID())
 
-	readyForOffer := !p.makingOffer.get() &&
-		(p.pc.SignalingState() == webrtc.SignalingStateStable && !p.remoteAnswerPending.get())
+	readyForOffer := p.pc.SignalingState() == webrtc.SignalingStateStable && !p.remoteAnswerPending
 
 	if !readyForOffer {
 		return nil, ErrOfferIgnored
@@ -143,16 +147,18 @@ func (p *Peer) SetRemoteDescription(sdp webrtc.SessionDescription) error {
 	if p.pc == nil {
 		return ErrNoTransportEstablished
 	}
+	p.Lock()
+	defer p.Unlock()
 
 	log.Infof("peer %s got answer", p.pc.ID())
 	if err := p.pc.SetRemoteDescription(sdp); err != nil {
 		return fmt.Errorf("error setting remote description: %v", err)
 	}
 
-	p.remoteAnswerPending.set(false)
+	p.remoteAnswerPending = false
 
-	if p.negotiationPending.get() {
-		p.negotiationPending.set(false)
+	if p.negotiationPending {
+		p.negotiationPending = false
 		p.pc.negotiate()
 	}
 
