@@ -99,7 +99,7 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 						return status.Errorf(codes.Internal, err.Error())
 					}
 				default:
-					return status.Errorf(codes.Internal, err.Error())
+					return status.Errorf(codes.Unknown, err.Error())
 				}
 			}
 
@@ -206,7 +206,15 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 
 				marshalled, err := json.Marshal(answer)
 				if err != nil {
-					return status.Errorf(codes.Internal, fmt.Sprintf("sdp marshal error: %v", err))
+					err = stream.Send(&pb.SignalReply{
+						Payload: &pb.SignalReply_Error{
+							Error: fmt.Errorf("sdp marshal error: %w", err).Error(),
+						},
+					})
+					if err != nil {
+						log.Errorf("grpc send error %v ", err)
+						return status.Errorf(codes.Internal, err.Error())
+					}
 				}
 
 				err = stream.Send(&pb.SignalReply{
@@ -235,7 +243,7 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 							return status.Errorf(codes.Internal, err.Error())
 						}
 					default:
-						return status.Errorf(codes.Internal, err.Error())
+						return status.Errorf(codes.Unknown, err.Error())
 					}
 				}
 			}
@@ -272,7 +280,7 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 						return status.Errorf(codes.Internal, err.Error())
 					}
 				default:
-					return status.Errorf(codes.Internal, fmt.Sprintf("negotiate error: %v", err))
+					return status.Errorf(codes.Unknown, fmt.Sprintf("negotiate error: %v", err))
 				}
 			}
 
