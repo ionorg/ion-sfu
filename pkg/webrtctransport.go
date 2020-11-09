@@ -220,10 +220,6 @@ func (p *WebRTCTransport) OnICECandidate(f func(c *webrtc.ICECandidate)) {
 // OnNegotiationNeeded handler
 func (p *WebRTCTransport) OnNegotiationNeeded(f func()) {
 	p.negotiate = f
-	//debounced := debounce.New(100 * time.Millisecond)
-	//p.negotiate = func() {
-	//	debounced(f)
-	//}
 }
 
 // OnTrack handler
