@@ -72,17 +72,34 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 			var offer webrtc.SessionDescription
 			err := json.Unmarshal(payload.Join.Description, &offer)
 			if err != nil {
-				return status.Errorf(codes.Internal, fmt.Sprintf("sdp unmarshal error: %v", err))
+				err = stream.Send(&pb.SignalReply{
+					Payload: &pb.SignalReply_Error{
+						Error: fmt.Errorf("join sdp unmarshal error: %w", err).Error(),
+					},
+				})
+				if err != nil {
+					log.Errorf("grpc send error %v ", err)
+					return status.Errorf(codes.Internal, err.Error())
+				}
 			}
 
 			answer, err := peer.Join(payload.Join.Sid, offer)
 			if err != nil {
 				switch err {
 				case sfu.ErrTransportExists:
-					log.Errorf("peer already exists")
-					return status.Errorf(codes.FailedPrecondition, err.Error())
+					fallthrough
+				case sfu.ErrOfferIgnored:
+					err = stream.Send(&pb.SignalReply{
+						Payload: &pb.SignalReply_Error{
+							Error: fmt.Errorf("join error: %w", err).Error(),
+						},
+					})
+					if err != nil {
+						log.Errorf("grpc send error %v ", err)
+						return status.Errorf(codes.Internal, err.Error())
+					}
 				default:
-					return status.Errorf(codes.Internal, fmt.Sprintf("join error: %v", err))
+					return status.Errorf(codes.Internal, err.Error())
 				}
 			}
 
@@ -100,7 +117,7 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 					},
 				})
 				if err != nil {
-					log.Errorf("OnIceCandidate error %v ", err)
+					log.Errorf("OnIceCandidate send error %v ", err)
 				}
 			}
 
@@ -108,7 +125,14 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 			peer.OnOffer = func(o *webrtc.SessionDescription) {
 				marshalled, err := json.Marshal(o)
 				if err != nil {
-					log.Errorf("sdp marshal error: %v", err)
+					err = stream.Send(&pb.SignalReply{
+						Payload: &pb.SignalReply_Error{
+							Error: fmt.Errorf("offer sdp marshal error: %w", err).Error(),
+						},
+					})
+					if err != nil {
+						log.Errorf("grpc send error %v ", err)
+					}
 					return
 				}
 
@@ -147,7 +171,15 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 			var sdp webrtc.SessionDescription
 			err := json.Unmarshal(payload.Description, &sdp)
 			if err != nil {
-				return status.Errorf(codes.Internal, fmt.Sprintf("sdp unmarshal error: %v", err))
+				err = stream.Send(&pb.SignalReply{
+					Payload: &pb.SignalReply_Error{
+						Error: fmt.Errorf("negotiate sdp unmarshal error: %w", err).Error(),
+					},
+				})
+				if err != nil {
+					log.Errorf("grpc send error %v ", err)
+					return status.Errorf(codes.Internal, err.Error())
+				}
 			}
 
 			if sdp.Type == webrtc.SDPTypeOffer {
@@ -155,9 +187,20 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 				if err != nil {
 					switch err {
 					case sfu.ErrNoTransportEstablished:
-						return status.Errorf(codes.FailedPrecondition, err.Error())
+						fallthrough
+					case sfu.ErrOfferIgnored:
+						err = stream.Send(&pb.SignalReply{
+							Payload: &pb.SignalReply_Error{
+								Error: fmt.Errorf("negotiate answer error: %w", err).Error(),
+							},
+						})
+						if err != nil {
+							log.Errorf("grpc send error %v ", err)
+							return status.Errorf(codes.Internal, err.Error())
+						}
+						continue
 					default:
-						return status.Errorf(codes.Internal, fmt.Sprintf("negotiate error: %v", err))
+						return status.Errorf(codes.Unknown, fmt.Sprintf("negotiate error: %v", err))
 					}
 				}
 
@@ -182,9 +225,17 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 				if err != nil {
 					switch err {
 					case sfu.ErrNoTransportEstablished:
-						return status.Errorf(codes.FailedPrecondition, err.Error())
+						err = stream.Send(&pb.SignalReply{
+							Payload: &pb.SignalReply_Error{
+								Error: fmt.Errorf("set remote description error: %w", err).Error(),
+							},
+						})
+						if err != nil {
+							log.Errorf("grpc send error %v ", err)
+							return status.Errorf(codes.Internal, err.Error())
+						}
 					default:
-						return status.Errorf(codes.Internal, fmt.Sprintf("negotiate error: %v", err))
+						return status.Errorf(codes.Internal, err.Error())
 					}
 				}
 			}
@@ -194,6 +245,16 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 			err := json.Unmarshal([]byte(payload.Trickle.Init), &candidate)
 			if err != nil {
 				log.Errorf("error parsing ice candidate: %v", err)
+				err = stream.Send(&pb.SignalReply{
+					Payload: &pb.SignalReply_Error{
+						Error: fmt.Errorf("unmarshal ice candidate error:  %w", err).Error(),
+					},
+				})
+				if err != nil {
+					log.Errorf("grpc send error %v ", err)
+					return status.Errorf(codes.Internal, err.Error())
+				}
+				continue
 			}
 
 			err = peer.Trickle(candidate)
@@ -201,7 +262,15 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 				switch err {
 				case sfu.ErrNoTransportEstablished:
 					log.Errorf("peer hasn't joined")
-					return status.Errorf(codes.FailedPrecondition, err.Error())
+					err = stream.Send(&pb.SignalReply{
+						Payload: &pb.SignalReply_Error{
+							Error: fmt.Errorf("trickle error:  %w", err).Error(),
+						},
+					})
+					if err != nil {
+						log.Errorf("grpc send error %v ", err)
+						return status.Errorf(codes.Internal, err.Error())
+					}
 				default:
 					return status.Errorf(codes.Internal, fmt.Sprintf("negotiate error: %v", err))
 				}
