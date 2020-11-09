@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/pion/sdp/v3"
+
 	"github.com/pion/webrtc/v3"
 	"github.com/stretchr/testify/assert"
 )
@@ -424,7 +426,7 @@ func TestWebRTCTransport_SetRemoteDescription(t *testing.T) {
 			p := &WebRTCTransport{
 				pc: tt.fields.pc,
 				router: &RouterMock{
-					AddTWCCExtFunc: func(_ string, _ int) {
+					SetExtMapFunc: func(_ *sdp.SessionDescription) {
 					},
 				},
 			}

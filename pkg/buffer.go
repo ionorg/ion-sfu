@@ -57,7 +57,7 @@ type Buffer struct {
 
 // BufferOptions provides configuration options for the buffer
 type BufferOptions struct {
-	TWCCExt    int
+	TWCCExt    uint8
 	BufferTime int
 	MaxBitRate uint64
 }
@@ -70,7 +70,7 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 		codecType:  track.Codec().Type,
 		maxBitrate: o.MaxBitRate,
 		simulcast:  len(track.RID()) > 0,
-		twccExt:    uint8(o.TWCCExt),
+		twccExt:    o.TWCCExt,
 	}
 	if o.BufferTime <= 0 {
 		o.BufferTime = defaultBufferTime
@@ -131,7 +131,8 @@ func (b *Buffer) push(p *rtp.Packet) {
 			b.feedbackTWCC(rtpTCC.TransportSequence, b.lastPacketTime, p.Marker)
 		}
 	}
-
+	// a := p.GetExtension(4)
+	// fmt.Printf("%b,%v", a, p.Header.ExtensionProfile == 0x1000)
 	if b.lastPacketTime-b.lastReport >= reportDelta {
 		b.feedbackCB(b.getRTCP())
 		b.lastReport = b.lastPacketTime

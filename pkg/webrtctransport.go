@@ -1,8 +1,6 @@
 package sfu
 
 import (
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -13,6 +11,12 @@ import (
 	log "github.com/pion/ion-log"
 	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
+)
+
+const (
+	sdesMidExt = iota
+	audioLevelExt
+	twccExt
 )
 
 // WebRTCTransportConfig represents configuration options
@@ -143,6 +147,7 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 
 	switch desc.Type {
 	case webrtc.SDPTypeAnswer:
+		p.router.SetExtMap(pd)
 		if p.pendingSenders.Len() > 0 {
 			p.mu.Lock()
 			pendingStart := make([]pendingSender, 0, p.pendingSenders.Len())
@@ -157,6 +162,8 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 				for i := 0; i < p.pendingSenders.Len(); i++ {
 					pd := p.pendingSenders.PopFront().(pendingSender)
 					if pd.transceiver.Mid() == mid {
+						ext := p.router.GetExtMap(mid, sdesMidExt)
+						pd.sender.SetMidExt(ext)
 						pendingStart = append(pendingStart, pd)
 					} else {
 						p.pendingSenders.PushBack(pd)
@@ -182,32 +189,7 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 		}
 
 	case webrtc.SDPTypeOffer:
-		for _, md := range pd.MediaDescriptions {
-			if md.MediaName.Media != mediaNameAudio && md.MediaName.Media != mediaNameVideo {
-				continue
-			}
-			var (
-				ext int
-				id  string
-			)
-			for _, att := range md.Attributes {
-				if att.Key == sdp.AttrKeyExtMap && strings.HasSuffix(att.Value, sdp.TransportCCURI) {
-					ext, _ = strconv.Atoi(att.Value[:1])
-					if len(id) > 0 {
-						break
-					}
-				}
-				if att.Key == sdp.AttrKeyMsid {
-					v := strings.Split(att.Value, " ")
-					id = v[len(v)-1]
-					if ext != 0 {
-						break
-					}
-				}
-			}
-			p.router.AddTWCCExt(id, ext)
-
-		}
+		p.router.SetExtMap(pd)
 	}
 
 	err = p.pc.SetRemoteDescription(desc)

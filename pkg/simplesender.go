@@ -24,6 +24,8 @@ type SimpleSender struct {
 	payload        uint8
 	maxBitrate     uint64
 	target         uint64
+	sdesMidExt     uint8
+	sdesMidHdrCtr  uint8
 	onCloseHandler func()
 	// Muting helpers
 	reSync   atomicBool
@@ -114,6 +116,12 @@ func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
 	h.PayloadType = s.payload
 	h.Timestamp = s.lastTS
 	h.SequenceNumber = s.lastSN
+	if s.sdesMidHdrCtr < 50 && s.sdesMidExt != 0 {
+		if err := h.SetExtension(s.sdesMidExt, []byte(s.transceiver.Mid())); err != nil {
+			log.Errorf("Setting sdes mid header err: %v", err)
+		}
+		s.sdesMidHdrCtr++
+	}
 
 	if pkt.SequenceNumber%500 == 0 {
 		log.Tracef("rtp write sender %s with ssrc %d", s.id, s.track.SSRC())
@@ -135,6 +143,10 @@ func (s *SimpleSender) Mute(val bool) {
 	if val {
 		s.reSync.set(val)
 	}
+}
+
+func (s *SimpleSender) SetMidExt(id uint8) {
+	s.sdesMidExt = id
 }
 
 func (s *SimpleSender) Kind() webrtc.RTPCodecType {
