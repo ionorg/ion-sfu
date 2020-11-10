@@ -263,6 +263,7 @@ func (r *router) GetExtMap(mid, ext string) uint8 {
 	return 0
 }
 
+// nolint:scopelint
 func (r *router) SetExtMap(pd *sdp.SessionDescription) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -319,6 +320,7 @@ func (r *router) SetExtMap(pd *sdp.SessionDescription) {
 	}
 }
 
+// nolint:scopelint
 func (r *router) OfferExtMap() map[webrtc.SDPSectionType][]sdp.ExtMap {
 	r.mu.Lock()
 	defer r.mu.Unlock()
