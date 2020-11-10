@@ -11,12 +11,6 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-const (
-	sdesMidExt = iota
-	audioLevelExt
-	twccExt
-)
-
 // WebRTCTransportConfig represents configuration options
 type WebRTCTransportConfig struct {
 	configuration webrtc.Configuration
@@ -110,6 +104,8 @@ func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportCon
 		}
 	})
 
+	pc.GetMapExtension(p.router.OfferExtMap)
+
 	return p, nil
 }
 
@@ -160,7 +156,7 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 				for i := 0; i < p.pendingSenders.Len(); i++ {
 					pd := p.pendingSenders.PopFront().(pendingSender)
 					if pd.transceiver.Mid() == mid {
-						ext := p.router.GetExtMap(mid, sdesMidExt)
+						ext := p.router.GetExtMap(mid, sdp.SDESMidURI)
 						pd.sender.SetMidExt(ext)
 						pendingStart = append(pendingStart, pd)
 					} else {
