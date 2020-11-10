@@ -2,7 +2,9 @@ package sfu
 
 import (
 	"sync"
+	"time"
 
+	"github.com/bep/debounce"
 	"github.com/gammazero/deque"
 
 	"github.com/lucsky/cuid"
@@ -156,8 +158,6 @@ func (p *WebRTCTransport) SetRemoteDescription(desc webrtc.SessionDescription) e
 				for i := 0; i < p.pendingSenders.Len(); i++ {
 					pd := p.pendingSenders.PopFront().(pendingSender)
 					if pd.transceiver.Mid() == mid {
-						ext := p.router.GetExtMap(mid, sdp.SDESMidURI)
-						pd.sender.SetMidExt(ext)
 						pendingStart = append(pendingStart, pd)
 					} else {
 						p.pendingSenders.PushBack(pd)
@@ -215,7 +215,10 @@ func (p *WebRTCTransport) OnICECandidate(f func(c *webrtc.ICECandidate)) {
 
 // OnNegotiationNeeded handler
 func (p *WebRTCTransport) OnNegotiationNeeded(f func()) {
-	p.negotiate = f
+	debounced := debounce.New(100 * time.Millisecond)
+	p.negotiate = func() {
+		debounced(f)
+	}
 }
 
 // OnTrack handler

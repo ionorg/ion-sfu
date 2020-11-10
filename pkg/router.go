@@ -95,10 +95,20 @@ func (r *router) AddReceiver(track *webrtc.Track, receiver *webrtc.RTPReceiver) 
 		}
 	}
 	trackID := track.ID()
+
+	var twccExt uint8
+	if e, ok := r.extensions[webrtc.SDPSectionType(mid)]; ok {
+		for _, ex := range e {
+			if ex.URI.String() == sdp.TransportCCURI {
+				twccExt = uint8(ex.Value)
+			}
+		}
+	}
+
 	recv := NewWebRTCReceiver(receiver, track, BufferOptions{
 		BufferTime: r.config.MaxBufferTime,
 		MaxBitRate: r.config.MaxBandwidth * 1000,
-		TWCCExt:    r.GetExtMap(mid, sdp.TransportCCURI),
+		TWCCExt:    twccExt,
 	})
 	recv.OnTransportWideCC(func(sn uint16, timeNS int64, marker bool) {
 		r.twcc.push(sn, timeNS, marker)
@@ -253,6 +263,8 @@ func (r *router) sendRTCP() {
 }
 
 func (r *router) GetExtMap(mid, ext string) uint8 {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	if e, ok := r.extensions[webrtc.SDPSectionType(mid)]; ok {
 		for _, ex := range e {
 			if ex.URI.String() == ext {
