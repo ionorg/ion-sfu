@@ -51,12 +51,8 @@ type SFU struct {
 	sessions map[string]*Session
 }
 
-// NewSFU creates a new sfu instance
-func NewSFU(c Config) *SFU {
-	// Init random seed
-	rand.Seed(time.Now().UnixNano())
-	// Init ballast
-	ballast := make([]byte, c.SFU.Ballast*1024*1024)
+// NewWebRTCTransportConfig parses our settings and returns a usable WebRTCTransportConfig for creating PeerConnections
+func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 	se := webrtc.SettingEngine{}
 
 	// Configure required extensions
@@ -137,6 +133,18 @@ func NewSFU(c Config) *SFU {
 	if len(c.WebRTC.Candidates.NAT1To1IPs) > 0 {
 		w.setting.SetNAT1To1IPs(c.WebRTC.Candidates.NAT1To1IPs, webrtc.ICECandidateTypeHost)
 	}
+
+	return w
+}
+
+// NewSFU creates a new sfu instance
+func NewSFU(c Config) *SFU {
+	// Init random seed
+	rand.Seed(time.Now().UnixNano())
+	// Init ballast
+	ballast := make([]byte, c.SFU.Ballast*1024*1024)
+
+	w := NewWebRTCTransportConfig(c)
 
 	s := &SFU{
 		webrtc:   w,
