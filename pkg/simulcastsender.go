@@ -25,7 +25,6 @@ type SimulcastSender struct {
 	enabled        atomicBool
 	target         uint64
 	payload        uint8
-	sdesMidExt     uint8
 	sdesMidHdrCtr  uint8
 	maxBitrate     uint64
 	onCloseHandler func()
@@ -181,8 +180,8 @@ func (s *SimulcastSender) WriteRTP(pkt *rtp.Packet) {
 	h.SequenceNumber = lSN
 	h.Timestamp = s.lTS
 	h.PayloadType = s.payload
-	if s.sdesMidHdrCtr < 50 && s.sdesMidExt != 0 {
-		if err := h.SetExtension(s.sdesMidExt, []byte(s.transceiver.Mid())); err != nil {
+	if s.sdesMidHdrCtr < 50 {
+		if err := h.SetExtension(1, []byte(s.transceiver.Mid())); err != nil {
 			log.Errorf("Setting sdes mid header err: %v", err)
 		}
 		s.sdesMidHdrCtr++
@@ -217,10 +216,6 @@ func (s *SimulcastSender) Track() *webrtc.Track {
 
 func (s *SimulcastSender) Transceiver() *webrtc.RTPTransceiver {
 	return s.transceiver
-}
-
-func (s *SimulcastSender) SetMidExt(id uint8) {
-	s.sdesMidExt = id
 }
 
 func (s *SimulcastSender) Type() SenderType {

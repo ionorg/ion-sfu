@@ -72,6 +72,8 @@ func TestSimpleSender_WriteRTP(t *testing.T) {
 	_, err = sfu.AddTrack(senderTrack)
 	assert.NoError(t, err)
 
+	tr := sfu.GetTransceivers()[0]
+
 	err = signalPair(sfu, remote)
 	assert.NoError(t, err)
 
@@ -101,9 +103,10 @@ forLoop:
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			s := &SimpleSender{
-				enabled: atomicBool{1},
-				payload: senderTrack.PayloadType(),
-				track:   senderTrack,
+				enabled:     atomicBool{1},
+				payload:     senderTrack.PayloadType(),
+				track:       senderTrack,
+				transceiver: tr,
 			}
 			tmr := time.NewTimer(1000 * time.Millisecond)
 			s.WriteRTP(fakePkt)
@@ -416,6 +419,8 @@ func TestSimpleSender_Mute(t *testing.T) {
 	_, err = sfu.AddTrack(senderTrack)
 	assert.NoError(t, err)
 
+	tr := sfu.GetTransceivers()[0]
+
 	err = signalPair(sfu, remote)
 	assert.NoError(t, err)
 
@@ -448,10 +453,11 @@ forLoop:
 	}
 
 	simpleSdr := SimpleSender{
-		enabled: atomicBool{1},
-		router:  r,
-		track:   senderTrack,
-		payload: senderTrack.PayloadType(),
+		enabled:     atomicBool{1},
+		router:      r,
+		track:       senderTrack,
+		payload:     senderTrack.PayloadType(),
+		transceiver: tr,
 	}
 	// Simple sender must forward packets while the sender is not muted
 	fakePkt := senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]

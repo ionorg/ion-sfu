@@ -21,7 +21,6 @@ type Sender interface {
 	ID() string
 	Start()
 	Close()
-	SetMidExt(id uint8)
 	Kind() webrtc.RTPCodecType
 	Type() SenderType
 	Track() *webrtc.Track

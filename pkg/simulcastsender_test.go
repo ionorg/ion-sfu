@@ -83,6 +83,8 @@ func TestSimulcastSender_WriteRTP(t *testing.T) {
 	_, err = sfu.AddTrack(senderTrack)
 	assert.NoError(t, err)
 
+	tr := sfu.GetTransceivers()[0]
+
 	gotPli := make(chan struct{}, 1)
 	fakeReceiver := &ReceiverMock{
 		TrackFunc: func() *webrtc.Track {
@@ -149,6 +151,7 @@ forLoop:
 					track:         senderTrack,
 					simulcastSSRC: simulcastSSRC,
 					lSSRC:         fakeRecvTrack.SSRC(),
+					transceiver:   tr,
 				}
 				s.WriteRTP(tt.fields.packet)
 				pkt, err := remoteTrack.ReadRTP()
@@ -474,6 +477,8 @@ func TestSimulcastSender_Mute(t *testing.T) {
 	_, err = sfu.AddTrack(senderTrack)
 	assert.NoError(t, err)
 
+	tr := sfu.GetTransceivers()[0]
+
 	err = signalPair(sfu, remote)
 	assert.NoError(t, err)
 
@@ -515,6 +520,7 @@ forLoop:
 		track:         senderTrack,
 		payload:       senderTrack.PayloadType(),
 		lSSRC:         1234,
+		transceiver:   tr,
 	}
 	// Simple sender must forward packets while the sender is not muted
 	fakePkt := senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]

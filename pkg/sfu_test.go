@@ -297,6 +297,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			testDone := atomicBool{}
 			var mu sync.RWMutex
 			done := make(chan struct{})
 			peers := make(map[string]*peer)
@@ -352,6 +353,9 @@ func TestSFU_SessionScenarios(t *testing.T) {
 							})
 
 							p.local.OnOffer = func(o *webrtc.SessionDescription) {
+								if testDone.get() {
+									return
+								}
 								p.mu.Lock()
 								defer p.mu.Unlock()
 								err := p.remote.SetRemoteDescription(*o)
@@ -360,8 +364,13 @@ func TestSFU_SessionScenarios(t *testing.T) {
 								assert.NoError(t, err)
 								err = p.remote.SetLocalDescription(a)
 								assert.NoError(t, err)
-								err = p.local.SetRemoteDescription(a)
-								assert.NoError(t, err)
+								go func() {
+									if testDone.get() {
+										return
+									}
+									err = p.local.SetRemoteDescription(a)
+									assert.NoError(t, err)
+								}()
 							}
 
 							offer, err := p.remote.CreateOffer(nil)
@@ -413,6 +422,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 			for _, p := range peers {
 				p.subs.Wait()
 			}
+			testDone.set(true)
 			close(done)
 
 			for _, p := range peers {
