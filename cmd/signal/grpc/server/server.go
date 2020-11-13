@@ -147,6 +147,18 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 				}
 			}
 
+			peer.OnICEConnectionStateChange = func(c webrtc.ICEConnectionState) {
+				err = stream.Send(&pb.SignalReply{
+					Payload: &pb.SignalReply_IceConnectionState{
+						IceConnectionState: c.String(),
+					},
+				})
+
+				if err != nil {
+					log.Errorf("oniceconnectionstatechange error %s", err)
+				}
+			}
+
 			marshalled, err := json.Marshal(answer)
 			if err != nil {
 				return status.Errorf(codes.Internal, fmt.Sprintf("sdp marshal error: %v", err))

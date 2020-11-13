@@ -22,17 +22,18 @@ type WebRTCTransportConfig struct {
 
 // WebRTCTransport represents a sfu peer connection
 type WebRTCTransport struct {
-	id             string
-	pc             *webrtc.PeerConnection
-	me             MediaEngine
-	mu             sync.RWMutex
-	router         Router
-	session        *Session
-	senders        map[string][]Sender
-	candidates     []webrtc.ICECandidateInit
-	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
-	pendingSenders deque.Deque
-	negotiate      func()
+	id                                string
+	pc                                *webrtc.PeerConnection
+	me                                MediaEngine
+	mu                                sync.RWMutex
+	router                            Router
+	session                           *Session
+	senders                           map[string][]Sender
+	candidates                        []webrtc.ICECandidateInit
+	onTrackHandler                    func(*webrtc.Track, *webrtc.RTPReceiver)
+	onICEConnectionStateChangeHandler func(webrtc.ICEConnectionState)
+	pendingSenders                    deque.Deque
+	negotiate                         func()
 
 	subOnce   sync.Once
 	closeOnce sync.Once
@@ -103,6 +104,10 @@ func NewWebRTCTransport(session *Session, me MediaEngine, cfg WebRTCTransportCon
 				}
 				p.router.Stop()
 			})
+		}
+
+		if p.onICEConnectionStateChangeHandler != nil {
+			p.onICEConnectionStateChangeHandler(connectionState)
 		}
 	})
 
@@ -211,6 +216,10 @@ func (p *WebRTCTransport) AddICECandidate(candidate webrtc.ICECandidateInit) err
 // OnICECandidate handler
 func (p *WebRTCTransport) OnICECandidate(f func(c *webrtc.ICECandidate)) {
 	p.pc.OnICECandidate(f)
+}
+
+func (p *WebRTCTransport) OnICEConnectionStateChange(f func(connectionState webrtc.ICEConnectionState)) {
+	p.onICEConnectionStateChangeHandler = f
 }
 
 // OnNegotiationNeeded handler
