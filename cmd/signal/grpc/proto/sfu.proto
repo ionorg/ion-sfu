@@ -23,7 +23,8 @@ message SignalReply {
         JoinReply join = 2;
         bytes description = 3;
         Trickle trickle = 4;
-        string error = 5;
+        string iceConnectionState = 5;
+        string error = 6;
     }
 }
 

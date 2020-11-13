@@ -30,8 +30,9 @@ type Peer struct {
 	provider TransportProvider
 	pc       *WebRTCTransport
 
-	OnIceCandidate func(*webrtc.ICECandidateInit)
-	OnOffer        func(*webrtc.SessionDescription)
+	OnIceCandidate             func(*webrtc.ICECandidateInit)
+	OnOffer                    func(*webrtc.SessionDescription)
+	OnICEConnectionStateChange func(webrtc.ICEConnectionState)
 
 	remoteAnswerPending bool
 	negotiationPending  bool
