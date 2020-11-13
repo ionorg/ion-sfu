@@ -123,6 +123,12 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		}
 	})
 
+	pc.OnICEConnectionStateChange(func(s webrtc.ICEConnectionState) {
+		if p.OnICEConnectionStateChange != nil {
+			p.OnICEConnectionStateChange(s)
+		}
+	})
+
 	return &answer, nil
 }
 
