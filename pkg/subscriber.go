@@ -48,6 +48,14 @@ func NewSubscriber(session *Session, id string, me MediaEngine, cfg WebRTCTransp
 		session: session,
 	}
 
+	pc.OnDataChannel(func(d *webrtc.DataChannel) {
+		log.Debugf("New DataChannel %s %d", d.Label(), d.ID())
+		// Register text message handling
+		if d.Label() == channelLabel {
+			handleAPICommand(s, d)
+		}
+	})
+
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		log.Debugf("ice connection state: %s", connectionState)
 		switch connectionState {

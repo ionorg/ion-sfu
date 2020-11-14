@@ -22,14 +22,14 @@ type setRemoteMedia struct {
 	Audio    bool   `json:"audio"`
 }
 
-func handleAPICommand(t Transport, dc *webrtc.DataChannel) {
+func handleAPICommand(s *Subscriber, dc *webrtc.DataChannel) {
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 		srm := &setRemoteMedia{}
 		if err := json.Unmarshal(msg.Data, srm); err != nil {
 			log.Errorf("Unmarshal api command err: %v", err)
 			return
 		}
-		senders := t.GetSenders(srm.StreamID)
+		senders := s.GetSenders(srm.StreamID)
 
 		for _, sender := range senders {
 			switch sender.Kind() {
