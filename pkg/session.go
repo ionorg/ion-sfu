@@ -69,17 +69,19 @@ func (s *Session) Publish(router Router, rr *receiverRouter) {
 }
 
 // Subscribe will create a Sender for every other Receiver in the session
-func (s *Session) Subscribe(sub *Subscriber) {
+func (s *Session) Subscribe(id string) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	for _, p := range s.peers {
-		if p.id == sub.id {
-			continue
-		}
-		err := p.publisher.GetRouter().AddSender(sub, nil)
-		if err != nil {
-			log.Errorf("Subscribing to router err: %v", err)
-			continue
+	if peer, ok := s.peers[id]; ok {
+		for pid, p := range s.peers {
+			if pid == id {
+				continue
+			}
+			err := p.publisher.GetRouter().AddSender(peer.subscriber, nil)
+			if err != nil {
+				log.Errorf("Subscribing to router err: %v", err)
+				continue
+			}
 		}
 	}
 }

@@ -30,7 +30,6 @@ type Subscriber struct {
 	pendingSenders deque.Deque
 	negotiate      func()
 
-	subOnce   sync.Once
 	closeOnce sync.Once
 }
 
@@ -54,24 +53,20 @@ func NewSubscriber(session *Session, id string, me MediaEngine, cfg WebRTCTransp
 		me:      me,
 		pc:      pc,
 		session: session,
+		senders: make(map[string][]Sender),
 	}
 
-	pc.OnDataChannel(func(d *webrtc.DataChannel) {
-		log.Debugf("New DataChannel %s %d", d.Label(), d.ID())
-		// Register text message handling
-		if d.Label() == channelLabel {
-			handleAPICommand(s, d)
-		}
-	})
+	dc, err := pc.CreateDataChannel(channelLabel, &webrtc.DataChannelInit{})
+	if err != nil {
+		log.Errorf("DC creation error: %v", err)
+		return nil, errPeerConnectionInitFailed
+	}
+	handleAPICommand(s, dc)
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		log.Debugf("ice connection state: %s", connectionState)
 		switch connectionState {
-		case webrtc.ICEConnectionStateConnected:
-			s.subOnce.Do(func() {
-				// Subscribe to existing peers
-				s.session.Subscribe(s)
-			})
+
 		case webrtc.ICEConnectionStateFailed:
 			fallthrough
 		case webrtc.ICEConnectionStateClosed:
