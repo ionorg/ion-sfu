@@ -1,6 +1,7 @@
 package sfu
 
 import (
+	"net/url"
 	"sync"
 	"time"
 
@@ -81,6 +82,36 @@ func NewSubscriber(session *Session, id string, me MediaEngine, cfg WebRTCTransp
 				}
 			})
 		}
+	})
+
+	pc.GetMapExtension(func() map[webrtc.SDPSectionType][]sdp.ExtMap {
+		sdesMid, _ := url.Parse(sdp.SDESMidURI)
+		ext := make(map[webrtc.SDPSectionType][]sdp.ExtMap)
+
+		for _, t := range pc.GetTransceivers() {
+			switch t.Kind() {
+			case webrtc.RTPCodecTypeAudio:
+				if t.Direction() == webrtc.RTPTransceiverDirectionSendonly {
+					ext[webrtc.SDPSectionType(t.Mid())] = []sdp.ExtMap{
+						{
+							Value: 1,
+							URI:   sdesMid,
+						},
+					}
+				}
+			case webrtc.RTPCodecTypeVideo:
+				if t.Direction() == webrtc.RTPTransceiverDirectionSendonly {
+					ext[webrtc.SDPSectionType(t.Mid())] = []sdp.ExtMap{
+						{
+							Value: 1,
+							URI:   sdesMid,
+						},
+					}
+				}
+			}
+		}
+
+		return ext
 	})
 
 	return s, nil

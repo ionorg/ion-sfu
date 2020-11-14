@@ -70,8 +70,6 @@ func NewPublisher(session *Session, id string, me MediaEngine, cfg WebRTCTranspo
 		}
 	})
 
-	pc.GetMapExtension(p.router.OfferExtMap)
-
 	return p, nil
 }
 
