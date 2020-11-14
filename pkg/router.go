@@ -4,7 +4,6 @@ package sfu
 
 import (
 	"math/rand"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -30,8 +29,6 @@ type Router interface {
 	AddReceiver(track *webrtc.Track, receiver *webrtc.RTPReceiver) *receiverRouter
 	AddSender(s *Subscriber, rr *receiverRouter) error
 	SetExtMap(pd *sdp.SessionDescription)
-	OfferExtMap() map[webrtc.SDPSectionType][]sdp.ExtMap
-	GetExtMap(mid, ext string) uint8
 	SendRTCP(pkts []rtcp.Packet)
 	Stop()
 }
@@ -96,14 +93,7 @@ func (r *router) AddReceiver(track *webrtc.Track, receiver *webrtc.RTPReceiver) 
 	}
 	trackID := track.ID()
 
-	var twccExt uint8
-	if e, ok := r.extensions[webrtc.SDPSectionType(mid)]; ok {
-		for _, ex := range e {
-			if ex.URI.String() == sdp.TransportCCURI {
-				twccExt = uint8(ex.Value)
-			}
-		}
-	}
+	twccExt := r.getExtMap(mid, sdp.TransportCCURI)
 
 	recv := NewWebRTCReceiver(receiver, track, BufferOptions{
 		BufferTime: r.config.MaxBufferTime,
@@ -230,11 +220,12 @@ func (r *router) addSender(sub *Subscriber, rr *receiverRouter) error {
 	} else {
 		sender = NewSimpleSender(sub.id, rr, t)
 	}
+	// nolint:scopelint
 	sender.OnCloseHandler(func() {
-		if err := sub.pc.RemoveTrack(t.Sender()); err != nil { // nolint:scopelint
-			log.Errorf("Error closing sender: %s", err) // nolint:scopelint
+		if err := sub.pc.RemoveTrack(t.Sender()); err != nil {
+			log.Errorf("Error closing sender: %s", err)
 		} else {
-			sub.negotiate() // nolint:scopelint
+			sub.negotiate()
 		}
 	})
 	sub.Lock()
@@ -262,9 +253,7 @@ func (r *router) sendRTCP() {
 	}
 }
 
-func (r *router) GetExtMap(mid, ext string) uint8 {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+func (r *router) getExtMap(mid, ext string) uint8 {
 	if e, ok := r.extensions[webrtc.SDPSectionType(mid)]; ok {
 		for _, ex := range e {
 			if ex.URI.String() == ext {
@@ -330,39 +319,4 @@ func (r *router) SetExtMap(pd *sdp.SessionDescription) {
 		}
 
 	}
-}
-
-// nolint:scopelint
-func (r *router) OfferExtMap() map[webrtc.SDPSectionType][]sdp.ExtMap {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	sdesMid, _ := url.Parse(sdp.SDESMidURI)
-
-	for _, t := range r.peer.GetTransceivers() {
-		if _, ok := r.extensions[webrtc.SDPSectionType(t.Mid())]; !ok {
-			switch t.Kind() {
-			case webrtc.RTPCodecTypeAudio:
-				if t.Direction() == webrtc.RTPTransceiverDirectionSendonly {
-					r.extensions[webrtc.SDPSectionType(t.Mid())] = []sdp.ExtMap{
-						{
-							Value: 1,
-							URI:   sdesMid,
-						},
-					}
-				}
-			case webrtc.RTPCodecTypeVideo:
-				if t.Direction() == webrtc.RTPTransceiverDirectionSendonly {
-					r.extensions[webrtc.SDPSectionType(t.Mid())] = []sdp.ExtMap{
-						{
-							Value: 1,
-							URI:   sdesMid,
-						},
-					}
-				}
-			}
-		}
-	}
-
-	return r.extensions
 }

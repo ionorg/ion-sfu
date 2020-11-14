@@ -40,7 +40,7 @@ type Peer struct {
 	publisher  *Publisher
 	subscriber *Subscriber
 
-	OnIceCandidate             func(*webrtc.ICECandidateInit)
+	OnIceCandidate             func(*webrtc.ICECandidateInit, int)
 	OnOffer                    func(*webrtc.SessionDescription)
 	OnICEConnectionStateChange func(webrtc.ICEConnectionState)
 
@@ -49,8 +49,8 @@ type Peer struct {
 }
 
 // NewPeer creates a new Peer for signaling with the given SFU
-func NewPeer(provider TransportProvider) Peer {
-	return Peer{
+func NewPeer(provider TransportProvider) *Peer {
+	return &Peer{
 		provider: provider,
 	}
 }
@@ -119,7 +119,7 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 
 		if p.OnIceCandidate != nil {
 			json := c.ToJSON()
-			p.OnIceCandidate(&json)
+			p.OnIceCandidate(&json, subscriber)
 		}
 	})
 
@@ -131,7 +131,7 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 
 		if p.OnIceCandidate != nil {
 			json := c.ToJSON()
-			p.OnIceCandidate(&json)
+			p.OnIceCandidate(&json, publisher)
 		}
 	})
 

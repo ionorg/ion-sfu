@@ -29,10 +29,10 @@ type Trickle struct {
 }
 
 type JSONSignal struct {
-	sfu.Peer
+	*sfu.Peer
 }
 
-func NewJSONSignal(p sfu.Peer) *JSONSignal {
+func NewJSONSignal(p *sfu.Peer) *JSONSignal {
 	return &JSONSignal{p}
 }
 
@@ -67,8 +67,14 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 			}
 
 		}
-		p.OnIceCandidate = func(candidate *webrtc.ICECandidateInit) {
-			if err := conn.Notify(ctx, "trickle", candidate); err != nil {
+		p.OnIceCandidate = func(candidate *webrtc.ICECandidateInit, target int) {
+			if err := conn.Notify(ctx, "trickle", struct {
+				Candidate *webrtc.ICECandidateInit `json:"candidate"`
+				Target    int                      `json:"target"`
+			}{
+				Candidate: candidate,
+				Target:    target,
+			}); err != nil {
 				log.Errorf("error sending ice candidate %s", err)
 			}
 		}
