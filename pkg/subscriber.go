@@ -111,7 +111,7 @@ func NewSubscriber(session *Session, id string, me MediaEngine, cfg WebRTCTransp
 }
 
 func (s *Subscriber) OnNegotiationNeeded(f func()) {
-	debounced := debounce.New(100 * time.Millisecond)
+	debounced := debounce.New(250 * time.Millisecond)
 	s.negotiate = func() {
 		debounced(f)
 	}
