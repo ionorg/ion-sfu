@@ -66,7 +66,6 @@ func NewSubscriber(session *Session, id string, me MediaEngine, cfg WebRTCTransp
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		log.Debugf("ice connection state: %s", connectionState)
 		switch connectionState {
-
 		case webrtc.ICEConnectionStateFailed:
 			fallthrough
 		case webrtc.ICEConnectionStateClosed:
@@ -82,7 +81,6 @@ func NewSubscriber(session *Session, id string, me MediaEngine, cfg WebRTCTransp
 	pc.GetMapExtension(func() map[webrtc.SDPSectionType][]sdp.ExtMap {
 		sdesMid, _ := url.Parse(sdp.SDESMidURI)
 		ext := make(map[webrtc.SDPSectionType][]sdp.ExtMap)
-
 		for _, t := range pc.GetTransceivers() {
 			switch t.Kind() {
 			case webrtc.RTPCodecTypeAudio:
