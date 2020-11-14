@@ -6,12 +6,13 @@ import (
 	log "github.com/pion/ion-log"
 )
 
-// Session represents a set of transports. Transports inside a session
+// Session represents a set of publishers. Transports inside a session
 // are automatically subscribed to each other.
 type Session struct {
 	id             string
 	mu             sync.RWMutex
-	transports     map[string]Transport
+	publishers     map[string]*Publisher
+	subscribers    map[string]*Subscriber
 	onCloseHandler func()
 	closed         bool
 }
@@ -20,28 +21,28 @@ type Session struct {
 func NewSession(id string) *Session {
 	return &Session{
 		id:         id,
-		transports: make(map[string]Transport),
+		publishers: make(map[string]*Publisher),
 		closed:     false,
 	}
 }
 
-// AddTransport adds a transport to the session
-func (s *Session) AddTransport(transport Transport) {
+// AddPublisher adds a transport to the session
+func (s *Session) AddPublisher(publisher *Publisher) {
 	s.mu.Lock()
-	s.transports[transport.ID()] = transport
+	s.publishers[publisher.ID()] = publisher
 	s.mu.Unlock()
 }
 
-// RemoveTransport removes a transport from the session
-func (s *Session) RemoveTransport(tid string) {
+// RemovePublisher removes a transport from the session
+func (s *Session) RemovePublisher(tid string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	log.Infof("RemoveTransport %s from session %s", tid, s.id)
-	delete(s.transports, tid)
+	log.Infof("RemovePublisher %s from session %s", tid, s.id)
+	delete(s.publishers, tid)
 
-	// Close session if no transports
-	if len(s.transports) == 0 && s.onCloseHandler != nil && !s.closed {
+	// Close session if no publishers
+	if len(s.publishers) == 0 && s.onCloseHandler != nil && !s.closed {
 		s.onCloseHandler()
 		s.closed = true
 	}
@@ -53,32 +54,30 @@ func (s *Session) Publish(router Router, rr *receiverRouter) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	for tid, t := range s.transports {
+	for sid, s := range s.subscribers {
 		// Don't sub to self
-		if router.ID() == tid {
+		if router.ID() == sid {
 			continue
 		}
 
-		log.Infof("Publish mediaSSRC to %s", tid)
+		log.Infof("Publish mediaSSRC to %s", sid)
 
-		if t, ok := t.(*WebRTCTransport); ok {
-			if err := router.AddSender(t, rr); err != nil {
-				log.Errorf("Error subscribing transport to router: %s", err)
-				continue
-			}
+		if err := router.AddSender(s, rr); err != nil {
+			log.Errorf("Error subscribing transport to router: %s", err)
+			continue
 		}
 	}
 }
 
 // Subscribe will create a Sender for every other Receiver in the session
-func (s *Session) Subscribe(p *WebRTCTransport) {
+func (s *Session) Subscribe(sub *Subscriber) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	for _, t := range s.transports {
-		if t.ID() == p.id {
+	for _, pub := range s.publishers {
+		if pub.ID() == sub.id {
 			continue
 		}
-		err := t.GetRouter().AddSender(p, nil)
+		err := pub.GetRouter().AddSender(sub, nil)
 		if err != nil {
 			log.Errorf("Subscribing to router err: %v", err)
 			continue
@@ -86,11 +85,11 @@ func (s *Session) Subscribe(p *WebRTCTransport) {
 	}
 }
 
-// Transports returns transports in this session
-func (s *Session) Transports() map[string]Transport {
+// Transports returns publishers in this session
+func (s *Session) Publishers() map[string]*Publisher {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.transports
+	return s.publishers
 }
 
 // OnClose is called when the session is closed

@@ -38,5 +38,9 @@ message JoinReply {
 }
 
 message Trickle {
+    enum target {
+        publisher = 0;
+        subscriber = 1;
+    }
     string init = 1;
 }
