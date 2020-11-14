@@ -5,7 +5,7 @@ go 1.13
 require (
 	github.com/bep/debounce v1.2.0
 	github.com/gammazero/deque v0.0.0-20201010052221-3932da5530cc
-	github.com/golang/protobuf v1.4.3 // indirect
+	github.com/golang/protobuf v1.4.3
 	github.com/gorilla/websocket v1.4.2
 	github.com/lucas-clemente/quic-go v0.18.1 // indirect
 	github.com/lucsky/cuid v1.0.2

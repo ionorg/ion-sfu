@@ -277,7 +277,7 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 				continue
 			}
 
-			err = peer.Trickle(candidate)
+			err = peer.Trickle(candidate, int(payload.Trickle.Target))
 			if err != nil {
 				switch err {
 				case sfu.ErrNoTransportEstablished:

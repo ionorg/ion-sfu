@@ -24,6 +24,7 @@ type Negotiation struct {
 
 // Trickle message sent when renegotiating the peer connection
 type Trickle struct {
+	Target    int                     `json:"target"`
 	Candidate webrtc.ICECandidateInit `json:"candidate"`
 }
 
@@ -113,7 +114,7 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 			break
 		}
 
-		err = p.Trickle(trickle.Candidate)
+		err = p.Trickle(trickle.Candidate, trickle.Target)
 		if err != nil {
 			replyError(err)
 		}
