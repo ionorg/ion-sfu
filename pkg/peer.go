@@ -11,6 +11,11 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
+const (
+	publisher  = 0
+	subscriber = 1
+)
+
 var (
 	// ErrTransportExists join is called after a peerconnection is established
 	ErrTransportExists = errors.New("rtc transport already exists for this connection")
@@ -23,13 +28,14 @@ var (
 // TransportProvider provides the peerConnection to the sfu.Peer{}
 // This allows the sfu.SFU{} implementation to be customized / wrapped by another package
 type TransportProvider interface {
-	NewPublisher(sid, pid string, me MediaEngine) (*Publisher, error)
-	NewSubscriber(sid, pid string, me MediaEngine) (*Subscriber, error)
+	NewTransport(sid, pid string, me MediaEngine) (*Session, *Publisher, *Subscriber, error)
 }
 
 // Peer represents a pair peer connection
 type Peer struct {
 	sync.Mutex
+	id         string
+	session    *Session
 	provider   TransportProvider
 	publisher  *Publisher
 	subscriber *Subscriber
@@ -65,23 +71,22 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 	}
 
 	pid := cuid.New()
-	p.publisher, err = p.provider.NewPublisher(sid, pid, me)
-	if err != nil {
-		return nil, fmt.Errorf("error creating transport: %v", err)
-	}
-	p.subscriber, err = p.provider.NewSubscriber(sid, pid, me)
+	p.id = pid
+	p.session, p.publisher, p.subscriber, err = p.provider.NewTransport(sid, pid, me)
 	if err != nil {
 		return nil, fmt.Errorf("error creating transport: %v", err)
 	}
 
-	log.Infof("peer %s join session %s", p.publisher.ID(), sid)
+	p.session.AddPeer(p)
+
+	log.Infof("peer %s join session %s", p.id, sid)
 
 	answer, err := p.publisher.Answer(sdp)
 	if err != nil {
 		return nil, fmt.Errorf("error setting remote description: %v", err)
 	}
 
-	log.Infof("peer %s send answer", p.publisher.ID())
+	log.Infof("peer %s send answer", p.id)
 
 	p.subscriber.OnNegotiationNeeded(func() {
 		p.Lock()
@@ -92,7 +97,7 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 			return
 		}
 
-		log.Debugf("peer %s negotiation needed", p.subscriber.id)
+		log.Debugf("peer %s negotiation needed", p.id)
 		offer, err := p.subscriber.CreateOffer()
 		if err != nil {
 			log.Errorf("CreateOffer error: %v", err)
@@ -101,7 +106,7 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 
 		p.remoteAnswerPending = true
 		if p.OnOffer != nil {
-			log.Infof("peer %s send offer", p.subscriber.id)
+			log.Infof("peer %s send offer", p.id)
 			p.OnOffer(&offer)
 		}
 	})
@@ -146,7 +151,7 @@ func (p *Peer) Answer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription
 	}
 	p.Lock()
 	defer p.Unlock()
-	log.Infof("peer %s got offer", p.publisher.ID())
+	log.Infof("peer %s got offer", p.id)
 
 	if p.publisher.SignalingState() == webrtc.SignalingStateStable {
 		return nil, ErrOfferIgnored
@@ -170,8 +175,8 @@ func (p *Peer) SetRemoteDescription(sdp webrtc.SessionDescription) error {
 	p.Lock()
 	defer p.Unlock()
 
-	log.Infof("peer %s got answer", p.subscriber.id)
-	if err := p.subscriber.pc.SetRemoteDescription(sdp); err != nil {
+	log.Infof("peer %s got answer", p.id)
+	if err := p.subscriber.SetRemoteDescription(sdp); err != nil {
 		return fmt.Errorf("error setting remote description: %v", err)
 	}
 
@@ -190,7 +195,7 @@ func (p *Peer) Trickle(candidate webrtc.ICECandidateInit, target int) error {
 	if p.subscriber == nil || p.publisher == nil {
 		return ErrNoTransportEstablished
 	}
-	log.Infof("peer %s trickle", p.subscriber.id)
+	log.Infof("peer %s trickle", p.id)
 	switch target {
 	case publisher:
 		if err := p.publisher.AddICECandidate(candidate); err != nil {
@@ -217,5 +222,6 @@ func (p *Peer) Close() error {
 			return err
 		}
 	}
+	p.session.RemovePeer(p.id)
 	return nil
 }

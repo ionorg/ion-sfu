@@ -4,6 +4,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pion/sdp/v3"
+
 	"github.com/bep/debounce"
 
 	log "github.com/pion/ion-log"
@@ -29,6 +31,11 @@ type Subscriber struct {
 
 	subOnce   sync.Once
 	closeOnce sync.Once
+}
+
+type pendingSender struct {
+	transceiver *webrtc.RTPTransceiver
+	sender      Sender
 }
 
 // NewSubscriber creates a new Subscriber
@@ -61,7 +68,7 @@ func NewSubscriber(session *Session, id string, me MediaEngine, cfg WebRTCTransp
 		switch connectionState {
 		case webrtc.ICEConnectionStateConnected:
 			s.subOnce.Do(func() {
-				// Subscribe to existing publishers
+				// Subscribe to existing peers
 				s.session.Subscribe(s)
 			})
 		case webrtc.ICEConnectionStateFailed:
@@ -79,20 +86,20 @@ func NewSubscriber(session *Session, id string, me MediaEngine, cfg WebRTCTransp
 	return s, nil
 }
 
-func (p *Subscriber) OnNegotiationNeeded(f func()) {
+func (s *Subscriber) OnNegotiationNeeded(f func()) {
 	debounced := debounce.New(100 * time.Millisecond)
-	p.negotiate = func() {
+	s.negotiate = func() {
 		debounced(f)
 	}
 }
 
-func (p *Subscriber) CreateOffer() (webrtc.SessionDescription, error) {
-	offer, err := p.pc.CreateOffer(nil)
+func (s *Subscriber) CreateOffer() (webrtc.SessionDescription, error) {
+	offer, err := s.pc.CreateOffer(nil)
 	if err != nil {
 		return webrtc.SessionDescription{}, err
 	}
 
-	err = p.pc.SetLocalDescription(offer)
+	err = s.pc.SetLocalDescription(offer)
 	if err != nil {
 		return webrtc.SessionDescription{}, err
 	}
@@ -101,37 +108,93 @@ func (p *Subscriber) CreateOffer() (webrtc.SessionDescription, error) {
 }
 
 // OnICECandidate handler
-func (p *Subscriber) OnICECandidate(f func(c *webrtc.ICECandidate)) {
-	p.pc.OnICECandidate(f)
+func (s *Subscriber) OnICECandidate(f func(c *webrtc.ICECandidate)) {
+	s.pc.OnICECandidate(f)
 }
 
 // AddICECandidate to peer connection
-func (p *Subscriber) AddICECandidate(candidate webrtc.ICECandidateInit) error {
-	if p.pc.RemoteDescription() != nil {
-		return p.pc.AddICECandidate(candidate)
+func (s *Subscriber) AddICECandidate(candidate webrtc.ICECandidateInit) error {
+	if s.pc.RemoteDescription() != nil {
+		return s.pc.AddICECandidate(candidate)
 	}
-	p.candidates = append(p.candidates, candidate)
+	s.candidates = append(s.candidates, candidate)
 	return nil
 }
 
-func (p *Subscriber) AddSender(streamID string, sender Sender) {
-	p.Lock()
-	defer p.Unlock()
-	if senders, ok := p.senders[streamID]; ok {
+func (s *Subscriber) AddSender(streamID string, sender Sender) {
+	s.Lock()
+	defer s.Unlock()
+	if senders, ok := s.senders[streamID]; ok {
 		senders = append(senders, sender)
-		p.senders[streamID] = senders
+		s.senders[streamID] = senders
 	} else {
-		p.senders[streamID] = []Sender{sender}
+		s.senders[streamID] = []Sender{sender}
 	}
 }
 
-func (p *Subscriber) GetSenders(streamID string) []Sender {
-	p.RLock()
-	defer p.RUnlock()
-	return p.senders[streamID]
+// SetRemoteDescription sets the SessionDescription of the remote peer
+func (s *Subscriber) SetRemoteDescription(desc webrtc.SessionDescription) error {
+	var err error
+	pd, err := desc.Unmarshal()
+	if err != nil {
+		log.Errorf("SetRemoteDescription error: %v", err)
+		return err
+	}
+
+	s.Lock()
+	defer s.Unlock()
+	if s.pendingSenders.Len() > 0 {
+		pendingStart := make([]pendingSender, 0, s.pendingSenders.Len())
+		for _, md := range pd.MediaDescriptions {
+			if s.pendingSenders.Len() == 0 {
+				break
+			}
+			mid, ok := md.Attribute(sdp.AttrKeyMID)
+			if !ok {
+				continue
+			}
+			for i := 0; i < s.pendingSenders.Len(); i++ {
+				pd := s.pendingSenders.PopFront().(pendingSender)
+				if pd.transceiver.Mid() == mid {
+					pendingStart = append(pendingStart, pd)
+				} else {
+					s.pendingSenders.PushBack(pd)
+				}
+			}
+		}
+		if len(pendingStart) > 0 {
+			defer func() {
+				if err == nil {
+					for _, ps := range pendingStart {
+						ps.sender.Start()
+					}
+				} else {
+					s.Lock()
+					for _, ps := range pendingStart {
+						s.pendingSenders.PushBack(ps)
+					}
+					s.Unlock()
+				}
+			}()
+		}
+	}
+
+	err = s.pc.SetRemoteDescription(desc)
+	if err != nil {
+		log.Errorf("SetRemoteDescription error: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func (s *Subscriber) GetSenders(streamID string) []Sender {
+	s.RLock()
+	defer s.RUnlock()
+	return s.senders[streamID]
 }
 
 // Close peer
-func (p *Subscriber) Close() error {
-	return p.pc.Close()
+func (s *Subscriber) Close() error {
+	return s.pc.Close()
 }

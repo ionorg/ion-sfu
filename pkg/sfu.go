@@ -184,23 +184,20 @@ func (s *SFU) getSession(id string) *Session {
 	return s.sessions[id]
 }
 
-func (s *SFU) NewPublisher(sid, pid string, me MediaEngine) (*Publisher, error) {
+func (s *SFU) NewTransport(sid, pid string, me MediaEngine) (*Session, *Publisher, *Subscriber, error) {
 	session := s.getSession(sid)
 
 	if session == nil {
 		session = s.newSession(sid)
 	}
 
-	return NewPublisher(session, pid, me, s.webrtc)
-}
-
-func (s *SFU) NewSubscriber(sid, pid string, me MediaEngine) (*Subscriber, error) {
-	session := s.getSession(sid)
-
-	if session == nil {
-		session = s.newSession(sid)
+	pub, err := NewPublisher(session, pid, me, s.webrtc)
+	if err != nil {
+		return nil, nil, nil, err
 	}
-
-	return NewSubscriber(session, pid, me, s.webrtc)
-
+	sub, err := NewSubscriber(session, pid, me, s.webrtc)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return session, pub, sub, nil
 }

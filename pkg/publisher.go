@@ -39,8 +39,6 @@ func NewPublisher(session *Session, id string, me MediaEngine, cfg WebRTCTranspo
 		session: session,
 		router:  newRouter(pc, id, cfg.router),
 	}
-	// Add transport to the session
-	session.AddPublisher(p)
 
 	pc.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
 		log.Debugf("Peer %s got remote track id: %s mediaSSRC: %d rid :%s streamID: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.Label())
@@ -78,6 +76,11 @@ func NewPublisher(session *Session, id string, me MediaEngine, cfg WebRTCTranspo
 }
 
 func (p *Publisher) Answer(offer webrtc.SessionDescription) (webrtc.SessionDescription, error) {
+	pd, err := offer.Unmarshal()
+	if err != nil {
+		return webrtc.SessionDescription{}, err
+	}
+	p.router.SetExtMap(pd)
 	if err := p.pc.SetRemoteDescription(offer); err != nil {
 		return webrtc.SessionDescription{}, err
 	}
@@ -103,7 +106,6 @@ func (p *Publisher) GetRouter() Router {
 
 // Close peer
 func (p *Publisher) Close() error {
-	p.session.RemovePublisher(p.id)
 	return p.pc.Close()
 }
 
