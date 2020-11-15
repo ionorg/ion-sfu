@@ -104,7 +104,7 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 			}
 
 			// Notify user of new ice candidate
-			peer.OnIceCandidate = func(candidate *webrtc.ICECandidateInit) {
+			peer.OnIceCandidate = func(candidate *webrtc.ICECandidateInit, target int) {
 				bytes, err := json.Marshal(candidate)
 				if err != nil {
 					log.Errorf("OnIceCandidate error %s", err)
@@ -112,7 +112,8 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 				err = stream.Send(&pb.SignalReply{
 					Payload: &pb.SignalReply_Trickle{
 						Trickle: &pb.Trickle{
-							Init: string(bytes),
+							Init:   string(bytes),
+							Target: pb.Trickle_Target(target),
 						},
 					},
 				})
@@ -277,7 +278,7 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 				continue
 			}
 
-			err = peer.Trickle(candidate)
+			err = peer.Trickle(candidate, int(payload.Trickle.Target))
 			if err != nil {
 				switch err {
 				case sfu.ErrNoTransportEstablished:

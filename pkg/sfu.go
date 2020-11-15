@@ -25,6 +25,13 @@ type Candidates struct {
 	NAT1To1IPs []string `mapstructure:"nat1to1"`
 }
 
+// WebRTCTransportConfig represents configuration options
+type WebRTCTransportConfig struct {
+	configuration webrtc.Configuration
+	setting       webrtc.SettingEngine
+	router        RouterConfig
+}
+
 // WebRTCConfig defines parameters for ice
 type WebRTCConfig struct {
 	ICEPortRange []uint16          `mapstructure:"portrange"`
@@ -177,18 +184,20 @@ func (s *SFU) getSession(id string) *Session {
 	return s.sessions[id]
 }
 
-// NewWebRTCTransport creates a new WebRTCTransport that is a member of a session
-func (s *SFU) NewWebRTCTransport(sid string, me MediaEngine) (*WebRTCTransport, error) {
+func (s *SFU) NewTransport(sid, pid string, me MediaEngine) (*Session, *Publisher, *Subscriber, error) {
 	session := s.getSession(sid)
 
 	if session == nil {
 		session = s.newSession(sid)
 	}
 
-	t, err := NewWebRTCTransport(session, me, s.webrtc)
+	pub, err := NewPublisher(session, pid, me, s.webrtc)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
-
-	return t, nil
+	sub, err := NewSubscriber(session, pid, me, s.webrtc)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return session, pub, sub, nil
 }

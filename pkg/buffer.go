@@ -91,6 +91,7 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 			b.nack = true
 		}
 	}
+	b.tcc = b.twccExt > 0
 	log.Debugf("NewBuffer BufferOptions=%v", o)
 	return b
 }

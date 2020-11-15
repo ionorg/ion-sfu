@@ -93,12 +93,13 @@ type action struct {
 }
 
 type peer struct {
-	id     string
-	mu     sync.Mutex
-	local  *Peer
-	remote *webrtc.PeerConnection
-	subs   sync.WaitGroup
-	pubs   []*sender
+	id        string
+	mu        sync.Mutex
+	local     *Peer
+	remotePub *webrtc.PeerConnection
+	remoteSub *webrtc.PeerConnection
+	subs      sync.WaitGroup
+	pubs      []*sender
 }
 
 type step struct {
@@ -310,14 +311,14 @@ func TestSFU_SessionScenarios(t *testing.T) {
 							me := webrtc.MediaEngine{}
 							me.RegisterDefaultCodecs()
 							api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
-							r, err := api.NewPeerConnection(webrtc.Configuration{})
-
+							pub, err := api.NewPeerConnection(webrtc.Configuration{})
 							assert.NoError(t, err)
-							_, err = r.CreateDataChannel("ion-sfu", nil)
+							sub, err := api.NewPeerConnection(webrtc.Configuration{})
 							assert.NoError(t, err)
 							local := NewPeer(sfu)
-							p := &peer{id: action.id, remote: r, local: &local}
-							r.OnTrack(func(track *webrtc.Track, recv *webrtc.RTPReceiver) {
+							_, err = pub.CreateDataChannel("ion-sfu", nil)
+							p := &peer{id: action.id, remotePub: pub, remoteSub: sub, local: local}
+							sub.OnTrack(func(track *webrtc.Track, recv *webrtc.RTPReceiver) {
 								mu.Lock()
 								p.subs.Done()
 								mu.Unlock()
@@ -333,16 +334,17 @@ func TestSFU_SessionScenarios(t *testing.T) {
 							mu.Unlock()
 
 							p.mu.Lock()
-							p.remote.OnNegotiationNeeded(func() {
+							p.remotePub.OnNegotiationNeeded(func() {
 								p.mu.Lock()
 								defer p.mu.Unlock()
-								o, err := p.remote.CreateOffer(nil)
+								o, err := p.remotePub.CreateOffer(nil)
 								assert.NoError(t, err)
-								err = p.remote.SetLocalDescription(o)
+								err = p.remotePub.SetLocalDescription(o)
 								assert.NoError(t, err)
 								a, err := p.local.Answer(o)
 								assert.NoError(t, err)
-								p.remote.SetRemoteDescription(*a)
+								err = p.remotePub.SetRemoteDescription(*a)
+								assert.NoError(t, err)
 
 								for _, pub := range p.pubs {
 									if pub.start != nil {
@@ -352,17 +354,26 @@ func TestSFU_SessionScenarios(t *testing.T) {
 								}
 							})
 
+							p.local.OnIceCandidate = func(init *webrtc.ICECandidateInit, i int) {
+								switch i {
+								case subscriber:
+									p.remoteSub.AddICECandidate(*init)
+								case publisher:
+									p.remotePub.AddICECandidate(*init)
+								}
+							}
+
 							p.local.OnOffer = func(o *webrtc.SessionDescription) {
 								if testDone.get() {
 									return
 								}
 								p.mu.Lock()
 								defer p.mu.Unlock()
-								err := p.remote.SetRemoteDescription(*o)
+								err := p.remoteSub.SetRemoteDescription(*o)
 								assert.NoError(t, err)
-								a, err := p.remote.CreateAnswer(nil)
+								a, err := p.remoteSub.CreateAnswer(nil)
 								assert.NoError(t, err)
-								err = p.remote.SetLocalDescription(a)
+								err = p.remoteSub.SetLocalDescription(a)
 								assert.NoError(t, err)
 								go func() {
 									if testDone.get() {
@@ -373,15 +384,16 @@ func TestSFU_SessionScenarios(t *testing.T) {
 								}()
 							}
 
-							offer, err := p.remote.CreateOffer(nil)
+							offer, err := p.remotePub.CreateOffer(nil)
 							assert.NoError(t, err)
-							gatherComplete := webrtc.GatheringCompletePromise(p.remote)
-							err = p.remote.SetLocalDescription(offer)
+							gatherComplete := webrtc.GatheringCompletePromise(p.remotePub)
+							err = p.remotePub.SetLocalDescription(offer)
 							assert.NoError(t, err)
 							<-gatherComplete
-							answer, err := p.local.Join("test", *p.remote.LocalDescription())
+							answer, err := p.local.Join("test", *p.remotePub.LocalDescription())
 							assert.NoError(t, err)
-							p.remote.SetRemoteDescription(*answer)
+							err = p.remotePub.SetRemoteDescription(*answer)
+							assert.NoError(t, err)
 							p.mu.Unlock()
 
 						case "publish":
@@ -395,7 +407,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 								}
 							}
 
-							peer.pubs = append(peer.pubs, addMedia(done, t, peer.remote, action.media)...)
+							peer.pubs = append(peer.pubs, addMedia(done, t, peer.remotePub, action.media)...)
 							peer.mu.Unlock()
 							mu.Unlock()
 
@@ -406,7 +418,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 							for _, media := range action.media {
 								for _, pub := range peer.pubs {
 									if pub.transceiver != nil && pub.transceiver.Sender().Track().ID() == media.tid {
-										peer.remote.RemoveTrack(pub.transceiver.Sender())
+										peer.remotePub.RemoveTrack(pub.transceiver.Sender())
 										pub.transceiver = nil
 									}
 								}
@@ -427,7 +439,8 @@ func TestSFU_SessionScenarios(t *testing.T) {
 
 			for _, p := range peers {
 				p.mu.Lock()
-				p.remote.Close()
+				p.remotePub.Close()
+				p.remoteSub.Close()
 				p.local.Close()
 				p.mu.Unlock()
 			}
