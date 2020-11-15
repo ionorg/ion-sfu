@@ -33,11 +33,6 @@ type Subscriber struct {
 	closeOnce sync.Once
 }
 
-type pendingSender struct {
-	transceiver *webrtc.RTPTransceiver
-	sender      Sender
-}
-
 // NewSubscriber creates a new Subscriber
 func NewSubscriber(session *Session, id string, me MediaEngine, cfg WebRTCTransportConfig) (*Subscriber, error) {
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine), webrtc.WithSettingEngine(cfg.setting))
@@ -168,7 +163,7 @@ func (s *Subscriber) SetRemoteDescription(desc webrtc.SessionDescription) error 
 	s.Lock()
 	defer s.Unlock()
 	if s.pendingSenders.Len() > 0 {
-		pendingStart := make([]pendingSender, 0, s.pendingSenders.Len())
+		pendingStart := make([]Sender, 0, s.pendingSenders.Len())
 		for _, md := range pd.MediaDescriptions {
 			if s.pendingSenders.Len() == 0 {
 				break
@@ -178,8 +173,8 @@ func (s *Subscriber) SetRemoteDescription(desc webrtc.SessionDescription) error 
 				continue
 			}
 			for i := 0; i < s.pendingSenders.Len(); i++ {
-				pd := s.pendingSenders.PopFront().(pendingSender)
-				if pd.transceiver.Mid() == mid {
+				pd := s.pendingSenders.PopFront().(Sender)
+				if pd.Transceiver().Mid() == mid {
 					pendingStart = append(pendingStart, pd)
 				} else {
 					s.pendingSenders.PushBack(pd)
@@ -190,7 +185,7 @@ func (s *Subscriber) SetRemoteDescription(desc webrtc.SessionDescription) error 
 			defer func() {
 				if err == nil {
 					for _, ps := range pendingStart {
-						ps.sender.Start()
+						ps.Start()
 					}
 				} else {
 					s.Lock()
@@ -216,6 +211,12 @@ func (s *Subscriber) GetSenders(streamID string) []Sender {
 	s.RLock()
 	defer s.RUnlock()
 	return s.senders[streamID]
+}
+
+func (s *Subscriber) SetPendingSender(sender Sender) {
+	s.Lock()
+	s.pendingSenders.PushBack(sender)
+	s.Unlock()
 }
 
 // Close peer

@@ -228,12 +228,7 @@ func (r *router) addSender(sub *Subscriber, rr *receiverRouter) error {
 			sub.negotiate()
 		}
 	})
-	sub.Lock()
-	sub.pendingSenders.PushBack(pendingSender{
-		transceiver: t,
-		sender:      sender,
-	})
-	sub.Unlock()
+	sub.SetPendingSender(sender)
 	sub.AddSender(rr.stream, sender)
 	recv.AddSender(sender)
 	return nil

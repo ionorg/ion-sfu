@@ -40,8 +40,8 @@ type Peer struct {
 	publisher  *Publisher
 	subscriber *Subscriber
 
-	OnIceCandidate             func(*webrtc.ICECandidateInit, int)
 	OnOffer                    func(*webrtc.SessionDescription)
+	OnIceCandidate             func(*webrtc.ICECandidateInit, int)
 	OnICEConnectionStateChange func(webrtc.ICEConnectionState)
 
 	remoteAnswerPending bool
@@ -162,7 +162,7 @@ func (p *Peer) Answer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription
 		return nil, fmt.Errorf("error creating answer: %v", err)
 	}
 
-	log.Infof("peer %s send answer", p.publisher.ID())
+	log.Infof("peer %s send answer", p.id)
 
 	return &answer, nil
 }

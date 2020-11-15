@@ -99,11 +99,6 @@ func (p *Publisher) Answer(offer webrtc.SessionDescription) (webrtc.SessionDescr
 	return answer, nil
 }
 
-// ID of peer
-func (p *Publisher) ID() string {
-	return p.id
-}
-
 // GetRouter returns router with mediaSSRC
 func (p *Publisher) GetRouter() Router {
 	return p.router
