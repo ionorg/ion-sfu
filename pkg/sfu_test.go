@@ -316,7 +316,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 							_, err = r.CreateDataChannel("ion-sfu", nil)
 							assert.NoError(t, err)
 							local := NewPeer(sfu)
-							p := &peer{id: action.id, remote: r, local: &local}
+							p := &peer{id: action.id, remote: r, local: local}
 							r.OnTrack(func(track *webrtc.Track, recv *webrtc.RTPReceiver) {
 								mu.Lock()
 								p.subs.Done()
