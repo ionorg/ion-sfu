@@ -153,7 +153,7 @@ func (p *Peer) Answer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription
 	defer p.Unlock()
 	log.Infof("peer %s got offer", p.id)
 
-	if p.publisher.SignalingState() == webrtc.SignalingStateStable {
+	if p.publisher.SignalingState() != webrtc.SignalingStateStable {
 		return nil, ErrOfferIgnored
 	}
 
