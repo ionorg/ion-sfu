@@ -68,11 +68,8 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 
 		}
 		p.OnIceCandidate = func(candidate *webrtc.ICECandidateInit, target int) {
-			if err := conn.Notify(ctx, "trickle", struct {
-				Candidate *webrtc.ICECandidateInit `json:"candidate"`
-				Target    int                      `json:"target"`
-			}{
-				Candidate: candidate,
+			if err := conn.Notify(ctx, "trickle", Trickle{
+				Candidate: *candidate,
 				Target:    target,
 			}); err != nil {
 				log.Errorf("error sending ice candidate %s", err)

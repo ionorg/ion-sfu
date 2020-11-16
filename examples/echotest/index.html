@@ -162,8 +162,13 @@
                 <div id="simulcast-controls" style="display: none">
                   <div class="radio">
                     <label
-                      ><input type="radio" onclLocal(this)" value="high"
-                      name="optremotevideos" checked /> High</label
+                      ><input
+                        type="radio"
+                        onclick="controlRemoteVideo(this)"
+                        value="high"
+                        name="optremotevideos"
+                      />
+                      High</label
                     >
                   </div>
                   <div class="radio">
@@ -281,7 +286,7 @@
       integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV"
       crossorigin="anonymous"
     ></script>
-    <script src="https://unpkg.com/ion-sdk-js@1.0.20/dist/ion-sdk.min.js"></script>
+    <script src="https://unpkg.com/ion-sdk-js@1.4.1/dist/ion-sdk.min.js"></script>
     <script>
       const localVideo = document.getElementById("local-video");
       const remoteVideo = document.getElementById("remote-video");
@@ -426,7 +431,7 @@
         let bytesPrev;
         let timestampPrev;
         setInterval(() => {
-          clientRemote.getStats(null).then((results) => {
+          clientRemote.getSubStats(null).then((results) => {
             results.forEach((report) => {
               const now = report.timestamp;
 
