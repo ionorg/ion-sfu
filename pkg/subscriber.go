@@ -160,10 +160,10 @@ func (s *Subscriber) SetRemoteDescription(desc webrtc.SessionDescription) error 
 		return err
 	}
 
-	s.Lock()
-	defer s.Unlock()
 	if s.pendingSenders.Len() > 0 {
 		pendingStart := make([]Sender, 0, s.pendingSenders.Len())
+
+		s.Lock()
 		for _, md := range pd.MediaDescriptions {
 			if s.pendingSenders.Len() == 0 {
 				break
@@ -181,6 +181,8 @@ func (s *Subscriber) SetRemoteDescription(desc webrtc.SessionDescription) error 
 				}
 			}
 		}
+		s.Unlock()
+
 		if len(pendingStart) > 0 {
 			defer func() {
 				if err == nil {
@@ -203,7 +205,6 @@ func (s *Subscriber) SetRemoteDescription(desc webrtc.SessionDescription) error 
 		log.Errorf("SetRemoteDescription error: %v", err)
 		return err
 	}
-
 	return nil
 }
 

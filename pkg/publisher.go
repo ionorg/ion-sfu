@@ -2,14 +2,13 @@ package sfu
 
 import (
 	"sync"
+	"sync/atomic"
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/webrtc/v3"
 )
 
 type Publisher struct {
-	sync.Mutex
-
 	id string
 	pc *webrtc.PeerConnection
 
@@ -18,7 +17,7 @@ type Publisher struct {
 	candidates []webrtc.ICECandidateInit
 
 	onTrackHandler                    func(*webrtc.Track, *webrtc.RTPReceiver)
-	onICEConnectionStateChangeHandler func(webrtc.ICEConnectionState)
+	onICEConnectionStateChangeHandler atomic.Value // func(webrtc.ICEConnectionState)
 
 	closeOnce sync.Once
 }
@@ -64,11 +63,10 @@ func NewPublisher(session *Session, id string, me MediaEngine, cfg WebRTCTranspo
 				p.router.Stop()
 			})
 		}
-		p.Lock()
-		if p.onICEConnectionStateChangeHandler != nil {
-			p.onICEConnectionStateChangeHandler(connectionState)
+
+		if handler, ok := p.onICEConnectionStateChangeHandler.Load().(func()); ok && handler != nil {
+			handler()
 		}
-		p.Unlock()
 	})
 
 	return p, nil
@@ -109,9 +107,7 @@ func (p *Publisher) OnICECandidate(f func(c *webrtc.ICECandidate)) {
 }
 
 func (p *Publisher) OnICEConnectionStateChange(f func(connectionState webrtc.ICEConnectionState)) {
-	p.Lock()
-	p.onICEConnectionStateChangeHandler = f
-	p.Unlock()
+	p.onICEConnectionStateChangeHandler.Store(f)
 }
 
 func (p *Publisher) SignalingState() webrtc.SignalingState {
