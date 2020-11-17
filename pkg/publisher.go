@@ -21,7 +21,6 @@ type Publisher struct {
 	onICEConnectionStateChangeHandler func(webrtc.ICEConnectionState)
 
 	closeOnce sync.Once
-	subOnce   sync.Once
 }
 
 // NewPublisher creates a new Publisher
@@ -54,11 +53,6 @@ func NewPublisher(session *Session, id string, me MediaEngine, cfg WebRTCTranspo
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		log.Debugf("ice connection state: %s", connectionState)
 		switch connectionState {
-		case webrtc.ICEConnectionStateConnected:
-			p.subOnce.Do(func() {
-				// Subscribe to existing peers
-				p.session.Subscribe(p.id)
-			})
 		case webrtc.ICEConnectionStateFailed:
 			fallthrough
 		case webrtc.ICEConnectionStateClosed:

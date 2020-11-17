@@ -111,6 +111,8 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		}
 	})
 
+	p.session.Subscribe(p)
+
 	p.subscriber.OnICECandidate(func(c *webrtc.ICECandidate) {
 		log.Debugf("on ice candidate called")
 		if c == nil {
