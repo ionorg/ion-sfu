@@ -122,10 +122,6 @@ func (s *SimpleSender) WriteRTP(pkt *rtp.Packet) {
 		s.sdesMidHdrCtr++
 	}
 
-	if pkt.SequenceNumber%500 == 0 {
-		log.Tracef("rtp write sender %s with ssrc %d", s.id, s.track.SSRC())
-	}
-
 	if err := s.track.WriteRTP(&rtp.Packet{Header: h, Payload: pkt.Payload}); err != nil {
 		if err == io.ErrClosedPipe {
 			return

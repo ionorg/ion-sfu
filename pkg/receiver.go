@@ -34,6 +34,7 @@ type Receiver interface {
 // WebRTCReceiver receives a video track
 type WebRTCReceiver struct {
 	sync.RWMutex
+
 	rtcpMu         sync.RWMutex
 	receiver       *webrtc.RTPReceiver
 	track          *webrtc.Track

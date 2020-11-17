@@ -61,8 +61,6 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		log.Debugf("peer already exists")
 		return nil, ErrTransportExists
 	}
-	p.Lock()
-	defer p.Unlock()
 
 	me := MediaEngine{}
 	err := me.PopulateFromSDP(sdp)
@@ -151,8 +149,7 @@ func (p *Peer) Answer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription
 	if p.subscriber == nil {
 		return nil, ErrNoTransportEstablished
 	}
-	p.Lock()
-	defer p.Unlock()
+
 	log.Infof("peer %s got offer", p.id)
 
 	if p.publisher.SignalingState() != webrtc.SignalingStateStable {
