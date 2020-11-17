@@ -196,10 +196,12 @@ func (w *WebRTCReceiver) readRTP() {
 			continue
 		}
 
-		if pkt.Timestamp-w.lastRTP < 1e5 {
-			w.enabled = false
-		} else {
-			w.enabled = true
+		if w.track.Kind() == webrtc.RTPCodecTypeVideo {
+			if pkt.Timestamp-w.lastRTP > uint32(0.9*float64(w.track.Codec().ClockRate)) {
+				w.enabled = true
+			} else {
+				w.enabled = false
+			}
 		}
 
 		w.lastRTP = pkt.Timestamp

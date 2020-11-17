@@ -208,7 +208,7 @@ func (s *SimulcastSender) SwitchSpatialLayer(targetLayer uint8) {
 			break
 		}
 
-		targetLayer -= 1
+		targetLayer--
 		if targetLayer == 0 {
 			break
 		}
