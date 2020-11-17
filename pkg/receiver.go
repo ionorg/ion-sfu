@@ -21,6 +21,7 @@ const (
 type Receiver interface {
 	Start()
 	Track() *webrtc.Track
+	Enabled() bool
 	AddSender(sender Sender)
 	DeleteSender(pid string)
 	SpatialLayer() uint8
@@ -35,12 +36,14 @@ type Receiver interface {
 type WebRTCReceiver struct {
 	sync.RWMutex
 
+	enabled        bool
 	rtcpMu         sync.RWMutex
 	receiver       *webrtc.RTPReceiver
 	track          *webrtc.Track
 	buffer         *Buffer
 	bandwidth      uint64
 	lastPli        int64
+	lastRTP        uint32
 	rtpCh          chan *rtp.Packet
 	rtcpCh         chan []rtcp.Packet
 	senders        map[string]Sender
@@ -91,6 +94,10 @@ func (w *WebRTCReceiver) Start() {
 		go w.readRTCP()
 	}
 	go w.writeRTP()
+}
+
+func (w *WebRTCReceiver) Enabled() bool {
+	return w.enabled
 }
 
 // OnCloseHandler method to be called on remote tracked removed
@@ -188,6 +195,14 @@ func (w *WebRTCReceiver) readRTP() {
 			log.Errorf("rtp err => %v", err)
 			continue
 		}
+
+		if pkt.Timestamp-w.lastRTP < 1e5 {
+			w.enabled = false
+		} else {
+			w.enabled = true
+		}
+
+		w.lastRTP = pkt.Timestamp
 
 		w.buffer.push(pkt)
 

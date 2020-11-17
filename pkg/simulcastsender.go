@@ -200,9 +200,18 @@ func (s *SimulcastSender) SwitchSpatialLayer(targetLayer uint8) {
 	if s.currentSpatialLayer != s.targetSpatialLayer {
 		return
 	}
-	if recv := s.router.receivers[targetLayer]; recv != nil {
-		recv.AddSender(s)
-		s.targetSpatialLayer = targetLayer
+
+	for {
+		if recv := s.router.receivers[targetLayer]; recv.Enabled() && recv != nil {
+			recv.AddSender(s)
+			s.targetSpatialLayer = targetLayer
+			break
+		}
+
+		targetLayer -= 1
+		if targetLayer == 0 {
+			break
+		}
 	}
 }
 
