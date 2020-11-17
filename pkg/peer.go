@@ -222,6 +222,8 @@ func (p *Peer) Close() error {
 			return err
 		}
 	}
-	p.session.RemovePeer(p.id)
+	if p.session != nil {
+		p.session.RemovePeer(p.id)
+	}
 	return nil
 }
