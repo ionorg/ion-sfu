@@ -56,15 +56,9 @@ func (s *Session) onMessage(origin, label string, msg webrtc.DataChannelMessage)
 			continue
 		}
 
-		var dc *webrtc.DataChannel
-		if p.publisher.channels[label] != nil {
-			dc = p.publisher.channels[label]
-		} else if p.subscriber.channels[label] != nil {
-			dc = p.subscriber.channels[label]
-		}
-
+		dc := p.subscriber.channels[label]
 		if dc != nil {
-			if msg.IsString() {
+			if msg.IsString {
 				dc.SendText(string(msg.Data))
 			} else {
 				dc.Send(msg.Data)
@@ -76,12 +70,15 @@ func (s *Session) onMessage(origin, label string, msg webrtc.DataChannelMessage)
 func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 	label := dc.Label()
 
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	s.peers[owner].subscriber.channels[label] = dc
+
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 		s.onMessage(owner, label, msg)
 	})
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 	for pid, p := range s.peers {
 		// Don't add to self
 		if owner == pid {

@@ -13,7 +13,6 @@ type Publisher struct {
 	pc *webrtc.PeerConnection
 
 	router     Router
-	channels   map[string]*webrtc.DataChannel
 	session    *Session
 	candidates []webrtc.ICECandidateInit
 
@@ -47,7 +46,7 @@ func NewPublisher(session *Session, id string, me MediaEngine, cfg WebRTCTranspo
 	})
 
 	pc.OnDataChannel(func(dc *webrtc.DataChannel) {
-		p.session.AddDatachannel(dc)
+		p.session.AddDatachannel(id, dc)
 	})
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
