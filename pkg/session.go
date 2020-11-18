@@ -57,7 +57,7 @@ func (s *Session) onMessage(origin, label string, msg webrtc.DataChannelMessage)
 		}
 
 		dc := p.subscriber.channels[label]
-		if dc != nil {
+		if dc != nil && dc.ReadyState() == webrtc.DataChannelStateOpen {
 			if msg.IsString {
 				dc.SendText(string(msg.Data))
 			} else {
