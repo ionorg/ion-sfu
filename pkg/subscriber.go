@@ -53,7 +53,7 @@ func NewSubscriber(session *Session, id string, me MediaEngine, cfg WebRTCTransp
 		senders:  make(map[string][]Sender),
 	}
 
-	dc, err := pc.CreateDataChannel(channelLabel, &webrtc.DataChannelInit{})
+	dc, err := pc.CreateDataChannel(apiChannelLabel, &webrtc.DataChannelInit{})
 	if err != nil {
 		log.Errorf("DC creation error: %v", err)
 		return nil, errPeerConnectionInitFailed
@@ -154,15 +154,20 @@ func (s *Subscriber) AddSender(streamID string, sender Sender) {
 }
 
 func (s *Subscriber) AddDataChannel(label string) (*webrtc.DataChannel, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	if s.channels[label] != nil {
+		return s.channels[label], nil
+	}
+
 	dc, err := s.pc.CreateDataChannel(label, &webrtc.DataChannelInit{})
 	if err != nil {
 		log.Errorf("dc creation error: %v", err)
 		return nil, errCreatingDataChannel
 	}
 
-	s.Lock()
 	s.channels[label] = dc
-	s.Unlock()
 
 	return dc, nil
 }
