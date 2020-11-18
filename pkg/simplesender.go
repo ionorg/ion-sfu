@@ -19,7 +19,7 @@ type SimpleSender struct {
 	sender         *webrtc.RTPSender
 	transceiver    *webrtc.RTPTransceiver
 	track          *webrtc.Track
-	router         *receiverRouter
+	router         *trackReceiverRouter
 	enabled        atomicBool
 	payload        uint8
 	maxBitrate     uint64
@@ -38,7 +38,7 @@ type SimpleSender struct {
 }
 
 // NewSimpleSender creates a new track sender instance
-func NewSimpleSender(id string, router *receiverRouter, transceiver *webrtc.RTPTransceiver) Sender {
+func NewSimpleSender(id string, router *trackReceiverRouter, transceiver *webrtc.RTPTransceiver) Sender {
 	sender := transceiver.Sender()
 	s := &SimpleSender{
 		id:          id,

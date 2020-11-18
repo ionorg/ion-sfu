@@ -18,7 +18,7 @@ import (
 // SimulcastSender represents a Sender which writes RTP to a webrtc track
 type SimulcastSender struct {
 	id             string
-	router         *receiverRouter
+	router         *trackReceiverRouter
 	sender         *webrtc.RTPSender
 	transceiver    *webrtc.RTPTransceiver
 	track          *webrtc.Track
@@ -54,7 +54,7 @@ type SimulcastSender struct {
 }
 
 // NewSimulcastSender creates a new track sender instance
-func NewSimulcastSender(id string, router *receiverRouter, transceiver *webrtc.RTPTransceiver, layer uint8, conf SimulcastConfig) Sender {
+func NewSimulcastSender(id string, router *trackReceiverRouter, transceiver *webrtc.RTPTransceiver, layer uint8, conf SimulcastConfig) Sender {
 	sender := transceiver.Sender()
 	s := &SimulcastSender{
 		id:                  id,

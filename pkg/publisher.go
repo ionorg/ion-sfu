@@ -49,6 +49,14 @@ func NewPublisher(session *Session, id string, me MediaEngine, cfg WebRTCTranspo
 		}
 	})
 
+	pc.OnDataChannel(func(dc *webrtc.DataChannel) {
+		if dc.Label() == apiChannelLabel {
+			return
+		}
+
+		p.router.AddDataChannel(dc)
+	})
+
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		log.Debugf("ice connection state: %s", connectionState)
 		switch connectionState {

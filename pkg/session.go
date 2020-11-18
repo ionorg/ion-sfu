@@ -49,7 +49,7 @@ func (s *Session) RemovePeer(pid string) {
 
 // Publish will add a Sender to all peers in current Session from given
 // Receiver
-func (s *Session) Publish(router Router, rr *receiverRouter) {
+func (s *Session) Publish(router Router, rr receiverRouter) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 

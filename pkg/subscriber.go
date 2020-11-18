@@ -51,7 +51,7 @@ func NewSubscriber(session *Session, id string, me MediaEngine, cfg WebRTCTransp
 		senders: make(map[string][]Sender),
 	}
 
-	dc, err := pc.CreateDataChannel(channelLabel, &webrtc.DataChannelInit{})
+	dc, err := pc.CreateDataChannel(apiChannelLabel, &webrtc.DataChannelInit{})
 	if err != nil {
 		log.Errorf("DC creation error: %v", err)
 		return nil, errPeerConnectionInitFailed

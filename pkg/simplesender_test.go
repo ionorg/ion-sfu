@@ -24,7 +24,7 @@ func TestNewSimpleSender(t *testing.T) {
 	assert.NoError(t, err)
 	type args struct {
 		id          string
-		router      *receiverRouter
+		router      *trackReceiverRouter
 		transceiver *webrtc.RTPTransceiver
 	}
 	tests := []struct {
@@ -191,7 +191,7 @@ forLoop:
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			wss := &SimpleSender{
-				router: &receiverRouter{
+				router: &trackReceiverRouter{
 					kind:      SimpleReceiver,
 					stream:    "123",
 					receivers: [3]Receiver{fakeReceiver},
@@ -238,7 +238,7 @@ func TestSimpleSender_Close(t *testing.T) {
 	type fields struct {
 		ctx            context.Context
 		cancel         context.CancelFunc
-		router         *receiverRouter
+		router         *trackReceiverRouter
 		onCloseHandler func()
 	}
 	tests := []struct {
@@ -447,7 +447,7 @@ forLoop:
 		},
 	}
 
-	r := &receiverRouter{
+	r := &trackReceiverRouter{
 		kind:      SimpleReceiver,
 		receivers: [3]Receiver{fakeRecv},
 	}

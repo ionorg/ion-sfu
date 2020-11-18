@@ -27,7 +27,7 @@ func TestNewWebRTCSimulcastSender(t *testing.T) {
 	type args struct {
 		ctx         context.Context
 		id          string
-		router      *receiverRouter
+		router      *trackReceiverRouter
 		transceiver *webrtc.RTPTransceiver
 		layer       uint8
 	}
@@ -288,7 +288,7 @@ func TestSimulcastSender_Close(t *testing.T) {
 	type fields struct {
 		ctx            context.Context
 		cancel         context.CancelFunc
-		router         *receiverRouter
+		router         *trackReceiverRouter
 		onCloseHandler func()
 	}
 	tests := []struct {
