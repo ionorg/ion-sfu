@@ -23,6 +23,7 @@ type Subscriber struct {
 	me MediaEngine
 
 	session    *Session
+	channels   map[string]*webrtc.DataChannel
 	senders    map[string][]Sender
 	candidates []webrtc.ICECandidateInit
 
@@ -44,11 +45,12 @@ func NewSubscriber(session *Session, id string, me MediaEngine, cfg WebRTCTransp
 	}
 
 	s := &Subscriber{
-		id:      id,
-		me:      me,
-		pc:      pc,
-		session: session,
-		senders: make(map[string][]Sender),
+		id:       id,
+		me:       me,
+		pc:       pc,
+		session:  session,
+		channels: make(map[string]*webrtc.DataChannel),
+		senders:  make(map[string][]Sender),
 	}
 
 	dc, err := pc.CreateDataChannel(channelLabel, &webrtc.DataChannelInit{})
@@ -149,6 +151,20 @@ func (s *Subscriber) AddSender(streamID string, sender Sender) {
 	} else {
 		s.senders[streamID] = []Sender{sender}
 	}
+}
+
+func (s *Subscriber) AddDataChannel(label string) (*webrtc.DataChannel, error) {
+	dc, err := s.pc.CreateDataChannel(label, &webrtc.DataChannelInit{})
+	if err != nil {
+		log.Errorf("dc creation error: %v", err)
+		return nil, errCreatingDataChannel
+	}
+
+	s.Lock()
+	s.channels[label] = dc
+	s.Unlock()
+
+	return dc, nil
 }
 
 // SetRemoteDescription sets the SessionDescription of the remote peer

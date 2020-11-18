@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	log "github.com/pion/ion-log"
+	"github.com/pion/webrtc/v3"
 )
 
 // Session represents a set of peers. Transports inside a session
@@ -44,6 +45,54 @@ func (s *Session) RemovePeer(pid string) {
 	if len(s.peers) == 0 && s.onCloseHandler != nil && !s.closed {
 		s.onCloseHandler()
 		s.closed = true
+	}
+}
+
+func (s *Session) onMessage(origin, label string, msg webrtc.DataChannelMessage) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for pid, p := range s.peers {
+		if origin == pid {
+			continue
+		}
+
+		var dc *webrtc.DataChannel
+		if p.publisher.channels[label] != nil {
+			dc = p.publisher.channels[label]
+		} else if p.subscriber.channels[label] != nil {
+			dc = p.subscriber.channels[label]
+		}
+
+		if dc != nil {
+			if msg.IsString() {
+				dc.SendText(string(msg.Data))
+			} else {
+				dc.Send(msg.Data)
+			}
+		}
+	}
+}
+
+func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
+	label := dc.Label()
+
+	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
+		s.onMessage(owner, label, msg)
+	})
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for pid, p := range s.peers {
+		// Don't add to self
+		if owner == pid {
+			continue
+		}
+		log.Infof("adding datachannel %s to %s", label, pid)
+		dc, err := p.subscriber.AddDataChannel(label)
+
+		dc.OnMessage(func(msg webrtc.DataChannelMessage) {
+			s.onMessage(pid, label, msg)
+		})
 	}
 }
 

@@ -13,10 +13,10 @@ type Publisher struct {
 	pc *webrtc.PeerConnection
 
 	router     Router
+	channels   map[string]*webrtc.DataChannel
 	session    *Session
 	candidates []webrtc.ICECandidateInit
 
-	onTrackHandler                    func(*webrtc.Track, *webrtc.RTPReceiver)
 	onICEConnectionStateChangeHandler atomic.Value // func(webrtc.ICEConnectionState)
 
 	closeOnce sync.Once
@@ -44,9 +44,10 @@ func NewPublisher(session *Session, id string, me MediaEngine, cfg WebRTCTranspo
 		if rr := p.router.AddReceiver(track, receiver); rr != nil {
 			p.session.Publish(p.router, rr)
 		}
-		if p.onTrackHandler != nil {
-			p.onTrackHandler(track, receiver)
-		}
+	})
+
+	pc.OnDataChannel(func(dc *webrtc.DataChannel) {
+		p.session.AddDatachannel(dc)
 	})
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
