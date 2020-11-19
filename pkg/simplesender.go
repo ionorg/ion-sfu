@@ -44,7 +44,7 @@ func NewSimpleSender(id string, router *receiverRouter, transceiver *webrtc.RTPT
 	s := &SimpleSender{
 		id:          id,
 		payload:     sender.Track().Codec().PayloadType,
-		nList:       NewNACKList(),
+		nList:       newNACKList(),
 		router:      router,
 		sender:      sender,
 		transceiver: transceiver,

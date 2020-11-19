@@ -62,7 +62,7 @@ func NewSimulcastSender(id string, router *receiverRouter, transceiver *webrtc.R
 		router:              router,
 		sender:              sender,
 		transceiver:         transceiver,
-		nList:               NewNACKList(),
+		nList:               newNACKList(),
 		track:               sender.Track(),
 		payload:             sender.Track().Codec().PayloadType,
 		currentTempLayer:    3,

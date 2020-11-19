@@ -20,24 +20,22 @@ type nackList struct {
 	ll    *list.List
 }
 
-func NewNACKList() *nackList {
+func newNACKList() *nackList {
 	return &nackList{
 		nacks: make(map[uint16]*list.Element),
 		ll:    list.New(),
 	}
 }
 
-func (n *nackList) getNACKSeqNo(SN []uint16) []uint16 {
+func (n *nackList) getNACKSeqNo(seqno []uint16) []uint16 {
 	packets := make([]uint16, 0, 17)
-	for _, sn := range SN {
+	for _, sn := range seqno {
 		if nack, ok := n.nacks[sn]; !ok {
 			n.nacks[sn] = n.ll.PushBack(NACK{sn, time.Now().UnixNano()})
 			packets = append(packets, sn)
-		} else {
-			if time.Now().UnixNano()-nack.Value.(NACK).LRX > ignoreRetransmission {
-				nack.Value = NACK{sn, time.Now().UnixNano()}
-				packets = append(packets, sn)
-			}
+		} else if time.Now().UnixNano()-nack.Value.(NACK).LRX > ignoreRetransmission {
+			nack.Value = NACK{sn, time.Now().UnixNano()}
+			packets = append(packets, sn)
 		}
 	}
 
