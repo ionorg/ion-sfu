@@ -16,6 +16,7 @@ import (
 type SimpleSender struct {
 	id             string
 	mid            string
+	nList          *nackList
 	sender         *webrtc.RTPSender
 	transceiver    *webrtc.RTPTransceiver
 	track          *webrtc.Track
@@ -43,6 +44,7 @@ func NewSimpleSender(id string, router *receiverRouter, transceiver *webrtc.RTPT
 	s := &SimpleSender{
 		id:          id,
 		payload:     sender.Track().Codec().PayloadType,
+		nList:       newNACKList(),
 		router:      router,
 		sender:      sender,
 		transceiver: transceiver,
@@ -221,7 +223,7 @@ func (s *SimpleSender) receiveRTCP() {
 				log.Tracef("sender got nack: %+v", pkt)
 				for _, pair := range pkt.Nacks {
 					if err := recv.WriteBufferedPacket(
-						pair.PacketList(),
+						s.nList.getNACKSeqNo(pair.PacketList()),
 						s.track,
 						s.snOffset,
 						s.tsOffset,

@@ -18,6 +18,7 @@ import (
 // SimulcastSender represents a Sender which writes RTP to a webrtc track
 type SimulcastSender struct {
 	id             string
+	nList          *nackList
 	router         *receiverRouter
 	sender         *webrtc.RTPSender
 	transceiver    *webrtc.RTPTransceiver
@@ -61,6 +62,7 @@ func NewSimulcastSender(id string, router *receiverRouter, transceiver *webrtc.R
 		router:              router,
 		sender:              sender,
 		transceiver:         transceiver,
+		nList:               newNACKList(),
 		track:               sender.Track(),
 		payload:             sender.Track().Codec().PayloadType,
 		currentTempLayer:    3,
@@ -301,7 +303,7 @@ func (s *SimulcastSender) receiveRTCP() {
 				log.Tracef("sender got nack: %+v", pkt)
 				for _, pair := range pkt.Nacks {
 					if err := recv.WriteBufferedPacket(
-						pair.PacketList(),
+						s.nList.getNACKSeqNo(pair.PacketList()),
 						s.track,
 						s.snOffset,
 						s.tsOffset,
