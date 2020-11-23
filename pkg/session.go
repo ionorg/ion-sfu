@@ -84,9 +84,14 @@ func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 		if owner == pid {
 			continue
 		}
-		log.Infof("adding datachannel %s to %s", label, pid)
 		dc, err := p.subscriber.AddDataChannel(label)
 
+		if err != nil {
+			log.Errorf("error adding datachannel: %s", err)
+			continue
+		}
+
+		pid := pid
 		dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 			s.onMessage(pid, label, msg)
 		})
