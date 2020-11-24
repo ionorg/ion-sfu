@@ -279,6 +279,10 @@ github.com/pion/webrtc/v3 v3.0.0-beta.13.0.20201120005427-80c59e3dd741 h1:nO3MgR
 github.com/pion/webrtc/v3 v3.0.0-beta.13.0.20201120005427-80c59e3dd741/go.mod h1:PV0um76H0n7X7md1x9EahYAVd2dXQ+Ocr1IwAtXHByU=
 github.com/pion/webrtc/v3 v3.0.0-beta.14.0.20201123182602-efb14ff23a4f h1:DSP45sd+B4FawEGU/jEnvwm9VBgzE+c7nziwVZEnMHE=
 github.com/pion/webrtc/v3 v3.0.0-beta.14.0.20201123182602-efb14ff23a4f/go.mod h1:PV0um76H0n7X7md1x9EahYAVd2dXQ+Ocr1IwAtXHByU=
+github.com/pion/webrtc/v3 v3.0.0-beta.14.0.20201124223607-07811784c880 h1:piaXs7ZVjJWwXlklT2gyfRbdh3HeNFkHL0cqUFEz9NM=
+github.com/pion/webrtc/v3 v3.0.0-beta.14.0.20201124223607-07811784c880/go.mod h1:PV0um76H0n7X7md1x9EahYAVd2dXQ+Ocr1IwAtXHByU=
+github.com/pion/webrtc/v3 v3.0.0-beta.14.0.20201124224228-727150044a79 h1:V6aR45k+x8tqWGJg5mVQxEcoP4LiIfmSpOAp9bt7Z7w=
+github.com/pion/webrtc/v3 v3.0.0-beta.14.0.20201124224228-727150044a79/go.mod h1:PV0um76H0n7X7md1x9EahYAVd2dXQ+Ocr1IwAtXHByU=
 github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
@@ -396,6 +400,8 @@ golang.org/x/crypto v0.0.0-20201112155050-0c6587e931a9 h1:umElSU9WZirRdgu2yFHY0a
 golang.org/x/crypto v0.0.0-20201112155050-0c6587e931a9/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
 golang.org/x/crypto v0.0.0-20201117144127-c1f2f97bffc9 h1:phUcVbl53swtrUN8kQEXFhUxPlIlWyBfKmidCu7P95o=
 golang.org/x/crypto v0.0.0-20201117144127-c1f2f97bffc9/go.mod h1:jdWPYTVW3xRLrWPugEBEK3UY2ZEsg3UU495nc5E+M+I=
+golang.org/x/crypto v0.0.0-20201124201722-c8d3bf9c5392 h1:xYJJ3S178yv++9zXV/hnr29plCAGO9vAFG9dorqaFQc=
+golang.org/x/crypto v0.0.0-20201124201722-c8d3bf9c5392/go.mod h1:jdWPYTVW3xRLrWPugEBEK3UY2ZEsg3UU495nc5E+M+I=
 golang.org/x/exp v0.0.0-20190121172915-509febef88a4/go.mod h1:CJ0aWSM057203Lf6IL+f9T1iT9GByDxfZKAQTCR3kQA=
 golang.org/x/exp v0.0.0-20190306152737-a1d7652674e8/go.mod h1:CJ0aWSM057203Lf6IL+f9T1iT9GByDxfZKAQTCR3kQA=
 golang.org/x/exp v0.0.0-20190510132918-efd6b22b2522/go.mod h1:ZjyILWgesfNpC6sMxTJOJm9Kp84zZh5NQWvqDGG3Qr8=
