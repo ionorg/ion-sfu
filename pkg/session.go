@@ -61,7 +61,7 @@ func (s *Session) Publish(router Router, rr *receiverRouter) {
 
 		log.Infof("Publish mediaSSRC to %s", pid)
 
-		if err := router.AddSender(p.subscriber, rr); err != nil {
+		if err := router.AddDownTracks(p.subscriber, rr); err != nil {
 			log.Errorf("Error subscribing transport to router: %s", err)
 			continue
 		}
@@ -76,7 +76,7 @@ func (s *Session) Subscribe(peer *Peer) {
 		if pid == peer.id {
 			continue
 		}
-		err := p.publisher.GetRouter().AddSender(peer.subscriber, nil)
+		err := p.publisher.GetRouter().AddDownTracks(peer.subscriber, nil)
 		if err != nil {
 			log.Errorf("Subscribing to router err: %v", err)
 			continue

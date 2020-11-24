@@ -3,8 +3,7 @@ package sfu
 //go:generate go run github.com/matryer/moq -out router_mock_test.generated.go . Router
 
 import (
-	"math/rand"
-	"strings"
+	"io"
 	"sync"
 	"time"
 
@@ -26,9 +25,8 @@ const (
 type Router interface {
 	ID() string
 	Config() RouterConfig
-	AddReceiver(track *webrtc.Track, receiver *webrtc.RTPReceiver) *receiverRouter
-	AddSender(s *Subscriber, rr *receiverRouter) error
-	SetExtMap(pd *sdp.SessionDescription)
+	AddReceiver(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) *receiverRouter
+	AddDownTracks(s *Subscriber, rr *receiverRouter) error
 	SendRTCP(pkts []rtcp.Packet)
 	Stop()
 }
@@ -47,27 +45,25 @@ type receiverRouter struct {
 }
 
 type router struct {
-	id         string
-	mu         sync.RWMutex
-	peer       *webrtc.PeerConnection
-	twcc       *TransportWideCC
-	rtcpCh     chan []rtcp.Packet
-	config     RouterConfig
-	receivers  map[string]*receiverRouter
-	extensions map[webrtc.SDPSectionType][]sdp.ExtMap
+	id        string
+	mu        sync.RWMutex
+	peer      *webrtc.PeerConnection
+	twcc      *TransportWideCC
+	rtcpCh    chan []rtcp.Packet
+	config    RouterConfig
+	receivers map[string]*receiverRouter
 }
 
 // newRouter for routing rtp/rtcp packets
 func newRouter(peer *webrtc.PeerConnection, id string, config RouterConfig) Router {
 	ch := make(chan []rtcp.Packet, 10)
 	r := &router{
-		id:         id,
-		peer:       peer,
-		twcc:       newTransportWideCC(ch),
-		config:     config,
-		rtcpCh:     ch,
-		receivers:  make(map[string]*receiverRouter),
-		extensions: make(map[webrtc.SDPSectionType][]sdp.ExtMap),
+		id:        id,
+		peer:      peer,
+		twcc:      newTransportWideCC(ch),
+		config:    config,
+		rtcpCh:    ch,
+		receivers: make(map[string]*receiverRouter),
 	}
 	go r.sendRTCP()
 	return r
@@ -81,19 +77,17 @@ func (r *router) Config() RouterConfig {
 	return r.config
 }
 
-func (r *router) AddReceiver(track *webrtc.Track, receiver *webrtc.RTPReceiver) *receiverRouter {
+func (r *router) AddReceiver(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) *receiverRouter {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	var mid string
-	for _, t := range r.peer.GetTransceivers() {
-		if t.Receiver() == receiver {
-			mid = t.Mid()
+	trackID := track.ID()
+	var twccExt uint8
+	for _, ext := range receiver.GetParameters().HeaderExtensions {
+		if ext.URI == sdp.TransportCCURI {
+			twccExt = ext.ID
 		}
 	}
-	trackID := track.ID()
-
-	twccExt := r.getExtMap(mid, sdp.TransportCCURI)
 
 	recv := NewWebRTCReceiver(receiver, track, BufferOptions{
 		BufferTime: r.config.MaxBufferTime,
@@ -108,7 +102,7 @@ func (r *router) AddReceiver(track *webrtc.Track, receiver *webrtc.RTPReceiver) 
 		r.deleteReceiver(trackID)
 	})
 	if track.Kind() == webrtc.RTPCodecTypeVideo {
-		r.twcc.mSSRC = track.SSRC()
+		r.twcc.mSSRC = uint32(track.SSRC())
 		r.twcc.tccLastReport = time.Now().UnixNano()
 	}
 	recv.Start()
@@ -119,7 +113,7 @@ func (r *router) AddReceiver(track *webrtc.Track, receiver *webrtc.RTPReceiver) 
 	}
 
 	rr := &receiverRouter{
-		stream:    track.Label(),
+		stream:    track.StreamID(),
 		receivers: [3]Receiver{},
 	}
 	rr.receivers[recv.SpatialLayer()] = recv
@@ -135,12 +129,12 @@ func (r *router) AddReceiver(track *webrtc.Track, receiver *webrtc.RTPReceiver) 
 }
 
 // AddWebRTCSender to router
-func (r *router) AddSender(s *Subscriber, rr *receiverRouter) error {
+func (r *router) AddDownTracks(s *Subscriber, rr *receiverRouter) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if rr != nil {
-		if err := r.addSender(s, rr); err != nil {
+		if err := r.addDownTrack(s, rr); err != nil {
 			return err
 		}
 		s.negotiate()
@@ -149,7 +143,7 @@ func (r *router) AddSender(s *Subscriber, rr *receiverRouter) error {
 
 	if len(r.receivers) > 0 {
 		for _, rr = range r.receivers {
-			if err := r.addSender(s, rr); err != nil {
+			if err := r.addDownTrack(s, rr); err != nil {
 				return err
 			}
 		}
@@ -166,16 +160,10 @@ func (r *router) Stop() {
 	close(r.rtcpCh)
 }
 
-func (r *router) addSender(sub *Subscriber, rr *receiverRouter) error {
-	var (
-		recv   Receiver
-		sender Sender
-		ssrc   uint32
-	)
-
+func (r *router) addDownTrack(sub *Subscriber, rr *receiverRouter) error {
+	var recv Receiver
 	if rr.kind == SimpleReceiver {
 		recv = rr.receivers[0]
-		ssrc = recv.Track().SSRC()
 	} else {
 		for _, rcv := range rr.receivers {
 			if rcv != nil {
@@ -185,53 +173,119 @@ func (r *router) addSender(sub *Subscriber, rr *receiverRouter) error {
 				break
 			}
 		}
-		ssrc = rand.Uint32()
 	}
 
 	if recv == nil {
 		return errNoReceiverFound
 	}
 
-	for _, s := range sub.GetSenders(rr.stream) {
-		if s.Track().ID() == recv.Track().ID() {
+	for _, dt := range sub.GetDownTracks(rr.stream) {
+		if dt.ID() == recv.Track().ID() {
 			return nil
 		}
 	}
 
 	inTrack := recv.Track()
-	to := sub.me.GetCodecsByName(recv.Track().Codec().Name)
-	if len(to) == 0 {
-		return errPtNotSupported
+	codec := inTrack.Codec()
+	if err := sub.me.RegisterCodec(codec, inTrack.Kind()); err != nil {
+		return err
 	}
-	pt := to[0].PayloadType
-	outTrack, err := sub.pc.NewTrack(pt, ssrc, inTrack.ID(), inTrack.Label())
+	outTrack, err := NewDownTrack(webrtc.RTPCodecCapability{
+		MimeType:     codec.MimeType,
+		ClockRate:    codec.ClockRate,
+		Channels:     codec.Channels,
+		SDPFmtpLine:  codec.SDPFmtpLine,
+		RTCPFeedback: []webrtc.RTCPFeedback{{"goog-remb", ""}, {"ccm", "fir"}, {"nack", ""}, {"nack", "pli"}},
+	}, rr, sub.id, inTrack.ID(), inTrack.StreamID())
 	if err != nil {
 		return err
 	}
 	// Create webrtc sender for the peer we are sending track to
-	t, err := sub.pc.AddTransceiverFromTrack(outTrack, webrtc.RtpTransceiverInit{
+	if outTrack.transceiver, err = sub.pc.AddTransceiverFromTrack(outTrack, webrtc.RTPTransceiverInit{
 		Direction: webrtc.RTPTransceiverDirectionSendonly,
-	})
-	if err != nil {
+	}); err != nil {
 		return err
 	}
+
 	if rr.kind == SimulcastReceiver {
-		sender = NewSimulcastSender(sub.id, rr, t, recv.SpatialLayer(), r.config.Simulcast)
+		outTrack.trackType = SimulcastDownTrack
 	} else {
-		sender = NewSimpleSender(sub.id, rr, t)
+		outTrack.trackType = SimpleDownTrack
 	}
 	// nolint:scopelint
-	sender.OnCloseHandler(func() {
-		if err := sub.pc.RemoveTrack(t.Sender()); err != nil {
+	outTrack.OnCloseHandler(func() {
+		if err := sub.pc.RemoveTrack(outTrack.transceiver.Sender()); err != nil {
 			log.Errorf("Error closing sender: %s", err)
 		} else {
 			sub.negotiate()
 		}
 	})
-	sub.SetPendingSender(sender)
-	sub.AddSender(rr.stream, sender)
-	recv.AddSender(sender)
+
+	go r.loopDownTrackRTCP(outTrack)
+	sub.AddDownTrack(rr.stream, outTrack)
+	recv.AddDownTrack(outTrack)
 	return nil
+}
+
+func (r *router) loopDownTrackRTCP(track *DownTrack) {
+	sender := track.transceiver.Sender()
+	for {
+		pkts, err := sender.ReadRTCP()
+		if err == io.ErrClosedPipe || err == io.EOF {
+			log.Debugf("Sender %s closed due to: %v", track.peerID, err)
+			// Remove sender from receiver
+			if recv := track.router.receivers[track.currentSpatialLayer]; recv != nil {
+				recv.DeleteSender(track.id)
+			}
+			track.Close()
+			return
+		}
+
+		if err != nil {
+			log.Errorf("rtcp err => %v", err)
+			continue
+		}
+
+		var fwdPkts []rtcp.Packet
+		pliOnce := true
+		firOnce := true
+		for _, pkt := range pkts {
+			switch pkt := pkt.(type) {
+			case *rtcp.PictureLossIndication:
+				if track.enabled.get() && pliOnce {
+					pkt.MediaSSRC = track.lSSRC
+					pkt.SenderSSRC = track.lSSRC
+					fwdPkts = append(fwdPkts, pkt)
+					pliOnce = false
+				}
+			case *rtcp.FullIntraRequest:
+				if track.enabled.get() && firOnce {
+					pkt.MediaSSRC = track.lSSRC
+					pkt.SenderSSRC = track.ssrc
+					fwdPkts = append(fwdPkts, pkt)
+					firOnce = false
+				}
+			case *rtcp.ReceiverReport:
+				if track.enabled.get() && len(pkt.Reports) > 0 && pkt.Reports[0].FractionLost > 25 {
+					log.Tracef("Slow link for sender %s, fraction packet lost %.2f", track.id, float64(pkt.Reports[0].FractionLost)/256)
+				}
+			case *rtcp.TransportLayerNack:
+				log.Tracef("sender got nack: %+v", pkt)
+				recv := track.router.receivers[track.currentSpatialLayer]
+				if recv == nil {
+					continue
+				}
+				for _, pair := range pkt.Nacks {
+					if err := recv.WriteBufferedPacket(track, track.nList.getNACKSeqNo(pair.PacketList())); err == errPacketNotFound {
+						// TODO handle missing nacks in sfu cache
+					}
+				}
+			}
+		}
+		if len(fwdPkts) > 0 {
+			r.rtcpCh <- fwdPkts
+		}
+	}
 }
 
 func (r *router) deleteReceiver(track string) {
@@ -245,73 +299,5 @@ func (r *router) sendRTCP() {
 		if err := r.peer.WriteRTCP(pkts); err != nil {
 			log.Errorf("Write rtcp to peer %s err :%v", r.id, err)
 		}
-	}
-}
-
-func (r *router) getExtMap(mid, ext string) uint8 {
-	if e, ok := r.extensions[webrtc.SDPSectionType(mid)]; ok {
-		for _, ex := range e {
-			if ex.URI.String() == ext {
-				return uint8(ex.Value)
-			}
-		}
-	}
-	return 0
-}
-
-// nolint:scopelint
-func (r *router) SetExtMap(pd *sdp.SessionDescription) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	for _, md := range pd.MediaDescriptions {
-		if md.MediaName.Media != mediaNameAudio && md.MediaName.Media != mediaNameVideo {
-			continue
-		}
-
-		mid, ok := md.Attribute(sdp.AttrKeyMID)
-		if !ok {
-			continue
-		}
-		if _, ok := r.extensions[webrtc.SDPSectionType(mid)]; ok {
-			continue
-		}
-
-		addExt := func(att sdp.Attribute) error {
-			em := sdp.ExtMap{}
-			if err := em.Unmarshal("extmap:" + att.Value); err != nil {
-				log.Errorf("Parsing ext map err: %v", err)
-				return err
-			}
-			r.extensions[webrtc.SDPSectionType(mid)] = append(r.extensions[webrtc.SDPSectionType(mid)], em)
-			return nil
-		}
-
-		var enterExtMap bool
-		for _, att := range md.Attributes {
-			isExtMap := false
-			if att.Key == sdp.AttrKeyExtMap {
-				enterExtMap = true
-				isExtMap = true
-				if strings.HasSuffix(att.Value, sdp.TransportCCURI) {
-					if err := addExt(att); err != nil {
-						continue
-					}
-				}
-				if strings.HasSuffix(att.Value, sdp.SDESMidURI) {
-					if err := addExt(att); err != nil {
-						continue
-					}
-				}
-				if strings.HasSuffix(att.Value, sdp.SDESRTPStreamIDURI) {
-					if err := addExt(att); err != nil {
-						continue
-					}
-				}
-			}
-			if enterExtMap && !isExtMap {
-				break
-			}
-		}
-
 	}
 }

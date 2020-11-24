@@ -2,12 +2,10 @@ package sfu
 
 import (
 	"math/rand"
-	"net/url"
 	"runtime"
 	"sync"
 	"time"
 
-	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 
 	log "github.com/pion/ion-log"
@@ -61,37 +59,6 @@ type SFU struct {
 // NewWebRTCTransportConfig parses our settings and returns a usable WebRTCTransportConfig for creating PeerConnections
 func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 	se := webrtc.SettingEngine{}
-
-	// Configure required extensions
-	sdes, _ := url.Parse(sdp.SDESRTPStreamIDURI)
-	sdesMid, _ := url.Parse(sdp.SDESMidURI)
-	transportCCURL, _ := url.Parse(sdp.TransportCCURI)
-	rtcpfb = append(rtcpfb, webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBTransportCC})
-	rtcpfb = append(rtcpfb, webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBGoogREMB})
-	se.AddSDPExtensions(webrtc.SDPSectionVideo,
-		[]sdp.ExtMap{
-			{
-				URI: sdes,
-			},
-			{
-				URI: sdesMid,
-			},
-			{
-				URI: transportCCURL,
-			},
-		})
-	se.AddSDPExtensions(webrtc.SDPSectionAudio,
-		[]sdp.ExtMap{
-			{
-				URI: sdes,
-			},
-			{
-				URI: sdesMid,
-			},
-			{
-				URI: transportCCURL,
-			},
-		})
 
 	var icePortStart, icePortEnd uint16
 
@@ -184,18 +151,18 @@ func (s *SFU) getSession(id string) *Session {
 	return s.sessions[id]
 }
 
-func (s *SFU) NewTransport(sid, pid string, me MediaEngine) (*Session, *Publisher, *Subscriber, error) {
+func (s *SFU) NewTransport(sid, pid string) (*Session, *Publisher, *Subscriber, error) {
 	session := s.getSession(sid)
 
 	if session == nil {
 		session = s.newSession(sid)
 	}
 
-	pub, err := NewPublisher(session, pid, me, s.webrtc)
+	pub, err := NewPublisher(session, pid, s.webrtc)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	sub, err := NewSubscriber(session, pid, me, s.webrtc)
+	sub, err := NewSubscriber(session, pid, s.webrtc)
 	if err != nil {
 		return nil, nil, nil, err
 	}

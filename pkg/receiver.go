@@ -20,15 +20,15 @@ const (
 // Receiver defines a interface for a track receivers
 type Receiver interface {
 	Start()
-	Track() *webrtc.Track
-	AddSender(sender Sender)
+	Track() *webrtc.TrackRemote
+	AddDownTrack(track *DownTrack)
 	DeleteSender(pid string)
 	SpatialLayer() uint8
 	OnCloseHandler(fn func())
 	OnTransportWideCC(fn func(sn uint16, timeNS int64, marker bool))
 	SendRTCP(p []rtcp.Packet)
 	SetRTCPCh(ch chan []rtcp.Packet)
-	WriteBufferedPacket(sn []uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error
+	WriteBufferedPacket(track *DownTrack, sn []uint16) error
 }
 
 // WebRTCReceiver receives a video track
@@ -37,25 +37,25 @@ type WebRTCReceiver struct {
 
 	rtcpMu         sync.RWMutex
 	receiver       *webrtc.RTPReceiver
-	track          *webrtc.Track
+	track          *webrtc.TrackRemote
 	buffer         *Buffer
 	bandwidth      uint64
 	lastPli        int64
 	rtpCh          chan *rtp.Packet
 	rtcpCh         chan []rtcp.Packet
-	senders        map[string]Sender
+	downTracks     map[string]*DownTrack
 	onCloseHandler func()
 
 	spatialLayer uint8
 }
 
 // NewWebRTCReceiver creates a new webrtc track receivers
-func NewWebRTCReceiver(receiver *webrtc.RTPReceiver, track *webrtc.Track, config BufferOptions) Receiver {
+func NewWebRTCReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote, config BufferOptions) Receiver {
 	w := &WebRTCReceiver{
-		receiver: receiver,
-		track:    track,
-		senders:  make(map[string]Sender),
-		rtpCh:    make(chan *rtp.Packet, maxSize),
+		receiver:   receiver,
+		track:      track,
+		downTracks: make(map[string]*DownTrack),
+		rtpCh:      make(chan *rtp.Packet, maxSize),
 	}
 
 	switch w.track.RID() {
@@ -102,16 +102,16 @@ func (w *WebRTCReceiver) OnTransportWideCC(fn func(sn uint16, timeNS int64, mark
 	w.buffer.onTransportWideCC(fn)
 }
 
-func (w *WebRTCReceiver) AddSender(sender Sender) {
+func (w *WebRTCReceiver) AddDownTrack(track *DownTrack) {
 	w.Lock()
-	w.senders[sender.ID()] = sender
+	w.downTracks[track.ID()] = track
 	w.Unlock()
 }
 
 // DeleteSender removes a Sender from a Receiver
 func (w *WebRTCReceiver) DeleteSender(pid string) {
 	w.Lock()
-	delete(w.senders, pid)
+	delete(w.downTracks, pid)
 	w.Unlock()
 }
 
@@ -133,24 +133,22 @@ func (w *WebRTCReceiver) SpatialLayer() uint8 {
 }
 
 // Track returns receivers track
-func (w *WebRTCReceiver) Track() *webrtc.Track {
+func (w *WebRTCReceiver) Track() *webrtc.TrackRemote {
 	return w.track
 }
 
 // WriteBufferedPacket writes buffered packet to track, return error if packet not found
-func (w *WebRTCReceiver) WriteBufferedPacket(sn []uint16, track *webrtc.Track, snOffset uint16, tsOffset, ssrc uint32) error {
+func (w *WebRTCReceiver) WriteBufferedPacket(track *DownTrack, sn []uint16) error {
 	if w.buffer == nil {
 		return nil
 	}
 	for _, seq := range sn {
-		h, p, err := w.buffer.getPacket(seq + snOffset)
+		h, p, err := w.buffer.getPacket(seq + track.snOffset)
 		if err != nil {
 			continue
 		}
-		h.PayloadType = track.PayloadType()
-		h.SequenceNumber -= snOffset
-		h.Timestamp -= tsOffset
-		h.SSRC = ssrc
+		h.SequenceNumber -= track.snOffset
+		h.Timestamp -= track.tsOffset
 		if err := track.WriteRTP(&rtp.Packet{
 			Header:  h,
 			Payload: p,
@@ -168,7 +166,7 @@ func (w *WebRTCReceiver) SetRTCPCh(ch chan []rtcp.Packet) {
 // readRTP receive all incoming tracks' rtp and sent to one channel
 func (w *WebRTCReceiver) readRTP() {
 	defer func() {
-		w.closeSenders()
+		w.closerTracks()
 		close(w.rtpCh)
 		if w.onCloseHandler != nil {
 			w.onCloseHandler()
@@ -239,18 +237,20 @@ func (w *WebRTCReceiver) readSimulcastRTCP(rid string) {
 func (w *WebRTCReceiver) writeRTP() {
 	for pkt := range w.rtpCh {
 		w.RLock()
-		for _, sub := range w.senders {
-			sub.WriteRTP(pkt)
+		for _, t := range w.downTracks {
+			if err := t.WriteRTP(pkt); err != nil && err == io.EOF {
+				delete(w.downTracks, t.ID())
+			}
 		}
 		w.RUnlock()
 	}
 }
 
-// closeSenders close all senders from Receiver
-func (w *WebRTCReceiver) closeSenders() {
+// closerTracks close all tracks from Receiver
+func (w *WebRTCReceiver) closerTracks() {
 	w.RLock()
 	defer w.RUnlock()
-	for _, sender := range w.senders {
-		sender.Close()
+	for _, dt := range w.downTracks {
+		dt.Close()
 	}
 }

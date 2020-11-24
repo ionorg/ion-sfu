@@ -2,7 +2,10 @@ package sfu
 
 import (
 	"encoding/binary"
+	"strings"
 	"sync/atomic"
+
+	"github.com/pion/webrtc/v3"
 )
 
 const ntpEpoch = 2208988800
@@ -120,7 +123,7 @@ func (p *VP8Helper) Unmarshal(payload []byte) error {
 // setVp8TemporalLayer is a helper to detect and modify accordingly the vp8 payload to reflect
 // temporal changes in the SFU.
 // VP8Helper temporal layers implemented according https://tools.ietf.org/html/rfc7741
-func setVP8TemporalLayer(pl []byte, s *SimulcastSender) (payload []byte, skip bool) {
+func setVP8TemporalLayer(pl []byte, s *DownTrack) (payload []byte, skip bool) {
 	var pkt VP8Helper
 	if err := pkt.Unmarshal(pl); err != nil {
 		return nil, false
@@ -178,4 +181,25 @@ func setNBitsOfUint16(src, size, startIndex, val uint16) uint16 {
 	// truncate val to size bits
 	val &= (1 << size) - 1
 	return src | (val << (16 - size - startIndex))
+}
+
+// Do a fuzzy find for a codec in the list of codecs
+// Used for lookup up a codec in an existing list to find a match
+func codecParametersFuzzySearch(needle webrtc.RTPCodecParameters, haystack []webrtc.RTPCodecParameters) (webrtc.RTPCodecParameters, error) {
+	// First attempt to match on MimeType + SDPFmtpLine
+	for _, c := range haystack {
+		if strings.EqualFold(c.RTPCodecCapability.MimeType, needle.RTPCodecCapability.MimeType) &&
+			c.RTPCodecCapability.SDPFmtpLine == needle.RTPCodecCapability.SDPFmtpLine {
+			return c, nil
+		}
+	}
+
+	// Fallback to just MimeType
+	for _, c := range haystack {
+		if strings.EqualFold(c.RTPCodecCapability.MimeType, needle.RTPCodecCapability.MimeType) {
+			return c, nil
+		}
+	}
+
+	return webrtc.RTPCodecParameters{}, webrtc.ErrCodecNotFound
 }

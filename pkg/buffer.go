@@ -63,11 +63,11 @@ type BufferOptions struct {
 }
 
 // NewBuffer constructs a new Buffer
-func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
+func NewBuffer(track *webrtc.TrackRemote, o BufferOptions) *Buffer {
 	b := &Buffer{
-		mediaSSRC:  track.SSRC(),
+		mediaSSRC:  uint32(track.SSRC()),
 		clockRate:  track.Codec().ClockRate,
-		codecType:  track.Codec().Type,
+		codecType:  track.Kind(),
 		maxBitrate: o.MaxBitRate,
 		simulcast:  len(track.RID()) > 0,
 		twccExt:    o.TWCCExt,
@@ -76,7 +76,7 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 		o.BufferTime = defaultBufferTime
 	}
 	b.pktQueue.duration = uint32(o.BufferTime) * b.clockRate / 1000
-	b.pktQueue.ssrc = track.SSRC()
+	b.pktQueue.ssrc = b.mediaSSRC
 
 	for _, fb := range track.Codec().RTCPFeedback {
 		switch fb.Type {
@@ -91,7 +91,6 @@ func NewBuffer(track *webrtc.Track, o BufferOptions) *Buffer {
 			b.nack = true
 		}
 	}
-	b.tcc = b.twccExt > 0
 	log.Debugf("NewBuffer BufferOptions=%v", o)
 	return b
 }

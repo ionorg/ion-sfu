@@ -28,7 +28,7 @@ var (
 // TransportProvider provides the peerConnection to the sfu.Peer{}
 // This allows the sfu.SFU{} implementation to be customized / wrapped by another package
 type TransportProvider interface {
-	NewTransport(sid, pid string, me MediaEngine) (*Session, *Publisher, *Subscriber, error)
+	NewTransport(sid, pid string) (*Session, *Publisher, *Subscriber, error)
 }
 
 // Peer represents a pair peer connection
@@ -62,16 +62,10 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		return nil, ErrTransportExists
 	}
 
-	me := MediaEngine{}
-	err := me.PopulateFromSDP(sdp)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing sdp: %v", err)
-	}
-
 	pid := cuid.New()
 	p.id = pid
-	p.session, p.publisher, p.subscriber, err = p.provider.NewTransport(sid, pid, me)
-	if err != nil {
+	var err error
+	if p.session, p.publisher, p.subscriber, err = p.provider.NewTransport(sid, pid); err != nil {
 		return nil, fmt.Errorf("error creating transport: %v", err)
 	}
 

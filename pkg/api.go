@@ -29,31 +29,25 @@ func handleAPICommand(s *Subscriber, dc *webrtc.DataChannel) {
 			log.Errorf("Unmarshal api command err: %v", err)
 			return
 		}
-		senders := s.GetSenders(srm.StreamID)
+		downTracks := s.GetDownTracks(srm.StreamID)
 
-		for _, sender := range senders {
-			switch sender.Kind() {
+		for _, dt := range downTracks {
+			switch dt.Kind() {
 			case webrtc.RTPCodecTypeAudio:
-				sender.Mute(!srm.Audio)
+				dt.Mute(!srm.Audio)
 			case webrtc.RTPCodecTypeVideo:
 				switch srm.Video {
 				case videoHighQuality:
-					sender.Mute(false)
-					if sender.Type() != SimpleSenderType {
-						sender.SwitchSpatialLayer(2)
-					}
+					dt.Mute(false)
+					dt.SwitchSpatialLayer(2)
 				case videoMediumQuality:
-					sender.Mute(false)
-					if sender.Type() != SimpleSenderType {
-						sender.SwitchSpatialLayer(1)
-					}
+					dt.Mute(false)
+					dt.SwitchSpatialLayer(1)
 				case videoLowQuality:
-					sender.Mute(false)
-					if sender.Type() != SimpleSenderType {
-						sender.SwitchSpatialLayer(0)
-					}
+					dt.Mute(false)
+					dt.SwitchSpatialLayer(0)
 				case videoMuted:
-					sender.Mute(true)
+					dt.Mute(true)
 				}
 			}
 		}

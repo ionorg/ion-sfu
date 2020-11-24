@@ -240,7 +240,7 @@ func TestWebRTCReceiver_closeSenders(t *testing.T) {
 		fields fields
 	}{
 		{
-			name: "Must call close methods on senders",
+			name: "Must call close methods on tracks",
 			fields: fields{
 				senders: map[string]Sender{"test": &fakeSender},
 			},
@@ -252,7 +252,7 @@ func TestWebRTCReceiver_closeSenders(t *testing.T) {
 			w := &WebRTCReceiver{
 				senders: tt.fields.senders,
 			}
-			w.closeSenders()
+			w.closerTracks()
 			tmr := time.NewTimer(100 * time.Millisecond)
 			for {
 				select {
