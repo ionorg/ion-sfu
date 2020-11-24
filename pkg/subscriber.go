@@ -205,6 +205,12 @@ func (s *Subscriber) SetRemoteDescription(desc webrtc.SessionDescription) error 
 		log.Errorf("SetRemoteDescription error: %v", err)
 		return err
 	}
+
+	for _, c := range s.candidates {
+		s.pc.AddICECandidate(c)
+		s.candidates = nil
+	}
+
 	return nil
 }
 
