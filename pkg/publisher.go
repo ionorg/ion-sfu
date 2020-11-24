@@ -81,6 +81,12 @@ func (p *Publisher) Answer(offer webrtc.SessionDescription) (webrtc.SessionDescr
 	if err := p.pc.SetRemoteDescription(offer); err != nil {
 		return webrtc.SessionDescription{}, err
 	}
+
+	for _, c := range p.candidates {
+		p.pc.AddICECandidate(c)
+		p.candidates = nil
+	}
+
 	answer, err := p.pc.CreateAnswer(nil)
 	if err != nil {
 		return webrtc.SessionDescription{}, err
