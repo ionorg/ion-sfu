@@ -5,9 +5,7 @@ import (
 	"time"
 
 	"github.com/bep/debounce"
-
 	log "github.com/pion/ion-log"
-
 	"github.com/pion/webrtc/v3"
 )
 
@@ -20,6 +18,7 @@ type Subscriber struct {
 
 	tracks     map[string][]*DownTrack
 	session    *Session
+	channels   map[string]*webrtc.DataChannel
 	candidates []webrtc.ICECandidateInit
 
 	negotiate func()
@@ -43,14 +42,15 @@ func NewSubscriber(session *Session, id string, cfg WebRTCTransportConfig) (*Sub
 	}
 
 	s := &Subscriber{
-		id:      id,
-		me:      me,
-		pc:      pc,
-		session: session,
-		tracks:  make(map[string][]*DownTrack),
+		id:       id,
+		me:       me,
+		pc:       pc,
+		session:  session,
+		tracks:   make(map[string][]*DownTrack),
+		channels: make(map[string]*webrtc.DataChannel),
 	}
 
-	dc, err := pc.CreateDataChannel(channelLabel, &webrtc.DataChannelInit{})
+	dc, err := pc.CreateDataChannel(apiChannelLabel, &webrtc.DataChannelInit{})
 	if err != nil {
 		log.Errorf("DC creation error: %v", err)
 		return nil, errPeerConnectionInitFailed
@@ -119,6 +119,25 @@ func (s *Subscriber) AddDownTrack(streamID string, downTrack *DownTrack) {
 	} else {
 		s.tracks[streamID] = []*DownTrack{downTrack}
 	}
+}
+
+func (s *Subscriber) AddDataChannel(label string) (*webrtc.DataChannel, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	if s.channels[label] != nil {
+		return s.channels[label], nil
+	}
+
+	dc, err := s.pc.CreateDataChannel(label, &webrtc.DataChannelInit{})
+	if err != nil {
+		log.Errorf("dc creation error: %v", err)
+		return nil, errCreatingDataChannel
+	}
+
+	s.channels[label] = dc
+
+	return dc, nil
 }
 
 // SetRemoteDescription sets the SessionDescription of the remote peer

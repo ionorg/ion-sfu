@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	channelLabel = "ion-sfu"
+	apiChannelLabel = "ion-sfu"
 
 	videoHighQuality   = "high"
 	videoMediumQuality = "medium"

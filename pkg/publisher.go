@@ -49,9 +49,14 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 		if rr := p.router.AddReceiver(track, receiver); rr != nil {
 			p.session.Publish(p.router, rr)
 		}
-		if p.onTrackHandler != nil {
-			p.onTrackHandler(track, receiver)
+	})
+
+	pc.OnDataChannel(func(dc *webrtc.DataChannel) {
+		if dc.Label() == apiChannelLabel {
+			// terminate api data channel
+			return
 		}
+		p.session.AddDatachannel(id, dc)
 	})
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
