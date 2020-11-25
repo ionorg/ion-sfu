@@ -47,7 +47,7 @@ func NewPublisher(session *Session, id string, me MediaEngine, cfg WebRTCTranspo
 
 	pc.OnDataChannel(func(dc *webrtc.DataChannel) {
 		if dc.Label() == apiChannelLabel {
-			log.Errorf("ondatachannel error: label reserved")
+			// terminate api data channel
 			return
 		}
 		p.session.AddDatachannel(id, dc)
