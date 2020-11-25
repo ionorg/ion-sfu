@@ -64,6 +64,9 @@
       </div>
 
       <div class="row">
+        <div class="col-12 pt-4">Media</div>
+      </div>
+      <div class="row">
         <div class="col-6 pt-2">
           <span
             style="position: absolute; margin-left: 5px; margin-top: 5px"
@@ -263,9 +266,48 @@
             <pre
               id="api"
               class="d-block border"
-              style="background-color: #f8f9fa; height: 117px"
+              style="
+                background-color: #f8f9fa;
+                height: 117px;
+                width: 320px;
+                margin: 5px 0;
+              "
             ></pre>
           </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-12 pt-4">Data</div>
+      </div>
+      <div class="row">
+        <div class="col-6 pt-2">
+          <textarea
+            id="local-data"
+            class="d-block border"
+            style="
+              background-color: #f8f9fa;
+              height: 117px;
+              width: 320px;
+              margin: 5px 0;
+              padding: 5px;
+            "
+            placeholder="Send a message"
+          ></textarea>
+          <button type="button" class="btn btn-primary" onclick="send()">
+            send
+          </button>
+        </div>
+        <div class="col-6 pt-2">
+          <pre
+            id="remote-data"
+            class="d-block border"
+            style="
+              background-color: #f8f9fa;
+              height: 117px;
+              width: 320px;
+              margin: 5px 0;
+            "
+          ></pre>
         </div>
       </div>
     </div>
@@ -286,13 +328,16 @@
       integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV"
       crossorigin="anonymous"
     ></script>
-    <script src="https://unpkg.com/ion-sdk-js@1.4.1/dist/ion-sdk.min.js"></script>
+    <script src="https://unpkg.com/ion-sdk-js@1.5.0/dist/ion-sdk.min.js"></script>
     <script>
       const localVideo = document.getElementById("local-video");
       const remoteVideo = document.getElementById("remote-video");
+      const localData = document.getElementById("local-data");
+      const remoteData = document.getElementById("remote-data");
       const sizeTag = document.getElementById("size-tag");
       const brTag = document.getElementById("br-tag");
       let simulcast = false;
+      let localDataChannel;
 
       remoteVideo.addEventListener("loadedmetadata", function () {
         sizeTag.innerHTML = `${remoteVideo.videoWidth}x${remoteVideo.videoHeight}`;
@@ -325,7 +370,7 @@
         })
           .then((media) => {
             localStream = media;
-            localVideo.srcObject = media.stream;
+            localVideo.srcObject = media;
             localVideo.autoplay = true;
             localVideo.controls = true;
             localVideo.muted = true;
@@ -333,6 +378,13 @@
             clientLocal.publish(media);
           })
           .catch(console.error);
+        localDataChannel = clientLocal.createDataChannel("data");
+      };
+
+      const send = () => {
+        if (localDataChannel.readyState === "open") {
+          localDataChannel.send(localData.value);
+        }
       };
 
       let remoteStream;
@@ -354,6 +406,12 @@
             document.getElementById("simple-controls").style.display = "block";
           }
         }
+      };
+
+      clientRemote.ondatachannel = ({ channel }) => {
+        channel.onmessage = ({ data }) => {
+          remoteData.innerHTML = data;
+        };
       };
 
       const api = {
