@@ -22,7 +22,7 @@ type Receiver interface {
 	Start()
 	Track() *webrtc.TrackRemote
 	AddDownTrack(track *DownTrack)
-	DeleteSender(pid string)
+	DeleteDownTrack(id string)
 	SpatialLayer() uint8
 	OnCloseHandler(fn func())
 	OnTransportWideCC(fn func(sn uint16, timeNS int64, marker bool))
@@ -104,14 +104,14 @@ func (w *WebRTCReceiver) OnTransportWideCC(fn func(sn uint16, timeNS int64, mark
 
 func (w *WebRTCReceiver) AddDownTrack(track *DownTrack) {
 	w.Lock()
-	w.downTracks[track.ID()] = track
+	w.downTracks[track.peerID] = track
 	w.Unlock()
 }
 
-// DeleteSender removes a Sender from a Receiver
-func (w *WebRTCReceiver) DeleteSender(pid string) {
+// DeleteDownTrack removes a DownTrack from a Receiver
+func (w *WebRTCReceiver) DeleteDownTrack(id string) {
 	w.Lock()
-	delete(w.downTracks, pid)
+	delete(w.downTracks, id)
 	w.Unlock()
 }
 
@@ -166,7 +166,7 @@ func (w *WebRTCReceiver) SetRTCPCh(ch chan []rtcp.Packet) {
 // readRTP receive all incoming tracks' rtp and sent to one channel
 func (w *WebRTCReceiver) readRTP() {
 	defer func() {
-		w.closerTracks()
+		w.closeTracks()
 		close(w.rtpCh)
 		if w.onCloseHandler != nil {
 			w.onCloseHandler()
@@ -178,7 +178,7 @@ func (w *WebRTCReceiver) readRTP() {
 		// or the peer has been disconnected. The router must be gracefully shutdown,
 		// waiting for all the receivers routines to stop.
 		if err == io.EOF {
-			log.Debugf("receiver %d readrtp eof", w.track.SSRC())
+			log.Debugf("receiver %d read rtp eof", w.track.SSRC())
 			return
 		}
 
@@ -237,17 +237,17 @@ func (w *WebRTCReceiver) readSimulcastRTCP(rid string) {
 func (w *WebRTCReceiver) writeRTP() {
 	for pkt := range w.rtpCh {
 		w.RLock()
-		for _, t := range w.downTracks {
-			if err := t.WriteRTP(pkt); err != nil && err == io.EOF {
-				delete(w.downTracks, t.ID())
+		for _, dt := range w.downTracks {
+			if err := dt.WriteRTP(pkt); err == io.EOF {
+				delete(w.downTracks, dt.peerID)
 			}
 		}
 		w.RUnlock()
 	}
 }
 
-// closerTracks close all tracks from Receiver
-func (w *WebRTCReceiver) closerTracks() {
+// closeTracks close all tracks from Receiver
+func (w *WebRTCReceiver) closeTracks() {
 	w.RLock()
 	defer w.RUnlock()
 	for _, dt := range w.downTracks {

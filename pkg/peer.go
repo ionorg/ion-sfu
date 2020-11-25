@@ -204,19 +204,16 @@ func (p *Peer) Trickle(candidate webrtc.ICECandidateInit, target int) error {
 
 // Close shuts down the peer connection and sends true to the done channel
 func (p *Peer) Close() error {
-	log.Debugf("peer closing")
+	if p.session != nil {
+		p.session.RemovePeer(p.id)
+	}
+	if p.publisher != nil {
+		p.publisher.Close()
+	}
 	if p.subscriber != nil {
 		if err := p.subscriber.Close(); err != nil {
 			return err
 		}
-	}
-	if p.publisher != nil {
-		if err := p.publisher.Close(); err != nil {
-			return err
-		}
-	}
-	if p.session != nil {
-		p.session.RemovePeer(p.id)
 	}
 	return nil
 }

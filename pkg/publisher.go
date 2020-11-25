@@ -60,13 +60,8 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 		case webrtc.ICEConnectionStateFailed:
 			fallthrough
 		case webrtc.ICEConnectionStateClosed:
-			p.closeOnce.Do(func() {
-				log.Debugf("webrtc ice closed for peer: %s", p.id)
-				if err := p.Close(); err != nil {
-					log.Errorf("webrtc transport close err: %v", err)
-				}
-				p.router.Stop()
-			})
+			log.Debugf("webrtc ice closed for peer: %s", p.id)
+			p.Close()
 		}
 
 		if handler, ok := p.onICEConnectionStateChangeHandler.Load().(func()); ok && handler != nil {
@@ -84,8 +79,8 @@ func (p *Publisher) Answer(offer webrtc.SessionDescription) (webrtc.SessionDescr
 
 	for _, c := range p.candidates {
 		p.pc.AddICECandidate(c)
-		p.candidates = nil
 	}
+	p.candidates = nil
 
 	answer, err := p.pc.CreateAnswer(nil)
 	if err != nil {
@@ -103,8 +98,13 @@ func (p *Publisher) GetRouter() Router {
 }
 
 // Close peer
-func (p *Publisher) Close() error {
-	return p.pc.Close()
+func (p *Publisher) Close() {
+	p.closeOnce.Do(func() {
+		if err := p.pc.Close(); err != nil {
+			log.Errorf("webrtc transport close err: %v", err)
+		}
+		p.router.Stop()
+	})
 }
 
 // OnICECandidate handler

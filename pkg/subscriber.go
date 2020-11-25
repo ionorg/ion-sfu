@@ -130,8 +130,8 @@ func (s *Subscriber) SetRemoteDescription(desc webrtc.SessionDescription) error 
 
 	for _, c := range s.candidates {
 		s.pc.AddICECandidate(c)
-		s.candidates = nil
 	}
+	s.candidates = nil
 
 	return nil
 }

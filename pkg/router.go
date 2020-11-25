@@ -190,6 +190,7 @@ func (r *router) addDownTrack(sub *Subscriber, rr *receiverRouter) error {
 	if err := sub.me.RegisterCodec(codec, inTrack.Kind()); err != nil {
 		return err
 	}
+
 	outTrack, err := NewDownTrack(webrtc.RTPCodecCapability{
 		MimeType:     codec.MimeType,
 		ClockRate:    codec.ClockRate,
@@ -197,6 +198,7 @@ func (r *router) addDownTrack(sub *Subscriber, rr *receiverRouter) error {
 		SDPFmtpLine:  codec.SDPFmtpLine,
 		RTCPFeedback: []webrtc.RTCPFeedback{{"goog-remb", ""}, {"ccm", "fir"}, {"nack", ""}, {"nack", "pli"}},
 	}, rr, sub.id, inTrack.ID(), inTrack.StreamID())
+
 	if err != nil {
 		return err
 	}
@@ -215,12 +217,11 @@ func (r *router) addDownTrack(sub *Subscriber, rr *receiverRouter) error {
 	// nolint:scopelint
 	outTrack.OnCloseHandler(func() {
 		if err := sub.pc.RemoveTrack(outTrack.transceiver.Sender()); err != nil {
-			log.Errorf("Error closing sender: %s", err)
+			log.Errorf("Error closing down track: %v", err)
 		} else {
 			sub.negotiate()
 		}
 	})
-
 	go r.loopDownTrackRTCP(outTrack)
 	sub.AddDownTrack(rr.stream, outTrack)
 	recv.AddDownTrack(outTrack)
@@ -235,7 +236,7 @@ func (r *router) loopDownTrackRTCP(track *DownTrack) {
 			log.Debugf("Sender %s closed due to: %v", track.peerID, err)
 			// Remove sender from receiver
 			if recv := track.router.receivers[track.currentSpatialLayer]; recv != nil {
-				recv.DeleteSender(track.id)
+				recv.DeleteDownTrack(track.peerID)
 			}
 			track.Close()
 			return

@@ -90,8 +90,8 @@ func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters,
 		d.payload = uint8(codec.PayloadType)
 		d.writeStream = t.WriteStream()
 		d.mime = strings.ToLower(codec.MimeType)
-		d.enabled.set(true)
 		d.reSync.set(true)
+		d.enabled.set(true)
 		return codec, nil
 	}
 	return webrtc.RTPCodecParameters{}, webrtc.ErrUnsupportedCodec
@@ -128,16 +128,13 @@ func (d *DownTrack) Kind() webrtc.RTPCodecType {
 }
 
 // WriteRTP writes a RTP Packet to the DownTrack
-// If one PeerConnection fails the packets will still be sent to
-// all PeerConnections. The error message will contain the ID of the failed
-// PeerConnections so you can remove them
 func (d *DownTrack) WriteRTP(p *rtp.Packet) error {
 	if !d.enabled.get() {
 		return nil
 	}
 	switch d.trackType {
 	case SimpleDownTrack:
-		return d.writeSimpleTrackRTP(*p)
+		return d.writeSimpleRTP(*p)
 	case SimulcastDownTrack:
 		return d.writeSimulcastRTP(*p)
 	}
@@ -157,7 +154,7 @@ func (d *DownTrack) Mute(val bool) {
 // Close track
 func (d *DownTrack) Close() {
 	d.closeOnce.Do(func() {
-		log.Debugf("Closing sender %s", d.id)
+		log.Debugf("Closing sender %s", d.peerID)
 		if d.onCloseHandler != nil {
 			d.onCloseHandler()
 		}
@@ -165,8 +162,8 @@ func (d *DownTrack) Close() {
 }
 
 func (d *DownTrack) SwitchSpatialLayer(targetLayer uint8) {
-	// Don't switch until previous switch is done or canceled
 	if d.trackType == SimulcastDownTrack {
+		// Don't switch until previous switch is done or canceled
 		if d.currentSpatialLayer != d.targetSpatialLayer {
 			return
 		}
@@ -182,7 +179,7 @@ func (d *DownTrack) OnCloseHandler(fn func()) {
 	d.onCloseHandler = fn
 }
 
-func (d *DownTrack) writeSimpleTrackRTP(pkt rtp.Packet) error {
+func (d *DownTrack) writeSimpleRTP(pkt rtp.Packet) error {
 	if d.reSync.get() {
 		if d.Kind() == webrtc.RTPCodecTypeVideo {
 			recv := d.router.receivers[0]
@@ -222,10 +219,10 @@ func (d *DownTrack) writeSimpleTrackRTP(pkt rtp.Packet) error {
 
 	d.lastSN = pkt.SequenceNumber - d.snOffset
 	d.lastTS = pkt.Timestamp - d.tsOffset
+	pkt.PayloadType = d.payload
 	pkt.Timestamp = d.lastTS
 	pkt.SequenceNumber = d.lastSN
-	pkt.Header.SSRC = d.ssrc
-	pkt.Header.PayloadType = d.payload
+	pkt.SSRC = d.ssrc
 	if d.sdesMidHdrCtr < 50 {
 		if err := pkt.Header.SetExtension(1, []byte(d.transceiver.Mid())); err != nil {
 			log.Errorf("Setting sdes mid header err: %v", err)
@@ -272,7 +269,7 @@ func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
 				relay = word&0x1F == 7
 			}
 		default:
-			log.Warnf("codec payload don't support simulcast: %d", d.codec.MimeType)
+			log.Warnf("codec payload don't support simulcast: %s", d.codec.MimeType)
 			return nil
 		}
 		// Packet is not a keyframe, discard it
@@ -285,7 +282,7 @@ func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
 		// Switch is done remove sender from previous layer
 		// and update current layer
 		if pRecv := d.router.receivers[d.currentSpatialLayer]; pRecv != nil && d.currentSpatialLayer != d.targetSpatialLayer {
-			pRecv.DeleteSender(d.id)
+			pRecv.DeleteDownTrack(d.peerID)
 		}
 		d.currentSpatialLayer = d.targetSpatialLayer
 	}

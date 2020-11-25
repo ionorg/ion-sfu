@@ -65,12 +65,19 @@ func getPublisherMediaEngine() (*webrtc.MediaEngine, error) {
 		}
 	}
 
-	if err := me.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: sdp.TransportCCURI}, webrtc.RTPCodecTypeVideo); err != err {
-		return nil, err
+	for _, extension := range []string{
+		sdp.SDESMidURI,
+		sdp.SDESRTPStreamIDURI,
+		sdp.TransportCCURI,
+	} {
+		if err := me.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: extension}, webrtc.RTPCodecTypeAudio); err != nil {
+			return nil, err
+		}
+		if err := me.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: extension}, webrtc.RTPCodecTypeVideo); err != nil {
+			return nil, err
+		}
 	}
-	if err := me.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: sdp.TransportCCURI}, webrtc.RTPCodecTypeAudio); err != err {
-		return nil, err
-	}
+
 	return me, nil
 }
 
