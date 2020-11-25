@@ -100,10 +100,10 @@ func (p *Publisher) GetRouter() Router {
 // Close peer
 func (p *Publisher) Close() {
 	p.closeOnce.Do(func() {
+		p.router.Stop()
 		if err := p.pc.Close(); err != nil {
 			log.Errorf("webrtc transport close err: %v", err)
 		}
-		p.router.Stop()
 	})
 }
 

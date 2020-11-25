@@ -42,14 +42,10 @@ func CreateTestListPackets(snsAndTSs []SequenceNumberAndTimeStamp) (packetList [
 }
 
 func TestNewBuffer(t *testing.T) {
-	me := webrtc.MediaEngine{}
-	me.RegisterDefaultCodecs()
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
-	p, _ := api.NewPeerConnection(webrtc.Configuration{})
-	track, _ := p.NewTrack(webrtc.DefaultPayloadTypeVP8, 1234, "test", "pion")
+	track := &webrtc.TrackRemote{}
 
 	type args struct {
-		track *webrtc.Track
+		track *webrtc.TrackRemote
 		o     BufferOptions
 	}
 	tests := []struct {
@@ -94,6 +90,7 @@ func TestNewBuffer(t *testing.T) {
 				},
 			}
 			buff := NewBuffer(tt.args.track, tt.args.o)
+			buff.codecType = webrtc.RTPCodecTypeVideo
 			assert.NotNil(t, buff)
 
 			for _, p := range TestPackets {

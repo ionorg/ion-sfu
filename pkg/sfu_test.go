@@ -1,13 +1,13 @@
 package sfu
 
 import (
-	"math/rand"
 	"sync"
 	"testing"
 	"time"
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/webrtc/v3"
+	med "github.com/pion/webrtc/v3/pkg/media"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -37,26 +37,12 @@ func signalPair(pcOffer *webrtc.PeerConnection, pcAnswer *webrtc.PeerConnection)
 	return pcOffer.SetRemoteDescription(*pcAnswer.LocalDescription())
 }
 
-func sendRTPWithSenderUntilDone(done <-chan struct{}, t *testing.T, track *webrtc.Track, sender Sender) {
-	for {
-		select {
-		case <-time.After(20 * time.Millisecond):
-			pkt := track.Packetizer().Packetize([]byte{0x01, 0x02, 0x03, 0x04}, 1)[0]
-			sender.WriteRTP(pkt)
-		case <-done:
-			return
-		}
-	}
-}
-
-func sendRTPUntilDone(start, done <-chan struct{}, t *testing.T, track *webrtc.Track) {
+func sendRTPUntilDone(start, done <-chan struct{}, t *testing.T, track *webrtc.TrackLocalStaticSample) {
 	<-start
 	for {
 		select {
-		case <-time.After(20 * time.Millisecond):
-			pkt := track.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]
-			pkt.Payload = []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0x9f, 0x94, 0x1}
-			_ = track.WriteRTP(pkt)
+		case <-time.After(10 * time.Millisecond):
+			assert.NoError(t, track.WriteSample(med.Sample{Data: []byte{0x0, 0xff, 0xff, 0xff, 0xff}, Duration: time.Second}))
 		case <-done:
 			return
 		}
@@ -114,24 +100,24 @@ type sender struct {
 func addMedia(done <-chan struct{}, t *testing.T, pc *webrtc.PeerConnection, media []media) []*sender {
 	var senders []*sender
 	for _, media := range media {
-		var track *webrtc.Track
+		var track *webrtc.TrackLocalStaticSample
 		var err error
 
 		start := make(chan struct{})
 
 		switch media.kind {
 		case "audio":
-			track, err = pc.NewTrack(webrtc.DefaultPayloadTypeOpus, rand.Uint32(), media.tid, media.id)
+			track, err = webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: "audio/opus"}, media.tid, media.id)
 			assert.NoError(t, err)
-			transceiver, err := pc.AddTransceiverFromTrack(track, webrtc.RtpTransceiverInit{
+			transceiver, err := pc.AddTransceiverFromTrack(track, webrtc.RTPTransceiverInit{
 				Direction: webrtc.RTPTransceiverDirectionSendonly,
 			})
 			assert.NoError(t, err)
 			senders = append(senders, &sender{transceiver: transceiver, start: start})
 		case "video":
-			track, err = pc.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), media.tid, media.id)
+			track, err = webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: "video/vp8"}, media.tid, media.id)
 			assert.NoError(t, err)
-			transceiver, err := pc.AddTransceiverFromTrack(track, webrtc.RtpTransceiverInit{
+			transceiver, err := pc.AddTransceiverFromTrack(track, webrtc.RTPTransceiverInit{
 				Direction: webrtc.RTPTransceiverDirectionSendonly,
 			})
 			assert.NoError(t, err)
@@ -309,8 +295,9 @@ func TestSFU_SessionScenarios(t *testing.T) {
 						switch action.kind {
 						case "join":
 							me := webrtc.MediaEngine{}
-							me.RegisterDefaultCodecs()
-							api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
+							err := me.RegisterDefaultCodecs()
+							assert.NoError(t, err)
+							api := webrtc.NewAPI(webrtc.WithMediaEngine(&me))
 							pub, err := api.NewPeerConnection(webrtc.Configuration{})
 							assert.NoError(t, err)
 							sub, err := api.NewPeerConnection(webrtc.Configuration{})
@@ -318,7 +305,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 							local := NewPeer(sfu)
 							_, err = pub.CreateDataChannel("ion-sfu", nil)
 							p := &peer{id: action.id, remotePub: pub, remoteSub: sub, local: local}
-							sub.OnTrack(func(track *webrtc.Track, recv *webrtc.RTPReceiver) {
+							sub.OnTrack(func(track *webrtc.TrackRemote, recv *webrtc.RTPReceiver) {
 								mu.Lock()
 								p.subs.Done()
 								mu.Unlock()
@@ -345,7 +332,6 @@ func TestSFU_SessionScenarios(t *testing.T) {
 								assert.NoError(t, err)
 								err = p.remotePub.SetRemoteDescription(*a)
 								assert.NoError(t, err)
-
 								for _, pub := range p.pubs {
 									if pub.start != nil {
 										close(pub.start)
