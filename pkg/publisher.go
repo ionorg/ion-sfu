@@ -84,8 +84,8 @@ func (p *Publisher) Answer(offer webrtc.SessionDescription) (webrtc.SessionDescr
 
 	for _, c := range p.candidates {
 		p.pc.AddICECandidate(c)
-		p.candidates = nil
 	}
+	p.candidates = nil
 
 	answer, err := p.pc.CreateAnswer(nil)
 	if err != nil {
