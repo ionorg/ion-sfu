@@ -267,7 +267,8 @@ func TestSFU_SessionScenarios(t *testing.T) {
 							{kind: "video", id: "stream1", tid: "video1"},
 						},
 					}},
-				}, {
+				},
+				{
 					actions: []*action{{
 						id:   "remote2",
 						kind: "publish",
