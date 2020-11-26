@@ -29,6 +29,7 @@ const (
 type DownTrack struct {
 	id            string
 	peerID        string
+	binded        atomicBool
 	mime          string
 	nList         *nackList
 	ssrc          uint32
@@ -63,7 +64,7 @@ type DownTrack struct {
 	codec          webrtc.RTPCodecCapability
 	router         *receiverRouter
 	transceiver    *webrtc.RTPTransceiver
-	writeStream    webrtc.TrackLocalWriter
+	writeStream    atomic.Value
 	onCloseHandler func()
 	closeOnce      sync.Once
 }
@@ -86,9 +87,10 @@ func NewDownTrack(c webrtc.RTPCodecCapability, rr *receiverRouter, peerID, id, s
 func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters, error) {
 	parameters := webrtc.RTPCodecParameters{RTPCodecCapability: d.codec}
 	if codec, err := codecParametersFuzzySearch(parameters, t.CodecParameters()); err == nil {
+		d.binded.set(true)
 		d.ssrc = uint32(t.SSRC())
 		d.payload = uint8(codec.PayloadType)
-		d.writeStream = t.WriteStream()
+		d.writeStream.Store(t.WriteStream())
 		d.mime = strings.ToLower(codec.MimeType)
 		d.reSync.set(true)
 		d.enabled.set(true)
@@ -99,8 +101,8 @@ func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters,
 
 // Unbind implements the teardown logic when the track is no longer needed. This happens
 // because a track has been stopped.
-func (d *DownTrack) Unbind(t webrtc.TrackLocalContext) error {
-	d.writeStream = nil
+func (d *DownTrack) Unbind(_ webrtc.TrackLocalContext) error {
+	d.binded.set(false)
 	return nil
 }
 
@@ -230,11 +232,14 @@ func (d *DownTrack) writeSimpleRTP(pkt rtp.Packet) error {
 		d.sdesMidHdrCtr++
 	}
 
-	_, err := d.writeStream.WriteRTP(&pkt.Header, pkt.Payload)
-	if err != nil {
-		log.Errorf("Write packet err %v", err)
+	if tw, ok := d.writeStream.Load().(webrtc.TrackLocalWriter); ok && d.binded.get() {
+		_, err := tw.WriteRTP(&pkt.Header, pkt.Payload)
+		if err != nil {
+			log.Errorf("Write packet err %v", err)
+		}
+		return err
 	}
-	return err
+	return nil
 }
 
 func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
@@ -330,7 +335,13 @@ func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
 		}
 		d.sdesMidHdrCtr++
 	}
-	// Write packet to client
-	_, err := d.writeStream.WriteRTP(&pkt.Header, pkt.Payload)
-	return err
+
+	if tw, ok := d.writeStream.Load().(webrtc.TrackLocalWriter); ok && d.binded.get() {
+		_, err := tw.WriteRTP(&pkt.Header, pkt.Payload)
+		if err != nil {
+			log.Errorf("Write packet err %v", err)
+		}
+		return err
+	}
+	return nil
 }
