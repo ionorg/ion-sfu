@@ -83,10 +83,10 @@ func getPublisherMediaEngine() (*webrtc.MediaEngine, error) {
 
 func getSubscriberMediaEngine() (*webrtc.MediaEngine, error) {
 	me := &webrtc.MediaEngine{}
-	if err := me.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: sdp.SDESMidURI}, webrtc.RTPCodecTypeVideo); err != err {
+	if err := me.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: sdp.SDESMidURI}, webrtc.RTPCodecTypeVideo); err != nil {
 		return nil, err
 	}
-	if err := me.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: sdp.SDESMidURI}, webrtc.RTPCodecTypeAudio); err != err {
+	if err := me.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: sdp.SDESMidURI}, webrtc.RTPCodecTypeAudio); err != nil {
 		return nil, err
 	}
 	return me, nil
