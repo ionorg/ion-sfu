@@ -123,6 +123,7 @@ func (s *Session) Publish(router Router, rr *receiverRouter) {
 func (s *Session) Subscribe(peer *Peer) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	subdChans := false
 	for pid, p := range s.peers {
 		if pid == peer.id {
 			continue
@@ -131,6 +132,24 @@ func (s *Session) Subscribe(peer *Peer) {
 		if err != nil {
 			log.Errorf("Subscribing to router err: %v", err)
 			continue
+		}
+
+		if !subdChans {
+			for _, dc := range p.subscriber.channels {
+				label := dc.Label()
+				dc, err := peer.subscriber.AddDataChannel(label)
+
+				if err != nil {
+					log.Errorf("error adding datachannel: %s", err)
+					continue
+				}
+
+				pid := pid
+				dc.OnMessage(func(msg webrtc.DataChannelMessage) {
+					s.onMessage(pid, label, msg)
+				})
+			}
+			subdChans = true
 		}
 	}
 }
