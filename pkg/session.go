@@ -137,16 +137,15 @@ func (s *Session) Subscribe(peer *Peer) {
 		if !subdChans {
 			for _, dc := range p.subscriber.channels {
 				label := dc.Label()
-				dc, err := peer.subscriber.AddDataChannel(label)
+				new, err := peer.subscriber.AddDataChannel(label)
 
 				if err != nil {
 					log.Errorf("error adding datachannel: %s", err)
 					continue
 				}
 
-				pid := pid
-				dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-					s.onMessage(pid, label, msg)
+				new.OnMessage(func(msg webrtc.DataChannelMessage) {
+					s.onMessage(peer.id, label, msg)
 				})
 			}
 			subdChans = true
