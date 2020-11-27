@@ -95,6 +95,8 @@ func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 		dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 			s.onMessage(pid, label, msg)
 		})
+
+		p.subscriber.negotiate()
 	}
 }
 
@@ -149,6 +151,8 @@ func (s *Session) Subscribe(peer *Peer) {
 				})
 			}
 			subdChans = true
+
+			peer.subscriber.negotiate()
 		}
 	}
 }
