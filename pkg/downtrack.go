@@ -36,7 +36,6 @@ type DownTrack struct {
 	payload             uint8
 	streamID            string
 	trackType           DownTrackType
-	sdesMidHdrCtr       uint8
 	currentSpatialLayer uint8
 
 	enabled  atomicBool
@@ -210,15 +209,10 @@ func (d *DownTrack) writeSimpleRTP(pkt rtp.Packet) error {
 	d.lastSN = pkt.SequenceNumber - d.snOffset
 	d.lastTS = pkt.Timestamp - d.tsOffset
 	pkt.PayloadType = d.payload
+	pkt.Extensions = nil
 	pkt.Timestamp = d.lastTS
 	pkt.SequenceNumber = d.lastSN
 	pkt.SSRC = d.ssrc
-	if d.sdesMidHdrCtr < 50 {
-		if err := pkt.Header.SetExtension(1, []byte(d.transceiver.Mid())); err != nil {
-			log.Errorf("Setting sdes mid header err: %v", err)
-		}
-		d.sdesMidHdrCtr++
-	}
 
 	if tw, ok := d.writeStream.Load().(webrtc.TrackLocalWriter); ok && d.bound.get() {
 		_, err := tw.WriteRTP(&pkt.Header, pkt.Payload)
@@ -314,15 +308,10 @@ func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
 	d.lastSN = pkt.SequenceNumber - d.snOffset
 	// Update pkt headers
 	pkt.SequenceNumber = d.lastSN
+	pkt.Extensions = nil
 	pkt.Timestamp = d.lastTS
 	pkt.Header.SSRC = d.ssrc
 	pkt.Header.PayloadType = d.payload
-	if d.sdesMidHdrCtr < 50 {
-		if err := pkt.Header.SetExtension(1, []byte(d.transceiver.Mid())); err != nil {
-			log.Errorf("Setting sdes mid header err: %v", err)
-		}
-		d.sdesMidHdrCtr++
-	}
 
 	if tw, ok := d.writeStream.Load().(webrtc.TrackLocalWriter); ok && d.bound.get() {
 		_, err := tw.WriteRTP(&pkt.Header, pkt.Payload)
