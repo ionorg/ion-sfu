@@ -115,12 +115,14 @@ func Test_setVP8TemporalLayer(t *testing.T) {
 			name: "Must skip when current temporal is bigger than wanted",
 			args: args{
 				dt: &DownTrack{
-					mime:             "video/vp8",
-					currentTempLayer: 2,
-					refPicID:         0,
-					lastPicID:        0,
-					refTlzi:          0,
-					lastTlzi:         0,
+					mime: "video/vp8",
+					simulcast: simulcastTrackHelpers{
+						refPicID:         0,
+						currentTempLayer: 2,
+						lastPicID:        0,
+						refTlzi:          0,
+						lastTlzi:         0,
+					},
 				},
 				pl: []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0xdf, 0x5, 0x6},
 			},
@@ -131,10 +133,12 @@ func Test_setVP8TemporalLayer(t *testing.T) {
 			name: "Must return modified payload",
 			args: args{
 				dt: &DownTrack{
-					mime:             "video/vp8",
-					currentTempLayer: 3,
-					refPicID:         32764,
-					refTlzi:          179,
+					mime: "video/vp8",
+					simulcast: simulcastTrackHelpers{
+						refPicID:         32764,
+						currentTempLayer: 3,
+						refTlzi:          179,
+					},
 				},
 				pl: []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0xdf, 0x5, 0x6},
 			},

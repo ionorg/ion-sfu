@@ -113,9 +113,9 @@ func (s *Subscriber) AddICECandidate(candidate webrtc.ICECandidateInit) error {
 func (s *Subscriber) AddDownTrack(streamID string, downTrack *DownTrack) {
 	s.Lock()
 	defer s.Unlock()
-	if senders, ok := s.tracks[streamID]; ok {
-		senders = append(senders, downTrack)
-		s.tracks[streamID] = senders
+	if dt, ok := s.tracks[streamID]; ok {
+		dt = append(dt, downTrack)
+		s.tracks[streamID] = dt
 	} else {
 		s.tracks[streamID] = []*DownTrack{downTrack}
 	}

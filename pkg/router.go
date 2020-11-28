@@ -211,6 +211,7 @@ func (r *router) addDownTrack(sub *Subscriber, rr *receiverRouter) error {
 
 	if rr.kind == SimulcastReceiver {
 		outTrack.trackType = SimulcastDownTrack
+		outTrack.currentSpatialLayer = recv.SpatialLayer()
 	} else {
 		outTrack.trackType = SimpleDownTrack
 	}
@@ -254,14 +255,14 @@ func (r *router) loopDownTrackRTCP(track *DownTrack) {
 			switch pkt := pkt.(type) {
 			case *rtcp.PictureLossIndication:
 				if track.enabled.get() && pliOnce {
-					pkt.MediaSSRC = track.lSSRC
-					pkt.SenderSSRC = track.lSSRC
+					pkt.MediaSSRC = track.lastSSRC
+					pkt.SenderSSRC = track.lastSSRC
 					fwdPkts = append(fwdPkts, pkt)
 					pliOnce = false
 				}
 			case *rtcp.FullIntraRequest:
 				if track.enabled.get() && firOnce {
-					pkt.MediaSSRC = track.lSSRC
+					pkt.MediaSSRC = track.lastSSRC
 					pkt.SenderSSRC = track.ssrc
 					fwdPkts = append(fwdPkts, pkt)
 					firOnce = false

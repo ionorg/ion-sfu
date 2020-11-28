@@ -27,39 +27,27 @@ const (
 // to SFU Subscriber, the track handle the packets for simple, simulcast
 // and SVC Publisher.
 type DownTrack struct {
-	id            string
-	peerID        string
-	binded        atomicBool
-	mime          string
-	nList         *nackList
-	ssrc          uint32
-	payload       uint8
-	streamID      string
-	trackType     DownTrackType
-	sdesMidHdrCtr uint8
-
+	id                  string
+	peerID              string
+	bound               atomicBool
+	mime                string
+	nList               *nackList
+	ssrc                uint32
+	payload             uint8
+	streamID            string
+	trackType           DownTrackType
+	sdesMidHdrCtr       uint8
 	currentSpatialLayer uint8
-	targetSpatialLayer  uint8
-	temporalSupported   bool
-	currentTempLayer    uint8
-	targetTempLayer     uint8
-	temporalEnabled     bool
-	enabled             atomicBool
-	reSync              atomicBool
-	snOffset            uint16
-	tsOffset            uint32
-	lastSN              uint16
-	lastTS              uint32
-	lTSCalc             time.Time
-	lSSRC               uint32
-	lTS                 uint32
-	lSN                 uint32
 
-	// VP8Helper temporal helpers
-	refPicID  uint16
-	lastPicID uint16
-	refTlzi   uint8
-	lastTlzi  uint8
+	enabled  atomicBool
+	reSync   atomicBool
+	snOffset uint16
+	tsOffset uint32
+	lastSSRC uint32
+	lastSN   uint16
+	lastTS   uint32
+
+	simulcast simulcastTrackHelpers
 
 	codec          webrtc.RTPCodecCapability
 	router         *receiverRouter
@@ -87,7 +75,7 @@ func NewDownTrack(c webrtc.RTPCodecCapability, rr *receiverRouter, peerID, id, s
 func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters, error) {
 	parameters := webrtc.RTPCodecParameters{RTPCodecCapability: d.codec}
 	if codec, err := codecParametersFuzzySearch(parameters, t.CodecParameters()); err == nil {
-		d.binded.set(true)
+		d.bound.set(true)
 		d.ssrc = uint32(t.SSRC())
 		d.payload = uint8(codec.PayloadType)
 		d.writeStream.Store(t.WriteStream())
@@ -102,7 +90,7 @@ func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters,
 // Unbind implements the teardown logic when the track is no longer needed. This happens
 // because a track has been stopped.
 func (d *DownTrack) Unbind(_ webrtc.TrackLocalContext) error {
-	d.binded.set(false)
+	d.bound.set(false)
 	return nil
 }
 
@@ -166,12 +154,12 @@ func (d *DownTrack) Close() {
 func (d *DownTrack) SwitchSpatialLayer(targetLayer uint8) {
 	if d.trackType == SimulcastDownTrack {
 		// Don't switch until previous switch is done or canceled
-		if d.currentSpatialLayer != d.targetSpatialLayer {
+		if d.currentSpatialLayer != d.simulcast.targetSpatialLayer {
 			return
 		}
 		if recv := d.router.receivers[targetLayer]; recv != nil {
 			recv.AddDownTrack(d)
-			d.targetSpatialLayer = targetLayer
+			d.simulcast.targetSpatialLayer = targetLayer
 		}
 	}
 }
@@ -215,7 +203,7 @@ func (d *DownTrack) writeSimpleRTP(pkt rtp.Packet) error {
 		}
 		d.snOffset = pkt.SequenceNumber - d.lastSN - 1
 		d.tsOffset = pkt.Timestamp - d.lastTS - 1
-		d.lSSRC = pkt.SSRC
+		d.lastSSRC = pkt.SSRC
 		d.reSync.set(false)
 	}
 
@@ -232,7 +220,7 @@ func (d *DownTrack) writeSimpleRTP(pkt rtp.Packet) error {
 		d.sdesMidHdrCtr++
 	}
 
-	if tw, ok := d.writeStream.Load().(webrtc.TrackLocalWriter); ok && d.binded.get() {
+	if tw, ok := d.writeStream.Load().(webrtc.TrackLocalWriter); ok && d.bound.get() {
 		_, err := tw.WriteRTP(&pkt.Header, pkt.Payload)
 		if err != nil {
 			log.Errorf("Write packet err %v", err)
@@ -245,8 +233,8 @@ func (d *DownTrack) writeSimpleRTP(pkt rtp.Packet) error {
 func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
 	// Check if packet SSRC is different from before
 	// if true, the video source changed
-	if d.lSSRC != pkt.SSRC {
-		recv := d.router.receivers[d.targetSpatialLayer]
+	if d.lastSSRC != pkt.SSRC {
+		recv := d.router.receivers[d.simulcast.targetSpatialLayer]
 		if recv == nil || uint32(recv.Track().SSRC()) != pkt.SSRC {
 			return nil
 		}
@@ -259,9 +247,9 @@ func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
 				if vp8Packet.IsKeyFrame {
 					relay = true
 					// Set VP8Helper temporal info
-					d.temporalSupported = vp8Packet.TemporalSupported
-					d.refPicID += vp8Packet.PictureID - d.lastPicID
-					d.refTlzi += vp8Packet.TL0PICIDX - d.lastTlzi
+					d.simulcast.temporalSupported = vp8Packet.TemporalSupported
+					d.simulcast.refPicID += vp8Packet.PictureID - d.simulcast.lastPicID
+					d.simulcast.refTlzi += vp8Packet.TL0PICIDX - d.simulcast.lastTlzi
 				}
 			}
 		case "video/h264":
@@ -286,26 +274,27 @@ func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
 		}
 		// Switch is done remove sender from previous layer
 		// and update current layer
-		if pRecv := d.router.receivers[d.currentSpatialLayer]; pRecv != nil && d.currentSpatialLayer != d.targetSpatialLayer {
+		if pRecv := d.router.receivers[d.currentSpatialLayer]; pRecv != nil &&
+			d.currentSpatialLayer != d.simulcast.targetSpatialLayer {
 			pRecv.DeleteDownTrack(d.peerID)
 		}
-		d.currentSpatialLayer = d.targetSpatialLayer
+		d.currentSpatialLayer = d.simulcast.targetSpatialLayer
 	}
 	// Compute how much time passed between the old RTP pkt
 	// and the current packet, and fix timestamp on source change
-	if !d.lTSCalc.IsZero() && d.lSSRC != pkt.SSRC {
-		tDiff := time.Now().Sub(d.lTSCalc)
+	if !d.simulcast.lTSCalc.IsZero() && d.lastSSRC != pkt.SSRC {
+		tDiff := time.Now().Sub(d.simulcast.lTSCalc)
 		td := uint32((tDiff.Milliseconds() * 90) / 1000)
 		if td == 0 {
 			td = 1
 		}
-		d.tsOffset = pkt.Timestamp - (d.lTS + td)
-		d.snOffset = pkt.SequenceNumber - uint16(d.lSN) - 1
-	} else if d.lTSCalc.IsZero() {
-		d.lTS = pkt.Timestamp
-		d.lSN = uint32(pkt.SequenceNumber)
+		d.tsOffset = pkt.Timestamp - (d.lastTS + td)
+		d.snOffset = pkt.SequenceNumber - d.lastSN - 1
+	} else if d.simulcast.lTSCalc.IsZero() {
+		d.lastTS = pkt.Timestamp
+		d.lastSN = pkt.SequenceNumber
 	}
-	if d.temporalEnabled && d.temporalSupported {
+	if d.simulcast.temporalEnabled && d.simulcast.temporalSupported {
 		if d.codec.MimeType == "video/vp8" {
 			pl, skip := setVP8TemporalLayer(pkt.Payload, d)
 			if skip {
@@ -319,14 +308,13 @@ func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
 		}
 	}
 	// Update base
-	d.lTSCalc = time.Now()
-	d.lSSRC = pkt.SSRC
-	d.lTS = pkt.Timestamp - d.tsOffset
-	lSN := pkt.SequenceNumber - d.snOffset
-	atomic.StoreUint32(&d.lSN, uint32(lSN))
+	d.simulcast.lTSCalc = time.Now()
+	d.lastSSRC = pkt.SSRC
+	d.lastTS = pkt.Timestamp - d.tsOffset
+	d.lastSN = pkt.SequenceNumber - d.snOffset
 	// Update pkt headers
-	pkt.SequenceNumber = lSN
-	pkt.Timestamp = d.lTS
+	pkt.SequenceNumber = d.lastSN
+	pkt.Timestamp = d.lastTS
 	pkt.Header.SSRC = d.ssrc
 	pkt.Header.PayloadType = d.payload
 	if d.sdesMidHdrCtr < 50 {
@@ -336,7 +324,7 @@ func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
 		d.sdesMidHdrCtr++
 	}
 
-	if tw, ok := d.writeStream.Load().(webrtc.TrackLocalWriter); ok && d.binded.get() {
+	if tw, ok := d.writeStream.Load().(webrtc.TrackLocalWriter); ok && d.bound.get() {
 		_, err := tw.WriteRTP(&pkt.Header, pkt.Payload)
 		if err != nil {
 			log.Errorf("Write packet err %v", err)

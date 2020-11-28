@@ -129,11 +129,11 @@ func setVP8TemporalLayer(pl []byte, s *DownTrack) (payload []byte, skip bool) {
 		return nil, false
 	}
 	// Check if temporal layer is requested
-	if pkt.TID > s.currentTempLayer {
+	if pkt.TID > s.simulcast.currentTempLayer {
 		skip = true
 		// Increment references to prevent gaps
-		s.refTlzi++
-		s.refPicID++
+		s.simulcast.refTlzi++
+		s.simulcast.refPicID++
 		return
 	}
 	// If we are here modify payload
@@ -141,13 +141,13 @@ func setVP8TemporalLayer(pl []byte, s *DownTrack) (payload []byte, skip bool) {
 	copy(payload, pl)
 	// Modify last zero index
 	if pkt.tlzIdx > 0 {
-		s.lastTlzi = pkt.TL0PICIDX - s.refTlzi
-		payload[pkt.tlzIdx] = s.lastTlzi
+		s.simulcast.lastTlzi = pkt.TL0PICIDX - s.simulcast.refTlzi
+		payload[pkt.tlzIdx] = s.simulcast.lastTlzi
 	}
 	if pkt.picIDIdx > 0 {
-		s.lastPicID = pkt.PictureID - s.refPicID
+		s.simulcast.lastPicID = pkt.PictureID - s.simulcast.refPicID
 		pid := make([]byte, 2)
-		binary.BigEndian.PutUint16(pid, s.lastPicID)
+		binary.BigEndian.PutUint16(pid, s.simulcast.lastPicID)
 		payload[pkt.picIDIdx] = pid[0]
 		if pkt.mBit {
 			payload[pkt.picIDIdx] |= 0x80
