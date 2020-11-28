@@ -191,13 +191,15 @@ func (s *SFU) NewTransport(sid, pid string, me MediaEngine) (*Session, *Publishe
 		session = s.newSession(sid)
 	}
 
-	pub, err := NewPublisher(session, pid, me, s.webrtc)
-	if err != nil {
-		return nil, nil, nil, err
-	}
 	sub, err := NewSubscriber(session, pid, me, s.webrtc)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+
+	pub, err := NewPublisher(session, pid, me, s.webrtc)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
 	return session, pub, sub, nil
 }
