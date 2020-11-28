@@ -46,7 +46,7 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 
 	pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 		log.Debugf("Peer %s got remote track id: %s mediaSSRC: %d rid :%s streamID: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.StreamID())
-		if rr := p.router.AddReceiver(track, receiver); rr != nil {
+		if rr := p.router.AddReceiver(track, receiver, me); rr != nil {
 			p.session.Publish(p.router, rr)
 		}
 	})

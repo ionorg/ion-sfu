@@ -25,7 +25,7 @@ const (
 type Router interface {
 	ID() string
 	Config() RouterConfig
-	AddReceiver(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) *receiverRouter
+	AddReceiver(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, me *webrtc.MediaEngine) *receiverRouter
 	AddDownTracks(s *Subscriber, rr *receiverRouter) error
 	SendRTCP(pkts []rtcp.Packet)
 	Stop()
@@ -77,16 +77,23 @@ func (r *router) Config() RouterConfig {
 	return r.config
 }
 
-func (r *router) AddReceiver(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) *receiverRouter {
+func (r *router) AddReceiver(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, me *webrtc.MediaEngine) *receiverRouter {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	trackID := track.ID()
 	var twccExt uint8
-	for _, ext := range receiver.GetParameters().HeaderExtensions {
-		if ext.URI == sdp.TransportCCURI {
-			twccExt = ext.ID
-		}
+
+	extId, audio, video := me.GetHeaderExtensionID(webrtc.RTPHeaderExtensionCapability{URI: sdp.TransportCCURI})
+	if r.twcc.tccLastReport == 0 {
+		r.twcc.tccLastReport = time.Now().UnixNano()
+		r.twcc.mSSRC = uint32(track.SSRC())
+	}
+	if track.Kind() == webrtc.RTPCodecTypeVideo && video {
+		twccExt = uint8(extId)
+	}
+	if track.Kind() == webrtc.RTPCodecTypeAudio && audio {
+		twccExt = uint8(extId)
 	}
 
 	recv := NewWebRTCReceiver(receiver, track, BufferOptions{
@@ -101,10 +108,6 @@ func (r *router) AddReceiver(track *webrtc.TrackRemote, receiver *webrtc.RTPRece
 	recv.OnCloseHandler(func() {
 		r.deleteReceiver(trackID)
 	})
-	if track.Kind() == webrtc.RTPCodecTypeVideo {
-		r.twcc.mSSRC = uint32(track.SSRC())
-		r.twcc.tccLastReport = time.Now().UnixNano()
-	}
 	recv.Start()
 
 	if rr, ok := r.receivers[trackID]; ok {
