@@ -71,11 +71,13 @@ func (p *VP8Helper) Unmarshal(payload []byte) error {
 	}
 
 	var idx uint8
+	S := payload[idx]&0x10 > 0
 	// Check for extended bit control
 	if payload[idx]&0x80 > 0 {
 		idx++
 		// Check if T is present, if not, no temporal layer is available
 		p.TemporalSupported = payload[idx]&0x20 > 0
+		K := payload[idx]&0x10 > 0
 		L := payload[idx]&0x40 > 0
 		// Check for PictureID
 		if payload[idx]&0x80 > 0 {
@@ -97,15 +99,20 @@ func (p *VP8Helper) Unmarshal(payload []byte) error {
 			p.tlzIdx = idx
 			p.TL0PICIDX = payload[idx]
 		}
-		idx++
-		// Set TID
-		p.TID = (payload[idx] & 0xc0) >> 6
-		idx++
+		if p.TemporalSupported || K {
+			idx++
+			p.TID = (payload[idx] & 0xc0) >> 6
+		}
 		if int(idx) >= payloadLen {
 			return errShortPacket
 		}
+		idx++
 		// Check is packet is a keyframe by looking at P bit in vp8 payload
-		p.IsKeyFrame = payload[idx]&0x01 == 0
+		p.IsKeyFrame = payload[idx]&0x01 == 0 && S
+	} else {
+		idx++
+		// Check is packet is a keyframe by looking at P bit in vp8 payload
+		p.IsKeyFrame = payload[idx]&0x01 == 0 && S
 	}
 	return nil
 }
@@ -163,9 +170,12 @@ func timeToNtp(ns int64) uint64 {
 	return seconds<<32 | fraction
 }
 
-// fromNtp converts a NTP timestamp into GO time
-func fromNtp(seconds, fraction uint32) (tm int64) {
-	n := (int64(fraction) * 1e9) >> 32
-	tm = (int64(seconds)-ntpEpoch)*1e9 + n
-	return
+// setNBitsOfUint16 will truncate the value to size, left-shift to startIndex position and set
+func setNBitsOfUint16(src, size, startIndex, val uint16) uint16 {
+	if startIndex+size > 16 {
+		return 0
+	}
+	// truncate val to size bits
+	val &= (1 << size) - 1
+	return src | (val << (16 - size - startIndex))
 }

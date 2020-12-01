@@ -1,24 +1,30 @@
 package sfu
 
 import (
+	"sync"
+
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 )
 
 type queue struct {
+	sync.Mutex
 	pkts     []*rtp.Packet
 	ssrc     uint32
 	head     int
 	tail     int
 	size     int
 	headSN   uint16
-	counter  int
 	duration uint32
+	counter  int
 	onLost   func(nack *rtcp.TransportLayerNack)
 }
 
 func (q *queue) AddPacket(pkt *rtp.Packet, latest bool) {
+	q.Lock()
+	defer q.Unlock()
+
 	if !latest {
 		q.set(int(q.headSN-pkt.SequenceNumber), pkt)
 		return
@@ -44,6 +50,8 @@ func (q *queue) AddPacket(pkt *rtp.Packet, latest bool) {
 }
 
 func (q *queue) GetPacket(sn uint16) *rtp.Packet {
+	q.Lock()
+	defer q.Unlock()
 	return q.get(int(q.headSN - sn))
 }
 
@@ -84,7 +92,7 @@ func (q *queue) set(i int, pkt *rtp.Packet) {
 
 func (q *queue) resize() {
 	if len(q.pkts) == 0 {
-		q.pkts = make([]*rtp.Packet, 128)
+		q.pkts = make([]*rtp.Packet, 1<<7)
 		return
 	}
 	if q.size == len(q.pkts) {
@@ -117,8 +125,7 @@ func (q *queue) nack() *rtcp.NackPair {
 }
 
 func (q *queue) clean() {
-	last := q.last()
-	for q.size > 120 && (last == nil || q.pkts[q.head].Timestamp-last.Timestamp > q.duration) {
+	for q.size > 100 && (q.last() == nil || q.pkts[q.head].Timestamp-q.last().Timestamp > q.duration) {
 		q.shift()
 	}
 }

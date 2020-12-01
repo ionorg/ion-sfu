@@ -16,21 +16,20 @@ func TestNewWebRTCSimulcastSender(t *testing.T) {
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
-	ctx := context.Background()
 
 	local, err := api.NewPeerConnection(webrtc.Configuration{})
 	assert.NoError(t, err)
 	senderTrack, err := local.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "fake_id", "fake_label")
 	assert.NoError(t, err)
-	sender, err := local.AddTrack(senderTrack)
+	transceiver, err := local.AddTransceiverFromTrack(senderTrack)
 	assert.NoError(t, err)
 
 	type args struct {
-		ctx    context.Context
-		id     string
-		router Router
-		sender *webrtc.RTPSender
-		layer  uint8
+		ctx         context.Context
+		id          string
+		router      *receiverRouter
+		transceiver *webrtc.RTPTransceiver
+		layer       uint8
 	}
 	tests := []struct {
 		name string
@@ -39,22 +38,17 @@ func TestNewWebRTCSimulcastSender(t *testing.T) {
 		{
 			name: "Must return a non nil Sender",
 			args: args{
-				ctx: ctx,
-				id:  "test",
-				router: &RouterMock{
-					ConfigFunc: func() RouterConfig {
-						return RouterConfig{}
-					},
-				},
-				sender: sender,
-				layer:  2,
+				id:          "test",
+				router:      nil,
+				transceiver: transceiver,
+				layer:       2,
 			},
 		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewSimulcastSender(tt.args.ctx, tt.args.id, tt.args.router, tt.args.sender, tt.args.layer)
+			got := NewSimulcastSender(tt.args.id, tt.args.router, tt.args.transceiver, tt.args.layer, SimulcastConfig{})
 			assert.NotNil(t, got)
 		})
 	}
@@ -89,25 +83,25 @@ func TestSimulcastSender_WriteRTP(t *testing.T) {
 	_, err = sfu.AddTrack(senderTrack)
 	assert.NoError(t, err)
 
+	tr := sfu.GetTransceivers()[0]
+
 	gotPli := make(chan struct{}, 1)
 	fakeReceiver := &ReceiverMock{
 		TrackFunc: func() *webrtc.Track {
 			return fakeRecvTrack
 		},
-	}
-
-	fakeRouter := &RouterMock{
-		GetReceiverFunc: func(_ uint8) Receiver {
-			return fakeReceiver
-		},
-		SendRTCPFunc: func(pkts []rtcp.Packet) error {
-			for _, pkt := range pkts {
-				if _, ok := pkt.(*rtcp.PictureLossIndication); ok {
+		SendRTCPFunc: func(p []rtcp.Packet) {
+			for _, pp := range p {
+				if _, ok := pp.(*rtcp.PictureLossIndication); ok {
 					gotPli <- struct{}{}
 				}
 			}
-			return nil
 		},
+	}
+
+	r := &receiverRouter{
+		kind:      SimulcastReceiver,
+		receivers: [3]Receiver{fakeReceiver, fakeReceiver, fakeReceiver},
 	}
 
 	err = signalPair(sfu, remote)
@@ -140,13 +134,6 @@ forLoop:
 		fields fields
 	}{
 		{
-			name: "On spatial change sender must forward a RTCP PLI request to receiver",
-			fields: fields{
-				checkPli: true,
-				packet:   fakePkt,
-			},
-		},
-		{
 			name: "Sender packet SSRC must be same as simulcast SSRC, and receiver packet must be restored",
 			fields: fields{
 				checkPacket: true,
@@ -157,35 +144,14 @@ forLoop:
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.fields.checkPli {
-				s := &SimulcastSender{
-					ctx:           context.Background(),
-					enabled:       atomicBool{1},
-					router:        fakeRouter,
-					track:         senderTrack,
-					simulcastSSRC: simulcastSSRC,
-				}
-				tmr := time.NewTimer(100 * time.Millisecond)
-				s.WriteRTP(tt.fields.packet)
-			testLoop:
-				for {
-					select {
-					case <-tmr.C:
-						t.Fatal("PLI packet not received")
-					case <-gotPli:
-						tmr.Stop()
-						break testLoop
-					}
-				}
-			}
 			if tt.fields.checkPacket {
 				s := &SimulcastSender{
-					ctx:           context.Background(),
 					enabled:       atomicBool{1},
-					router:        fakeRouter,
+					router:        r,
 					track:         senderTrack,
 					simulcastSSRC: simulcastSSRC,
 					lSSRC:         fakeRecvTrack.SSRC(),
+					transceiver:   tr,
 				}
 				s.WriteRTP(tt.fields.packet)
 				pkt, err := remoteTrack.ReadRTP()
@@ -227,18 +193,16 @@ func TestSimulcastSender_receiveRTCP(t *testing.T) {
 	fakeReceiver := &ReceiverMock{
 		DeleteSenderFunc: func(_ string) {
 		},
+		SendRTCPFunc: func(p []rtcp.Packet) {
+			for _, pp := range p {
+				gotRTCP <- pp
+			}
+		},
 	}
 
-	fakeRouter := &RouterMock{
-		GetReceiverFunc: func(_ uint8) Receiver {
-			return fakeReceiver
-		},
-		SendRTCPFunc: func(pkts []rtcp.Packet) error {
-			for _, pkt := range pkts {
-				gotRTCP <- pkt
-			}
-			return nil
-		},
+	r := &receiverRouter{
+		kind:      SimulcastReceiver,
+		receivers: [3]Receiver{fakeReceiver, fakeReceiver, fakeReceiver},
 	}
 
 	err = signalPair(sfu, remote)
@@ -267,23 +231,13 @@ forLoop:
 				MediaSSRC:  simulcastSSRC,
 			},
 		},
-		{
-			name: "Sender must forward FIR messages, with correct SSRC",
-			want: &rtcp.FullIntraRequest{
-				SenderSSRC: simulcastSSRC,
-				MediaSSRC:  simulcastSSRC,
-			},
-		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
 			wss := &SimulcastSender{
-				ctx:           ctx,
-				cancel:        cancel,
 				enabled:       atomicBool{1},
-				router:        fakeRouter,
+				router:        r,
 				sender:        s,
 				track:         senderTrack,
 				lSSRC:         recvSSRC,
@@ -325,16 +279,16 @@ forLoop:
 func TestSimulcastSender_Close(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	closeCtr := 0
-	fakeRouter := &RouterMock{
-		GetReceiverFunc: func(_ uint8) Receiver {
-			return nil
-		},
+
+	r := &receiverRouter{
+		kind:      SimulcastReceiver,
+		receivers: [3]Receiver{},
 	}
 
 	type fields struct {
 		ctx            context.Context
 		cancel         context.CancelFunc
-		router         Router
+		router         *receiverRouter
 		onCloseHandler func()
 	}
 	tests := []struct {
@@ -347,7 +301,7 @@ func TestSimulcastSender_Close(t *testing.T) {
 			fields: fields{
 				ctx:            ctx,
 				cancel:         cancel,
-				router:         fakeRouter,
+				router:         r,
 				onCloseHandler: nil,
 			},
 		},
@@ -357,7 +311,7 @@ func TestSimulcastSender_Close(t *testing.T) {
 			fields: fields{
 				ctx:    ctx,
 				cancel: cancel,
-				router: fakeRouter,
+				router: r,
 				onCloseHandler: func() {
 					closeCtr++
 				},
@@ -368,8 +322,6 @@ func TestSimulcastSender_Close(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			s := &SimulcastSender{
-				ctx:            tt.fields.ctx,
-				cancel:         tt.fields.cancel,
 				router:         tt.fields.router,
 				onCloseHandler: tt.fields.onCloseHandler,
 			}
@@ -525,6 +477,8 @@ func TestSimulcastSender_Mute(t *testing.T) {
 	_, err = sfu.AddTrack(senderTrack)
 	assert.NoError(t, err)
 
+	tr := sfu.GetTransceivers()[0]
+
 	err = signalPair(sfu, remote)
 	assert.NoError(t, err)
 
@@ -541,34 +495,32 @@ forLoop:
 	}
 
 	gotPli := make(chan struct{}, 1)
-	fakeRecv := &ReceiverMock{
+	fakeReceiver := &ReceiverMock{
 		TrackFunc: func() *webrtc.Track {
 			return senderTrack
 		},
-	}
-
-	fakeRouter := &RouterMock{
-		GetReceiverFunc: func(_ uint8) Receiver {
-			return fakeRecv
-		},
-		SendRTCPFunc: func(pkts []rtcp.Packet) error {
-			for _, pkt := range pkts {
-				if _, ok := pkt.(*rtcp.PictureLossIndication); ok {
+		SendRTCPFunc: func(p []rtcp.Packet) {
+			for _, pp := range p {
+				if _, ok := pp.(*rtcp.PictureLossIndication); ok {
 					gotPli <- struct{}{}
 				}
 			}
-			return nil
 		},
 	}
 
+	r := &receiverRouter{
+		kind:      SimulcastReceiver,
+		receivers: [3]Receiver{fakeReceiver, fakeReceiver, fakeReceiver},
+	}
+
 	simpleSdr := SimulcastSender{
-		ctx:           context.Background(),
 		enabled:       atomicBool{1},
 		simulcastSSRC: 1234,
-		router:        fakeRouter,
+		router:        r,
 		track:         senderTrack,
 		payload:       senderTrack.PayloadType(),
 		lSSRC:         1234,
+		transceiver:   tr,
 	}
 	// Simple sender must forward packets while the sender is not muted
 	fakePkt := senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]

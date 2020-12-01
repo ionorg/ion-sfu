@@ -9,36 +9,39 @@ service SFU {
 }
 
 message SignalRequest {
+    string id = 1;
     oneof payload {
-        JoinRequest join = 1;
-        SessionDescription negotiate = 2;
-        Trickle trickle = 3;
+        JoinRequest join = 2;
+        bytes description = 3;
+        Trickle trickle = 4;
     }
 }
 
 message SignalReply {
+    string id = 1;
     oneof payload {
-        JoinReply join = 1;
-        SessionDescription negotiate = 2;
-        Trickle trickle = 3;
+        JoinReply join = 2;
+        bytes description = 3;
+        Trickle trickle = 4;
+        string iceConnectionState = 5;
+        string error = 6;
     }
 }
 
 message JoinRequest {
     string sid = 1;
-    SessionDescription offer = 2;
+    bytes description = 2;
 }
 
 message JoinReply {
-    string pid = 1;
-    SessionDescription answer = 2;
+    bytes description = 1;
 }
 
 message Trickle {
-    string init = 1;
-}
-
-message SessionDescription {
-    string type = 1; // "answer" | "offer" | "pranswer" | "rollback"
-    bytes sdp = 2;
+    enum Target {
+        PUBLISHER = 0;
+        SUBSCRIBER = 1;
+    }
+    Target target = 1;
+    string init = 2;
 }

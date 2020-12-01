@@ -1,7 +1,6 @@
 package sfu
 
 import (
-	"context"
 	"reflect"
 	"sync/atomic"
 	"testing"
@@ -47,37 +46,6 @@ func TestWebRTCReceiver_AddSender(t *testing.T) {
 			}
 			w.AddSender(tt.args.sender)
 			assert.Equal(t, tt.want, len(w.senders))
-		})
-	}
-}
-
-func TestWebRTCReceiver_Close(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	type fields struct {
-		ctx    context.Context
-		cancel context.CancelFunc
-	}
-	tests := []struct {
-		name   string
-		fields fields
-	}{
-		{
-			name: "Must cancel context",
-			fields: fields{
-				ctx:    ctx,
-				cancel: cancel,
-			},
-		},
-	}
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			w := &WebRTCReceiver{
-				ctx:    tt.fields.ctx,
-				cancel: tt.fields.cancel,
-			}
-			w.Close()
-			assert.Error(t, ctx.Err())
 		})
 	}
 }

@@ -154,10 +154,8 @@ func main() {
 
 	grpcServer := grpc.NewServer()
 
-	inst := server.GRPCSignal{SFU: sfu.NewSFU(conf.Config)}
-	pb.RegisterSFUService(grpcServer, &pb.SFUService{
-		Signal: inst.Signal,
-	})
+	inst := server.SFUServer{SFU: sfu.NewSFU(conf.Config)}
+	pb.RegisterSFUServer(grpcServer, &inst)
 
 	grpclog.SetLogger(log.New(os.Stdout, "ION-SFU: ", log.LstdFlags))
 	grpclog.Info("--- Starting SFU Node (grpc-web) ---")
