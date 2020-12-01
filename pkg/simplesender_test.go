@@ -15,19 +15,17 @@ func TestNewSimpleSender(t *testing.T) {
 	me := webrtc.MediaEngine{}
 	me.RegisterDefaultCodecs()
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
-	ctx := context.Background()
 
 	local, err := api.NewPeerConnection(webrtc.Configuration{})
 	assert.NoError(t, err)
 	senderTrack, err := local.NewTrack(webrtc.DefaultPayloadTypeVP8, rand.Uint32(), "fake_id", "fake_label")
 	assert.NoError(t, err)
-	sender, err := local.AddTrack(senderTrack)
+	transceiver, err := local.AddTransceiverFromTrack(senderTrack)
 	assert.NoError(t, err)
 	type args struct {
-		ctx    context.Context
-		id     string
-		router Router
-		sender *webrtc.RTPSender
+		id          string
+		router      *receiverRouter
+		transceiver *webrtc.RTPTransceiver
 	}
 	tests := []struct {
 		name string
@@ -37,17 +35,16 @@ func TestNewSimpleSender(t *testing.T) {
 		{
 			name: "Must return a non nil Sender",
 			args: args{
-				ctx:    ctx,
-				id:     "test",
-				router: nil,
-				sender: sender,
+				id:          "test",
+				router:      nil,
+				transceiver: transceiver,
 			},
 		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewSimpleSender(tt.args.ctx, tt.args.id, tt.args.router, tt.args.sender)
+			got := NewSimpleSender(tt.args.id, tt.args.router, tt.args.transceiver)
 			assert.NotNil(t, got)
 		})
 	}
@@ -74,6 +71,8 @@ func TestSimpleSender_WriteRTP(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = sfu.AddTrack(senderTrack)
 	assert.NoError(t, err)
+
+	tr := sfu.GetTransceivers()[0]
 
 	err = signalPair(sfu, remote)
 	assert.NoError(t, err)
@@ -103,13 +102,11 @@ forLoop:
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
 			s := &SimpleSender{
-				ctx:     ctx,
-				cancel:  cancel,
-				enabled: atomicBool{1},
-				payload: senderTrack.PayloadType(),
-				track:   senderTrack,
+				enabled:     atomicBool{1},
+				payload:     senderTrack.PayloadType(),
+				track:       senderTrack,
+				transceiver: tr,
 			}
 			tmr := time.NewTimer(1000 * time.Millisecond)
 			s.WriteRTP(fakePkt)
@@ -157,17 +154,10 @@ func TestSimpleSender_receiveRTCP(t *testing.T) {
 	fakeReceiver := &ReceiverMock{
 		DeleteSenderFunc: func(_ string) {
 		},
-	}
-
-	fakeRouter := &RouterMock{
-		GetReceiverFunc: func(_ uint8) Receiver {
-			return fakeReceiver
-		},
-		SendRTCPFunc: func(pkts []rtcp.Packet) error {
-			for _, pkt := range pkts {
-				gotRTCP <- pkt
+		SendRTCPFunc: func(p []rtcp.Packet) {
+			for _, pp := range p {
+				gotRTCP <- pp
 			}
-			return nil
 		},
 	}
 
@@ -196,32 +186,26 @@ forLoop:
 				MediaSSRC:  1234,
 			},
 		},
-		{
-			name: "Sender must forward FIR messages",
-			want: &rtcp.FullIntraRequest{
-				SenderSSRC: 1234,
-				MediaSSRC:  1234,
-			},
-		},
-		// TODO: Add test cases.
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
 			wss := &SimpleSender{
-				ctx:    ctx,
-				cancel: cancel,
-				router: fakeRouter,
+				router: &receiverRouter{
+					kind:      SimpleReceiver,
+					stream:    "123",
+					receivers: [3]Receiver{fakeReceiver},
+				},
 				sender: s,
 				track:  senderTrack,
 			}
+			wss.enabled.set(true)
 			go wss.receiveRTCP()
 			tmr := time.NewTimer(5000 * time.Millisecond)
 		testLoop:
 			for {
 				select {
-				case <-time.After(20 * time.Millisecond):
+				case <-time.After(10 * time.Millisecond):
 					err := remote.WriteRTCP([]rtcp.Packet{tt.want, tt.want, tt.want, tt.want})
 					assert.NoError(t, err)
 				case <-tmr.C:
@@ -250,16 +234,11 @@ forLoop:
 func TestSimpleSender_Close(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	closeCtr := 0
-	fakeRouter := &RouterMock{
-		GetReceiverFunc: func(_ uint8) Receiver {
-			return nil
-		},
-	}
 
 	type fields struct {
 		ctx            context.Context
 		cancel         context.CancelFunc
-		router         Router
+		router         *receiverRouter
 		onCloseHandler func()
 	}
 	tests := []struct {
@@ -272,7 +251,7 @@ func TestSimpleSender_Close(t *testing.T) {
 			fields: fields{
 				ctx:            ctx,
 				cancel:         cancel,
-				router:         fakeRouter,
+				router:         nil,
 				onCloseHandler: nil,
 			},
 		},
@@ -282,7 +261,7 @@ func TestSimpleSender_Close(t *testing.T) {
 			fields: fields{
 				ctx:    ctx,
 				cancel: cancel,
-				router: fakeRouter,
+				router: nil,
 				onCloseHandler: func() {
 					closeCtr++
 				},
@@ -293,8 +272,6 @@ func TestSimpleSender_Close(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			s := &SimpleSender{
-				ctx:            tt.fields.ctx,
-				cancel:         tt.fields.cancel,
 				router:         tt.fields.router,
 				onCloseHandler: tt.fields.onCloseHandler,
 			}
@@ -442,6 +419,8 @@ func TestSimpleSender_Mute(t *testing.T) {
 	_, err = sfu.AddTrack(senderTrack)
 	assert.NoError(t, err)
 
+	tr := sfu.GetTransceivers()[0]
+
 	err = signalPair(sfu, remote)
 	assert.NoError(t, err)
 
@@ -458,28 +437,27 @@ forLoop:
 	}
 
 	gotPli := make(chan struct{}, 1)
-	fakeRecv := &ReceiverMock{}
-
-	fakeRouter := &RouterMock{
-		GetReceiverFunc: func(_ uint8) Receiver {
-			return fakeRecv
-		},
-		SendRTCPFunc: func(pkts []rtcp.Packet) error {
-			for _, pkt := range pkts {
-				if _, ok := pkt.(*rtcp.PictureLossIndication); ok {
+	fakeRecv := &ReceiverMock{
+		SendRTCPFunc: func(p []rtcp.Packet) {
+			for _, pp := range p {
+				if _, ok := pp.(*rtcp.PictureLossIndication); ok {
 					gotPli <- struct{}{}
 				}
 			}
-			return nil
 		},
 	}
 
+	r := &receiverRouter{
+		kind:      SimpleReceiver,
+		receivers: [3]Receiver{fakeRecv},
+	}
+
 	simpleSdr := SimpleSender{
-		ctx:     context.Background(),
-		enabled: atomicBool{1},
-		router:  fakeRouter,
-		track:   senderTrack,
-		payload: senderTrack.PayloadType(),
+		enabled:     atomicBool{1},
+		router:      r,
+		track:       senderTrack,
+		payload:     senderTrack.PayloadType(),
+		transceiver: tr,
 	}
 	// Simple sender must forward packets while the sender is not muted
 	fakePkt := senderTrack.Packetizer().Packetize([]byte{0x05, 0x06, 0x07, 0x08}, 1)[0]

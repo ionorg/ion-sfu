@@ -1,0 +1,14 @@
+version: "3"
+services:
+  pubsub:
+    image: nginx
+    volumes:
+      - ./:/usr/share/nginx/html
+    ports:
+      - 8000:80
+
+  sfu:
+    image: pionwebrtc/ion-sfu:latest-jsonrpc
+    ports:
+      - "5000-5200:5000-5200/udp"
+      - 7000:7000

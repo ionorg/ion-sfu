@@ -25,7 +25,6 @@ var (
 // MediaEngine handles stream codecs
 type MediaEngine struct {
 	webrtc.MediaEngine
-	tCCExt int
 }
 
 // PopulateFromSDP finds all codecs in sd and adds them to m, using the dynamic
@@ -42,13 +41,6 @@ func (e *MediaEngine) PopulateFromSDP(sd webrtc.SessionDescription) error {
 	for _, md := range s.MediaDescriptions {
 		if md.MediaName.Media != mediaNameAudio && md.MediaName.Media != mediaNameVideo {
 			continue
-		}
-
-		for _, att := range md.Attributes {
-			if att.Key == sdp.AttrKeyExtMap && strings.HasSuffix(att.Value, sdp.TransportCCURI) {
-				e.tCCExt, _ = strconv.Atoi(att.Value[:1])
-				break
-			}
 		}
 
 		for _, format := range md.MediaName.Formats {

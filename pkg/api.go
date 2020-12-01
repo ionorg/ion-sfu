@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	channelLabel = "ion-sfu"
+	apiChannelLabel = "ion-sfu"
 
 	videoHighQuality   = "high"
 	videoMediumQuality = "medium"
@@ -22,14 +22,14 @@ type setRemoteMedia struct {
 	Audio    bool   `json:"audio"`
 }
 
-func handleAPICommand(t Transport, dc *webrtc.DataChannel) {
+func handleAPICommand(s *Subscriber, dc *webrtc.DataChannel) {
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 		srm := &setRemoteMedia{}
 		if err := json.Unmarshal(msg.Data, srm); err != nil {
 			log.Errorf("Unmarshal api command err: %v", err)
 			return
 		}
-		senders := t.GetSenders(srm.StreamID)
+		senders := s.GetSenders(srm.StreamID)
 
 		for _, sender := range senders {
 			switch sender.Kind() {
@@ -40,17 +40,17 @@ func handleAPICommand(t Transport, dc *webrtc.DataChannel) {
 				case videoHighQuality:
 					sender.Mute(false)
 					if sender.Type() != SimpleSenderType {
-						sender.SwitchSpatialLayer(3)
+						sender.SwitchSpatialLayer(2)
 					}
 				case videoMediumQuality:
 					sender.Mute(false)
 					if sender.Type() != SimpleSenderType {
-						sender.SwitchSpatialLayer(2)
+						sender.SwitchSpatialLayer(1)
 					}
 				case videoLowQuality:
 					sender.Mute(false)
 					if sender.Type() != SimpleSenderType {
-						sender.SwitchSpatialLayer(1)
+						sender.SwitchSpatialLayer(0)
 					}
 				case videoMuted:
 					sender.Mute(true)
