@@ -84,16 +84,15 @@ func (r *router) AddReceiver(track *webrtc.TrackRemote, receiver *webrtc.RTPRece
 	trackID := track.ID()
 	var twccExt uint8
 
-	extID, audio, video := me.GetHeaderExtensionID(webrtc.RTPHeaderExtensionCapability{URI: sdp.TransportCCURI})
+	for _, ext := range receiver.GetParameters().HeaderExtensions {
+		if ext.URI == sdp.TransportCCURI {
+			twccExt = uint8(ext.ID)
+			break
+		}
+	}
 	if r.twcc.tccLastReport == 0 {
 		r.twcc.tccLastReport = time.Now().UnixNano()
 		r.twcc.mSSRC = uint32(track.SSRC())
-	}
-	if track.Kind() == webrtc.RTPCodecTypeVideo && video {
-		twccExt = uint8(extID)
-	}
-	if track.Kind() == webrtc.RTPCodecTypeAudio && audio {
-		twccExt = uint8(extID)
 	}
 
 	recv := NewWebRTCReceiver(receiver, track, BufferOptions{

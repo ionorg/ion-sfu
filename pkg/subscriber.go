@@ -17,7 +17,6 @@ type Subscriber struct {
 	me *webrtc.MediaEngine
 
 	tracks     map[string][]*DownTrack
-	session    *Session
 	channels   map[string]*webrtc.DataChannel
 	candidates []webrtc.ICECandidateInit
 
@@ -27,7 +26,7 @@ type Subscriber struct {
 }
 
 // NewSubscriber creates a new Subscriber
-func NewSubscriber(session *Session, id string, cfg WebRTCTransportConfig) (*Subscriber, error) {
+func NewSubscriber(id string, cfg WebRTCTransportConfig) (*Subscriber, error) {
 	me, err := getSubscriberMediaEngine()
 	if err != nil {
 		log.Errorf("NewPeer error: %v", err)
@@ -45,7 +44,6 @@ func NewSubscriber(session *Session, id string, cfg WebRTCTransportConfig) (*Sub
 		id:       id,
 		me:       me,
 		pc:       pc,
-		session:  session,
 		tracks:   make(map[string][]*DownTrack),
 		channels: make(map[string]*webrtc.DataChannel),
 	}

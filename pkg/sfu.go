@@ -134,13 +134,13 @@ func (s *SFU) newSession(id string) *Session {
 	session := NewSession(id)
 	session.OnClose(func() {
 		s.mu.Lock()
-		defer s.mu.Unlock()
 		delete(s.sessions, id)
+		s.mu.Unlock()
 	})
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.sessions[id] = session
+	s.mu.Unlock()
 	return session
 }
 
@@ -151,21 +151,11 @@ func (s *SFU) getSession(id string) *Session {
 	return s.sessions[id]
 }
 
-func (s *SFU) NewTransport(sid, pid string) (*Session, *Publisher, *Subscriber, error) {
+func (s *SFU) GetSession(sid string) (*Session, WebRTCTransportConfig) {
 	session := s.getSession(sid)
 
 	if session == nil {
 		session = s.newSession(sid)
 	}
-
-	pub, err := NewPublisher(session, pid, s.webrtc)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	sub, err := NewSubscriber(session, pid, s.webrtc)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	return session, pub, sub, nil
+	return session, s.webrtc
 }
