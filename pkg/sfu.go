@@ -166,5 +166,6 @@ func (s *SFU) NewTransport(sid, pid string) (*Session, *Publisher, *Subscriber, 
 	if err != nil {
 		return nil, nil, nil, err
 	}
+
 	return session, pub, sub, nil
 }
