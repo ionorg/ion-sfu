@@ -6,6 +6,7 @@ require (
 	github.com/bep/debounce v1.2.0
 	github.com/desertbit/timer v0.0.0-20180107155436-c41aec40b27f // indirect
 	github.com/gammazero/deque v0.0.0-20201010052221-3932da5530cc
+	github.com/gammazero/workerpool v1.1.1
 	github.com/golang/protobuf v1.4.3 // indirect
 	github.com/gorilla/websocket v1.4.2
 	github.com/improbable-eng/grpc-web v0.13.0

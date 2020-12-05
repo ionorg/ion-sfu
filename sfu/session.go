@@ -105,7 +105,7 @@ func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 
 // Publish will add a Sender to all peers in current Session from given
 // Receiver
-func (s *Session) Publish(router Router, rr *receiverRouter) {
+func (s *Session) Publish(router Router, r Receiver) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -117,7 +117,7 @@ func (s *Session) Publish(router Router, rr *receiverRouter) {
 
 		log.Infof("Publishing track to peer %s", pid)
 
-		if err := router.AddDownTracks(p.subscriber, rr); err != nil {
+		if err := router.AddDownTracks(p.subscriber, r); err != nil {
 			log.Errorf("Error subscribing transport to router: %s", err)
 			continue
 		}

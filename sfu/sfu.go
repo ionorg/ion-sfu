@@ -153,7 +153,6 @@ func (s *SFU) getSession(id string) *Session {
 
 func (s *SFU) GetSession(sid string) (*Session, WebRTCTransportConfig) {
 	session := s.getSession(sid)
-
 	if session == nil {
 		session = s.newSession(sid)
 	}

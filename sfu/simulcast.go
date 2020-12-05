@@ -14,10 +14,10 @@ type SimulcastConfig struct {
 }
 
 type simulcastTrackHelpers struct {
-	targetSpatialLayer uint8
+	targetSpatialLayer int
 	temporalSupported  bool
-	targetTempLayer    uint8
-	currentTempLayer   uint8
+	targetTempLayer    int
+	currentTempLayer   int
 	temporalEnabled    bool
 	lTSCalc            time.Time
 

@@ -129,7 +129,7 @@ func setVP8TemporalLayer(pl []byte, s *DownTrack) (payload []byte, skip bool) {
 		return nil, false
 	}
 	// Check if temporal layer is requested
-	if pkt.TID > s.simulcast.currentTempLayer {
+	if pkt.TID > uint8(s.simulcast.currentTempLayer) {
 		skip = true
 		// Increment references to prevent gaps
 		s.simulcast.refTlzi++
