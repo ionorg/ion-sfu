@@ -199,36 +199,35 @@ func (r *router) loopDownTrackRTCP(track *DownTrack) {
 		pliOnce := true
 		firOnce := true
 		for _, pkt := range pkts {
-			switch pkt := pkt.(type) {
+			switch p := pkt.(type) {
 			case *rtcp.PictureLossIndication:
 				if track.enabled.get() && pliOnce {
-					pkt.MediaSSRC = track.lastSSRC
-					pkt.SenderSSRC = track.lastSSRC
-					fwdPkts = append(fwdPkts, pkt)
+					p.MediaSSRC = track.lastSSRC
+					p.SenderSSRC = track.lastSSRC
+					fwdPkts = append(fwdPkts, p)
 					pliOnce = false
 				}
 			case *rtcp.FullIntraRequest:
 				if track.enabled.get() && firOnce {
-					pkt.MediaSSRC = track.lastSSRC
-					pkt.SenderSSRC = track.ssrc
-					fwdPkts = append(fwdPkts, pkt)
+					p.MediaSSRC = track.lastSSRC
+					p.SenderSSRC = track.ssrc
+					fwdPkts = append(fwdPkts, p)
 					firOnce = false
 				}
 			case *rtcp.ReceiverReport:
-				if track.enabled.get() && len(pkt.Reports) > 0 && pkt.Reports[0].FractionLost > 25 {
-					log.Tracef("Slow link for sender %s, fraction packet lost %.2f", track.id, float64(pkt.Reports[0].FractionLost)/256)
+				if track.enabled.get() && len(p.Reports) > 0 && p.Reports[0].FractionLost > 25 {
+					log.Tracef("Slow link for sender %s, fraction packet lost %.2f", track.id, float64(p.Reports[0].FractionLost)/256)
 				}
 			case *rtcp.TransportLayerNack:
-				log.Tracef("sender got nack: %+v", pkt)
-				for _, pair := range pkt.Nacks {
+				log.Tracef("sender got nack: %+v", p)
+				for _, pair := range p.Nacks {
 					r.wp.Submit(func() {
-						pkts := track.receiver.GetBufferedPackets(track.currentSpatialLayer, track.snOffset, track.tsOffset, track.nList.getNACKSeqNo(pair.PacketList()))
-						for _, pkt := range pkts {
-							_ = track.WriteRTP(&pkt)
+						ps := track.receiver.GetBufferedPackets(track.currentSpatialLayer, track.snOffset, track.tsOffset, track.nList.getNACKSeqNo(pair.PacketList()))
+						for _, pt := range ps {
+							_ = track.WriteRTP(&pt)
 						}
 					})
 				}
-
 			}
 		}
 		if len(fwdPkts) > 0 {
