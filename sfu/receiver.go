@@ -109,6 +109,11 @@ func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote) {
 	w.downTracks[layer] = make([]*DownTrack, 0, 10)
 
 	go w.readRTP(track, layer)
+	if w.isSimulcast {
+		go w.readSimulcastRTCP(track.RID())
+	} else {
+		go w.readRTCP()
+	}
 }
 
 func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
@@ -219,6 +224,33 @@ func (w *WebRTCReceiver) readRTP(track *webrtc.TrackRemote, layer int) {
 		}
 		w.downTracks[layer] = w.downTracks[layer][:i]
 		w.Unlock()
+	}
+}
+
+func (w *WebRTCReceiver) readRTCP() {
+	for {
+		_, err := w.receiver.ReadRTCP()
+		if err == io.ErrClosedPipe || err == io.EOF {
+			log.Debugf("receiver %s readrtcp eof", w.peerID)
+			return
+		}
+		if err != nil {
+			log.Errorf("rtcp err => %v", err)
+			continue
+		}
+	}
+}
+
+func (w *WebRTCReceiver) readSimulcastRTCP(rid string) {
+	for {
+		_, err := w.receiver.ReadSimulcastRTCP(rid)
+		if err == io.ErrClosedPipe || err == io.EOF {
+			return
+		}
+		if err != nil {
+			log.Errorf("rtcp err => %v", err)
+			continue
+		}
 	}
 }
 

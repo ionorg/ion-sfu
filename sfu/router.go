@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	maxNackWorkers = 2
+	maxNackWorkers = 5
 )
 
 // Router defines a track rtp/rtcp router
