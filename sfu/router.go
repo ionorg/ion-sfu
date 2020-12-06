@@ -5,12 +5,11 @@ package sfu
 import (
 	"io"
 	"sync"
-	"time"
 
 	"github.com/gammazero/workerpool"
 	log "github.com/pion/ion-log"
+	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/rtcp"
-	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -38,21 +37,21 @@ type router struct {
 	mu        sync.RWMutex
 	wp        *workerpool.WorkerPool
 	peer      *webrtc.PeerConnection
-	twcc      *TransportWideCC
 	rtcpCh    chan []rtcp.Packet
+	buffer    *buffer.Interceptor
 	config    RouterConfig
 	receivers map[string]Receiver
 }
 
 // newRouter for routing rtp/rtcp packets
-func newRouter(peer *webrtc.PeerConnection, id string, config RouterConfig) Router {
+func newRouter(peer *webrtc.PeerConnection, id string, bi *buffer.Interceptor, config RouterConfig) Router {
 	ch := make(chan []rtcp.Packet, 10)
 	r := &router{
 		id:        id,
 		peer:      peer,
-		twcc:      newTransportWideCC(ch),
-		config:    config,
+		buffer:    bi,
 		rtcpCh:    ch,
+		config:    config,
 		receivers: make(map[string]Receiver),
 		wp:        workerpool.New(maxNackWorkers),
 	}
@@ -62,6 +61,10 @@ func newRouter(peer *webrtc.PeerConnection, id string, config RouterConfig) Rout
 
 func (r *router) ID() string {
 	return r.id
+}
+
+func (r *router) Stop() {
+	close(r.rtcpCh)
 }
 
 func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote) (Receiver, bool) {
@@ -75,34 +78,14 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 	if recv == nil {
 		recv = NewWebRTCReceiver(receiver, track, r.id)
 		r.receivers[trackID] = recv
+		recv.SetRTCPCh(r.rtcpCh)
+		recv.OnCloseHandler(func() {
+			r.deleteReceiver(trackID)
+		})
 		publish = true
 	}
-	var twccExt uint8
 
-	for _, ext := range receiver.GetParameters().HeaderExtensions {
-		if ext.URI == sdp.TransportCCURI {
-			twccExt = uint8(ext.ID)
-			break
-		}
-	}
-	if r.twcc.tccLastReport == 0 && twccExt != 0 {
-		r.twcc.tccLastReport = time.Now().UnixNano()
-		r.twcc.mSSRC = uint32(track.SSRC())
-	}
-
-	layer := recv.AddUpTrack(track, BufferOptions{
-		BufferTime: r.config.MaxBufferTime,
-		MaxBitRate: r.config.MaxBandwidth * 1000,
-		TWCCExt:    twccExt,
-	})
-	recv.OnTransportWideCC(layer, func(sn uint16, timeNS int64, marker bool) {
-		r.twcc.push(sn, timeNS, marker)
-	})
-	recv.SetRTCPCh(r.rtcpCh)
-	recv.OnCloseHandler(func() {
-		r.deleteReceiver(trackID)
-	})
-	recv.Start(layer)
+	recv.AddUpTrack(track)
 
 	return recv, publish
 }
@@ -129,10 +112,6 @@ func (r *router) AddDownTracks(s *Subscriber, recv Receiver) error {
 		s.negotiate()
 	}
 	return nil
-}
-
-func (r *router) Stop() {
-	close(r.rtcpCh)
 }
 
 func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
@@ -222,7 +201,7 @@ func (r *router) loopDownTrackRTCP(track *DownTrack) {
 				log.Tracef("sender got nack: %+v", p)
 				for _, pair := range p.Nacks {
 					r.wp.Submit(func() {
-						ps := track.receiver.GetBufferedPackets(track.currentSpatialLayer, track.snOffset, track.tsOffset, track.nList.getNACKSeqNo(pair.PacketList()))
+						ps := r.buffer.GetBufferedPackets(track.receiver.SSRC(track.currentSpatialLayer), track.snOffset, track.tsOffset, track.nList.getNACKSeqNo(pair.PacketList()))
 						for _, pt := range ps {
 							_ = track.WriteRTP(&pt)
 						}

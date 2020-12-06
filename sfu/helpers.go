@@ -173,16 +173,6 @@ func timeToNtp(ns int64) uint64 {
 	return seconds<<32 | fraction
 }
 
-// setNBitsOfUint16 will truncate the value to size, left-shift to startIndex position and set
-func setNBitsOfUint16(src, size, startIndex, val uint16) uint16 {
-	if startIndex+size > 16 {
-		return 0
-	}
-	// truncate val to size bits
-	val &= (1 << size) - 1
-	return src | (val << (16 - size - startIndex))
-}
-
 // Do a fuzzy find for a codec in the list of codecs
 // Used for lookup up a codec in an existing list to find a match
 func codecParametersFuzzySearch(needle webrtc.RTPCodecParameters, haystack []webrtc.RTPCodecParameters) (webrtc.RTPCodecParameters, error) {

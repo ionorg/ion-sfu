@@ -1,4 +1,4 @@
-package sfu
+package buffer
 
 import (
 	"testing"
@@ -46,7 +46,7 @@ func TestNewBuffer(t *testing.T) {
 
 	type args struct {
 		track *webrtc.TrackRemote
-		o     BufferOptions
+		o     Options
 	}
 	tests := []struct {
 		name string
@@ -56,8 +56,7 @@ func TestNewBuffer(t *testing.T) {
 			name: "Must not be nil and add packets in sequence",
 			args: args{
 				track: track,
-				o: BufferOptions{
-					TWCCExt:    0,
+				o: Options{
 					BufferTime: 1e3,
 					MaxBitRate: 1e3,
 				},

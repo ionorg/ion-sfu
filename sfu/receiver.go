@@ -23,16 +23,14 @@ type Receiver interface {
 	StreamID() string
 	Codec() webrtc.RTPCodecParameters
 	Kind() webrtc.RTPCodecType
-	Start(layer int)
-	AddUpTrack(track *webrtc.TrackRemote, options BufferOptions) int
+	SSRC(layer int) uint32
+	AddUpTrack(track *webrtc.TrackRemote)
 	AddDownTrack(track *DownTrack, bestQualityFirst bool)
 	SubDownTrack(track *DownTrack, layer int) error
 	DeleteDownTrack(layer int, id string)
 	OnCloseHandler(fn func())
-	OnTransportWideCC(layer int, fn func(sn uint16, timeNS int64, marker bool))
 	SendRTCP(p []rtcp.Packet)
 	SetRTCPCh(ch chan []rtcp.Packet)
-	GetBufferedPackets(layer int, snOffset uint16, tsOffset uint32, sn []uint16) []rtp.Packet
 }
 
 // WebRTCReceiver receives a video track
@@ -51,7 +49,6 @@ type WebRTCReceiver struct {
 	codec          webrtc.RTPCodecParameters
 	rtcpCh         chan []rtcp.Packet
 	rtpCh          [3]chan *rtp.Packet
-	buffer         [3]*Buffer
 	upTracks       [3]*webrtc.TrackRemote
 	downTracks     [3][]*DownTrack
 	isSimulcast    bool
@@ -81,6 +78,13 @@ func (w *WebRTCReceiver) TrackID() string {
 	return w.trackID
 }
 
+func (w *WebRTCReceiver) SSRC(layer int) uint32 {
+	if track := w.upTracks[layer]; track != nil {
+		return uint32(track.SSRC())
+	}
+	return 0
+}
+
 func (w *WebRTCReceiver) Codec() webrtc.RTPCodecParameters {
 	return w.codec
 }
@@ -89,40 +93,28 @@ func (w *WebRTCReceiver) Kind() webrtc.RTPCodecType {
 	return w.kind
 }
 
-func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, config BufferOptions) int {
+func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote) {
 	var layer int
-	buffer := NewBuffer(track, config)
 
 	switch track.RID() {
 	case fullResolution:
 		layer = 2
 		w.rtpCh[layer] = make(chan *rtp.Packet, maxSize)
 		w.upTracks[layer] = track
-		w.buffer[layer] = buffer
 	case halfResolution:
 		layer = 1
 		w.rtpCh[layer] = make(chan *rtp.Packet, maxSize)
 		w.upTracks[layer] = track
-		w.buffer[layer] = buffer
 	default:
 		layer = 0
 		w.rtpCh[layer] = make(chan *rtp.Packet, maxSize)
 		w.upTracks[layer] = track
-		w.buffer[layer] = buffer
 	}
-
-	buffer.onFeedback(func(packets []rtcp.Packet) {
-		w.rtcpCh <- packets
-	})
 
 	w.downTracks[layer] = make([]*DownTrack, 0, 10)
 
-	buffer.onLostHandler(func(nack *rtcp.TransportLayerNack) {
-		log.Debugf("Writing nack to mediaSSRC: %d, missing sn: %d, bitmap: %b", track.SSRC(), nack.Nacks[0].PacketID, nack.Nacks[0].LostPackets)
-		w.rtcpCh <- []rtcp.Packet{nack}
-	})
-
-	return layer
+	go w.writeRTP(layer)
+	go w.readRTP(track, layer)
 }
 
 func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
@@ -159,24 +151,9 @@ func (w *WebRTCReceiver) SubDownTrack(track *DownTrack, layer int) error {
 	return nil
 }
 
-func (w *WebRTCReceiver) Start(layer int) {
-	track := w.upTracks[layer]
-	go w.readRTP(track, w.buffer[layer], layer)
-	if len(track.RID()) > 0 {
-		go w.readSimulcastRTCP(track.RID(), layer)
-	} else {
-		go w.readRTCP()
-	}
-	go w.writeRTP(layer)
-}
-
 // OnCloseHandler method to be called on remote tracked removed
 func (w *WebRTCReceiver) OnCloseHandler(fn func()) {
 	w.onCloseHandler = fn
-}
-
-func (w *WebRTCReceiver) OnTransportWideCC(layer int, fn func(sn uint16, timeNS int64, marker bool)) {
-	w.buffer[layer].onTransportWideCC(fn)
 }
 
 // DeleteDownTrack removes a DownTrack from a Receiver
@@ -208,33 +185,12 @@ func (w *WebRTCReceiver) SendRTCP(p []rtcp.Packet) {
 	w.rtcpCh <- p
 }
 
-// WriteBufferedPacket writes buffered packet to track, return error if packet not found
-func (w *WebRTCReceiver) GetBufferedPackets(layer int, snOffset uint16, tsOffset uint32, sn []uint16) []rtp.Packet {
-	if w.buffer[layer] == nil {
-		return nil
-	}
-	var pkts []rtp.Packet
-	for _, seq := range sn {
-		h, p, err := w.buffer[layer].getPacket(seq + snOffset)
-		if err != nil {
-			continue
-		}
-		h.SequenceNumber -= snOffset
-		h.Timestamp -= tsOffset
-		pkts = append(pkts, rtp.Packet{
-			Header:  h,
-			Payload: p,
-		})
-	}
-	return pkts
-}
-
 func (w *WebRTCReceiver) SetRTCPCh(ch chan []rtcp.Packet) {
 	w.rtcpCh = ch
 }
 
 // readRTP receive all incoming tracks' rtp and sent to one channel
-func (w *WebRTCReceiver) readRTP(track *webrtc.TrackRemote, buffer *Buffer, layer int) {
+func (w *WebRTCReceiver) readRTP(track *webrtc.TrackRemote, layer int) {
 	defer func() {
 		w.closeTracks(layer)
 		close(w.rtpCh[layer])
@@ -257,50 +213,7 @@ func (w *WebRTCReceiver) readRTP(track *webrtc.TrackRemote, buffer *Buffer, laye
 			continue
 		}
 
-		buffer.push(pkt)
-
 		w.rtpCh[layer] <- pkt
-	}
-}
-
-func (w *WebRTCReceiver) readRTCP() {
-	for {
-		pkts, err := w.receiver.ReadRTCP()
-		if err == io.ErrClosedPipe || err == io.EOF {
-			log.Debugf("receiver %s readrtcp eof", w.peerID)
-			return
-		}
-		if err != nil {
-			log.Errorf("rtcp err => %v", err)
-			continue
-		}
-
-		for _, pkt := range pkts {
-			switch pkt := pkt.(type) {
-			case *rtcp.SenderReport:
-				w.buffer[0].setSenderReportData(pkt.RTPTime, pkt.NTPTime)
-			}
-		}
-	}
-}
-
-func (w *WebRTCReceiver) readSimulcastRTCP(rid string, layer int) {
-	for {
-		pkts, err := w.receiver.ReadSimulcastRTCP(rid)
-		if err == io.ErrClosedPipe || err == io.EOF {
-			return
-		}
-		if err != nil {
-			log.Errorf("rtcp err => %v", err)
-			continue
-		}
-
-		for _, pkt := range pkts {
-			switch pkt := pkt.(type) {
-			case *rtcp.SenderReport:
-				w.buffer[layer].setSenderReportData(pkt.RTPTime, pkt.NTPTime)
-			}
-		}
 	}
 }
 

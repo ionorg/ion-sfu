@@ -1,4 +1,4 @@
-package sfu
+package buffer
 
 import (
 	"reflect"
@@ -89,7 +89,7 @@ func Test_queue(t *testing.T) {
 	for _, p := range TestPackets {
 		p := p
 		assert.NotPanics(t, func() {
-			q.AddPacket(p, true)
+			q.addPacket(p, true)
 		})
 	}
 	var expectedSN uint16
@@ -102,7 +102,7 @@ func Test_queue(t *testing.T) {
 		},
 	}
 	expectedSN = 8
-	q.AddPacket(np, false)
+	q.addPacket(np, false)
 	assert.Equal(t, expectedSN, q.GetPacket(8).SequenceNumber)
 }
 
@@ -129,7 +129,7 @@ func Test_queue_edges(t *testing.T) {
 	for _, p := range TestPackets {
 		p := p
 		assert.NotPanics(t, func() {
-			q.AddPacket(p, true)
+			q.addPacket(p, true)
 		})
 	}
 	assert.Equal(t, 6, q.size)
@@ -142,6 +142,6 @@ func Test_queue_edges(t *testing.T) {
 			SequenceNumber: 65535,
 		},
 	}
-	q.AddPacket(np, false)
+	q.addPacket(np, false)
 	assert.Equal(t, expectedSN+1, q.GetPacket(expectedSN+1).SequenceNumber)
 }

@@ -12,8 +12,9 @@ require (
 	github.com/improbable-eng/grpc-web v0.13.0
 	github.com/lucas-clemente/quic-go v0.19.3 // indirect
 	github.com/lucsky/cuid v1.0.2
+	github.com/pion/interceptor v0.0.5
 	github.com/pion/ion-log v1.0.0
-	github.com/pion/rtcp v1.2.5
+	github.com/pion/rtcp v1.2.6
 	github.com/pion/rtp v1.6.1
 	github.com/pion/sdp/v3 v3.0.3
 	github.com/pion/srtp v1.5.2 // indirect

@@ -1,8 +1,13 @@
-package sfu
+package buffer
 
 import (
+	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/pion/sdp/v3"
+
+	"github.com/pion/interceptor"
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
@@ -51,34 +56,47 @@ type Buffer struct {
 	jitter             float64 // An estimate of the statistical variance of the RTP data packet inter-arrival time.
 	totalByte          uint64
 	// callbacks
-	feedbackTWCC func(sn uint16, timeNS int64, marker bool)
 	feedbackCB   func([]rtcp.Packet)
+	feedbackTWCC func(sn uint16, timeNS int64, marker bool)
 }
 
 // BufferOptions provides configuration options for the buffer
-type BufferOptions struct {
-	TWCCExt    uint8
+type Options struct {
 	BufferTime int
 	MaxBitRate uint64
 }
 
 // NewBuffer constructs a new Buffer
-func NewBuffer(track *webrtc.TrackRemote, o BufferOptions) *Buffer {
+func NewBuffer(info *interceptor.StreamInfo, o Options) *Buffer {
 	b := &Buffer{
-		mediaSSRC:  uint32(track.SSRC()),
-		clockRate:  track.Codec().ClockRate,
-		codecType:  track.Kind(),
+		mediaSSRC:  info.SSRC,
+		clockRate:  info.ClockRate,
 		maxBitrate: o.MaxBitRate,
-		simulcast:  len(track.RID()) > 0,
-		twccExt:    o.TWCCExt,
+		simulcast:  false,
 	}
+	switch {
+	case strings.HasPrefix(info.MimeType, "audio/"):
+		b.codecType = webrtc.RTPCodecTypeAudio
+	case strings.HasPrefix(info.MimeType, "video/"):
+		b.codecType = webrtc.RTPCodecTypeVideo
+	default:
+		b.codecType = webrtc.RTPCodecType(0)
+	}
+
+	for _, ext := range info.RTPHeaderExtensions {
+		if ext.URI == sdp.TransportCCURI {
+			b.twccExt = uint8(ext.ID)
+			break
+		}
+	}
+
 	if o.BufferTime <= 0 {
 		o.BufferTime = defaultBufferTime
 	}
 	b.pktQueue.duration = uint32(o.BufferTime) * b.clockRate / 1000
 	b.pktQueue.ssrc = b.mediaSSRC
 
-	for _, fb := range track.Codec().RTCPFeedback {
+	for _, fb := range info.RTCPFeedback {
 		switch fb.Type {
 		case webrtc.TypeRTCPFBGoogREMB:
 			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBGoogREMB)
@@ -122,7 +140,7 @@ func (b *Buffer) push(p *rtp.Packet) {
 	}
 	b.lastTransit = transit
 	if b.codecType == webrtc.RTPCodecTypeVideo {
-		b.pktQueue.AddPacket(p, p.SequenceNumber == b.maxSeqNo)
+		b.pktQueue.addPacket(p, p.SequenceNumber == b.maxSeqNo)
 	}
 
 	if b.tcc {
@@ -231,16 +249,20 @@ func (b *Buffer) getPacket(sn uint16) (rtp.Header, []byte, error) {
 	return rtp.Header{}, nil, errPacketNotFound
 }
 
-func (b *Buffer) onLostHandler(fn func(nack *rtcp.TransportLayerNack)) {
-	if b.nack {
-		b.pktQueue.onLost = fn
-	}
+func (b *Buffer) onTransportWideCC(fn func(sn uint16, timeNS int64, marker bool)) {
+	b.feedbackTWCC = fn
 }
 
 func (b *Buffer) onFeedback(fn func(fb []rtcp.Packet)) {
 	b.feedbackCB = fn
 }
 
-func (b *Buffer) onTransportWideCC(fn func(sn uint16, timeNS int64, marker bool)) {
-	b.feedbackTWCC = fn
+func snDiff(sn1, sn2 uint16) int {
+	if sn1 == sn2 {
+		return 0
+	}
+	if ((sn2 - sn1) & 0x8000) != 0 {
+		return 1
+	}
+	return -1
 }

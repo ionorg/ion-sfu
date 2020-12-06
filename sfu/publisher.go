@@ -4,6 +4,10 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/pion/interceptor"
+
+	"github.com/pion/ion-sfu/pkg/buffer"
+
 	log "github.com/pion/ion-log"
 	"github.com/pion/webrtc/v3"
 )
@@ -29,7 +33,12 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 		log.Errorf("NewPeer error: %v", err)
 		return nil, errPeerConnectionInitFailed
 	}
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(me), webrtc.WithSettingEngine(cfg.setting))
+
+	bi := buffer.NewBufferInterceptor()
+	ir := &interceptor.Registry{}
+	ir.Add(bi)
+
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me), webrtc.WithSettingEngine(cfg.setting), webrtc.WithInterceptorRegistry(ir))
 	pc, err := api.NewPeerConnection(cfg.configuration)
 
 	if err != nil {
@@ -41,7 +50,7 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 		id:      id,
 		pc:      pc,
 		session: session,
-		router:  newRouter(pc, id, cfg.router),
+		router:  newRouter(pc, id, bi, cfg.router),
 	}
 
 	pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
