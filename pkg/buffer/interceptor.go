@@ -43,6 +43,7 @@ func (i *Interceptor) BindRemoteStream(s *interceptor.StreamInfo, reader interce
 				i.twcc.push(sn, timeNS, marker)
 			})
 			i.buffers = append(i.buffers, buffer)
+			i.twcc.mSSRC = s.SSRC
 		}
 
 		p, att, err := reader.Read()
