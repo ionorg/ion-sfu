@@ -157,16 +157,6 @@ func setVP8TemporalLayer(pl []byte, s *DownTrack) (payload []byte, skip bool) {
 	return
 }
 
-func snDiff(sn1, sn2 uint16) int {
-	if sn1 == sn2 {
-		return 0
-	}
-	if ((sn2 - sn1) & 0x8000) != 0 {
-		return 1
-	}
-	return -1
-}
-
 func timeToNtp(ns int64) uint64 {
 	seconds := uint64(ns/1e9 + ntpEpoch)
 	fraction := uint64(((ns % 1e9) << 32) / 1e9)

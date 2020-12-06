@@ -9,7 +9,6 @@ import (
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
-	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -48,7 +47,6 @@ type WebRTCReceiver struct {
 	receiver       *webrtc.RTPReceiver
 	codec          webrtc.RTPCodecParameters
 	rtcpCh         chan []rtcp.Packet
-	rtpCh          [3]chan *rtp.Packet
 	upTracks       [3]*webrtc.TrackRemote
 	downTracks     [3][]*DownTrack
 	isSimulcast    bool
@@ -99,21 +97,17 @@ func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote) {
 	switch track.RID() {
 	case fullResolution:
 		layer = 2
-		w.rtpCh[layer] = make(chan *rtp.Packet, maxSize)
 		w.upTracks[layer] = track
 	case halfResolution:
 		layer = 1
-		w.rtpCh[layer] = make(chan *rtp.Packet, maxSize)
 		w.upTracks[layer] = track
 	default:
 		layer = 0
-		w.rtpCh[layer] = make(chan *rtp.Packet, maxSize)
 		w.upTracks[layer] = track
 	}
 
 	w.downTracks[layer] = make([]*DownTrack, 0, 10)
 
-	go w.writeRTP(layer)
 	go w.readRTP(track, layer)
 }
 
@@ -193,7 +187,6 @@ func (w *WebRTCReceiver) SetRTCPCh(ch chan []rtcp.Packet) {
 func (w *WebRTCReceiver) readRTP(track *webrtc.TrackRemote, layer int) {
 	defer func() {
 		w.closeTracks(layer)
-		close(w.rtpCh[layer])
 		if w.onCloseHandler != nil {
 			w.onCloseHandler()
 		}
@@ -213,12 +206,6 @@ func (w *WebRTCReceiver) readRTP(track *webrtc.TrackRemote, layer int) {
 			continue
 		}
 
-		w.rtpCh[layer] <- pkt
-	}
-}
-
-func (w *WebRTCReceiver) writeRTP(layer int) {
-	for pkt := range w.rtpCh[layer] {
 		w.Lock()
 		i := 0
 		for _, dt := range w.downTracks[layer] {
