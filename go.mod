@@ -18,7 +18,6 @@ require (
 	github.com/pion/sdp/v3 v3.0.3
 	github.com/pion/webrtc/v3 v3.0.0-beta.12.0.20201115002753-64bbf7eea97d
 	github.com/rs/cors v1.7.0 // indirect
-	github.com/sirupsen/logrus v1.2.0
 	github.com/soheilhy/cmux v0.1.4
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20200429184054-15c2290dcb37
 	github.com/spf13/viper v1.7.1
@@ -27,6 +26,7 @@ require (
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20201113233024-12cec1faf1ba // indirect
 	google.golang.org/grpc v1.33.2
+	google.golang.org/grpc/examples v0.0.0-20201204235607-0d6a24f68a5f // indirect
 	google.golang.org/protobuf v1.25.0
 	gopkg.in/ini.v1 v1.51.1 // indirect
 )
