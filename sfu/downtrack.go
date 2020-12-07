@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	log "github.com/pion/ion-log"
@@ -51,7 +50,7 @@ type DownTrack struct {
 	codec          webrtc.RTPCodecCapability
 	receiver       Receiver
 	transceiver    *webrtc.RTPTransceiver
-	writeStream    atomic.Value
+	writeStream    webrtc.TrackLocalWriter
 	onCloseHandler func()
 	closeOnce      sync.Once
 }
@@ -77,7 +76,7 @@ func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters,
 		d.bound.set(true)
 		d.ssrc = uint32(t.SSRC())
 		d.payload = uint8(codec.PayloadType)
-		d.writeStream.Store(t.WriteStream())
+		d.writeStream = t.WriteStream()
 		d.mime = strings.ToLower(codec.MimeType)
 		d.reSync.set(true)
 		d.enabled.set(true)
@@ -118,7 +117,7 @@ func (d *DownTrack) Kind() webrtc.RTPCodecType {
 
 // WriteRTP writes a RTP Packet to the DownTrack
 func (d *DownTrack) WriteRTP(p *rtp.Packet) error {
-	if !d.enabled.get() {
+	if !d.enabled.get() || !d.bound.get() {
 		return nil
 	}
 	switch d.trackType {
@@ -209,14 +208,11 @@ func (d *DownTrack) writeSimpleRTP(pkt rtp.Packet) error {
 	pkt.SequenceNumber = d.lastSN
 	pkt.SSRC = d.ssrc
 
-	if tw, ok := d.writeStream.Load().(webrtc.TrackLocalWriter); ok && d.bound.get() {
-		_, err := tw.WriteRTP(&pkt.Header, pkt.Payload)
-		if err != nil {
-			log.Errorf("Write packet err %v", err)
-		}
-		return err
+	_, err := d.writeStream.WriteRTP(&pkt.Header, pkt.Payload)
+	if err != nil {
+		log.Errorf("Write packet err %v", err)
 	}
-	return nil
+	return err
 }
 
 func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
@@ -303,12 +299,9 @@ func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
 	pkt.Header.SSRC = d.ssrc
 	pkt.Header.PayloadType = d.payload
 
-	if tw, ok := d.writeStream.Load().(webrtc.TrackLocalWriter); ok && d.bound.get() {
-		_, err := tw.WriteRTP(&pkt.Header, pkt.Payload)
-		if err != nil {
-			log.Errorf("Write packet err %v", err)
-		}
-		return err
+	_, err := d.writeStream.WriteRTP(&pkt.Header, pkt.Payload)
+	if err != nil {
+		log.Errorf("Write packet err %v", err)
 	}
-	return nil
+	return err
 }

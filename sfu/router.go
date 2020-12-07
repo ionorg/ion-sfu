@@ -65,6 +65,7 @@ func (r *router) ID() string {
 
 func (r *router) Stop() {
 	close(r.rtcpCh)
+	r.wp.Stop()
 }
 
 func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote) (Receiver, bool) {

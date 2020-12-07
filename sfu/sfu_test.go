@@ -41,7 +41,7 @@ func sendRTPUntilDone(start, done <-chan struct{}, t *testing.T, track *webrtc.T
 	<-start
 	for {
 		select {
-		case <-time.After(40 * time.Millisecond):
+		case <-time.After(20 * time.Millisecond):
 			assert.NoError(t, track.WriteSample(med.Sample{Data: []byte{0x0, 0xff, 0xff, 0xff, 0xff}, Duration: time.Second}))
 		case <-done:
 			return

@@ -1,6 +1,7 @@
 package buffer
 
 import (
+	"sync"
 	"sync/atomic"
 
 	"github.com/pion/interceptor"
@@ -9,6 +10,7 @@ import (
 )
 
 type Interceptor struct {
+	sync.RWMutex
 	twcc       *TransportWideCC
 	buffers    []*Buffer
 	rtcpWriter atomic.Value
@@ -23,27 +25,11 @@ func NewBufferInterceptor() *Interceptor {
 	}
 }
 
-func (i *Interceptor) BindRemoteStream(s *interceptor.StreamInfo, reader interceptor.RTPReader) interceptor.RTPReader {
+func (i *Interceptor) BindRemoteStream(info *interceptor.StreamInfo, reader interceptor.RTPReader) interceptor.RTPReader {
 	return interceptor.RTPReaderFunc(func() (*rtp.Packet, interceptor.Attributes, error) {
-		var buffer *Buffer
-		for _, b := range i.buffers {
-			if b.mediaSSRC == s.SSRC {
-				buffer = b
-				break
-			}
-		}
+		buffer := i.getBuffer(info.SSRC)
 		if buffer == nil {
-			buffer = NewBuffer(s, Options{})
-			buffer.onFeedback(func(pkts []rtcp.Packet) {
-				if p, ok := i.rtcpWriter.Load().(interceptor.RTCPWriter); ok {
-					p.Write(pkts, nil)
-				}
-			})
-			buffer.onTransportWideCC(func(sn uint16, timeNS int64, marker bool) {
-				i.twcc.push(sn, timeNS, marker)
-			})
-			i.buffers = append(i.buffers, buffer)
-			i.twcc.mSSRC = s.SSRC
+			buffer = i.newBuffer(info)
 		}
 
 		p, att, err := reader.Read()
@@ -53,6 +39,25 @@ func (i *Interceptor) BindRemoteStream(s *interceptor.StreamInfo, reader interce
 		buffer.push(p)
 		return p, att, nil
 	})
+}
+
+func (i *Interceptor) UnbindRemoteStream(info *interceptor.StreamInfo) {
+	i.Lock()
+	idx := -1
+	for j, buff := range i.buffers {
+		if buff.mediaSSRC == info.SSRC {
+			idx = j
+			break
+		}
+	}
+	if idx == -1 {
+		i.Unlock()
+		return
+	}
+	i.buffers[idx] = i.buffers[len(i.buffers)-1]
+	i.buffers[len(i.buffers)-1] = nil
+	i.buffers = i.buffers[:len(i.buffers)-1]
+	i.Unlock()
 }
 
 func (i *Interceptor) BindRTCPReader(reader interceptor.RTCPReader) interceptor.RTCPReader {
@@ -94,13 +99,7 @@ func (i *Interceptor) BindRTCPWriter(writer interceptor.RTCPWriter) interceptor.
 }
 
 func (i *Interceptor) GetBufferedPackets(ssrc uint32, snOffset uint16, tsOffset uint32, sn []uint16) []rtp.Packet {
-	var buffer *Buffer
-	for _, b := range i.buffers {
-		if b.mediaSSRC == ssrc {
-			buffer = b
-			break
-		}
-	}
+	buffer := i.getBuffer(ssrc)
 	if buffer == nil {
 		return nil
 	}
@@ -118,4 +117,32 @@ func (i *Interceptor) GetBufferedPackets(ssrc uint32, snOffset uint16, tsOffset 
 		})
 	}
 	return pkts
+}
+
+func (i *Interceptor) getBuffer(ssrc uint32) *Buffer {
+	i.RLock()
+	defer i.RUnlock()
+	for _, b := range i.buffers {
+		if b.mediaSSRC == ssrc {
+			return b
+		}
+	}
+	return nil
+}
+
+func (i *Interceptor) newBuffer(info *interceptor.StreamInfo) *Buffer {
+	buffer := NewBuffer(info, Options{})
+	buffer.onFeedback(func(pkts []rtcp.Packet) {
+		if p, ok := i.rtcpWriter.Load().(interceptor.RTCPWriter); ok {
+			p.Write(pkts, nil)
+		}
+	})
+	buffer.onTransportWideCC(func(sn uint16, timeNS int64, marker bool) {
+		i.twcc.push(sn, timeNS, marker)
+	})
+	i.Lock()
+	i.buffers = append(i.buffers, buffer)
+	i.Unlock()
+	i.twcc.mSSRC = info.SSRC
+	return buffer
 }

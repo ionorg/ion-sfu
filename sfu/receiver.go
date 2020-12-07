@@ -34,7 +34,7 @@ type Receiver interface {
 
 // WebRTCReceiver receives a video track
 type WebRTCReceiver struct {
-	sync.Mutex
+	sync.RWMutex
 	rtcpMu sync.RWMutex
 
 	peerID         string
@@ -165,6 +165,10 @@ func (w *WebRTCReceiver) DeleteDownTrack(layer int, id string) {
 			break
 		}
 	}
+	if idx == -1 {
+		w.Unlock()
+		return
+	}
 	w.downTracks[layer][idx] = w.downTracks[layer][len(w.downTracks[layer])-1]
 	w.downTracks[layer][len(w.downTracks[layer])-1] = nil
 	w.downTracks[layer] = w.downTracks[layer][:len(w.downTracks[layer])-1]
@@ -211,19 +215,13 @@ func (w *WebRTCReceiver) readRTP(track *webrtc.TrackRemote, layer int) {
 			continue
 		}
 
-		w.Lock()
-		i := 0
+		w.RLock()
 		for _, dt := range w.downTracks[layer] {
-			if err := dt.WriteRTP(pkt); err != io.EOF {
-				w.downTracks[layer][i] = dt
-				i++
+			if err := dt.WriteRTP(pkt); err == io.EOF {
+				go w.DeleteDownTrack(layer, dt.id)
 			}
 		}
-		for j := i; j < len(w.downTracks[layer]); j++ {
-			w.downTracks[layer][j] = nil
-		}
-		w.downTracks[layer] = w.downTracks[layer][:i]
-		w.Unlock()
+		w.RUnlock()
 	}
 }
 
