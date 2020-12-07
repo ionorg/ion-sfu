@@ -1,17 +1,11 @@
 package sfu
 
 import (
-	"net/url"
 	"sync"
 	"time"
 
-	"github.com/pion/sdp/v3"
-
 	"github.com/bep/debounce"
-
 	log "github.com/pion/ion-log"
-
-	"github.com/gammazero/deque"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -20,23 +14,25 @@ type Subscriber struct {
 
 	id string
 	pc *webrtc.PeerConnection
-	me MediaEngine
+	me *webrtc.MediaEngine
 
-	session    *Session
+	tracks     map[string][]*DownTrack
 	channels   map[string]*webrtc.DataChannel
-	senders    map[string][]Sender
 	candidates []webrtc.ICECandidateInit
 
-	onTrackHandler func(*webrtc.Track, *webrtc.RTPReceiver)
-	pendingSenders deque.Deque
-	negotiate      func()
+	negotiate func()
 
 	closeOnce sync.Once
 }
 
 // NewSubscriber creates a new Subscriber
-func NewSubscriber(session *Session, id string, me MediaEngine, cfg WebRTCTransportConfig) (*Subscriber, error) {
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(me.MediaEngine), webrtc.WithSettingEngine(cfg.setting))
+func NewSubscriber(id string, cfg WebRTCTransportConfig) (*Subscriber, error) {
+	me, err := getSubscriberMediaEngine()
+	if err != nil {
+		log.Errorf("NewPeer error: %v", err)
+		return nil, errPeerConnectionInitFailed
+	}
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me), webrtc.WithSettingEngine(cfg.setting))
 	pc, err := api.NewPeerConnection(cfg.configuration)
 
 	if err != nil {
@@ -48,9 +44,8 @@ func NewSubscriber(session *Session, id string, me MediaEngine, cfg WebRTCTransp
 		id:       id,
 		me:       me,
 		pc:       pc,
-		session:  session,
+		tracks:   make(map[string][]*DownTrack),
 		channels: make(map[string]*webrtc.DataChannel),
-		senders:  make(map[string][]Sender),
 	}
 
 	dc, err := pc.CreateDataChannel(apiChannelLabel, &webrtc.DataChannelInit{})
@@ -73,35 +68,6 @@ func NewSubscriber(session *Session, id string, me MediaEngine, cfg WebRTCTransp
 				}
 			})
 		}
-	})
-
-	pc.GetMapExtension(func() map[webrtc.SDPSectionType][]sdp.ExtMap {
-		sdesMid, _ := url.Parse(sdp.SDESMidURI)
-		ext := make(map[webrtc.SDPSectionType][]sdp.ExtMap)
-		for _, t := range pc.GetTransceivers() {
-			switch t.Kind() {
-			case webrtc.RTPCodecTypeAudio:
-				if t.Direction() == webrtc.RTPTransceiverDirectionSendonly {
-					ext[webrtc.SDPSectionType(t.Mid())] = []sdp.ExtMap{
-						{
-							Value: 1,
-							URI:   sdesMid,
-						},
-					}
-				}
-			case webrtc.RTPCodecTypeVideo:
-				if t.Direction() == webrtc.RTPTransceiverDirectionSendonly {
-					ext[webrtc.SDPSectionType(t.Mid())] = []sdp.ExtMap{
-						{
-							Value: 1,
-							URI:   sdesMid,
-						},
-					}
-				}
-			}
-		}
-
-		return ext
 	})
 
 	return s, nil
@@ -142,14 +108,14 @@ func (s *Subscriber) AddICECandidate(candidate webrtc.ICECandidateInit) error {
 	return nil
 }
 
-func (s *Subscriber) AddSender(streamID string, sender Sender) {
+func (s *Subscriber) AddDownTrack(streamID string, downTrack *DownTrack) {
 	s.Lock()
 	defer s.Unlock()
-	if senders, ok := s.senders[streamID]; ok {
-		senders = append(senders, sender)
-		s.senders[streamID] = senders
+	if dt, ok := s.tracks[streamID]; ok {
+		dt = append(dt, downTrack)
+		s.tracks[streamID] = dt
 	} else {
-		s.senders[streamID] = []Sender{sender}
+		s.tracks[streamID] = []*DownTrack{downTrack}
 	}
 }
 
@@ -174,55 +140,7 @@ func (s *Subscriber) AddDataChannel(label string) (*webrtc.DataChannel, error) {
 
 // SetRemoteDescription sets the SessionDescription of the remote peer
 func (s *Subscriber) SetRemoteDescription(desc webrtc.SessionDescription) error {
-	var err error
-	pd, err := desc.Unmarshal()
-	if err != nil {
-		log.Errorf("SetRemoteDescription error: %v", err)
-		return err
-	}
-
-	if s.pendingSenders.Len() > 0 {
-		pendingStart := make([]Sender, 0, s.pendingSenders.Len())
-
-		s.Lock()
-		for _, md := range pd.MediaDescriptions {
-			if s.pendingSenders.Len() == 0 {
-				break
-			}
-			mid, ok := md.Attribute(sdp.AttrKeyMID)
-			if !ok {
-				continue
-			}
-			for i := 0; i < s.pendingSenders.Len(); i++ {
-				pd := s.pendingSenders.PopFront().(Sender)
-				if pd.Transceiver().Mid() == mid {
-					pendingStart = append(pendingStart, pd)
-				} else {
-					s.pendingSenders.PushBack(pd)
-				}
-			}
-		}
-		s.Unlock()
-
-		if len(pendingStart) > 0 {
-			defer func() {
-				if err == nil {
-					for _, ps := range pendingStart {
-						ps.Start()
-					}
-				} else {
-					s.Lock()
-					for _, ps := range pendingStart {
-						s.pendingSenders.PushBack(ps)
-					}
-					s.Unlock()
-				}
-			}()
-		}
-	}
-
-	err = s.pc.SetRemoteDescription(desc)
-	if err != nil {
+	if err := s.pc.SetRemoteDescription(desc); err != nil {
 		log.Errorf("SetRemoteDescription error: %v", err)
 		return err
 	}
@@ -235,16 +153,10 @@ func (s *Subscriber) SetRemoteDescription(desc webrtc.SessionDescription) error 
 	return nil
 }
 
-func (s *Subscriber) GetSenders(streamID string) []Sender {
+func (s *Subscriber) GetDownTracks(streamID string) []*DownTrack {
 	s.RLock()
 	defer s.RUnlock()
-	return s.senders[streamID]
-}
-
-func (s *Subscriber) SetPendingSender(sender Sender) {
-	s.Lock()
-	s.pendingSenders.PushBack(sender)
-	s.Unlock()
+	return s.tracks[streamID]
 }
 
 // Close peer

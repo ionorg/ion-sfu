@@ -2,7 +2,10 @@ package sfu
 
 import (
 	"encoding/binary"
+	"strings"
 	"sync/atomic"
+
+	"github.com/pion/webrtc/v3"
 )
 
 const ntpEpoch = 2208988800
@@ -120,17 +123,17 @@ func (p *VP8Helper) Unmarshal(payload []byte) error {
 // setVp8TemporalLayer is a helper to detect and modify accordingly the vp8 payload to reflect
 // temporal changes in the SFU.
 // VP8Helper temporal layers implemented according https://tools.ietf.org/html/rfc7741
-func setVP8TemporalLayer(pl []byte, s *SimulcastSender) (payload []byte, skip bool) {
+func setVP8TemporalLayer(pl []byte, s *DownTrack) (payload []byte, skip bool) {
 	var pkt VP8Helper
 	if err := pkt.Unmarshal(pl); err != nil {
 		return nil, false
 	}
 	// Check if temporal layer is requested
-	if pkt.TID > s.currentTempLayer {
+	if pkt.TID > uint8(s.simulcast.currentTempLayer) {
 		skip = true
 		// Increment references to prevent gaps
-		s.refTlzi++
-		s.refPicID++
+		s.simulcast.refTlzi++
+		s.simulcast.refPicID++
 		return
 	}
 	// If we are here modify payload
@@ -138,13 +141,13 @@ func setVP8TemporalLayer(pl []byte, s *SimulcastSender) (payload []byte, skip bo
 	copy(payload, pl)
 	// Modify last zero index
 	if pkt.tlzIdx > 0 {
-		s.lastTlzi = pkt.TL0PICIDX - s.refTlzi
-		payload[pkt.tlzIdx] = s.lastTlzi
+		s.simulcast.lastTlzi = pkt.TL0PICIDX - s.simulcast.refTlzi
+		payload[pkt.tlzIdx] = s.simulcast.lastTlzi
 	}
 	if pkt.picIDIdx > 0 {
-		s.lastPicID = pkt.PictureID - s.refPicID
+		s.simulcast.lastPicID = pkt.PictureID - s.simulcast.refPicID
 		pid := make([]byte, 2)
-		binary.BigEndian.PutUint16(pid, s.lastPicID)
+		binary.BigEndian.PutUint16(pid, s.simulcast.lastPicID)
 		payload[pkt.picIDIdx] = pid[0]
 		if pkt.mBit {
 			payload[pkt.picIDIdx] |= 0x80
@@ -154,28 +157,29 @@ func setVP8TemporalLayer(pl []byte, s *SimulcastSender) (payload []byte, skip bo
 	return
 }
 
-func snDiff(sn1, sn2 uint16) int {
-	if sn1 == sn2 {
-		return 0
-	}
-	if ((sn2 - sn1) & 0x8000) != 0 {
-		return 1
-	}
-	return -1
-}
-
 func timeToNtp(ns int64) uint64 {
 	seconds := uint64(ns/1e9 + ntpEpoch)
 	fraction := uint64(((ns % 1e9) << 32) / 1e9)
 	return seconds<<32 | fraction
 }
 
-// setNBitsOfUint16 will truncate the value to size, left-shift to startIndex position and set
-func setNBitsOfUint16(src, size, startIndex, val uint16) uint16 {
-	if startIndex+size > 16 {
-		return 0
+// Do a fuzzy find for a codec in the list of codecs
+// Used for lookup up a codec in an existing list to find a match
+func codecParametersFuzzySearch(needle webrtc.RTPCodecParameters, haystack []webrtc.RTPCodecParameters) (webrtc.RTPCodecParameters, error) {
+	// First attempt to match on MimeType + SDPFmtpLine
+	for _, c := range haystack {
+		if strings.EqualFold(c.RTPCodecCapability.MimeType, needle.RTPCodecCapability.MimeType) &&
+			c.RTPCodecCapability.SDPFmtpLine == needle.RTPCodecCapability.SDPFmtpLine {
+			return c, nil
+		}
 	}
-	// truncate val to size bits
-	val &= (1 << size) - 1
-	return src | (val << (16 - size - startIndex))
+
+	// Fallback to just MimeType
+	for _, c := range haystack {
+		if strings.EqualFold(c.RTPCodecCapability.MimeType, needle.RTPCodecCapability.MimeType) {
+			return c, nil
+		}
+	}
+
+	return webrtc.RTPCodecParameters{}, webrtc.ErrCodecNotFound
 }

@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	log "github.com/pion/ion-log"
-	sfu "github.com/pion/ion-sfu/pkg"
+	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/pion/webrtc/v3"
 	"github.com/sourcegraph/jsonrpc2"
 )

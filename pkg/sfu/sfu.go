@@ -2,12 +2,10 @@ package sfu
 
 import (
 	"math/rand"
-	"net/url"
 	"runtime"
 	"sync"
 	"time"
 
-	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 
 	log "github.com/pion/ion-log"
@@ -61,37 +59,6 @@ type SFU struct {
 // NewWebRTCTransportConfig parses our settings and returns a usable WebRTCTransportConfig for creating PeerConnections
 func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 	se := webrtc.SettingEngine{}
-
-	// Configure required extensions
-	sdes, _ := url.Parse(sdp.SDESRTPStreamIDURI)
-	sdesMid, _ := url.Parse(sdp.SDESMidURI)
-	transportCCURL, _ := url.Parse(sdp.TransportCCURI)
-	rtcpfb = append(rtcpfb, webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBTransportCC})
-	rtcpfb = append(rtcpfb, webrtc.RTCPFeedback{Type: webrtc.TypeRTCPFBGoogREMB})
-	se.AddSDPExtensions(webrtc.SDPSectionVideo,
-		[]sdp.ExtMap{
-			{
-				URI: sdes,
-			},
-			{
-				URI: sdesMid,
-			},
-			{
-				URI: transportCCURL,
-			},
-		})
-	se.AddSDPExtensions(webrtc.SDPSectionAudio,
-		[]sdp.ExtMap{
-			{
-				URI: sdes,
-			},
-			{
-				URI: sdesMid,
-			},
-			{
-				URI: transportCCURL,
-			},
-		})
 
 	var icePortStart, icePortEnd uint16
 
@@ -167,13 +134,13 @@ func (s *SFU) newSession(id string) *Session {
 	session := NewSession(id)
 	session.OnClose(func() {
 		s.mu.Lock()
-		defer s.mu.Unlock()
 		delete(s.sessions, id)
+		s.mu.Unlock()
 	})
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.sessions[id] = session
+	s.mu.Unlock()
 	return session
 }
 
@@ -184,22 +151,10 @@ func (s *SFU) getSession(id string) *Session {
 	return s.sessions[id]
 }
 
-func (s *SFU) NewTransport(sid, pid string, me MediaEngine) (*Session, *Publisher, *Subscriber, error) {
+func (s *SFU) GetSession(sid string) (*Session, WebRTCTransportConfig) {
 	session := s.getSession(sid)
-
 	if session == nil {
 		session = s.newSession(sid)
 	}
-
-	sub, err := NewSubscriber(session, pid, me, s.webrtc)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	pub, err := NewPublisher(session, pid, me, s.webrtc)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	return session, pub, sub, nil
+	return session, s.webrtc
 }

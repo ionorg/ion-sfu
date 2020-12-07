@@ -25,10 +25,10 @@ var (
 	ErrOfferIgnored = errors.New("offered ignored")
 )
 
-// TransportProvider provides the peerConnection to the sfu.Peer{}
+// SessionProvider provides the session to the sfu.Peer{}
 // This allows the sfu.SFU{} implementation to be customized / wrapped by another package
-type TransportProvider interface {
-	NewTransport(sid, pid string, me MediaEngine) (*Session, *Publisher, *Subscriber, error)
+type SessionProvider interface {
+	GetSession(sid string) (*Session, WebRTCTransportConfig)
 }
 
 // Peer represents a pair peer connection
@@ -36,7 +36,7 @@ type Peer struct {
 	sync.Mutex
 	id         string
 	session    *Session
-	provider   TransportProvider
+	provider   SessionProvider
 	publisher  *Publisher
 	subscriber *Subscriber
 
@@ -49,7 +49,7 @@ type Peer struct {
 }
 
 // NewPeer creates a new Peer for signaling with the given SFU
-func NewPeer(provider TransportProvider) *Peer {
+func NewPeer(provider SessionProvider) *Peer {
 	return &Peer{
 		provider: provider,
 	}
@@ -62,15 +62,20 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		return nil, ErrTransportExists
 	}
 
-	me := MediaEngine{}
-	err := me.PopulateFromSDP(sdp)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing sdp: %v", err)
-	}
-
 	pid := cuid.New()
 	p.id = pid
-	p.session, p.publisher, p.subscriber, err = p.provider.NewTransport(sid, pid, me)
+	var (
+		cfg WebRTCTransportConfig
+		err error
+	)
+
+	p.session, cfg = p.provider.GetSession(sid)
+
+	p.subscriber, err = NewSubscriber(pid, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("error creating transport: %v", err)
+	}
+	p.publisher, err = NewPublisher(p.session, pid, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("error creating transport: %v", err)
 	}
@@ -210,19 +215,16 @@ func (p *Peer) Trickle(candidate webrtc.ICECandidateInit, target int) error {
 
 // Close shuts down the peer connection and sends true to the done channel
 func (p *Peer) Close() error {
-	log.Debugf("peer closing")
+	if p.session != nil {
+		p.session.RemovePeer(p.id)
+	}
+	if p.publisher != nil {
+		p.publisher.Close()
+	}
 	if p.subscriber != nil {
 		if err := p.subscriber.Close(); err != nil {
 			return err
 		}
-	}
-	if p.publisher != nil {
-		if err := p.publisher.Close(); err != nil {
-			return err
-		}
-	}
-	if p.session != nil {
-		p.session.RemovePeer(p.id)
 	}
 	return nil
 }

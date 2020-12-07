@@ -103,7 +103,7 @@ func TestVP8Helper_Unmarshal(t *testing.T) {
 func Test_setVP8TemporalLayer(t *testing.T) {
 	type args struct {
 		pl []byte
-		s  *SimulcastSender
+		dt *DownTrack
 	}
 	tests := []struct {
 		name        string
@@ -114,12 +114,15 @@ func Test_setVP8TemporalLayer(t *testing.T) {
 		{
 			name: "Must skip when current temporal is bigger than wanted",
 			args: args{
-				s: &SimulcastSender{
-					currentTempLayer: 2,
-					refPicID:         0,
-					lastPicID:        0,
-					refTlzi:          0,
-					lastTlzi:         0,
+				dt: &DownTrack{
+					mime: "video/vp8",
+					simulcast: simulcastTrackHelpers{
+						refPicID:         0,
+						currentTempLayer: 2,
+						lastPicID:        0,
+						refTlzi:          0,
+						lastTlzi:         0,
+					},
 				},
 				pl: []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0xdf, 0x5, 0x6},
 			},
@@ -129,10 +132,13 @@ func Test_setVP8TemporalLayer(t *testing.T) {
 		{
 			name: "Must return modified payload",
 			args: args{
-				s: &SimulcastSender{
-					currentTempLayer: 3,
-					refPicID:         32764,
-					refTlzi:          179,
+				dt: &DownTrack{
+					mime: "video/vp8",
+					simulcast: simulcastTrackHelpers{
+						refPicID:         32764,
+						currentTempLayer: 3,
+						refTlzi:          179,
+					},
 				},
 				pl: []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0xdf, 0x5, 0x6},
 			},
@@ -143,7 +149,7 @@ func Test_setVP8TemporalLayer(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			gotPayload, gotSkip := setVP8TemporalLayer(tt.args.pl, tt.args.s)
+			gotPayload, gotSkip := setVP8TemporalLayer(tt.args.pl, tt.args.dt)
 			if !reflect.DeepEqual(gotPayload, tt.wantPayload) {
 				t.Errorf("setVP8TemporalLayer() gotPayload = %v, want %v", gotPayload, tt.wantPayload)
 			}

@@ -1,4 +1,4 @@
-package sfu
+package buffer
 
 import (
 	"sync"
@@ -21,7 +21,7 @@ type queue struct {
 	onLost   func(nack *rtcp.TransportLayerNack)
 }
 
-func (q *queue) AddPacket(pkt *rtp.Packet, latest bool) {
+func (q *queue) addPacket(pkt *rtp.Packet, latest bool) {
 	q.Lock()
 	defer q.Unlock()
 

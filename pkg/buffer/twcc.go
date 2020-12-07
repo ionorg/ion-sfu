@@ -1,4 +1,4 @@
-package sfu
+package buffer
 
 import (
 	"encoding/binary"
@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/gammazero/deque"
 	"github.com/pion/rtcp"
@@ -27,7 +28,6 @@ type rtpExtInfo struct {
 
 type TransportWideCC struct {
 	sync.Mutex
-	rtcpCh chan []rtcp.Packet
 
 	tccExtInfo    []rtpExtInfo
 	tccLastReport int64
@@ -44,13 +44,15 @@ type TransportWideCC struct {
 	payload  [100]byte
 	deltas   [200]byte
 	chunk    uint16
+
+	onFeedback func(packet []rtcp.Packet)
 }
 
-func newTransportWideCC(ch chan []rtcp.Packet) *TransportWideCC {
+func newTransportWideCC() *TransportWideCC {
 	return &TransportWideCC{
-		tccExtInfo: make([]rtpExtInfo, 0, 101),
-		rtcpCh:     ch,
-		sSSRC:      rand.Uint32(),
+		tccExtInfo:    make([]rtpExtInfo, 0, 101),
+		tccLastReport: time.Now().Add(time.Millisecond * 200).UnixNano(),
+		sSSRC:         rand.Uint32(),
 	}
 }
 
@@ -69,7 +71,7 @@ func (t *TransportWideCC) push(sn uint16, timeNS int64, marker bool) {
 	delta := timeNS - t.tccLastReport
 	if delta >= tccReportDelta || len(t.tccExtInfo) > 100 || (marker && delta >= tccReportDeltaAfterMark) {
 		if pkt := t.buildTransportCCPacket(); pkt != nil {
-			t.rtcpCh <- []rtcp.Packet{pkt}
+			t.onFeedback([]rtcp.Packet{pkt})
 		}
 		t.tccLastReport = timeNS
 	}
@@ -285,4 +287,14 @@ func (t *TransportWideCC) writeDelta(deltaType, delta uint16) {
 	}
 	binary.BigEndian.PutUint16(t.deltas[t.deltaLen:], delta)
 	t.deltaLen += 2
+}
+
+// setNBitsOfUint16 will truncate the value to size, left-shift to startIndex position and set
+func setNBitsOfUint16(src, size, startIndex, val uint16) uint16 {
+	if startIndex+size > 16 {
+		return 0
+	}
+	// truncate val to size bits
+	val &= (1 << size) - 1
+	return src | (val << (16 - size - startIndex))
 }

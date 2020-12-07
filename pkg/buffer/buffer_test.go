@@ -1,7 +1,9 @@
-package sfu
+package buffer
 
 import (
 	"testing"
+
+	"github.com/pion/interceptor"
 
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
@@ -42,15 +44,9 @@ func CreateTestListPackets(snsAndTSs []SequenceNumberAndTimeStamp) (packetList [
 }
 
 func TestNewBuffer(t *testing.T) {
-	me := webrtc.MediaEngine{}
-	me.RegisterDefaultCodecs()
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(me))
-	p, _ := api.NewPeerConnection(webrtc.Configuration{})
-	track, _ := p.NewTrack(webrtc.DefaultPayloadTypeVP8, 1234, "test", "pion")
-
 	type args struct {
-		track *webrtc.Track
-		o     BufferOptions
+		options Options
+		info    *interceptor.StreamInfo
 	}
 	tests := []struct {
 		name string
@@ -59,11 +55,18 @@ func TestNewBuffer(t *testing.T) {
 		{
 			name: "Must not be nil and add packets in sequence",
 			args: args{
-				track: track,
-				o: BufferOptions{
-					TWCCExt:    0,
-					BufferTime: 1e3,
-					MaxBitRate: 1e3,
+				options: Options{
+					BufferTime: 1000,
+					MaxBitRate: 1e6,
+				},
+				info: &interceptor.StreamInfo{
+					ID:                  "demo",
+					Attributes:          nil,
+					SSRC:                1234,
+					RTPHeaderExtensions: nil,
+					MimeType:            "",
+					ClockRate:           9000,
+					RTCPFeedback:        nil,
 				},
 			},
 		},
@@ -93,7 +96,8 @@ func TestNewBuffer(t *testing.T) {
 					},
 				},
 			}
-			buff := NewBuffer(tt.args.track, tt.args.o)
+			buff := NewBuffer(tt.args.info, tt.args.options)
+			buff.codecType = webrtc.RTPCodecTypeVideo
 			assert.NotNil(t, buff)
 
 			for _, p := range TestPackets {
