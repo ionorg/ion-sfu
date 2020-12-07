@@ -200,6 +200,7 @@ func (r *router) loopDownTrackRTCP(track *DownTrack) {
 				}
 			case *rtcp.TransportLayerNack:
 				log.Tracef("sender got nack: %+v", p)
+				// nolint:scopelint
 				r.wp.Submit(func() {
 					for _, pair := range p.Nacks {
 						for _, pt := range r.buffer.GetBufferedPackets(track.receiver.SSRC(track.currentSpatialLayer), track.snOffset, track.tsOffset, track.nList.getNACKSeqNo(pair.PacketList())) {
