@@ -8,7 +8,7 @@ import (
 	"os"
 
 	log "github.com/pion/ion-log"
-	sfu "github.com/pion/ion-sfu/sfu"
+	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/spf13/viper"
 
 	"github.com/pion/ion-sfu/cmd/signal/grpc/server"

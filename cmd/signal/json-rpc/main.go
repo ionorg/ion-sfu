@@ -14,7 +14,7 @@ import (
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/ion-sfu/cmd/signal/json-rpc/server"
-	sfu "github.com/pion/ion-sfu/sfu"
+	"github.com/pion/ion-sfu/pkg/sfu"
 )
 
 var (

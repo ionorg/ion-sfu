@@ -6,7 +6,7 @@ import (
 	"io"
 
 	log "github.com/pion/ion-log"
-	sfu "github.com/pion/ion-sfu/sfu"
+	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/pion/webrtc/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
