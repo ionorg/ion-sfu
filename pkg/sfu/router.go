@@ -6,15 +6,10 @@ import (
 	"io"
 	"sync"
 
-	"github.com/gammazero/workerpool"
 	log "github.com/pion/ion-log"
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
-)
-
-const (
-	maxNackWorkers = 5
 )
 
 // Router defines a track rtp/rtcp router
@@ -35,7 +30,6 @@ type RouterConfig struct {
 type router struct {
 	id        string
 	mu        sync.RWMutex
-	wp        *workerpool.WorkerPool
 	peer      *webrtc.PeerConnection
 	rtcpCh    chan []rtcp.Packet
 	buffer    *buffer.Interceptor
@@ -53,7 +47,6 @@ func newRouter(peer *webrtc.PeerConnection, id string, bi *buffer.Interceptor, c
 		rtcpCh:    ch,
 		config:    config,
 		receivers: make(map[string]Receiver),
-		wp:        workerpool.New(maxNackWorkers),
 	}
 	go r.sendRTCP()
 	return r
@@ -65,7 +58,6 @@ func (r *router) ID() string {
 
 func (r *router) Stop() {
 	close(r.rtcpCh)
-	r.wp.Stop()
 }
 
 func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote) (Receiver, bool) {
@@ -175,39 +167,44 @@ func (r *router) loopDownTrackRTCP(track *DownTrack) {
 			continue
 		}
 
+		if track.enabled.get() {
+			continue
+		}
+
 		var fwdPkts []rtcp.Packet
 		pliOnce := true
 		firOnce := true
 		for _, pkt := range pkts {
 			switch p := pkt.(type) {
 			case *rtcp.PictureLossIndication:
-				if track.enabled.get() && pliOnce {
+				if pliOnce {
 					p.MediaSSRC = track.lastSSRC
 					p.SenderSSRC = track.lastSSRC
 					fwdPkts = append(fwdPkts, p)
 					pliOnce = false
 				}
 			case *rtcp.FullIntraRequest:
-				if track.enabled.get() && firOnce {
+				if firOnce {
 					p.MediaSSRC = track.lastSSRC
 					p.SenderSSRC = track.ssrc
 					fwdPkts = append(fwdPkts, p)
 					firOnce = false
 				}
 			case *rtcp.ReceiverReport:
-				if track.enabled.get() && len(p.Reports) > 0 && p.Reports[0].FractionLost > 25 {
+				if len(p.Reports) > 0 && p.Reports[0].FractionLost > 25 {
 					log.Tracef("Slow link for sender %s, fraction packet lost %.2f", track.id, float64(p.Reports[0].FractionLost)/256)
 				}
 			case *rtcp.TransportLayerNack:
 				log.Tracef("sender got nack: %+v", p)
-				// nolint:scopelint
-				r.wp.Submit(func() {
-					for _, pair := range p.Nacks {
-						for _, pt := range r.buffer.GetBufferedPackets(track.receiver.SSRC(track.currentSpatialLayer), track.snOffset, track.tsOffset, track.nList.getNACKSeqNo(pair.PacketList())) {
-							_ = track.WriteRTP(&pt)
-						}
+				for _, pair := range p.Nacks {
+					for _, pt := range r.buffer.GetBufferedPackets(
+						track.receiver.SSRC(track.currentSpatialLayer),
+						track.snOffset,
+						track.tsOffset,
+						track.nList.getNACKSeqNo(pair.PacketList())) {
+						_ = track.WriteRTP(&pt)
 					}
-				})
+				}
 			}
 		}
 		if len(fwdPkts) > 0 {

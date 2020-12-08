@@ -62,7 +62,6 @@ func (i *Interceptor) UnbindRemoteStream(info *interceptor.StreamInfo) {
 
 func (i *Interceptor) BindRTCPReader(reader interceptor.RTCPReader) interceptor.RTCPReader {
 	return interceptor.RTCPReaderFunc(func() ([]rtcp.Packet, interceptor.Attributes, error) {
-		var buffer *Buffer
 		pkts, attributes, err := reader.Read()
 		if err != nil {
 			return nil, nil, err
@@ -71,16 +70,9 @@ func (i *Interceptor) BindRTCPReader(reader interceptor.RTCPReader) interceptor.
 		for _, pkt := range pkts {
 			switch pkt := pkt.(type) {
 			case *rtcp.SenderReport:
+				buffer := i.getBuffer(pkt.SSRC)
 				if buffer == nil {
-					for _, b := range i.buffers {
-						if b.mediaSSRC == pkt.SSRC {
-							buffer = b
-							break
-						}
-					}
-					if buffer == nil {
-						return pkts, attributes, nil
-					}
+					return pkts, attributes, nil
 				}
 				buffer.setSenderReportData(pkt.RTPTime, pkt.NTPTime)
 			}
