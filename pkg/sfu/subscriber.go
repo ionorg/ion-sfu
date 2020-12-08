@@ -1,8 +1,12 @@
 package sfu
 
 import (
+	"io"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/pion/rtcp"
 
 	"github.com/bep/debounce"
 	log "github.com/pion/ion-log"
@@ -69,6 +73,8 @@ func NewSubscriber(id string, cfg WebRTCTransportConfig) (*Subscriber, error) {
 			})
 		}
 	})
+
+	go s.downTracksReports()
 
 	return s, nil
 }
@@ -162,4 +168,38 @@ func (s *Subscriber) GetDownTracks(streamID string) []*DownTrack {
 // Close peer
 func (s *Subscriber) Close() error {
 	return s.pc.Close()
+}
+
+func (s *Subscriber) downTracksReports() {
+	for {
+		time.Sleep(time.Second)
+		var r []rtcp.Packet
+		s.RLock()
+		for _, dts := range s.tracks {
+			for _, dt := range dts {
+				now := time.Now().UnixNano()
+				nowNTP := timeToNtp(now)
+				lastPktMs := atomic.LoadInt64(&dt.lastPacketMs)
+				maxPktTs := atomic.LoadUint32(&dt.lastTS)
+				diffTs := uint32((now/1e6)-lastPktMs) * dt.codec.ClockRate / 1000
+				octets, packets := dt.getSRStats()
+				r = append(r, &rtcp.SenderReport{
+					SSRC:        dt.ssrc,
+					NTPTime:     nowNTP,
+					RTPTime:     maxPktTs + diffTs,
+					PacketCount: packets,
+					OctetCount:  octets,
+				})
+			}
+		}
+		s.RUnlock()
+		if len(r) > 0 {
+			if err := s.pc.WriteRTCP(r); err != nil {
+				if err == io.EOF || err == io.ErrClosedPipe {
+					return
+				}
+				log.Errorf("Sending downtrack reports err: %v", err)
+			}
+		}
+	}
 }

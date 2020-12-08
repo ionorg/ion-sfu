@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	log "github.com/pion/ion-log"
@@ -53,6 +54,12 @@ type DownTrack struct {
 	writeStream    webrtc.TrackLocalWriter
 	onCloseHandler func()
 	closeOnce      sync.Once
+
+	// Report helpers
+	octetCount   uint32
+	packetCount  uint32
+	maxPacketTs  uint32
+	lastPacketMs int64
 }
 
 // NewDownTrack returns a DownTrack.
@@ -200,12 +207,19 @@ func (d *DownTrack) writeSimpleRTP(pkt rtp.Packet) error {
 		d.reSync.set(false)
 	}
 
-	d.lastSN = pkt.SequenceNumber - d.snOffset
-	d.lastTS = pkt.Timestamp - d.tsOffset
+	atomic.AddUint32(&d.octetCount, uint32(len(pkt.Payload)))
+	atomic.AddUint32(&d.packetCount, 1)
+
+	newSN := pkt.SequenceNumber - d.snOffset
+	newTS := pkt.Timestamp - d.tsOffset
+	if (newSN-d.lastSN)&0x8000 == 0 {
+		d.lastSN = newSN
+		atomic.StoreInt64(&d.lastPacketMs, time.Now().UnixNano()/1e6)
+		atomic.StoreUint32(&d.lastTS, newTS)
+	}
 	pkt.PayloadType = d.payload
-	pkt.Extensions = nil
-	pkt.Timestamp = d.lastTS
-	pkt.SequenceNumber = d.lastSN
+	pkt.Timestamp = newTS
+	pkt.SequenceNumber = newSN
 	pkt.SSRC = d.ssrc
 
 	_, err := d.writeStream.WriteRTP(&pkt.Header, pkt.Payload)
@@ -287,15 +301,21 @@ func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
 			}
 		}
 	}
+	atomic.AddUint32(&d.octetCount, uint32(len(pkt.Payload)))
+	atomic.AddUint32(&d.packetCount, 1)
+	newSN := pkt.SequenceNumber - d.snOffset
+	newTS := pkt.Timestamp - d.tsOffset
+	if (newSN-d.lastSN)&0x8000 == 0 {
+		d.lastSN = newSN
+		atomic.StoreInt64(&d.lastPacketMs, time.Now().UnixNano()/1e6)
+		atomic.StoreUint32(&d.lastTS, newTS)
+	}
 	// Update base
 	d.simulcast.lTSCalc = time.Now()
 	d.lastSSRC = pkt.SSRC
-	d.lastTS = pkt.Timestamp - d.tsOffset
-	d.lastSN = pkt.SequenceNumber - d.snOffset
 	// Update pkt headers
-	pkt.SequenceNumber = d.lastSN
-	pkt.Extensions = nil
-	pkt.Timestamp = d.lastTS
+	pkt.SequenceNumber = newSN
+	pkt.Timestamp = newTS
 	pkt.Header.SSRC = d.ssrc
 	pkt.Header.PayloadType = d.payload
 
@@ -304,4 +324,10 @@ func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
 		log.Errorf("Write packet err %v", err)
 	}
 	return err
+}
+
+func (d *DownTrack) getSRStats() (octets, packets uint32) {
+	octets = atomic.LoadUint32(&d.octetCount)
+	packets = atomic.LoadUint32(&d.packetCount)
+	return
 }
