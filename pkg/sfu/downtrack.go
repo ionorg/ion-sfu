@@ -80,11 +80,11 @@ func NewDownTrack(c webrtc.RTPCodecCapability, r Receiver, peerID, id, streamID 
 func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters, error) {
 	parameters := webrtc.RTPCodecParameters{RTPCodecCapability: d.codec}
 	if codec, err := codecParametersFuzzySearch(parameters, t.CodecParameters()); err == nil {
-		d.bound.set(true)
 		d.ssrc = uint32(t.SSRC())
 		d.payload = uint8(codec.PayloadType)
 		d.writeStream = t.WriteStream()
 		d.mime = strings.ToLower(codec.MimeType)
+		d.bound.set(true)
 		d.reSync.set(true)
 		d.enabled.set(true)
 		return codec, nil
@@ -221,6 +221,8 @@ func (d *DownTrack) writeSimpleRTP(pkt rtp.Packet) error {
 	pkt.Timestamp = newTS
 	pkt.SequenceNumber = newSN
 	pkt.SSRC = d.ssrc
+	pkt.Header.Extension = false
+	pkt.Header.Extensions = nil
 
 	_, err := d.writeStream.WriteRTP(&pkt.Header, pkt.Payload)
 	if err != nil {

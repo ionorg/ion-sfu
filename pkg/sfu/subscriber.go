@@ -174,6 +174,7 @@ func (s *Subscriber) downTracksReports() {
 	for {
 		time.Sleep(time.Second)
 		var r []rtcp.Packet
+		var sd []rtcp.SourceDescriptionChunk
 		s.RLock()
 		for _, dts := range s.tracks {
 			for _, dt := range dts {
@@ -190,10 +191,18 @@ func (s *Subscriber) downTracksReports() {
 					PacketCount: packets,
 					OctetCount:  octets,
 				})
+				sd = append(sd, rtcp.SourceDescriptionChunk{
+					Source: dt.ssrc,
+					Items: []rtcp.SourceDescriptionItem{{
+						Type: rtcp.SDESCNAME,
+						Text: dt.streamID,
+					}},
+				})
 			}
 		}
 		s.RUnlock()
 		if len(r) > 0 {
+			r = append(r, &rtcp.SourceDescription{Chunks: sd})
 			if err := s.pc.WriteRTCP(r); err != nil {
 				if err == io.EOF || err == io.ErrClosedPipe {
 					return

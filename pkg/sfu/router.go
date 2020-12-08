@@ -167,7 +167,7 @@ func (r *router) loopDownTrackRTCP(track *DownTrack) {
 			continue
 		}
 
-		if track.enabled.get() {
+		if !track.enabled.get() {
 			continue
 		}
 
@@ -202,6 +202,7 @@ func (r *router) loopDownTrackRTCP(track *DownTrack) {
 						track.snOffset,
 						track.tsOffset,
 						track.nList.getNACKSeqNo(pair.PacketList())) {
+						pt := pt
 						_ = track.WriteRTP(&pt)
 					}
 				}
