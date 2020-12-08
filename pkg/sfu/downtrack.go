@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/bep/debounce"
+
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
@@ -53,6 +55,7 @@ type DownTrack struct {
 	transceiver    *webrtc.RTPTransceiver
 	writeStream    webrtc.TrackLocalWriter
 	onCloseHandler func()
+	onBind         func()
 	closeOnce      sync.Once
 
 	// Report helpers
@@ -87,6 +90,7 @@ func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters,
 		d.bound.set(true)
 		d.reSync.set(true)
 		d.enabled.set(true)
+		d.onBind()
 		return codec, nil
 	}
 	return webrtc.RTPCodecParameters{}, webrtc.ErrUnsupportedCodec
@@ -171,6 +175,13 @@ func (d *DownTrack) SwitchSpatialLayer(targetLayer int) {
 // OnCloseHandler method to be called on remote tracked removed
 func (d *DownTrack) OnCloseHandler(fn func()) {
 	d.onCloseHandler = fn
+}
+
+func (d *DownTrack) OnBind(f func()) {
+	debounced := debounce.New(250 * time.Millisecond)
+	d.onBind = func() {
+		debounced(f)
+	}
 }
 
 func (d *DownTrack) writeSimpleRTP(pkt rtp.Packet) error {

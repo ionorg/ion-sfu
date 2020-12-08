@@ -144,6 +144,13 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 			sub.negotiate()
 		}
 	})
+
+	outTrack.OnBind(func() {
+		if err := sub.sendDownTracksReports(); err != nil {
+			log.Errorf("Sending track binding reports err:%v", err)
+		}
+	})
+
 	go r.loopDownTrackRTCP(outTrack)
 	sub.AddDownTrack(recv.StreamID(), outTrack)
 	recv.AddDownTrack(outTrack, r.config.Simulcast.BestQualityFirst)
