@@ -18,6 +18,10 @@ type SFUServer struct {
 	SFU *sfu.SFU
 }
 
+func NewServer(sfu *sfu.SFU) *SFUServer {
+	return &SFUServer{SFU: sfu}
+}
+
 // Publish a stream to the sfu. Publish creates a bidirectional
 // streaming rpc connection between the client and sfu.
 //

@@ -135,7 +135,7 @@ func main() {
 	s := grpc.NewServer(
 		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
 	)
-	pb.RegisterSFUServer(s, &server.SFUServer{SFU: sfu.NewSFU(conf.Config)})
+	pb.RegisterSFUServer(s, server.NewServer(sfu.NewSFU(conf.Config)))
 	grpc_prometheus.Register(s)
 
 	go startMetrics(metricsAddr)
