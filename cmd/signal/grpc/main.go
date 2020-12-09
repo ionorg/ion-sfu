@@ -5,13 +5,17 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	log "github.com/pion/ion-log"
-	"github.com/pion/ion-sfu/pkg/sfu"
-	"github.com/spf13/viper"
-
+	pb "github.com/pion/ion-sfu/cmd/signal/grpc/proto"
 	"github.com/pion/ion-sfu/cmd/signal/grpc/server"
+	"github.com/pion/ion-sfu/pkg/sfu"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 )
 
 type grpcConfig struct {
@@ -25,9 +29,10 @@ type Config struct {
 }
 
 var (
-	conf = Config{}
-	file string
-	addr string
+	conf        = Config{}
+	file        string
+	addr        string
+	metricsAddr string
 )
 
 const (
@@ -78,6 +83,7 @@ func load() bool {
 func parse() bool {
 	flag.StringVar(&file, "c", "config.toml", "config file")
 	flag.StringVar(&addr, "a", ":50051", "address to use")
+	flag.StringVar(&metricsAddr, "m", ":8100", "merics to use")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
 	if !load() {
@@ -88,6 +94,26 @@ func parse() bool {
 		return false
 	}
 	return true
+}
+
+func startMetrics(addr string) {
+	// start metrics server
+	m := http.NewServeMux()
+	m.Handle("/metrics", promhttp.Handler())
+	srv := &http.Server{
+		Handler: m,
+	}
+
+	metricsLis, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Panicf("cannot bind to metrics endpoint %s. err: %s", addr, err)
+	}
+	log.Infof("Metrics Listening at %s", addr)
+
+	err = srv.Serve(metricsLis)
+	if err != nil {
+		log.Errorf("debug server stopped. got err: %s", err)
+	}
 }
 
 func main() {
@@ -105,10 +131,17 @@ func main() {
 	if err != nil {
 		log.Panicf("failed to listen: %v", err)
 	}
+
+	s := grpc.NewServer(
+		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
+	)
+	pb.RegisterSFUServer(s, &server.SFUServer{SFU: sfu.NewSFU(conf.Config)})
+	grpc_prometheus.Register(s)
+
+	go startMetrics(metricsAddr)
+
 	log.Infof("SFU Listening at %s", addr)
-	s := server.NewServer(sfu.NewSFU(conf.Config))
 	if err := s.Serve(lis); err != nil {
 		log.Panicf("failed to serve: %v", err)
 	}
-	select {}
 }

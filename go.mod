@@ -9,6 +9,7 @@ require (
 	github.com/gammazero/workerpool v1.1.1
 	github.com/golang/protobuf v1.4.3 // indirect
 	github.com/gorilla/websocket v1.4.2
+	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/improbable-eng/grpc-web v0.13.0
 	github.com/lucas-clemente/quic-go v0.19.3 // indirect
 	github.com/lucsky/cuid v1.0.2
@@ -20,6 +21,7 @@ require (
 	github.com/pion/sdp/v3 v3.0.3
 	github.com/pion/srtp v1.5.2 // indirect
 	github.com/pion/webrtc/v3 v3.0.0-beta.15.0.20201209023348-63401a8837fb
+	github.com/prometheus/client_golang v0.9.3
 	github.com/rs/cors v1.7.0 // indirect
 	github.com/sirupsen/logrus v1.2.0 // indirect
 	github.com/soheilhy/cmux v0.1.4
