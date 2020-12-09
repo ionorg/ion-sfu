@@ -28,8 +28,8 @@ type RouterConfig struct {
 }
 
 type router struct {
+	sync.RWMutex
 	id        string
-	mu        sync.RWMutex
 	peer      *webrtc.PeerConnection
 	rtcpCh    chan []rtcp.Packet
 	buffer    *buffer.Interceptor
@@ -61,8 +61,8 @@ func (r *router) Stop() {
 }
 
 func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote) (Receiver, bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.Lock()
+	defer r.Unlock()
 
 	publish := false
 	trackID := track.ID()
@@ -85,8 +85,8 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 
 // AddWebRTCSender to router
 func (r *router) AddDownTracks(s *Subscriber, recv Receiver) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.Lock()
+	defer r.Unlock()
 
 	if recv != nil {
 		if err := r.addDownTrack(s, recv); err != nil {
@@ -144,6 +144,11 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 			sub.negotiate()
 		}
 	})
+
+	outTrack.OnBind(func() {
+		go sub.sendStreamDownTracksReports(recv.StreamID())
+	})
+
 	go r.loopDownTrackRTCP(outTrack)
 	sub.AddDownTrack(recv.StreamID(), outTrack)
 	recv.AddDownTrack(outTrack, r.config.Simulcast.BestQualityFirst)
@@ -167,7 +172,7 @@ func (r *router) loopDownTrackRTCP(track *DownTrack) {
 			continue
 		}
 
-		if track.enabled.get() {
+		if !track.enabled.get() {
 			continue
 		}
 
@@ -202,6 +207,7 @@ func (r *router) loopDownTrackRTCP(track *DownTrack) {
 						track.snOffset,
 						track.tsOffset,
 						track.nList.getNACKSeqNo(pair.PacketList())) {
+						pt := pt
 						_ = track.WriteRTP(&pt)
 					}
 				}
@@ -214,9 +220,9 @@ func (r *router) loopDownTrackRTCP(track *DownTrack) {
 }
 
 func (r *router) deleteReceiver(track string) {
-	r.mu.Lock()
+	r.Lock()
 	delete(r.receivers, track)
-	r.mu.Unlock()
+	r.Unlock()
 }
 
 func (r *router) sendRTCP() {

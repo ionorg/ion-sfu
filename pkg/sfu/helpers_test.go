@@ -184,7 +184,6 @@ func Test_timeToNtp(t *testing.T) {
 			if gotNTP != tt.wantNTP {
 				t.Errorf("timeToNtp() gotFraction = %v, want %v", gotNTP, tt.wantNTP)
 			}
-			println(gotNTP >> 16)
 		})
 	}
 }

@@ -122,7 +122,7 @@ func (b *Buffer) push(p *rtp.Packet) {
 		b.maxSeqNo = p.SequenceNumber
 		b.pktQueue.headSN = p.SequenceNumber - 1
 		b.lastReport = b.lastPacketTime
-	} else if snDiff(b.maxSeqNo, p.SequenceNumber) <= 0 {
+	} else if (p.SequenceNumber-b.maxSeqNo)&0x8000 == 0 {
 		if p.SequenceNumber < b.maxSeqNo {
 			b.cycles += maxSN
 		}
@@ -255,14 +255,4 @@ func (b *Buffer) onTransportWideCC(fn func(sn uint16, timeNS int64, marker bool)
 
 func (b *Buffer) onFeedback(fn func(fb []rtcp.Packet)) {
 	b.feedbackCB = fn
-}
-
-func snDiff(sn1, sn2 uint16) int {
-	if sn1 == sn2 {
-		return 0
-	}
-	if ((sn2 - sn1) & 0x8000) != 0 {
-		return 1
-	}
-	return -1
 }
