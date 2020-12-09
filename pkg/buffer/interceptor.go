@@ -134,7 +134,7 @@ func (i *Interceptor) newBuffer(info *interceptor.StreamInfo) *Buffer {
 	})
 	i.Lock()
 	i.buffers = append(i.buffers, buffer)
-	i.Unlock()
 	i.twcc.mSSRC = info.SSRC
+	i.Unlock()
 	return buffer
 }
