@@ -227,8 +227,6 @@ func (d *DownTrack) writeSimpleRTP(pkt rtp.Packet) error {
 	pkt.Timestamp = newTS
 	pkt.SequenceNumber = newSN
 	pkt.SSRC = d.ssrc
-	pkt.Header.Extension = false
-	pkt.Header.Extensions = nil
 
 	_, err := d.writeStream.WriteRTP(&pkt.Header, pkt.Payload)
 	if err != nil {

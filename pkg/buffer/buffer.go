@@ -149,8 +149,7 @@ func (b *Buffer) push(p *rtp.Packet) {
 			b.feedbackTWCC(rtpTCC.TransportSequence, b.lastPacketTime, p.Marker)
 		}
 	}
-	// a := p.GetExtension(4)
-	// fmt.Printf("%b,%v", a, p.Header.ExtensionProfile == 0x1000)
+
 	if b.lastPacketTime-b.lastReport >= reportDelta {
 		b.feedbackCB(b.getRTCP())
 		b.lastReport = b.lastPacketTime

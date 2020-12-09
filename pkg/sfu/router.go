@@ -197,7 +197,7 @@ func (r *router) loopDownTrackRTCP(track *DownTrack) {
 				}
 			case *rtcp.ReceiverReport:
 				if len(p.Reports) > 0 && p.Reports[0].FractionLost > 25 {
-					log.Tracef("Slow link for sender %s, fraction packet lost %.2f", track.id, float64(p.Reports[0].FractionLost)/256)
+					log.Tracef("Slow link for sender %s, fraction packet lost %.2f", track.peerID, float64(p.Reports[0].FractionLost)/256)
 				}
 			case *rtcp.TransportLayerNack:
 				log.Tracef("sender got nack: %+v", p)
@@ -208,7 +208,7 @@ func (r *router) loopDownTrackRTCP(track *DownTrack) {
 						track.tsOffset,
 						track.nList.getNACKSeqNo(pair.PacketList())) {
 						pt := pt
-						_ = track.WriteRTP(&pt)
+						_, _ = track.writeStream.WriteRTP(&pt.Header, pt.Payload)
 					}
 				}
 			}
