@@ -90,7 +90,7 @@ func (i *Interceptor) BindRTCPWriter(writer interceptor.RTCPWriter) interceptor.
 	return writer
 }
 
-func (i *Interceptor) GetBufferedPackets(ssrc uint32, snOffset uint16, tsOffset uint32, sn []uint16) []rtp.Packet {
+func (i *Interceptor) GetBufferedPackets(ssrc, mediaSSRC uint32, snOffset uint16, tsOffset uint32, sn []uint16) []rtp.Packet {
 	buffer := i.getBuffer(ssrc)
 	if buffer == nil {
 		return nil
@@ -101,6 +101,7 @@ func (i *Interceptor) GetBufferedPackets(ssrc uint32, snOffset uint16, tsOffset 
 		if err != nil {
 			continue
 		}
+		h.SSRC = mediaSSRC
 		h.SequenceNumber -= snOffset
 		h.Timestamp -= tsOffset
 		pkts = append(pkts, rtp.Packet{

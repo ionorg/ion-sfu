@@ -204,6 +204,7 @@ func (r *router) loopDownTrackRTCP(track *DownTrack) {
 				for _, pair := range p.Nacks {
 					for _, pt := range r.buffer.GetBufferedPackets(
 						track.receiver.SSRC(track.currentSpatialLayer),
+						track.ssrc,
 						track.snOffset,
 						track.tsOffset,
 						track.nList.getNACKSeqNo(pair.PacketList())) {
