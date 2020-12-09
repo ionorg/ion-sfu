@@ -8,8 +8,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bep/debounce"
-
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
@@ -177,11 +175,8 @@ func (d *DownTrack) OnCloseHandler(fn func()) {
 	d.onCloseHandler = fn
 }
 
-func (d *DownTrack) OnBind(f func()) {
-	debounced := debounce.New(250 * time.Millisecond)
-	d.onBind = func() {
-		debounced(f)
-	}
+func (d *DownTrack) OnBind(fn func()) {
+	d.onBind = fn
 }
 
 func (d *DownTrack) writeSimpleRTP(pkt rtp.Packet) error {

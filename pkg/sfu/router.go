@@ -146,9 +146,7 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 	})
 
 	outTrack.OnBind(func() {
-		if err := sub.sendDownTracksReports(); err != nil {
-			log.Errorf("Sending track binding reports err:%v", err)
-		}
+		go sub.sendStreamDownTracksReports(recv.StreamID())
 	})
 
 	go r.loopDownTrackRTCP(outTrack)

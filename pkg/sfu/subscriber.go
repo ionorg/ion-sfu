@@ -173,50 +173,85 @@ func (s *Subscriber) Close() error {
 func (s *Subscriber) downTracksReports() {
 	for {
 		time.Sleep(5 * time.Second)
-		if err := s.sendDownTracksReports(); err != nil {
-			if err == io.EOF || err == io.ErrClosedPipe {
-				return
+		var r []rtcp.Packet
+		var sd []rtcp.SourceDescriptionChunk
+		s.RLock()
+		for _, dts := range s.tracks {
+			for _, dt := range dts {
+				if !dt.bound.get() {
+					continue
+				}
+				now := time.Now().UnixNano()
+				nowNTP := timeToNtp(now)
+				lastPktMs := atomic.LoadInt64(&dt.lastPacketMs)
+				maxPktTs := atomic.LoadUint32(&dt.lastTS)
+				diffTs := uint32((now/1e6)-lastPktMs) * dt.codec.ClockRate / 1000
+				octets, packets := dt.getSRStats()
+				r = append(r, &rtcp.SenderReport{
+					SSRC:        dt.ssrc,
+					NTPTime:     nowNTP,
+					RTPTime:     maxPktTs + diffTs,
+					PacketCount: packets,
+					OctetCount:  octets,
+				})
+				sd = append(sd, rtcp.SourceDescriptionChunk{
+					Source: dt.ssrc,
+					Items: []rtcp.SourceDescriptionItem{{
+						Type: rtcp.SDESCNAME,
+						Text: dt.streamID,
+					}},
+				})
 			}
-			log.Errorf("Sending downtrack reports err: %v", err)
+		}
+		s.RUnlock()
+		if len(r) > 0 {
+			r = append(r, &rtcp.SourceDescription{Chunks: sd})
+			if err := s.pc.WriteRTCP(r); err != nil {
+				if err == io.EOF || err == io.ErrClosedPipe {
+					return
+				}
+				log.Errorf("Sending downtrack reports err: %v", err)
+			}
 		}
 	}
 }
 
-func (s *Subscriber) sendDownTracksReports() error {
+func (s *Subscriber) sendStreamDownTracksReports(streamID string) {
 	var r []rtcp.Packet
 	var sd []rtcp.SourceDescriptionChunk
+
 	s.RLock()
-	for _, dts := range s.tracks {
-		for _, dt := range dts {
-			if !dt.bound.get() {
-				continue
-			}
-			now := time.Now().UnixNano()
-			nowNTP := timeToNtp(now)
-			lastPktMs := atomic.LoadInt64(&dt.lastPacketMs)
-			maxPktTs := atomic.LoadUint32(&dt.lastTS)
-			diffTs := uint32((now/1e6)-lastPktMs) * dt.codec.ClockRate / 1000
-			octets, packets := dt.getSRStats()
-			r = append(r, &rtcp.SenderReport{
-				SSRC:        dt.ssrc,
-				NTPTime:     nowNTP,
-				RTPTime:     maxPktTs + diffTs,
-				PacketCount: packets,
-				OctetCount:  octets,
-			})
-			sd = append(sd, rtcp.SourceDescriptionChunk{
-				Source: dt.ssrc,
-				Items: []rtcp.SourceDescriptionItem{{
-					Type: rtcp.SDESCNAME,
-					Text: dt.streamID,
-				}},
-			})
+	dts := s.tracks[streamID]
+	for _, dt := range dts {
+		if !dt.bound.get() {
+			continue
 		}
+		now := time.Now().UnixNano()
+		nowNTP := timeToNtp(now)
+		lastPktMs := atomic.LoadInt64(&dt.lastPacketMs)
+		maxPktTs := atomic.LoadUint32(&dt.lastTS)
+		diffTs := uint32((now/1e6)-lastPktMs) * dt.codec.ClockRate / 1000
+		octets, packets := dt.getSRStats()
+		r = append(r, &rtcp.SenderReport{
+			SSRC:        dt.ssrc,
+			NTPTime:     nowNTP,
+			RTPTime:     maxPktTs + diffTs,
+			PacketCount: packets,
+			OctetCount:  octets,
+		})
+		sd = append(sd, rtcp.SourceDescriptionChunk{
+			Source: dt.ssrc,
+			Items: []rtcp.SourceDescriptionItem{{
+				Type: rtcp.SDESCNAME,
+				Text: dt.streamID,
+			}},
+		})
 	}
 	s.RUnlock()
 	if len(r) > 0 {
 		r = append(r, &rtcp.SourceDescription{Chunks: sd})
-		return s.pc.WriteRTCP(r)
+		if err := s.pc.WriteRTCP(r); err != nil {
+			log.Errorf("Sending track binding reports err:%v", err)
+		}
 	}
-	return nil
 }
