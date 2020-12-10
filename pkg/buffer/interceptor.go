@@ -27,7 +27,7 @@ func NewBufferInterceptor() *Interceptor {
 
 func (i *Interceptor) BindRemoteStream(info *interceptor.StreamInfo, reader interceptor.RTPReader) interceptor.RTPReader {
 	return interceptor.RTPReaderFunc(func() (*rtp.Packet, interceptor.Attributes, error) {
-		buffer := i.getBuffer(info.SSRC)
+		buffer := i.GetBuffer(info.SSRC)
 		if buffer == nil {
 			buffer = i.newBuffer(info)
 		}
@@ -70,7 +70,7 @@ func (i *Interceptor) BindRTCPReader(reader interceptor.RTCPReader) interceptor.
 		for _, pkt := range pkts {
 			switch pkt := pkt.(type) {
 			case *rtcp.SenderReport:
-				buffer := i.getBuffer(pkt.SSRC)
+				buffer := i.GetBuffer(pkt.SSRC)
 				if buffer == nil {
 					continue
 				}
@@ -91,7 +91,7 @@ func (i *Interceptor) BindRTCPWriter(writer interceptor.RTCPWriter) interceptor.
 }
 
 func (i *Interceptor) GetBufferedPackets(ssrc, mediaSSRC uint32, snOffset uint16, tsOffset uint32, sn []uint16) []rtp.Packet {
-	buffer := i.getBuffer(ssrc)
+	buffer := i.GetBuffer(ssrc)
 	if buffer == nil {
 		return nil
 	}
@@ -112,7 +112,7 @@ func (i *Interceptor) GetBufferedPackets(ssrc, mediaSSRC uint32, snOffset uint16
 	return pkts
 }
 
-func (i *Interceptor) getBuffer(ssrc uint32) *Buffer {
+func (i *Interceptor) GetBuffer(ssrc uint32) *Buffer {
 	i.RLock()
 	defer i.RUnlock()
 	for _, b := range i.buffers {

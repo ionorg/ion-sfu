@@ -29,6 +29,7 @@ type Buffer struct {
 	codecType  webrtc.RTPCodecType
 	simulcast  bool
 	mediaSSRC  uint32
+	MediaSSRC  uint32
 	clockRate  uint32
 	maxBitrate uint64
 	lastReport int64
@@ -55,6 +56,10 @@ type Buffer struct {
 	maxSeqNo           uint16  // The highest sequence number received in an RTP data packet
 	jitter             float64 // An estimate of the statistical variance of the RTP data packet inter-arrival time.
 	totalByte          uint64
+
+	latestTimestamp     uint32 // latest received RTP timestamp on packet
+	latestTimestampTime int64  // Time of the latest timestamp (in nanos since unix epoch)
+
 	// callbacks
 	feedbackCB   func([]rtcp.Packet)
 	feedbackTWCC func(sn uint16, timeNS int64, marker bool)
@@ -129,6 +134,13 @@ func (b *Buffer) push(p *rtp.Packet) {
 		b.maxSeqNo = p.SequenceNumber
 	}
 	b.packetCount++
+
+	// if first time update or the timestamp is later (factoring timestamp wrap around)
+	if (b.latestTimestampTime == 0) || IsLaterTimestamp(p.Timestamp, b.latestTimestamp) {
+		b.latestTimestamp = p.Timestamp
+		b.latestTimestampTime = b.lastPacketTime
+	}
+
 	arrival := uint32(b.lastPacketTime / 1e6 * int64(b.clockRate/1e3))
 	transit := arrival - p.Timestamp
 	if b.lastTransit != 0 {
@@ -254,4 +266,44 @@ func (b *Buffer) onTransportWideCC(fn func(sn uint16, timeNS int64, marker bool)
 
 func (b *Buffer) onFeedback(fn func(fb []rtcp.Packet)) {
 	b.feedbackCB = fn
+}
+
+func (b *Buffer) GetMediaSSRC() uint32 {
+	return b.mediaSSRC
+}
+
+func (b *Buffer) GetClockRate() uint32 {
+	return b.clockRate
+}
+
+func (b *Buffer) GetSenderReportData() (rtpTime uint32, ntpTime uint64, lastReceivedTimeInNanosSinceEpoch int64) {
+	rtpTime = atomic.LoadUint32(&b.lastSRRTPTime)
+	ntpTime = atomic.LoadUint64(&b.lastSRNTPTime)
+	lastReceivedTimeInNanosSinceEpoch = atomic.LoadInt64(&b.lastSRRecv)
+
+	return rtpTime, ntpTime, lastReceivedTimeInNanosSinceEpoch
+}
+
+func (b *Buffer) GetLatestTimestamp() (latestTimestamp uint32, latestTimestampTimeInNanosSinceEpoch int64) {
+	latestTimestamp = atomic.LoadUint32(&b.latestTimestamp)
+	latestTimestampTimeInNanosSinceEpoch = atomic.LoadInt64(&b.latestTimestampTime)
+
+	return latestTimestamp, latestTimestampTimeInNanosSinceEpoch
+}
+
+func IsTimestampWrapAround(timestamp1 uint32, timestamp2 uint32) bool {
+	return (timestamp1&0xC000000 == 0) && (timestamp2&0xC000000 == 0xC000000)
+}
+
+func IsLaterTimestamp(timestamp1 uint32, timestamp2 uint32) bool {
+	if timestamp1 > timestamp2 {
+		if IsTimestampWrapAround(timestamp2, timestamp1) {
+			return false
+		}
+		return true
+	}
+	if IsTimestampWrapAround(timestamp1, timestamp2) {
+		return true
+	}
+	return false
 }

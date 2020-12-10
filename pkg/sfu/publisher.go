@@ -7,6 +7,7 @@ import (
 	"github.com/pion/interceptor"
 
 	"github.com/pion/ion-sfu/pkg/buffer"
+	"github.com/pion/ion-sfu/pkg/stats"
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/webrtc/v3"
@@ -35,7 +36,9 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 	}
 
 	bi := buffer.NewBufferInterceptor()
+	si := stats.NewStreamInterceptor(bi)
 	ir := &interceptor.Registry{}
+	ir.Add(si)
 	ir.Add(bi)
 
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me), webrtc.WithSettingEngine(cfg.setting), webrtc.WithInterceptorRegistry(ir))
