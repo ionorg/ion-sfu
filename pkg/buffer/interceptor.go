@@ -72,7 +72,7 @@ func (i *Interceptor) BindRTCPReader(reader interceptor.RTCPReader) interceptor.
 			case *rtcp.SenderReport:
 				buffer := i.getBuffer(pkt.SSRC)
 				if buffer == nil {
-					return pkts, attributes, nil
+					continue
 				}
 				buffer.setSenderReportData(pkt.RTPTime, pkt.NTPTime)
 			}

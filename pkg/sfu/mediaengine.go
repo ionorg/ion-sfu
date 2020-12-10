@@ -66,10 +66,13 @@ func getPublisherMediaEngine() (*webrtc.MediaEngine, error) {
 		sdp.SDESRTPStreamIDURI,
 		sdp.TransportCCURI,
 	} {
-		if err := me.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: extension}, webrtc.RTPCodecTypeAudio); err != nil {
+		if err := me.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: extension}, webrtc.RTPCodecTypeVideo); err != nil {
 			return nil, err
 		}
-		if err := me.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: extension}, webrtc.RTPCodecTypeVideo); err != nil {
+		if extension == sdp.TransportCCURI {
+			continue
+		}
+		if err := me.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: extension}, webrtc.RTPCodecTypeAudio); err != nil {
 			return nil, err
 		}
 	}
@@ -79,11 +82,5 @@ func getPublisherMediaEngine() (*webrtc.MediaEngine, error) {
 
 func getSubscriberMediaEngine() (*webrtc.MediaEngine, error) {
 	me := &webrtc.MediaEngine{}
-	if err := me.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: sdp.SDESMidURI}, webrtc.RTPCodecTypeVideo); err != nil {
-		return nil, err
-	}
-	if err := me.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: sdp.SDESMidURI}, webrtc.RTPCodecTypeAudio); err != nil {
-		return nil, err
-	}
 	return me, nil
 }

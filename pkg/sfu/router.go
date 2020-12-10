@@ -125,7 +125,7 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 		Channels:     codec.Channels,
 		SDPFmtpLine:  codec.SDPFmtpLine,
 		RTCPFeedback: []webrtc.RTCPFeedback{{"goog-remb", ""}, {"nack", ""}, {"nack", "pli"}},
-	}, recv, sub.id, recv.TrackID(), recv.StreamID())
+	}, recv, sub.id)
 	if err != nil {
 		return err
 	}
