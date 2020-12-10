@@ -64,14 +64,14 @@ type DownTrack struct {
 }
 
 // NewDownTrack returns a DownTrack.
-func NewDownTrack(c webrtc.RTPCodecCapability, r Receiver, peerID, id, streamID string) (*DownTrack, error) {
+func NewDownTrack(c webrtc.RTPCodecCapability, r Receiver, peerID string) (*DownTrack, error) {
 	return &DownTrack{
-		id:       id,
+		id:       r.TrackID(),
 		peerID:   peerID,
+		streamID: r.StreamID(),
 		nList:    newNACKList(),
-		codec:    c,
 		receiver: r,
-		streamID: streamID,
+		codec:    c,
 	}, nil
 }
 
@@ -216,9 +216,10 @@ func (d *DownTrack) writeSimpleRTP(pkt rtp.Packet) error {
 	atomic.AddUint32(&d.octetCount, uint32(len(pkt.Payload)))
 	atomic.AddUint32(&d.packetCount, 1)
 
+	d.lastSSRC = pkt.SSRC
 	newSN := pkt.SequenceNumber - d.snOffset
 	newTS := pkt.Timestamp - d.tsOffset
-	if (newSN-d.lastSN)&0x8000 == 0 {
+	if (newSN-d.lastSN)&0x8000 == 0 || d.lastSN == 0 {
 		d.lastSN = newSN
 		atomic.StoreInt64(&d.lastPacketMs, time.Now().UnixNano()/1e6)
 		atomic.StoreUint32(&d.lastTS, newTS)

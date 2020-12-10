@@ -200,6 +200,12 @@ func (s *Subscriber) downTracksReports() {
 						Type: rtcp.SDESCNAME,
 						Text: dt.streamID,
 					}},
+				}, rtcp.SourceDescriptionChunk{
+					Source: dt.ssrc,
+					Items: []rtcp.SourceDescriptionItem{{
+						Type: rtcp.SDESType(15),
+						Text: dt.transceiver.Mid(),
+					}},
 				})
 			}
 		}
@@ -226,32 +232,34 @@ func (s *Subscriber) sendStreamDownTracksReports(streamID string) {
 		if !dt.bound.get() {
 			continue
 		}
-		now := time.Now().UnixNano()
-		nowNTP := timeToNtp(now)
-		lastPktMs := atomic.LoadInt64(&dt.lastPacketMs)
-		maxPktTs := atomic.LoadUint32(&dt.lastTS)
-		diffTs := uint32((now/1e6)-lastPktMs) * dt.codec.ClockRate / 1000
-		octets, packets := dt.getSRStats()
-		r = append(r, &rtcp.SenderReport{
-			SSRC:        dt.ssrc,
-			NTPTime:     nowNTP,
-			RTPTime:     maxPktTs + diffTs,
-			PacketCount: packets,
-			OctetCount:  octets,
-		})
 		sd = append(sd, rtcp.SourceDescriptionChunk{
 			Source: dt.ssrc,
 			Items: []rtcp.SourceDescriptionItem{{
 				Type: rtcp.SDESCNAME,
 				Text: dt.streamID,
 			}},
+		}, rtcp.SourceDescriptionChunk{
+			Source: dt.ssrc,
+			Items: []rtcp.SourceDescriptionItem{{
+				Type: rtcp.SDESType(15),
+				Text: dt.transceiver.Mid(),
+			}},
 		})
 	}
 	s.RUnlock()
-	if len(r) > 0 {
-		r = append(r, &rtcp.SourceDescription{Chunks: sd})
-		if err := s.pc.WriteRTCP(r); err != nil {
-			log.Errorf("Sending track binding reports err:%v", err)
+	r = append(r, &rtcp.SourceDescription{Chunks: sd})
+	go func() {
+		r := r
+		i := 0
+		for {
+			if err := s.pc.WriteRTCP(r); err != nil {
+				log.Errorf("Sending track binding reports err:%v", err)
+			}
+			if i > 5 {
+				return
+			}
+			i++
+			time.Sleep(20 * time.Millisecond)
 		}
-	}
+	}()
 }
