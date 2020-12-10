@@ -4,10 +4,13 @@ import (
 	"net"
 	"net/http"
 
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	log "github.com/pion/ion-log"
+	pb "github.com/pion/ion-sfu/cmd/signal/grpc/proto"
 	grpcServer "github.com/pion/ion-sfu/cmd/signal/grpc/server"
 	jsonrpcServer "github.com/pion/ion-sfu/cmd/signal/json-rpc/server"
 	"github.com/pion/ion-sfu/pkg/sfu"
+	"google.golang.org/grpc"
 
 	// pprof
 	_ "net/http/pprof"
@@ -35,8 +38,12 @@ func (s *Server) ServeGRPC(gaddr string) error {
 		return err
 	}
 
-	gs := grpcServer.NewServer(s.sfu)
+	gs := grpc.NewServer(
+		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
+	)
+	pb.RegisterSFUServer(gs, grpcServer.NewServer(s.sfu))
 	log.Infof("GRPC Listening at %s", gaddr)
+
 	if err := gs.Serve(l); err != nil {
 		log.Errorf("err=%v", err)
 		return err
