@@ -17,7 +17,7 @@ require (
 	github.com/pion/rtp v1.6.1
 	github.com/pion/sdp/v3 v3.0.3
 	github.com/pion/webrtc/v3 v3.0.0-beta.15.0.20201209023348-63401a8837fb
-	github.com/prometheus/client_golang v0.9.3
+	github.com/prometheus/client_golang v0.9.4
 	github.com/rs/cors v1.7.0 // indirect
 	github.com/soheilhy/cmux v0.1.4
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20200429184054-15c2290dcb37
