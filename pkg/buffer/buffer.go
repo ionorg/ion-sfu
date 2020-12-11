@@ -268,6 +268,10 @@ func (b *Buffer) onFeedback(fn func(fb []rtcp.Packet)) {
 	b.feedbackCB = fn
 }
 
+func (b *Buffer) onNack(fn func(fb *rtcp.TransportLayerNack)) {
+	b.pktQueue.onLost = fn
+}
+
 func (b *Buffer) GetMediaSSRC() uint32 {
 	return b.mediaSSRC
 }

@@ -2,6 +2,7 @@ package sfu
 
 import (
 	"io"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -173,6 +174,7 @@ func (s *Subscriber) Close() error {
 func (s *Subscriber) downTracksReports() {
 	for {
 		time.Sleep(5 * time.Second)
+
 		var r []rtcp.Packet
 		var sd []rtcp.SourceDescriptionChunk
 		s.RLock()
@@ -210,7 +212,14 @@ func (s *Subscriber) downTracksReports() {
 			}
 		}
 		s.RUnlock()
-		if len(r) > 0 {
+		i := math.Ceil(float64(len(sd)) / float64(20))
+		j := 0
+		for i > 0 {
+			if i > 1 {
+				sd = sd[j*20 : (j+1)*20-1]
+			} else {
+				sd = sd[j*20 : cap(sd)]
+			}
 			r = append(r, &rtcp.SourceDescription{Chunks: sd})
 			if err := s.pc.WriteRTCP(r); err != nil {
 				if err == io.EOF || err == io.ErrClosedPipe {
@@ -218,6 +227,9 @@ func (s *Subscriber) downTracksReports() {
 				}
 				log.Errorf("Sending downtrack reports err: %v", err)
 			}
+			r = r[:0]
+			i--
+			j++
 		}
 	}
 }
