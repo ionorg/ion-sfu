@@ -2,6 +2,7 @@ package stats
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/pion/ion-sfu/pkg/buffer"
 
@@ -13,8 +14,9 @@ import (
 // Stream contains buffer with statistics
 type Stream struct {
 	sync.RWMutex
-	Buffer *buffer.Buffer
-	cname  string
+	Buffer        *buffer.Buffer
+	cname         string
+	driftInMillis uint64
 }
 
 // NewBuffer constructs a new Buffer
@@ -39,4 +41,8 @@ func (s *Stream) setCName(cname string) {
 	defer s.Unlock()
 
 	s.cname = cname
+}
+
+func (s *Stream) setDriftInMillis(driftInMillis uint64) {
+	atomic.StoreUint64(&s.driftInMillis, driftInMillis)
 }
