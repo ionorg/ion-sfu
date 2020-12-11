@@ -4,6 +4,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	log "github.com/pion/ion-log"
+
 	"github.com/pion/interceptor"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
@@ -84,7 +86,9 @@ func (i *Interceptor) BindRTCPReader(reader interceptor.RTCPReader) interceptor.
 
 func (i *Interceptor) BindRTCPWriter(writer interceptor.RTCPWriter) interceptor.RTCPWriter {
 	i.twcc.onFeedback = func(pkts []rtcp.Packet) {
-		writer.Write(pkts, nil)
+		if _, err := writer.Write(pkts, nil); err != nil {
+			log.Errorf("Writing buffer twcc rtcp err: %v", err)
+		}
 	}
 	i.rtcpWriter.Store(writer)
 	return writer
@@ -127,11 +131,20 @@ func (i *Interceptor) newBuffer(info *interceptor.StreamInfo) *Buffer {
 	buffer := NewBuffer(info, Options{})
 	buffer.onFeedback(func(pkts []rtcp.Packet) {
 		if p, ok := i.rtcpWriter.Load().(interceptor.RTCPWriter); ok {
-			p.Write(pkts, nil)
+			if _, err := p.Write(pkts, nil); err != nil {
+				log.Errorf("Writing buffer rtcp err: %v", err)
+			}
 		}
 	})
 	buffer.onTransportWideCC(func(sn uint16, timeNS int64, marker bool) {
 		i.twcc.push(sn, timeNS, marker)
+	})
+	buffer.onNack(func(fb *rtcp.TransportLayerNack) {
+		if p, ok := i.rtcpWriter.Load().(interceptor.RTCPWriter); ok {
+			if _, err := p.Write([]rtcp.Packet{fb}, nil); err != nil {
+				log.Errorf("Writing buffer rtcp err: %v", err)
+			}
+		}
 	})
 	i.Lock()
 	i.buffers = append(i.buffers, buffer)

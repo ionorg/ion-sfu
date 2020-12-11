@@ -27,9 +27,9 @@ func newNACKList() *nackList {
 	}
 }
 
-func (n *nackList) getNACKSeqNo(seqno []uint16) []uint16 {
+func (n *nackList) getNACKSeqNo(seqNo []uint16) []uint16 {
 	packets := make([]uint16, 0, 17)
-	for _, sn := range seqno {
+	for _, sn := range seqNo {
 		if nack, ok := n.nacks[sn]; !ok {
 			n.nacks[sn] = n.ll.PushBack(NACK{sn, time.Now().UnixNano()})
 			packets = append(packets, sn)
