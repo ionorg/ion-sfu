@@ -255,3 +255,7 @@ func (b *Buffer) onTransportWideCC(fn func(sn uint16, timeNS int64, marker bool)
 func (b *Buffer) onFeedback(fn func(fb []rtcp.Packet)) {
 	b.feedbackCB = fn
 }
+
+func (b *Buffer) onNack(fn func(fb *rtcp.TransportLayerNack)) {
+	b.pktQueue.onLost = fn
+}
