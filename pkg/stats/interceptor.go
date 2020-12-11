@@ -119,9 +119,28 @@ func (i *Interceptor) BindRTCPReader(reader interceptor.RTCPReader) interceptor.
 					return minPacketNtpTimeInMillisSinceSenderEpoch, maxPacketNtpTimeInMillisSinceSenderEpoch
 				}
 
-				minPacketNtpTimeInMillisSinceSenderEpoch, maxPacketNtpTimeInMillisSinceSenderEpoch := calculateLatestMinMaxSenderNtpTime(findRelatedCName(pkt.SSRC))
+				setDrift := func(cname string, driftInMillis uint64) {
+					if len(cname) < 1 {
+						return
+					}
+					i.RLock()
+					defer i.RUnlock()
+
+					for _, s := range i.streams {
+						if s.GetCName() != cname {
+							continue
+						}
+						s.setDriftInMillis(driftInMillis)
+					}
+				}
+
+				cname := findRelatedCName(pkt.SSRC)
+
+				minPacketNtpTimeInMillisSinceSenderEpoch, maxPacketNtpTimeInMillisSinceSenderEpoch := calculateLatestMinMaxSenderNtpTime(cname)
 
 				driftInMillis := maxPacketNtpTimeInMillisSinceSenderEpoch - minPacketNtpTimeInMillisSinceSenderEpoch
+
+				setDrift(cname, driftInMillis)
 			}
 		}
 
