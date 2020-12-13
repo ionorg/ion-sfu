@@ -17,7 +17,7 @@ A [selective forwarding unit](https://webrtcglossary.com/sfu/) is a video routin
 
 ## Features
 * Audio/Video/Datachannel forwarding
-* Congestion Control (TWCC)
+* Congestion Control (TWCC, REMB, RR/SR)
 * Unified plan semantics
 * Pub/Sub Peer Connection (`O(n)` port usage)
 
