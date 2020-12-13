@@ -15,6 +15,12 @@
 
 A [selective forwarding unit](https://webrtcglossary.com/sfu/) is a video routing service which allows webrtc sessions to scale more efficiently. This package provides a simple, flexible, high performance Go implementation of a WebRTC SFU. It can be called directly or through a [gRPC](cmd/signal/grpc) or [json-rpc](cmd/signal/json-rpc) interface.
 
+## Features
+* Audio/Video/Datachannel forwarding
+* Congestion Control (TWCC)
+* Unified plan semantics
+* Pub/Sub Peer Connection (`O(n)` port usage)
+
 ## Quickstart
 
 Run the Echo Test example
@@ -28,9 +34,7 @@ Open the client
 http://localhost:8000/
 ```
 
-## Services
-
-### sfu + json-rpc signaling
+### SFU with json-rpc signaling
 
 The json-rpc signaling service can be used to easily get up and running with the sfu. It can be used with the [corresponding javascript signaling module](https://github.com/pion/ion-sdk-js/blob/master/src/signal/ion-sfu.ts).
 
@@ -46,7 +50,7 @@ go build ./cmd/signal/json-rpc/main.go && ./main -c config.toml
 docker run -p 7000:7000 -p 5000-5200:5000-5200/udp pionwebrtc/ion-sfu:latest-jsonrpc
 ```
 
-### sfu + grpc signaling
+### SFU with gRPC signaling
 
 For service-to-service communication, you can use the grpc interface. A common pattern is to call the grpc endpoints from a custom signaling service.
 
