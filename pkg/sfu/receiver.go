@@ -12,10 +12,6 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-const (
-	maxSize = 1024
-)
-
 // Receiver defines a interface for a track receivers
 type Receiver interface {
 	TrackID() string
@@ -34,7 +30,7 @@ type Receiver interface {
 
 // WebRTCReceiver receives a video track
 type WebRTCReceiver struct {
-	sync.RWMutex
+	sync.Mutex
 	rtcpMu sync.RWMutex
 
 	peerID         string
@@ -55,7 +51,7 @@ type WebRTCReceiver struct {
 
 // NewWebRTCReceiver creates a new webrtc track receivers
 func NewWebRTCReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote, pid string) Receiver {
-	w := &WebRTCReceiver{
+	return &WebRTCReceiver{
 		peerID:      pid,
 		receiver:    receiver,
 		trackID:     track.ID(),
@@ -64,8 +60,6 @@ func NewWebRTCReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote, 
 		kind:        track.Kind(),
 		isSimulcast: len(track.RID()) > 0,
 	}
-
-	return w
 }
 
 func (w *WebRTCReceiver) StreamID() string {
@@ -128,6 +122,7 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 			}
 		}
 		track.currentSpatialLayer = layer
+		track.simulcast.targetSpatialLayer = layer
 		track.trackType = SimulcastDownTrack
 	} else {
 		track.trackType = SimpleDownTrack
@@ -141,7 +136,7 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 func (w *WebRTCReceiver) SubDownTrack(track *DownTrack, layer int) error {
 	w.Lock()
 	if dts := w.downTracks[layer]; dts != nil {
-		dts = append(dts, track)
+		w.downTracks[layer] = append(dts, track)
 	} else {
 		w.Unlock()
 		return errNoReceiverFound
@@ -215,13 +210,13 @@ func (w *WebRTCReceiver) readRTP(track *webrtc.TrackRemote, layer int) {
 			continue
 		}
 
-		w.RLock()
+		w.Lock()
 		for _, dt := range w.downTracks[layer] {
 			if err := dt.WriteRTP(pkt); err == io.EOF {
 				go w.DeleteDownTrack(layer, dt.id)
 			}
 		}
-		w.RUnlock()
+		w.Unlock()
 	}
 }
 
