@@ -22,7 +22,7 @@
       }
     </style>
 
-    <title>Pion ion-sfu | Racetest</title>
+    <title>Pion ion-sfu | Gallery Test</title>
   </head>
 
   <body>
@@ -73,7 +73,8 @@
       integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV"
       crossorigin="anonymous"
     ></script>
-    <script src="https://unpkg.com/ion-sdk-js@1.5.0/dist/ion-sdk.min.js"></script>
+    <script src="https://unpkg.com/ion-sdk-js@1.5.4/dist/ion-sdk.min.js"></script>
+    <script src="https://unpkg.com/ion-sdk-js@1.5.4/dist/json-rpc.min.js"></script>
     <script>
       const localVideo = document.getElementById("local-video");
       const remotesDiv = document.getElementById("remotes");
@@ -84,7 +85,7 @@
 
       class Peer {
         constructor() {
-          this.signal = new IonSDK.IonSFUJSONRPCSignal(
+          this.signal = new Signal.IonSFUJSONRPCSignal(
             "ws://localhost:7000/ws"
           );
 
@@ -92,7 +93,9 @@
           videosDiv.style.display = "flex";
           remotesDiv.appendChild(videosDiv);
 
-          this.client = new IonSDK.Client("test session", this.signal);
+          this.client = new IonSDK.Client(this.signal);
+          this.signal.onopen = () => this.client.join("test session");
+
           this.client.ontrack = (track, stream) => {
             if (track.kind === "video") {
               const remoteVideo = document.createElement("video");

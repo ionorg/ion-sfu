@@ -170,6 +170,7 @@
                         onclick="controlRemoteVideo(this)"
                         value="high"
                         name="optremotevideos"
+                        checked
                       />
                       High</label
                     >
@@ -328,7 +329,8 @@
       integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV"
       crossorigin="anonymous"
     ></script>
-    <script src="https://unpkg.com/ion-sdk-js@1.5.0/dist/ion-sdk.min.js"></script>
+    <script src="https://unpkg.com/ion-sdk-js@1.5.4/dist/ion-sdk.min.js"></script>
+    <script src="https://unpkg.com/ion-sdk-js@1.5.4/dist/json-rpc.min.js"></script>
     <script>
       const localVideo = document.getElementById("local-video");
       const remoteVideo = document.getElementById("remote-video");
@@ -350,15 +352,18 @@
       /* eslint-env browser */
       const joinBtns = document.getElementById("start-btns");
 
-      const signalLocal = new IonSDK.IonSFUJSONRPCSignal(
+      const signalLocal = new Signal.IonSFUJSONRPCSignal(
         "ws://localhost:7000/ws"
       );
-      const signalRemote = new IonSDK.IonSFUJSONRPCSignal(
+      const signalRemote = new Signal.IonSFUJSONRPCSignal(
         "ws://localhost:7000/ws"
       );
 
-      const clientLocal = new IonSDK.Client("test session", signalLocal);
-      const clientRemote = new IonSDK.Client("test session", signalRemote);
+      const clientLocal = new IonSDK.Client(signalLocal);
+      const clientRemote = new IonSDK.Client(signalRemote);
+
+      signalLocal.onopen = () => clientLocal.join("test session");
+      signalRemote.onopen = () => clientRemote.join("test session");
 
       let localStream;
       const start = (sc) => {
