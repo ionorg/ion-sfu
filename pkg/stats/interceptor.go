@@ -1,13 +1,71 @@
 package stats
 
 import (
+	"math"
 	"sync"
 
 	"github.com/pion/interceptor"
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
+	"github.com/prometheus/client_golang/prometheus"
 )
+
+var (
+	driftBuckets = []float64{5, 10, 20, 40, 80, 160, math.Inf(+1)}
+
+	drift = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Subsystem: "rtp",
+		Name:      "drift_millis",
+		Buckets:   driftBuckets,
+	})
+
+	expectedCount = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: "rtp",
+		Name:      "expected",
+	})
+
+	receivedCount = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: "rtp",
+		Name:      "received",
+	})
+
+	packetCount = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: "rtp",
+		Name:      "packets",
+	})
+
+	totalBytes = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: "rtp",
+		Name:      "bytes",
+	})
+
+	expectedMinusReceived = prometheus.NewSummary(prometheus.SummaryOpts{
+		Subsystem: "rtp",
+		Name:      "expected_minus_received",
+	})
+
+	lostRate = prometheus.NewSummary(prometheus.SummaryOpts{
+		Subsystem: "rtp",
+		Name:      "lostRate",
+	})
+
+	jitter = prometheus.NewSummary(prometheus.SummaryOpts{
+		Subsystem: "rtp",
+		Name:      "jitter",
+	})
+)
+
+func init() {
+	prometheus.MustRegister(drift)
+	prometheus.MustRegister(expectedCount)
+	prometheus.MustRegister(receivedCount)
+	prometheus.MustRegister(packetCount)
+	prometheus.MustRegister(totalBytes)
+	prometheus.MustRegister(expectedMinusReceived)
+	prometheus.MustRegister(lostRate)
+	prometheus.MustRegister(jitter)
+}
 
 type Interceptor struct {
 	sync.RWMutex
@@ -76,6 +134,33 @@ func (i *Interceptor) BindRTCPReader(reader interceptor.RTCPReader) interceptor.
 						}
 					}
 				}
+			case *rtcp.ReceiverReport:
+				calculateStats := func(ssrc uint32) {
+					i.RLock()
+					defer i.RUnlock()
+
+					for _, s := range i.streams {
+						if s.Buffer.GetMediaSSRC() != ssrc {
+							continue
+						}
+						bufferStats := s.Buffer.GetStats()
+
+						hadStats, diffStats := s.updateStats(bufferStats)
+
+						if hadStats {
+							expectedCount.Add(float64(diffStats.LastExpected))
+							receivedCount.Add(float64(diffStats.LastReceived))
+							packetCount.Add(float64(diffStats.PacketCount))
+							totalBytes.Add(float64(diffStats.TotalByte))
+						}
+
+						expectedMinusReceived.Observe(float64(bufferStats.LastExpected - bufferStats.LastReceived))
+						lostRate.Observe(float64(bufferStats.LostRate))
+						jitter.Observe(float64(bufferStats.Jitter))
+					}
+				}
+				calculateStats(pkt.SSRC)
+
 			case *rtcp.SenderReport:
 				findRelatedCName := func(ssrc uint32) string {
 					i.RLock()
@@ -134,6 +219,34 @@ func (i *Interceptor) BindRTCPReader(reader interceptor.RTCPReader) interceptor.
 					}
 				}
 
+				calculateStats := func(ssrc uint32) {
+					i.RLock()
+					defer i.RUnlock()
+
+					for _, s := range i.streams {
+						if s.Buffer.GetMediaSSRC() != ssrc {
+							continue
+						}
+
+						bufferStats := s.Buffer.GetStats()
+						driftInMillis := s.getDriftInMillis()
+
+						hadStats, diffStats := s.updateStats(bufferStats)
+
+						drift.Observe(float64(driftInMillis))
+						if hadStats {
+							expectedCount.Add(float64(diffStats.LastExpected))
+							receivedCount.Add(float64(diffStats.LastReceived))
+							packetCount.Add(float64(diffStats.PacketCount))
+							totalBytes.Add(float64(diffStats.TotalByte))
+						}
+
+						expectedMinusReceived.Observe(float64(bufferStats.LastExpected - bufferStats.LastReceived))
+						lostRate.Observe(float64(bufferStats.LostRate))
+						jitter.Observe(float64(bufferStats.Jitter))
+					}
+				}
+
 				cname := findRelatedCName(pkt.SSRC)
 
 				minPacketNtpTimeInMillisSinceSenderEpoch, maxPacketNtpTimeInMillisSinceSenderEpoch := calculateLatestMinMaxSenderNtpTime(cname)
@@ -141,6 +254,7 @@ func (i *Interceptor) BindRTCPReader(reader interceptor.RTCPReader) interceptor.
 				driftInMillis := maxPacketNtpTimeInMillisSinceSenderEpoch - minPacketNtpTimeInMillisSinceSenderEpoch
 
 				setDrift(cname, driftInMillis)
+				calculateStats(pkt.SSRC)
 			}
 		}
 

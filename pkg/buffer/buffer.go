@@ -4,6 +4,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/pion/sdp/v3"
 
@@ -63,6 +64,15 @@ type Buffer struct {
 	// callbacks
 	feedbackCB   func([]rtcp.Packet)
 	feedbackTWCC func(sn uint16, timeNS int64, marker bool)
+}
+
+type BufferStats struct {
+	LastExpected uint32
+	LastReceived uint32
+	LostRate     float32
+	PacketCount  uint32  // Number of packets received from this source.
+	Jitter       float64 // An estimate of the statistical variance of the RTP data packet inter-arrival time.
+	TotalByte    uint64
 }
 
 // BufferOptions provides configuration options for the buffer
@@ -272,14 +282,17 @@ func (b *Buffer) onNack(fn func(fb *rtcp.TransportLayerNack)) {
 	b.pktQueue.onLost = fn
 }
 
+// GetMediaSSRC returns the associated SSRC of the RTP stream
 func (b *Buffer) GetMediaSSRC() uint32 {
 	return b.mediaSSRC
 }
 
+// GetClockRate returns the RTP clock rate
 func (b *Buffer) GetClockRate() uint32 {
 	return b.clockRate
 }
 
+// GetSenderReportData returns the rtp, ntp and nanos of the last sender report
 func (b *Buffer) GetSenderReportData() (rtpTime uint32, ntpTime uint64, lastReceivedTimeInNanosSinceEpoch int64) {
 	rtpTime = atomic.LoadUint32(&b.lastSRRTPTime)
 	ntpTime = atomic.LoadUint64(&b.lastSRNTPTime)
@@ -288,6 +301,23 @@ func (b *Buffer) GetSenderReportData() (rtpTime uint32, ntpTime uint64, lastRece
 	return rtpTime, ntpTime, lastReceivedTimeInNanosSinceEpoch
 }
 
+// GetStats returns the raw statistics about a particular buffer state
+func (b *Buffer) GetStats() (stats BufferStats) {
+	stats.LastExpected = atomic.LoadUint32(&b.lastExpected)
+	stats.LastReceived = atomic.LoadUint32(&b.lastReceived)
+	raw32Lost := atomic.LoadUint32((*uint32)(unsafe.Pointer(&b.lostRate)))
+	stats.LostRate = *((*float32)(unsafe.Pointer(&raw32Lost)))
+	stats.PacketCount = atomic.LoadUint32(&b.packetCount)
+
+	raw64Jitter := atomic.LoadUint64((*uint64)(unsafe.Pointer(&b.lostRate)))
+	stats.Jitter = *((*float64)(unsafe.Pointer(&raw64Jitter)))
+
+	stats.TotalByte = atomic.LoadUint64(&b.totalByte)
+
+	return stats
+}
+
+// GetLatestTimestamp returns the latest RTP timestamp factoring in potential RTP timestamp wrap-around
 func (b *Buffer) GetLatestTimestamp() (latestTimestamp uint32, latestTimestampTimeInNanosSinceEpoch int64) {
 	latestTimestamp = atomic.LoadUint32(&b.latestTimestamp)
 	latestTimestampTimeInNanosSinceEpoch = atomic.LoadInt64(&b.latestTimestampTime)
@@ -295,10 +325,12 @@ func (b *Buffer) GetLatestTimestamp() (latestTimestamp uint32, latestTimestampTi
 	return latestTimestamp, latestTimestampTimeInNanosSinceEpoch
 }
 
+// IsTimestampWrapAround returns true if wrap around happens from timestamp1 to timestamp2
 func IsTimestampWrapAround(timestamp1 uint32, timestamp2 uint32) bool {
 	return (timestamp1&0xC000000 == 0) && (timestamp2&0xC000000 == 0xC000000)
 }
 
+// IsLaterTimestamp returns true if timestamp1 is later in time than timestamp2 factoring in timestamp wrap-around
 func IsLaterTimestamp(timestamp1 uint32, timestamp2 uint32) bool {
 	if timestamp1 > timestamp2 {
 		if IsTimestampWrapAround(timestamp2, timestamp1) {
