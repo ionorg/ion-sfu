@@ -134,7 +134,8 @@
       integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV"
       crossorigin="anonymous"
     ></script>
-    <script src="https://unpkg.com/ion-sdk-js@1.5.0/dist/ion-sdk.min.js"></script>
+    <script src="https://unpkg.com/ion-sdk-js@1.5.5/dist/ion-sdk.min.js"></script>
+    <script src="https://unpkg.com/ion-sdk-js@1.5.5/dist/json-rpc.min.js"></script>
     <script>
       const localVideo = document.getElementById("local-video");
       const remotesDiv = document.getElementById("remotes");
@@ -150,11 +151,12 @@
         ],
       };
 
-      const signalLocal = new IonSDK.IonSFUJSONRPCSignal(
+      const signalLocal = new Signal.IonSFUJSONRPCSignal(
         "ws://localhost:7000/ws"
       );
 
-      const clientLocal = new IonSDK.Client("test session", signalLocal);
+      const clientLocal = new IonSDK.Client(signalLocal);
+      signalLocal.onopen = () => clientLocal.join("test session");
 
       let localStream;
       const start = () => {

@@ -164,7 +164,7 @@ func (d *DownTrack) SwitchSpatialLayer(targetLayer int) {
 		if d.currentSpatialLayer != d.simulcast.targetSpatialLayer {
 			return
 		}
-		if err := d.receiver.SubDownTrack(d, targetLayer); err != nil {
+		if err := d.receiver.SubDownTrack(d, targetLayer); err == nil {
 			d.simulcast.targetSpatialLayer = targetLayer
 		}
 	}
@@ -240,6 +240,9 @@ func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
 	// Check if packet SSRC is different from before
 	// if true, the video source changed
 	if d.lastSSRC != pkt.SSRC {
+		if d.currentSpatialLayer == d.simulcast.targetSpatialLayer && d.lastSSRC != 0 {
+			return nil
+		}
 		relay := false
 		// Wait for a keyframe to sync new source
 		switch d.mime {
@@ -270,14 +273,14 @@ func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
 		// Packet is not a keyframe, discard it
 		if !relay {
 			d.receiver.SendRTCP([]rtcp.Packet{
-				&rtcp.PictureLossIndication{SenderSSRC: pkt.SSRC, MediaSSRC: pkt.SSRC},
+				&rtcp.PictureLossIndication{SenderSSRC: d.ssrc, MediaSSRC: pkt.SSRC},
 			})
 			return nil
 		}
 		// Switch is done remove sender from previous layer
 		// and update current layer
 		if d.currentSpatialLayer != d.simulcast.targetSpatialLayer {
-			d.receiver.DeleteDownTrack(d.currentSpatialLayer, d.peerID)
+			go d.receiver.DeleteDownTrack(d.currentSpatialLayer, d.peerID)
 		}
 		d.currentSpatialLayer = d.simulcast.targetSpatialLayer
 	}
