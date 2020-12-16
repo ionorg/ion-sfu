@@ -125,15 +125,15 @@ func (d *DownTrack) Kind() webrtc.RTPCodecType {
 }
 
 // WriteRTP writes a RTP Packet to the DownTrack
-func (d *DownTrack) WriteRTP(p *rtp.Packet) error {
+func (d *DownTrack) WriteRTP(p rtp.Packet) error {
 	if !d.enabled.get() || !d.bound.get() {
 		return nil
 	}
 	switch d.trackType {
 	case SimpleDownTrack:
-		return d.writeSimpleRTP(*p)
+		return d.writeSimpleRTP(p)
 	case SimulcastDownTrack:
-		return d.writeSimulcastRTP(*p)
+		return d.writeSimulcastRTP(p)
 	}
 	return nil
 }

@@ -28,17 +28,17 @@ func NewBufferInterceptor() *Interceptor {
 }
 
 func (i *Interceptor) BindRemoteStream(info *interceptor.StreamInfo, reader interceptor.RTPReader) interceptor.RTPReader {
-	return interceptor.RTPReaderFunc(func() (*rtp.Packet, interceptor.Attributes, error) {
+	return interceptor.RTPReaderFunc(func(bytes []byte, attributes interceptor.Attributes) (int, interceptor.Attributes, error) {
 		buffer := i.getBuffer(info.SSRC)
 		if buffer == nil {
 			buffer = i.newBuffer(info)
 		}
 
-		p, att, err := reader.Read()
+		p, att, err := reader.Read(bytes, attributes)
 		if err != nil {
-			return nil, nil, err
+			return 0, nil, err
 		}
-		buffer.push(p)
+		buffer.push(bytes)
 		return p, att, nil
 	})
 }
@@ -63,10 +63,16 @@ func (i *Interceptor) UnbindRemoteStream(info *interceptor.StreamInfo) {
 }
 
 func (i *Interceptor) BindRTCPReader(reader interceptor.RTCPReader) interceptor.RTCPReader {
-	return interceptor.RTCPReaderFunc(func() ([]rtcp.Packet, interceptor.Attributes, error) {
-		pkts, attributes, err := reader.Read()
+	return interceptor.RTCPReaderFunc(func(bytes []byte, attributes interceptor.Attributes) (int, interceptor.Attributes, error) {
+		j, attributes, err := reader.Read(bytes, attributes)
+
 		if err != nil {
-			return nil, nil, err
+			return 0, nil, err
+		}
+
+		pkts, err := rtcp.Unmarshal(bytes[:j])
+		if err != nil {
+			return j, nil, err
 		}
 
 		for _, pkt := range pkts {
@@ -80,7 +86,7 @@ func (i *Interceptor) BindRTCPReader(reader interceptor.RTCPReader) interceptor.
 			}
 		}
 
-		return pkts, attributes, nil
+		return j, attributes, nil
 	})
 }
 
@@ -101,17 +107,20 @@ func (i *Interceptor) GetBufferedPackets(ssrc, mediaSSRC uint32, snOffset uint16
 	}
 	var pkts []rtp.Packet
 	for _, seq := range sn {
-		h, p, err := buffer.getPacket(seq + snOffset)
-		if err != nil {
+		pktRaw, err := buffer.getPacket(seq + snOffset)
+		if err != nil || pktRaw == nil {
 			continue
 		}
-		h.SSRC = mediaSSRC
-		h.SequenceNumber -= snOffset
-		h.Timestamp -= tsOffset
-		pkts = append(pkts, rtp.Packet{
-			Header:  h,
-			Payload: p,
-		})
+		pkt := rtp.Packet{}
+		if err = pkt.Unmarshal(pktRaw); err != nil {
+			log.Errorf("rtp marshal err => %v", err)
+			continue
+		}
+
+		pkt.SSRC = mediaSSRC
+		pkt.SequenceNumber -= snOffset
+		pkt.Timestamp -= tsOffset
+		pkts = append(pkts, pkt)
 	}
 	return pkts
 }

@@ -1,17 +1,15 @@
 package buffer
 
 import (
+	"encoding/binary"
 	"strings"
 	"sync/atomic"
 	"time"
 
-	"github.com/pion/sdp/v3"
-
 	"github.com/pion/interceptor"
-
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
-	"github.com/pion/rtp"
+	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -25,7 +23,7 @@ const (
 
 // Buffer contains all packets
 type Buffer struct {
-	pktQueue   queue
+	pktQueue   Bucket
 	codecType  webrtc.RTPCodecType
 	simulcast  bool
 	mediaSSRC  uint32
@@ -114,23 +112,25 @@ func NewBuffer(info *interceptor.StreamInfo, o Options) *Buffer {
 }
 
 // push adds a RTP Packet, out of order, new packet may be arrived later
-func (b *Buffer) push(p *rtp.Packet) {
+func (b *Buffer) push(pkt []byte) {
+	sn := binary.BigEndian.Uint16(pkt[2:4])
+	ts := binary.BigEndian.Uint32(pkt[4:8])
 	b.lastPacketTime = time.Now().UnixNano()
-	b.totalByte += uint64(p.MarshalSize())
+	b.totalByte += uint64(len(pkt))
 	if b.packetCount == 0 {
-		b.baseSN = p.SequenceNumber
-		b.maxSeqNo = p.SequenceNumber
-		b.pktQueue.headSN = p.SequenceNumber - 1
+		b.baseSN = sn
+		b.maxSeqNo = sn
+		b.pktQueue.headSN = sn - 1
 		b.lastReport = b.lastPacketTime
-	} else if (p.SequenceNumber-b.maxSeqNo)&0x8000 == 0 {
-		if p.SequenceNumber < b.maxSeqNo {
+	} else if (sn-b.maxSeqNo)&0x8000 == 0 {
+		if sn < b.maxSeqNo {
 			b.cycles += maxSN
 		}
-		b.maxSeqNo = p.SequenceNumber
+		b.maxSeqNo = sn
 	}
 	b.packetCount++
 	arrival := uint32(b.lastPacketTime / 1e6 * int64(b.clockRate/1e3))
-	transit := arrival - p.Timestamp
+	transit := arrival - ts
 	if b.lastTransit != 0 {
 		d := int32(transit - b.lastTransit)
 		if d < 0 {
@@ -140,13 +140,12 @@ func (b *Buffer) push(p *rtp.Packet) {
 	}
 	b.lastTransit = transit
 	if b.codecType == webrtc.RTPCodecTypeVideo {
-		b.pktQueue.addPacket(p, p.SequenceNumber == b.maxSeqNo)
+		b.pktQueue.addPacket(pkt, sn, sn == b.maxSeqNo)
 	}
 
 	if b.tcc {
-		rtpTCC := rtp.TransportCCExtension{}
-		if err := rtpTCC.Unmarshal(p.GetExtension(b.twccExt)); err == nil {
-			b.feedbackTWCC(rtpTCC.TransportSequence, b.lastPacketTime, p.Marker)
+		if ccSN, err := getTWCCRtpExt(pkt, b.twccExt); err == nil {
+			b.feedbackTWCC(ccSN, b.lastPacketTime, (pkt[1]>>7&0x1) > 0)
 		}
 	}
 
@@ -241,11 +240,11 @@ func (b *Buffer) getRTCP() []rtcp.Packet {
 	return pkts
 }
 
-func (b *Buffer) getPacket(sn uint16) (rtp.Header, []byte, error) {
-	if bufferPkt := b.pktQueue.GetPacket(sn); bufferPkt != nil {
-		return bufferPkt.Header, bufferPkt.Payload, nil
+func (b *Buffer) getPacket(sn uint16) ([]byte, error) {
+	if bufferPkt := b.pktQueue.getPacket(sn); bufferPkt != nil {
+		return bufferPkt, nil
 	}
-	return rtp.Header{}, nil, errPacketNotFound
+	return nil, errPacketNotFound
 }
 
 func (b *Buffer) onTransportWideCC(fn func(sn uint16, timeNS int64, marker bool)) {
@@ -258,4 +257,82 @@ func (b *Buffer) onFeedback(fn func(fb []rtcp.Packet)) {
 
 func (b *Buffer) onNack(fn func(fb *rtcp.TransportLayerNack)) {
 	b.pktQueue.onLost = fn
+}
+
+func getTWCCRtpExt(rawPacket []byte, extID uint8) (uint16, error) {
+	ext := (rawPacket[0] >> 4 & 0x1) > 0
+	nCSRC := int(rawPacket[0] & 0xf)
+	currOffset := 12 + (nCSRC * 4)
+
+	if len(rawPacket) < currOffset {
+		return 0, errExtNotFound
+	}
+
+	if ext {
+		if expected := currOffset + 4; len(rawPacket) < expected {
+			return 0, errExtNotFound
+		}
+
+		extensionProfile := binary.BigEndian.Uint16(rawPacket[currOffset:])
+		currOffset += 2
+		extensionLength := int(binary.BigEndian.Uint16(rawPacket[currOffset:])) * 4
+		currOffset += 2
+
+		if expected := currOffset + extensionLength; len(rawPacket) < expected {
+			return 0, errExtNotFound
+		}
+
+		switch extensionProfile {
+		// RFC 8285 RTP One Byte Header Extension
+		case 0xBEDE:
+			end := currOffset + extensionLength
+			for currOffset < end {
+				if rawPacket[currOffset] == 0x00 { // padding
+					currOffset++
+					continue
+				}
+
+				extid := rawPacket[currOffset] >> 4
+				extLen := int(rawPacket[currOffset]&^0xF0 + 1)
+				currOffset++
+
+				if extid == 0xf {
+					break
+				}
+
+				if extid == extID {
+					return binary.BigEndian.Uint16(rawPacket[currOffset : currOffset+extLen]), nil
+				}
+				currOffset += extLen
+			}
+
+		// RFC 8285 RTP Two Byte Header Extension
+		case 0x1000:
+			end := currOffset + extensionLength
+			for currOffset < end {
+				if rawPacket[currOffset] == 0x00 { // padding
+					currOffset++
+					continue
+				}
+				extid := rawPacket[currOffset]
+				currOffset++
+
+				extLen := int(rawPacket[currOffset])
+				currOffset++
+
+				if extid == extID {
+					return binary.BigEndian.Uint16(rawPacket[currOffset : currOffset+extLen]), nil
+				}
+
+				currOffset += extLen
+			}
+
+		default: // RFC3550 Extension
+			if len(rawPacket) < currOffset+extensionLength {
+				return 0, errExtNotFound
+			}
+			currOffset += extensionLength
+		}
+	}
+	return 0, errExtNotFound
 }

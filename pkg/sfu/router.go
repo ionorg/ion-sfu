@@ -158,7 +158,7 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 func (r *router) loopDownTrackRTCP(track *DownTrack) {
 	sender := track.transceiver.Sender()
 	for {
-		pkts, err := sender.ReadRTCP()
+		pkts, _, err := sender.ReadRTCP()
 		if err == io.ErrClosedPipe || err == io.EOF {
 			log.Debugf("Sender %s closed due to: %v", track.peerID, err)
 			// Remove sender from receiver

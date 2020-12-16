@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pion/rtp"
+
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
@@ -195,8 +197,9 @@ func (w *WebRTCReceiver) readRTP(track *webrtc.TrackRemote, layer int) {
 			w.onCloseHandler()
 		}
 	}()
+	pktBuff := make([]byte, 0, 1460)
 	for {
-		pkt, err := track.ReadRTP()
+		n, _, err := track.Read(pktBuff)
 		// EOF signal received, this means that the remote track has been removed
 		// or the peer has been disconnected. The router must be gracefully shutdown,
 		// waiting for all the receivers routines to stop.
@@ -210,6 +213,12 @@ func (w *WebRTCReceiver) readRTP(track *webrtc.TrackRemote, layer int) {
 			continue
 		}
 
+		pkt := rtp.Packet{}
+		if err = pkt.Unmarshal(pktBuff[:n]); err != nil {
+			log.Errorf("rtp marshal err => %v", err)
+			continue
+		}
+
 		w.Lock()
 		for _, dt := range w.downTracks[layer] {
 			if err := dt.WriteRTP(pkt); err == io.EOF {
@@ -217,12 +226,14 @@ func (w *WebRTCReceiver) readRTP(track *webrtc.TrackRemote, layer int) {
 			}
 		}
 		w.Unlock()
+		pktBuff = pktBuff[:0]
 	}
 }
 
 func (w *WebRTCReceiver) readRTCP() {
+	pktBuff := make([]byte, 0, 1460)
 	for {
-		_, err := w.receiver.ReadRTCP()
+		_, _, err := w.receiver.Read(pktBuff)
 		if err == io.ErrClosedPipe || err == io.EOF {
 			log.Debugf("receiver %s readrtcp eof", w.peerID)
 			return
@@ -231,12 +242,14 @@ func (w *WebRTCReceiver) readRTCP() {
 			log.Errorf("rtcp err => %v", err)
 			continue
 		}
+		pktBuff = pktBuff[:0]
 	}
 }
 
 func (w *WebRTCReceiver) readSimulcastRTCP(rid string) {
+	pktBuff := make([]byte, 1460)
 	for {
-		_, err := w.receiver.ReadSimulcastRTCP(rid)
+		_, _, err := w.receiver.ReadSimulcast(pktBuff, rid)
 		if err == io.ErrClosedPipe || err == io.EOF {
 			return
 		}
@@ -244,6 +257,7 @@ func (w *WebRTCReceiver) readSimulcastRTCP(rid string) {
 			log.Errorf("rtcp err => %v", err)
 			continue
 		}
+		pktBuff = pktBuff[:0]
 	}
 }
 
