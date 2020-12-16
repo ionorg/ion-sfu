@@ -52,7 +52,7 @@ func Test_queue_nack(t *testing.T) {
 		want   *rtcp.NackPair
 	}{
 		{
-			name:   "Most generate correct nack packet",
+			name:   "Most generate correct pairs packet",
 			fields: fields{},
 			want: &rtcp.NackPair{
 				PacketID:    2,
@@ -76,8 +76,8 @@ func Test_queue_nack(t *testing.T) {
 				q.counter++
 				// q.push(p)
 			}
-			//if got := q.nack(); !reflect.DeepEqual(got, tt.want) {
-			//	t.Errorf("nack() = %v, want %v", got, tt.want)
+			//if got := q.pairs(); !reflect.DeepEqual(got, tt.want) {
+			//	t.Errorf("pairs() = %v, want %v", got, tt.want)
 			//}
 		})
 	}

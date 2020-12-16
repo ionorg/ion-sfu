@@ -148,9 +148,14 @@ func (i *Interceptor) newBuffer(info *interceptor.StreamInfo) *Buffer {
 	buffer.onTransportWideCC(func(sn uint16, timeNS int64, marker bool) {
 		i.twcc.push(sn, timeNS, marker)
 	})
-	buffer.onNack(func(fb *rtcp.TransportLayerNack) {
+	buffer.onNack(func(pairs []rtcp.NackPair) {
+		nack := &rtcp.TransportLayerNack{
+			SenderSSRC: buffer.mediaSSRC,
+			MediaSSRC:  buffer.mediaSSRC,
+			Nacks:      pairs,
+		}
 		if p, ok := i.rtcpWriter.Load().(interceptor.RTCPWriter); ok {
-			if _, err := p.Write([]rtcp.Packet{fb}, nil); err != nil {
+			if _, err := p.Write([]rtcp.Packet{nack}, nil); err != nil {
 				log.Errorf("Writing buffer rtcp err: %v", err)
 			}
 		}

@@ -91,8 +91,6 @@ func NewBuffer(info *interceptor.StreamInfo, o Options) *Buffer {
 	if o.BufferTime <= 0 {
 		o.BufferTime = defaultBufferTime
 	}
-	b.pktQueue.duration = uint32(o.BufferTime) * b.clockRate / 1000
-	b.pktQueue.ssrc = b.mediaSSRC
 
 	for _, fb := range info.RTCPFeedback {
 		switch fb.Type {
@@ -255,7 +253,7 @@ func (b *Buffer) onFeedback(fn func(fb []rtcp.Packet)) {
 	b.feedbackCB = fn
 }
 
-func (b *Buffer) onNack(fn func(fb *rtcp.TransportLayerNack)) {
+func (b *Buffer) onNack(fn func(pairs []rtcp.NackPair)) {
 	b.pktQueue.onLost = fn
 }
 

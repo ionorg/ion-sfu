@@ -11,22 +11,23 @@ const maxPktSize = 1460
 
 type Bucket struct {
 	sync.Mutex
-	buf []byte
+	buf  []byte
+	nack *nackQueue
 
 	ssrc     uint32
 	headSN   uint16
 	step     int
 	maxSteps int
 
-	duration uint32
-	counter  int
-	onLost   func(nack *rtcp.TransportLayerNack)
+	counter int
+	onLost  func(nack []rtcp.NackPair)
 }
 
 func NewBucket(size int) *Bucket {
 	return &Bucket{
 		buf:      make([]byte, size),
 		maxSteps: size / maxPktSize,
+		nack:     newNACKQueue(),
 	}
 }
 
@@ -36,17 +37,24 @@ func (b *Bucket) addPacket(pkt []byte, sn uint16, latest bool) {
 
 	if !latest {
 		b.set(sn, pkt)
+		b.nack.remove(sn)
 		return
 	}
 	diff := sn - b.headSN
 	b.headSN = sn
 	for i := uint16(1); i < diff; i++ {
 		b.step++
+		b.counter++
+		b.nack.push(sn - i)
 		if b.step > b.maxSteps {
 			b.step = 0
 		}
 	}
 	b.counter++
+	if b.counter > 2 {
+		b.onLost(b.nack.pairs())
+		b.counter = 0
+	}
 	b.push(pkt)
 }
 
