@@ -23,7 +23,7 @@ const (
 
 // Buffer contains all packets
 type Buffer struct {
-	pktQueue   Bucket
+	pktBucket  *Bucket
 	codecType  webrtc.RTPCodecType
 	simulcast  bool
 	mediaSSRC  uint32
@@ -71,6 +71,7 @@ func NewBuffer(info *interceptor.StreamInfo, o Options) *Buffer {
 		clockRate:  info.ClockRate,
 		maxBitrate: o.MaxBitRate,
 		simulcast:  false,
+		pktBucket:  NewBucket(2 * 1000 * 1000),
 	}
 	switch {
 	case strings.HasPrefix(info.MimeType, "audio/"):
@@ -118,7 +119,7 @@ func (b *Buffer) push(pkt []byte) {
 	if b.packetCount == 0 {
 		b.baseSN = sn
 		b.maxSeqNo = sn
-		b.pktQueue.headSN = sn - 1
+		b.pktBucket.headSN = sn - 1
 		b.lastReport = b.lastPacketTime
 	} else if (sn-b.maxSeqNo)&0x8000 == 0 {
 		if sn < b.maxSeqNo {
@@ -138,7 +139,7 @@ func (b *Buffer) push(pkt []byte) {
 	}
 	b.lastTransit = transit
 	if b.codecType == webrtc.RTPCodecTypeVideo {
-		b.pktQueue.addPacket(pkt, sn, sn == b.maxSeqNo)
+		b.pktBucket.addPacket(pkt, sn, sn == b.maxSeqNo)
 	}
 
 	if b.tcc {
@@ -239,7 +240,7 @@ func (b *Buffer) getRTCP() []rtcp.Packet {
 }
 
 func (b *Buffer) getPacket(sn uint16) ([]byte, error) {
-	if bufferPkt := b.pktQueue.getPacket(sn); bufferPkt != nil {
+	if bufferPkt := b.pktBucket.getPacket(sn); bufferPkt != nil {
 		return bufferPkt, nil
 	}
 	return nil, errPacketNotFound
@@ -254,7 +255,7 @@ func (b *Buffer) onFeedback(fn func(fb []rtcp.Packet)) {
 }
 
 func (b *Buffer) onNack(fn func(pairs []rtcp.NackPair)) {
-	b.pktQueue.onLost = fn
+	b.pktBucket.onLost = fn
 }
 
 func getTWCCRtpExt(rawPacket []byte, extID uint8) (uint16, error) {

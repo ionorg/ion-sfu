@@ -197,7 +197,7 @@ func (w *WebRTCReceiver) readRTP(track *webrtc.TrackRemote, layer int) {
 			w.onCloseHandler()
 		}
 	}()
-	pktBuff := make([]byte, 0, 1460)
+	pktBuff := make([]byte, 1460)
 	for {
 		n, _, err := track.Read(pktBuff)
 		// EOF signal received, this means that the remote track has been removed
@@ -226,12 +226,11 @@ func (w *WebRTCReceiver) readRTP(track *webrtc.TrackRemote, layer int) {
 			}
 		}
 		w.Unlock()
-		pktBuff = pktBuff[:0]
 	}
 }
 
 func (w *WebRTCReceiver) readRTCP() {
-	pktBuff := make([]byte, 0, 1460)
+	pktBuff := make([]byte, 1460)
 	for {
 		_, _, err := w.receiver.Read(pktBuff)
 		if err == io.ErrClosedPipe || err == io.EOF {
@@ -242,7 +241,6 @@ func (w *WebRTCReceiver) readRTCP() {
 			log.Errorf("rtcp err => %v", err)
 			continue
 		}
-		pktBuff = pktBuff[:0]
 	}
 }
 
@@ -257,7 +255,6 @@ func (w *WebRTCReceiver) readSimulcastRTCP(rid string) {
 			log.Errorf("rtcp err => %v", err)
 			continue
 		}
-		pktBuff = pktBuff[:0]
 	}
 }
 

@@ -104,7 +104,7 @@ func TestNewBuffer(t *testing.T) {
 			//for _, p := range TestPackets {
 			// buff.push(p)
 			//}
-			//assert.Equal(t, 6, buff.pktQueue.size)
+			//assert.Equal(t, 6, buff.pktBucket.size)
 			assert.Equal(t, uint32(1<<16), buff.cycles)
 			assert.Equal(t, uint16(2), buff.maxSeqNo)
 		})

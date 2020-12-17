@@ -28,12 +28,12 @@ func NewBufferInterceptor() *Interceptor {
 }
 
 func (i *Interceptor) BindRemoteStream(info *interceptor.StreamInfo, reader interceptor.RTPReader) interceptor.RTPReader {
+	buffer := i.getBuffer(info.SSRC)
+	println(info.SSRC)
+	if buffer == nil {
+		buffer = i.newBuffer(info)
+	}
 	return interceptor.RTPReaderFunc(func(bytes []byte, attributes interceptor.Attributes) (int, interceptor.Attributes, error) {
-		buffer := i.getBuffer(info.SSRC)
-		if buffer == nil {
-			buffer = i.newBuffer(info)
-		}
-
 		p, att, err := reader.Read(bytes, attributes)
 		if err != nil {
 			return 0, nil, err
