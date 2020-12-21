@@ -10,7 +10,7 @@ const maxNackTimes = 10  // Max number of times a packet will be NACKed
 const maxNackCache = 100 // Max NACK sn the sfu will keep reference
 
 type nack struct {
-	baseSN uint32
+	sn     uint32
 	nacked uint8
 }
 
@@ -28,6 +28,12 @@ func newNACKQueue() *nackQueue {
 	}
 }
 
+func (n *nackQueue) reset() {
+	n.maxSN = 0
+	n.cycles = 0
+	n.nacks = n.nacks[:0]
+}
+
 func (n *nackQueue) remove(sn uint16) {
 	var extSN uint32
 	if sn > n.maxSN && sn&0x8000 == 1 && n.maxSN&0x8000 == 0 {
@@ -36,8 +42,8 @@ func (n *nackQueue) remove(sn uint16) {
 		extSN = n.cycles | uint32(sn)
 	}
 
-	i := sort.Search(len(n.nacks), func(i int) bool { return n.nacks[i].baseSN >= extSN })
-	if i > len(n.nacks) || n.nacks[i].baseSN != extSN {
+	i := sort.Search(len(n.nacks), func(i int) bool { return n.nacks[i].sn >= extSN })
+	if i > len(n.nacks) || n.nacks[i].sn != extSN {
 		return
 	}
 	copy(n.nacks[i:], n.nacks[i+1:])
@@ -61,14 +67,14 @@ func (n *nackQueue) push(sn uint16) {
 		extSN = n.cycles | uint32(sn)
 	}
 
-	i := sort.Search(len(n.nacks), func(i int) bool { return n.nacks[i].baseSN >= extSN })
-	if i < len(n.nacks) && n.nacks[i].baseSN == extSN {
+	i := sort.Search(len(n.nacks), func(i int) bool { return n.nacks[i].sn >= extSN })
+	if i < len(n.nacks) && n.nacks[i].sn == extSN {
 		return
 	}
 	n.nacks = append(n.nacks, nack{})
 	copy(n.nacks[i+1:], n.nacks[i:])
 	n.nacks[i] = nack{
-		baseSN: extSN,
+		sn:     extSN,
 		nacked: 0,
 	}
 
@@ -86,19 +92,19 @@ func (n *nackQueue) pairs() []rtcp.NackPair {
 			continue
 		}
 		n.nacks[i] = nack{
-			baseSN: nck.baseSN,
+			sn:     nck.sn,
 			nacked: nck.nacked + 1,
 		}
 		i++
-		if np.PacketID == 0 || uint16(nck.baseSN) > np.PacketID+16 {
+		if np.PacketID == 0 || uint16(nck.sn) > np.PacketID+16 {
 			if np.PacketID != 0 {
 				nps = append(nps, np)
 			}
-			np.PacketID = uint16(nck.baseSN)
+			np.PacketID = uint16(nck.sn)
 			np.LostPackets = 0
 			continue
 		}
-		np.LostPackets |= 1 << (uint16(nck.baseSN) - np.PacketID - 1)
+		np.LostPackets |= 1 << (uint16(nck.sn) - np.PacketID - 1)
 	}
 	if np.PacketID != 0 {
 		nps = append(nps, np)

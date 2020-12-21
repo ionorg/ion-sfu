@@ -3,7 +3,6 @@ package sfu
 //go:generate go run github.com/matryer/moq -out router_mock_test.generated.go . Router
 
 import (
-	"io"
 	"sync"
 
 	log "github.com/pion/ion-log"
@@ -30,20 +29,20 @@ type RouterConfig struct {
 type router struct {
 	sync.RWMutex
 	id        string
+	twcc      *TransportWideCC
 	peer      *webrtc.PeerConnection
 	rtcpCh    chan []rtcp.Packet
-	buffer    *buffer.Interceptor
 	config    RouterConfig
 	receivers map[string]Receiver
 }
 
 // newRouter for routing rtp/rtcp packets
-func newRouter(peer *webrtc.PeerConnection, id string, bi *buffer.Interceptor, config RouterConfig) Router {
+func newRouter(peer *webrtc.PeerConnection, id string, config RouterConfig) Router {
 	ch := make(chan []rtcp.Packet, 10)
 	r := &router{
 		id:        id,
 		peer:      peer,
-		buffer:    bi,
+		twcc:      newTransportWideCC(),
 		rtcpCh:    ch,
 		config:    config,
 		receivers: make(map[string]Receiver),
@@ -67,6 +66,30 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 	publish := false
 	trackID := track.ID()
 
+	buff, rtcpReader := bufferFactory.GetBufferPair(uint32(track.SSRC()))
+
+	buff.OnFeedback(func(fb []rtcp.Packet) {
+		r.rtcpCh <- fb
+	})
+
+	buff.OnTransportWideCC(func(sn uint16, timeNS int64, marker bool) {
+		r.twcc.push(sn, timeNS, marker)
+	})
+
+	rtcpReader.OnPacket(func(bytes []byte) {
+		pkts, err := rtcp.Unmarshal(bytes)
+		if err != nil {
+			log.Errorf("Unmarshal rtcp receiver packets err: %v", err)
+			return
+		}
+		for _, pkt := range pkts {
+			switch pkt := pkt.(type) {
+			case *rtcp.SenderReport:
+				buff.SetSenderReportData(pkt.RTPTime, pkt.NTPTime)
+			}
+		}
+	})
+
 	recv := r.receivers[trackID]
 	if recv == nil {
 		recv = NewWebRTCReceiver(receiver, track, r.id)
@@ -78,7 +101,11 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 		publish = true
 	}
 
-	recv.AddUpTrack(track)
+	recv.AddUpTrack(track, buff)
+	buff.Bind(receiver.GetParameters(), buffer.Options{
+		BufferTime: r.config.MaxBufferTime,
+		MaxBitRate: r.config.MaxBandwidth,
+	})
 
 	return recv, publish
 }
@@ -149,75 +176,9 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 		go sub.sendStreamDownTracksReports(recv.StreamID())
 	})
 
-	go r.loopDownTrackRTCP(outTrack)
 	sub.AddDownTrack(recv.StreamID(), outTrack)
 	recv.AddDownTrack(outTrack, r.config.Simulcast.BestQualityFirst)
 	return nil
-}
-
-func (r *router) loopDownTrackRTCP(track *DownTrack) {
-	sender := track.transceiver.Sender()
-	for {
-		pkts, _, err := sender.ReadRTCP()
-		if err == io.ErrClosedPipe || err == io.EOF {
-			log.Debugf("Sender %s closed due to: %v", track.peerID, err)
-			// Remove sender from receiver
-			track.receiver.DeleteDownTrack(track.currentSpatialLayer, track.peerID)
-			track.Close()
-			return
-		}
-
-		if err != nil {
-			log.Errorf("rtcp err => %v", err)
-			continue
-		}
-
-		if !track.enabled.get() {
-			continue
-		}
-
-		var fwdPkts []rtcp.Packet
-		pliOnce := true
-		firOnce := true
-		for _, pkt := range pkts {
-			switch p := pkt.(type) {
-			case *rtcp.PictureLossIndication:
-				if pliOnce {
-					p.MediaSSRC = track.lastSSRC
-					p.SenderSSRC = track.lastSSRC
-					fwdPkts = append(fwdPkts, p)
-					pliOnce = false
-				}
-			case *rtcp.FullIntraRequest:
-				if firOnce {
-					p.MediaSSRC = track.lastSSRC
-					p.SenderSSRC = track.ssrc
-					fwdPkts = append(fwdPkts, p)
-					firOnce = false
-				}
-			case *rtcp.ReceiverReport:
-				if len(p.Reports) > 0 && p.Reports[0].FractionLost > 25 {
-					log.Tracef("Slow link for sender %s, fraction packet lost %.2f", track.peerID, float64(p.Reports[0].FractionLost)/256)
-				}
-			case *rtcp.TransportLayerNack:
-				log.Tracef("sender got nack: %+v", p)
-				for _, pair := range p.Nacks {
-					for _, pt := range r.buffer.GetBufferedPackets(
-						track.receiver.SSRC(track.currentSpatialLayer),
-						track.ssrc,
-						track.snOffset,
-						track.tsOffset,
-						track.nList.getNACKSeqNo(pair.PacketList())) {
-						pt := pt
-						_, _ = track.writeStream.WriteRTP(&pt.Header, pt.Payload)
-					}
-				}
-			}
-		}
-		if len(fwdPkts) > 0 {
-			r.rtcpCh <- fwdPkts
-		}
-	}
 }
 
 func (r *router) deleteReceiver(track string) {

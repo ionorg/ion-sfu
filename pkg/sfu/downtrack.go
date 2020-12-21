@@ -88,6 +88,7 @@ func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters,
 		d.bound.set(true)
 		d.reSync.set(true)
 		d.enabled.set(true)
+
 		d.onBind()
 		return codec, nil
 	}
@@ -334,6 +335,52 @@ func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
 		log.Errorf("Write packet err %v", err)
 	}
 	return err
+}
+
+func (d *DownTrack) handleRTCP(bytes []byte) {
+	if !d.enabled.get() {
+		return
+	}
+
+	pkts, err := rtcp.Unmarshal(bytes)
+	if err != nil {
+		log.Errorf("Unmarshal rtcp receiver packets err: %v", err)
+	}
+
+	var fwdPkts []rtcp.Packet
+	pliOnce := true
+	firOnce := true
+	for _, pkt := range pkts {
+		switch p := pkt.(type) {
+		case *rtcp.PictureLossIndication:
+			if pliOnce {
+				p.MediaSSRC = d.lastSSRC
+				p.SenderSSRC = d.lastSSRC
+				fwdPkts = append(fwdPkts, p)
+				pliOnce = false
+			}
+		case *rtcp.FullIntraRequest:
+			if firOnce {
+				p.MediaSSRC = d.lastSSRC
+				p.SenderSSRC = d.ssrc
+				fwdPkts = append(fwdPkts, p)
+				firOnce = false
+			}
+		case *rtcp.ReceiverReport:
+			if len(p.Reports) > 0 && p.Reports[0].FractionLost > 25 {
+				log.Tracef("Slow link for sender %s, fraction packet lost %.2f", d.peerID, float64(p.Reports[0].FractionLost)/256)
+			}
+		case *rtcp.TransportLayerNack:
+			log.Tracef("sender got nack: %+v", p)
+			var nackedPackets []uint16
+			for _, pair := range p.Nacks {
+				nackedPackets = append(nackedPackets, d.nList.getNACKSeqNo(pair.PacketList())...)
+			}
+		}
+	}
+	if len(fwdPkts) > 0 {
+		d.receiver.SendRTCP(fwdPkts)
+	}
 }
 
 func (d *DownTrack) getSRStats() (octets, packets uint32) {

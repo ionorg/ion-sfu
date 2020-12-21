@@ -11,10 +11,9 @@ const maxPktSize = 1460
 
 type Bucket struct {
 	sync.Mutex
-	buf  []byte
-	nack *nackQueue
+	buf    []byte
+	nacker *nackQueue
 
-	ssrc     uint32
 	headSN   uint16
 	step     int
 	maxSteps int
@@ -23,60 +22,77 @@ type Bucket struct {
 	onLost  func(nack []rtcp.NackPair)
 }
 
-func NewBucket(size int) *Bucket {
-	return &Bucket{
+func NewBucket(size int, nack bool) *Bucket {
+	b := &Bucket{
 		buf:      make([]byte, size),
-		maxSteps: size / maxPktSize,
-		nack:     newNACKQueue(),
+		maxSteps: size/maxPktSize - 1,
 	}
+	if nack {
+		b.nacker = newNACKQueue()
+	}
+	return b
 }
 
-func (b *Bucket) addPacket(pkt []byte, sn uint16, latest bool) {
+func (b *Bucket) addPacket(pkt []byte, sn uint16, latest bool) []byte {
 	b.Lock()
 	defer b.Unlock()
 
 	if !latest {
-		b.set(sn, pkt)
-		b.nack.remove(sn)
-		return
+		b.nacker.remove(sn)
+		return b.set(sn, pkt)
 	}
 	diff := sn - b.headSN
 	b.headSN = sn
 	for i := uint16(1); i < diff; i++ {
 		b.step++
-		b.counter++
-		b.nack.push(sn - i)
+		if b.nacker != nil {
+			b.counter++
+			b.nacker.push(sn - i)
+		}
 		if b.step > b.maxSteps {
 			b.step = 0
 		}
 	}
-	b.counter++
-	if b.counter > 2 {
-		b.onLost(b.nack.pairs())
-		b.counter = 0
+
+	if b.nacker != nil {
+		b.counter++
+		if b.counter > 2 {
+			np := b.nacker.pairs()
+			if len(np) > 0 {
+				b.onLost(b.nacker.pairs())
+			}
+			b.counter = 0
+		}
 	}
-	b.push(pkt)
+	return b.push(pkt)
 }
 
-func (b *Bucket) getPacket(sn uint16) []byte {
+func (b *Bucket) getPacket(buf []byte, sn uint16) (i int, err error) {
 	b.Lock()
 	defer b.Unlock()
 	p := b.get(sn)
 	if p == nil {
-		return nil
+		err = errPacketNotFound
+		return
 	}
-	pkt := make([]byte, len(p))
-	copy(pkt, p)
-	return pkt
+	i = len(p)
+	if len(buf) < i {
+		err = errBufferTooSmall
+		return
+	}
+	copy(buf, p)
+	return
 }
 
-func (b *Bucket) push(pkt []byte) {
+func (b *Bucket) push(pkt []byte) []byte {
 	binary.BigEndian.PutUint16(b.buf[b.step*maxPktSize:], uint16(len(pkt)))
-	copy(b.buf[b.step*maxPktSize+2:], pkt)
+	off := b.step*maxPktSize + 2
+	copy(b.buf[off:], pkt)
 	b.step++
 	if b.step > b.maxSteps {
 		b.step = 0
 	}
+	return b.buf[off : off+len(pkt)]
 }
 
 func (b *Bucket) get(sn uint16) []byte {
@@ -95,15 +111,26 @@ func (b *Bucket) get(sn uint16) []byte {
 	return b.buf[off+2 : off+2+sz]
 }
 
-func (b *Bucket) set(sn uint16, pkt []byte) {
+func (b *Bucket) set(sn uint16, pkt []byte) []byte {
 	pos := b.step - int(b.headSN-sn+1)
 	if pos < 0 {
 		pos = b.maxSteps + pos + 1
 	}
 	off := pos * maxPktSize
 	if off > len(b.buf) {
-		return
+		return nil
 	}
 	binary.BigEndian.PutUint16(b.buf[off:], uint16(len(pkt)))
 	copy(b.buf[off+2:], pkt)
+	return b.buf[off+2 : off+2+len(pkt)]
+}
+
+func (b *Bucket) reset() {
+	if b.headSN != 0 {
+		b.headSN = 0
+		b.counter = 0
+		b.step = 0
+		b.onLost = nil
+		b.nacker.reset()
+	}
 }

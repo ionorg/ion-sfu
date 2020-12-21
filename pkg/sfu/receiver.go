@@ -7,9 +7,11 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/pion/ion-log"
 	"github.com/pion/rtp"
 
-	log "github.com/pion/ion-log"
+	"github.com/pion/ion-sfu/pkg/buffer"
+
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 )
@@ -21,7 +23,7 @@ type Receiver interface {
 	Codec() webrtc.RTPCodecParameters
 	Kind() webrtc.RTPCodecType
 	SSRC(layer int) uint32
-	AddUpTrack(track *webrtc.TrackRemote)
+	AddUpTrack(track *webrtc.TrackRemote, buffer *buffer.Buffer)
 	AddDownTrack(track *DownTrack, bestQualityFirst bool)
 	SubDownTrack(track *DownTrack, layer int) error
 	DeleteDownTrack(layer int, id string)
@@ -45,6 +47,7 @@ type WebRTCReceiver struct {
 	receiver       *webrtc.RTPReceiver
 	codec          webrtc.RTPCodecParameters
 	rtcpCh         chan []rtcp.Packet
+	buffers        [3]*buffer.Buffer
 	upTracks       [3]*webrtc.TrackRemote
 	downTracks     [3][]*DownTrack
 	isSimulcast    bool
@@ -87,29 +90,22 @@ func (w *WebRTCReceiver) Kind() webrtc.RTPCodecType {
 	return w.kind
 }
 
-func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote) {
+func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, buff *buffer.Buffer) {
 	var layer int
 
 	switch track.RID() {
 	case fullResolution:
 		layer = 2
-		w.upTracks[layer] = track
 	case halfResolution:
 		layer = 1
-		w.upTracks[layer] = track
 	default:
 		layer = 0
-		w.upTracks[layer] = track
 	}
 
+	w.upTracks[layer] = track
+	w.buffers[layer] = buff
 	w.downTracks[layer] = make([]*DownTrack, 0, 10)
-
-	go w.readRTP(track, layer)
-	if w.isSimulcast {
-		go w.readSimulcastRTCP(track.RID())
-	} else {
-		go w.readRTCP()
-	}
+	go w.writeRTP(layer)
 }
 
 func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
@@ -189,32 +185,16 @@ func (w *WebRTCReceiver) SetRTCPCh(ch chan []rtcp.Packet) {
 	w.rtcpCh = ch
 }
 
-// readRTP receive all incoming tracks' rtp and sent to one channel
-func (w *WebRTCReceiver) readRTP(track *webrtc.TrackRemote, layer int) {
+func (w *WebRTCReceiver) writeRTP(layer int) {
 	defer func() {
 		w.closeTracks(layer)
 		if w.onCloseHandler != nil {
 			w.onCloseHandler()
 		}
 	}()
-	pktBuff := make([]byte, 1460)
-	for {
-		n, _, err := track.Read(pktBuff)
-		// EOF signal received, this means that the remote track has been removed
-		// or the peer has been disconnected. The router must be gracefully shutdown,
-		// waiting for all the receivers routines to stop.
-		if err == io.EOF {
-			log.Debugf("receiver %d read rtp eof", track.SSRC())
-			return
-		}
-
-		if err != nil {
-			log.Errorf("rtp err => %v", err)
-			continue
-		}
-
+	for n := range w.buffers[layer].PacketChan() {
 		pkt := rtp.Packet{}
-		if err = pkt.Unmarshal(pktBuff[:n]); err != nil {
+		if err := pkt.Unmarshal(n); err != nil {
 			log.Errorf("rtp marshal err => %v", err)
 			continue
 		}
@@ -226,35 +206,6 @@ func (w *WebRTCReceiver) readRTP(track *webrtc.TrackRemote, layer int) {
 			}
 		}
 		w.Unlock()
-	}
-}
-
-func (w *WebRTCReceiver) readRTCP() {
-	pktBuff := make([]byte, 1460)
-	for {
-		_, _, err := w.receiver.Read(pktBuff)
-		if err == io.ErrClosedPipe || err == io.EOF {
-			log.Debugf("receiver %s readrtcp eof", w.peerID)
-			return
-		}
-		if err != nil {
-			log.Errorf("rtcp err => %v", err)
-			continue
-		}
-	}
-}
-
-func (w *WebRTCReceiver) readSimulcastRTCP(rid string) {
-	pktBuff := make([]byte, 1460)
-	for {
-		_, _, err := w.receiver.ReadSimulcast(pktBuff, rid)
-		if err == io.ErrClosedPipe || err == io.EOF {
-			return
-		}
-		if err != nil {
-			log.Errorf("rtcp err => %v", err)
-			continue
-		}
 	}
 }
 

@@ -104,7 +104,7 @@ func Test_nackQueue_push(t *testing.T) {
 			}
 			var newSN []uint32
 			for _, sn := range n.nacks {
-				newSN = append(newSN, sn.baseSN)
+				newSN = append(newSN, sn.sn)
 			}
 			assert.Equal(t, tt.want, newSN)
 		})
@@ -168,7 +168,7 @@ func Test_nackQueue_remove(t *testing.T) {
 			n.remove(5)
 			var newSN []uint32
 			for _, sn := range n.nacks {
-				newSN = append(newSN, sn.baseSN)
+				newSN = append(newSN, sn.sn)
 			}
 			assert.Equal(t, tt.want, newSN)
 		})

@@ -74,7 +74,7 @@ func Test_queue_nack(t *testing.T) {
 				}
 				q.headSN = p.SequenceNumber
 				q.counter++
-				// q.push(p)
+				// q.Write(p)
 			}
 			//if got := q.pairs(); !reflect.DeepEqual(got, tt.want) {
 			//	t.Errorf("pairs() = %v, want %v", got, tt.want)

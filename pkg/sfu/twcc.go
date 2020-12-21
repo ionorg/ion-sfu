@@ -1,4 +1,4 @@
-package buffer
+package sfu
 
 import (
 	"encoding/binary"
@@ -61,7 +61,7 @@ func (t *TransportWideCC) push(sn uint16, timeNS int64, marker bool) {
 	defer t.Unlock()
 
 	if sn < 0x0fff && (t.tccLastSn&0xffff) > 0xf000 {
-		t.tccCycles += maxSN
+		t.tccCycles += 1 << 16
 	}
 	t.tccExtInfo = append(t.tccExtInfo, rtpExtInfo{
 		ExtTSN:    t.tccCycles | uint32(sn),
