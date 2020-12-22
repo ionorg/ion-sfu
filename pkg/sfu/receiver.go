@@ -1,7 +1,5 @@
 package sfu
 
-//go:generate go run github.com/matryer/moq -out receiver_mock_test.generated.go . Receiver
-
 import (
 	"io"
 	"sync"
