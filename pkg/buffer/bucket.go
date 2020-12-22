@@ -2,7 +2,6 @@ package buffer
 
 import (
 	"encoding/binary"
-	"sync"
 
 	"github.com/pion/rtcp"
 )
@@ -10,7 +9,6 @@ import (
 const maxPktSize = 1460
 
 type Bucket struct {
-	sync.Mutex
 	buf    []byte
 	nacker *nackQueue
 
@@ -34,9 +32,6 @@ func NewBucket(size int, nack bool) *Bucket {
 }
 
 func (b *Bucket) addPacket(pkt []byte, sn uint16, latest bool) []byte {
-	b.Lock()
-	defer b.Unlock()
-
 	if !latest {
 		b.nacker.remove(sn)
 		return b.set(sn, pkt)
@@ -68,8 +63,6 @@ func (b *Bucket) addPacket(pkt []byte, sn uint16, latest bool) []byte {
 }
 
 func (b *Bucket) getPacket(buf []byte, sn uint16) (i int, err error) {
-	b.Lock()
-	defer b.Unlock()
 	p := b.get(sn)
 	if p == nil {
 		err = errPacketNotFound

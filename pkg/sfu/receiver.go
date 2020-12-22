@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/gammazero/workerpool"
-	log "github.com/pion/ion-log"
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
@@ -213,13 +212,7 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 			w.onCloseHandler()
 		}
 	}()
-	for n := range w.buffers[layer].PacketChan() {
-		pkt := rtp.Packet{}
-		if err := pkt.Unmarshal(n); err != nil {
-			log.Errorf("rtp marshal err => %v", err)
-			continue
-		}
-
+	for pkt := range w.buffers[layer].PacketChan() {
 		w.Lock()
 		for _, dt := range w.downTracks[layer] {
 			if err := dt.WriteRTP(pkt); err == io.EOF {

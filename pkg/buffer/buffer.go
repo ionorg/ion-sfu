@@ -5,8 +5,9 @@ import (
 	"io"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
+
+	"github.com/pion/rtp"
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
@@ -34,14 +35,14 @@ type Buffer struct {
 	codecType  webrtc.RTPCodecType
 	videoPool  *sync.Pool
 	audioPool  *sync.Pool
-	packetChan chan []byte
-	bound      bool
+	packetChan chan rtp.Packet
 	pPackets   []pendingPackets
 	mediaSSRC  uint32
 	clockRate  uint32
 	maxBitrate uint64
 	lastReport int64
 	twccExt    uint8
+	bound      bool
 	closed     bool
 	onClose    func()
 
@@ -82,12 +83,12 @@ func NewBuffer(ssrc uint32, vp, ap *sync.Pool) *Buffer {
 		mediaSSRC:  ssrc,
 		videoPool:  vp,
 		audioPool:  ap,
-		packetChan: make(chan []byte, 100),
+		packetChan: make(chan rtp.Packet, 100),
 	}
 	return b
 }
 
-func (b *Buffer) PacketChan() chan []byte {
+func (b *Buffer) PacketChan() chan rtp.Packet {
 	return b.packetChan
 }
 
@@ -162,25 +163,22 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 
 // Write adds a RTP Packet, out of order, new packet may be arrived later
 func (b *Buffer) Write(pkt []byte) (n int, err error) {
+	b.Lock()
+	defer b.Unlock()
+
 	if b.closed {
 		err = io.EOF
 		return
 	}
 
 	if !b.bound {
-		b.Lock()
-		// Recheck after getting lock
-		if !b.bound {
-			packet := make([]byte, len(pkt))
-			copy(packet, pkt)
-			b.pPackets = append(b.pPackets, pendingPackets{
-				packet:      packet,
-				arrivalTime: time.Now().UnixNano(),
-			})
-			b.Unlock()
-			return
-		}
-		b.Unlock()
+		packet := make([]byte, len(pkt))
+		copy(packet, pkt)
+		b.pPackets = append(b.pPackets, pendingPackets{
+			packet:      packet,
+			arrivalTime: time.Now().UnixNano(),
+		})
+		return
 	}
 
 	b.calc(pkt, time.Now().UnixNano())
@@ -214,6 +212,7 @@ func (b *Buffer) Read(buff []byte) (n int, err error) {
 func (b *Buffer) Close() error {
 	b.Lock()
 	defer b.Unlock()
+
 	b.closed = true
 	if b.bucket != nil && b.codecType == webrtc.RTPCodecTypeVideo {
 		b.videoPool.Put(b.bucket)
@@ -246,7 +245,12 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	}
 	b.totalByte += uint64(len(pkt))
 	b.packetCount++
-	b.packetChan <- b.bucket.addPacket(pkt, sn, sn == b.maxSeqNo)
+
+	var p rtp.Packet
+	if err := p.Unmarshal(b.bucket.addPacket(pkt, sn, sn == b.maxSeqNo)); err == nil {
+		b.packetChan <- p
+	}
+
 	arrival := uint32(arrivalTime / 1e6 * int64(b.clockRate/1e3))
 	transit := arrival - ts
 	if b.lastTransit != 0 {
@@ -312,11 +316,9 @@ func (b *Buffer) buildReceptionReport() rtcp.ReceptionReport {
 		fracLost = uint8((lostInterval << 8) / expectedInterval)
 	}
 	var dlsr uint32
-	lastSRRecv := atomic.LoadInt64(&b.lastSRRecv)
-	lastSRNTPTime := atomic.LoadUint64(&b.lastSRNTPTime)
 
-	if lastSRRecv != 0 {
-		delayMS := uint32((time.Now().UnixNano() - lastSRRecv) / 1e6)
+	if b.lastSRRecv != 0 {
+		delayMS := uint32((time.Now().UnixNano() - b.lastSRRecv) / 1e6)
 		dlsr = (delayMS / 1e3) << 16
 		dlsr |= (delayMS % 1e3) * 65536 / 1000
 	}
@@ -327,16 +329,18 @@ func (b *Buffer) buildReceptionReport() rtcp.ReceptionReport {
 		TotalLost:          lost,
 		LastSequenceNumber: extMaxSeq,
 		Jitter:             uint32(b.jitter),
-		LastSenderReport:   uint32(lastSRNTPTime >> 16),
+		LastSenderReport:   uint32(b.lastSRNTPTime >> 16),
 		Delay:              dlsr,
 	}
 	return rr
 }
 
 func (b *Buffer) SetSenderReportData(rtpTime uint32, ntpTime uint64) {
-	atomic.StoreUint32(&b.lastSRRTPTime, rtpTime)
-	atomic.StoreUint64(&b.lastSRNTPTime, ntpTime)
-	atomic.StoreInt64(&b.lastSRRecv, time.Now().UnixNano())
+	b.Lock()
+	b.lastSRRTPTime = rtpTime
+	b.lastSRNTPTime = ntpTime
+	b.lastSRRecv = time.Now().UnixNano()
+	b.Unlock()
 }
 
 func (b *Buffer) getRTCP() []rtcp.Packet {
@@ -354,6 +358,8 @@ func (b *Buffer) getRTCP() []rtcp.Packet {
 }
 
 func (b *Buffer) GetPacket(buff []byte, sn uint16) (int, error) {
+	b.Lock()
+	defer b.Unlock()
 	return b.bucket.getPacket(buff, sn)
 }
 

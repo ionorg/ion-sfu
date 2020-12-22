@@ -1,7 +1,6 @@
 package sfu
 
 import (
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -422,7 +421,6 @@ func TestSFU_SessionScenarios(t *testing.T) {
 			for _, p := range peers {
 				p.subs.Wait()
 			}
-			println("####################", runtime.NumGoroutine())
 			testDone.set(true)
 			close(done)
 
