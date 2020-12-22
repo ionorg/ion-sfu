@@ -4,6 +4,7 @@ package sfu
 
 import (
 	"sync"
+	"time"
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/ion-sfu/pkg/buffer"
@@ -47,6 +48,11 @@ func newRouter(peer *webrtc.PeerConnection, id string, config RouterConfig) Rout
 		config:    config,
 		receivers: make(map[string]Receiver),
 	}
+
+	r.twcc.onFeedback = func(packet []rtcp.Packet) {
+		r.rtcpCh <- packet
+	}
+
 	go r.sendRTCP()
 	return r
 }
@@ -102,6 +108,12 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 	}
 
 	recv.AddUpTrack(track, buff)
+
+	if r.twcc.mSSRC == 0 {
+		r.twcc.tccLastReport = time.Now().UnixNano()
+		r.twcc.mSSRC = uint32(track.SSRC())
+	}
+
 	buff.Bind(receiver.GetParameters(), buffer.Options{
 		BufferTime: r.config.MaxBufferTime,
 		MaxBitRate: r.config.MaxBandwidth,

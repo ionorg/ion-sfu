@@ -131,6 +131,8 @@ func (b *Bucket) reset() {
 		b.counter = 0
 		b.step = 0
 		b.onLost = nil
-		b.nacker.reset()
+		if b.nacker != nil {
+			b.nacker.reset()
+		}
 	}
 }

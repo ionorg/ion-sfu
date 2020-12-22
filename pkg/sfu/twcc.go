@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/gammazero/deque"
 	"github.com/pion/rtcp"
@@ -50,9 +49,8 @@ type TransportWideCC struct {
 
 func newTransportWideCC() *TransportWideCC {
 	return &TransportWideCC{
-		tccExtInfo:    make([]rtpExtInfo, 0, 101),
-		tccLastReport: time.Now().Add(time.Millisecond * 200).UnixNano(),
-		sSSRC:         rand.Uint32(),
+		tccExtInfo: make([]rtpExtInfo, 0, 101),
+		sSSRC:      rand.Uint32(),
 	}
 }
 
@@ -69,7 +67,8 @@ func (t *TransportWideCC) push(sn uint16, timeNS int64, marker bool) {
 	})
 	t.tccLastSn = sn
 	delta := timeNS - t.tccLastReport
-	if delta >= tccReportDelta || len(t.tccExtInfo) > 100 || (marker && delta >= tccReportDeltaAfterMark) {
+	if len(t.tccExtInfo) > 20 && t.mSSRC != 0 &&
+		(delta >= tccReportDelta || len(t.tccExtInfo) > 100 || (marker && delta >= tccReportDeltaAfterMark)) {
 		if pkt := t.buildTransportCCPacket(); pkt != nil {
 			t.onFeedback([]rtcp.Packet{pkt})
 		}
