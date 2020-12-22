@@ -6,7 +6,7 @@ import (
 	"github.com/pion/rtcp"
 )
 
-const maxNackTimes = 10  // Max number of times a packet will be NACKed
+const maxNackTimes = 3   // Max number of times a packet will be NACKed
 const maxNackCache = 100 // Max NACK sn the sfu will keep reference
 
 type nack struct {
@@ -17,6 +17,7 @@ type nack struct {
 type nackQueue struct {
 	nacks  []nack
 	maxSN  uint16
+	kfSN   uint32
 	cycles uint32
 }
 
@@ -31,6 +32,7 @@ func newNACKQueue() *nackQueue {
 func (n *nackQueue) reset() {
 	n.maxSN = 0
 	n.cycles = 0
+	n.kfSN = 0
 	n.nacks = n.nacks[:0]
 }
 
@@ -83,12 +85,17 @@ func (n *nackQueue) push(sn uint16) {
 	}
 }
 
-func (n *nackQueue) pairs() []rtcp.NackPair {
+func (n *nackQueue) pairs() ([]rtcp.NackPair, bool) {
 	i := 0
+	askKF := false
 	var np rtcp.NackPair
 	var nps []rtcp.NackPair
 	for _, nck := range n.nacks {
 		if nck.nacked >= maxNackTimes {
+			if nck.sn > n.kfSN {
+				n.kfSN = nck.sn
+				askKF = true
+			}
 			continue
 		}
 		n.nacks[i] = nack{
@@ -110,5 +117,5 @@ func (n *nackQueue) pairs() []rtcp.NackPair {
 		nps = append(nps, np)
 	}
 	n.nacks = n.nacks[:i]
-	return nps
+	return nps, askKF
 }

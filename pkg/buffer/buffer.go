@@ -136,11 +136,19 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 		}
 	}
 
-	b.bucket.onLost = func(nacks []rtcp.NackPair) {
-		b.feedbackCB([]rtcp.Packet{&rtcp.TransportLayerNack{
+	b.bucket.onLost = func(nacks []rtcp.NackPair, askKeyframe bool) {
+		pkts := []rtcp.Packet{&rtcp.TransportLayerNack{
 			MediaSSRC: b.mediaSSRC,
 			Nacks:     nacks,
-		}})
+		}}
+
+		if askKeyframe {
+			pkts = append(pkts, &rtcp.PictureLossIndication{
+				MediaSSRC: b.mediaSSRC,
+			})
+		}
+
+		b.feedbackCB(pkts)
 	}
 
 	for _, pp := range b.pPackets {

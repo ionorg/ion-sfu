@@ -19,7 +19,7 @@ type Bucket struct {
 	maxSteps int
 
 	counter int
-	onLost  func(nack []rtcp.NackPair)
+	onLost  func(nack []rtcp.NackPair, askKeyframe bool)
 }
 
 func NewBucket(size int, nack bool) *Bucket {
@@ -57,9 +57,9 @@ func (b *Bucket) addPacket(pkt []byte, sn uint16, latest bool) []byte {
 	if b.nacker != nil {
 		b.counter++
 		if b.counter > 2 {
-			np := b.nacker.pairs()
+			np, akf := b.nacker.pairs()
 			if len(np) > 0 {
-				b.onLost(b.nacker.pairs())
+				b.onLost(np, akf)
 			}
 			b.counter = 0
 		}
