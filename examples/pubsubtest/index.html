@@ -155,7 +155,7 @@
         "ws://localhost:7000/ws"
       );
 
-      const clientLocal = new IonSDK.Client(signalLocal);
+      const clientLocal = new IonSDK.Client(signalLocal, config);
       signalLocal.onopen = () => clientLocal.join("test session");
 
       let localStream;
@@ -186,7 +186,7 @@
             remoteVideo.muted = true;
             remotesDiv.appendChild(remoteVideo);
 
-            track.onremovetrack = () => remotesDiv.removeChild(removeVideo);
+            track.onremovetrack = () => remotesDiv.removeChild(remoteVideo);
           };
         }
       };
