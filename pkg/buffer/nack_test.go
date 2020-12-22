@@ -59,7 +59,7 @@ func Test_nackQueue_pairs(t *testing.T) {
 			for _, sn := range tt.args {
 				n.push(sn)
 			}
-			got := n.pairs()
+			got, _ := n.pairs()
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("pairs() = %v, want %v", got, tt.want)
 			}

@@ -6,11 +6,12 @@ require (
 	github.com/bep/debounce v1.2.0
 	github.com/desertbit/timer v0.0.0-20180107155436-c41aec40b27f // indirect
 	github.com/gammazero/deque v0.0.0-20201010052221-3932da5530cc
+	github.com/gammazero/workerpool v1.1.1
 	github.com/gorilla/websocket v1.4.2
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/improbable-eng/grpc-web v0.13.0
 	github.com/lucsky/cuid v1.0.2
-	github.com/pion/interceptor v0.0.8
+	github.com/pion/interceptor v0.0.8 // indirect
 	github.com/pion/ion-log v1.0.0
 	github.com/pion/rtcp v1.2.6
 	github.com/pion/rtp v1.6.2

@@ -7,12 +7,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gammazero/workerpool"
 	log "github.com/pion/ion-log"
-	"github.com/pion/rtp"
-
 	"github.com/pion/ion-sfu/pkg/buffer"
-
 	"github.com/pion/rtcp"
+	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -26,6 +25,7 @@ type Receiver interface {
 	AddUpTrack(track *webrtc.TrackRemote, buffer *buffer.Buffer)
 	AddDownTrack(track *DownTrack, bestQualityFirst bool)
 	SubDownTrack(track *DownTrack, layer int) error
+	GetBufferPacket(track *DownTrack, layer int, packets []uint16)
 	DeleteDownTrack(layer int, id string)
 	OnCloseHandler(fn func())
 	SendRTCP(p []rtcp.Packet)
@@ -50,6 +50,7 @@ type WebRTCReceiver struct {
 	buffers        [3]*buffer.Buffer
 	upTracks       [3]*webrtc.TrackRemote
 	downTracks     [3][]*DownTrack
+	nackWorker     *workerpool.WorkerPool
 	isSimulcast    bool
 	onCloseHandler func()
 }
@@ -63,6 +64,7 @@ func NewWebRTCReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote, 
 		streamID:    track.StreamID(),
 		codec:       track.Codec(),
 		kind:        track.Kind(),
+		nackWorker:  workerpool.New(1),
 		isSimulcast: len(track.RID()) > 0,
 	}
 }
@@ -185,9 +187,30 @@ func (w *WebRTCReceiver) SetRTCPCh(ch chan []rtcp.Packet) {
 	w.rtcpCh = ch
 }
 
+func (w *WebRTCReceiver) GetBufferPacket(track *DownTrack, layer int, packets []uint16) {
+	w.nackWorker.Submit(func() {
+		pktBuff := packetFactory.Get().([]byte)
+		for _, sn := range packets {
+			i, err := w.buffers[layer].GetPacket(pktBuff, sn)
+			if err != nil {
+				continue
+			}
+			var pkt rtp.Packet
+			if err = pkt.Unmarshal(pktBuff[:i]); err != nil {
+				continue
+			}
+			if err = track.WriteRTP(pkt); err == io.EOF {
+				break
+			}
+		}
+		packetFactory.Put(pktBuff)
+	})
+}
+
 func (w *WebRTCReceiver) writeRTP(layer int) {
 	defer func() {
 		w.closeTracks(layer)
+		w.nackWorker.Stop()
 		if w.onCloseHandler != nil {
 			w.onCloseHandler()
 		}

@@ -8,6 +8,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/pion/ion-sfu/pkg/buffer"
+
+	"github.com/pion/transport/packetio"
+
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
@@ -88,7 +92,11 @@ func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters,
 		d.bound.set(true)
 		d.reSync.set(true)
 		d.enabled.set(true)
-
+		if rr := bufferFactory.GetOrNew(packetio.RTCPBufferPacket, uint32(t.SSRC())).(*buffer.RTCPReader); rr != nil {
+			rr.OnPacket(func(pkt []byte) {
+				d.handleRTCP(pkt)
+			})
+		}
 		d.onBind()
 		return codec, nil
 	}

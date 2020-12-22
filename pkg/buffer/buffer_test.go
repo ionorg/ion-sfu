@@ -1,9 +1,10 @@
 package buffer
 
 import (
+	"sync"
 	"testing"
 
-	"github.com/pion/interceptor"
+	"github.com/pion/rtcp"
 
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
@@ -46,7 +47,7 @@ func CreateTestListPackets(snsAndTSs []SequenceNumberAndTimeStamp) (packetList [
 func TestNewBuffer(t *testing.T) {
 	type args struct {
 		options Options
-		info    *interceptor.StreamInfo
+		ssrc    uint32
 	}
 	tests := []struct {
 		name string
@@ -58,15 +59,6 @@ func TestNewBuffer(t *testing.T) {
 				options: Options{
 					BufferTime: 1000,
 					MaxBitRate: 1e6,
-				},
-				info: &interceptor.StreamInfo{
-					ID:                  "demo",
-					Attributes:          nil,
-					SSRC:                1234,
-					RTPHeaderExtensions: nil,
-					MimeType:            "",
-					ClockRate:           9000,
-					RTCPFeedback:        nil,
 				},
 			},
 		},
@@ -96,14 +88,34 @@ func TestNewBuffer(t *testing.T) {
 					},
 				},
 			}
-			buff := NewBuffer(tt.args.info, tt.args.options)
+			pool := &sync.Pool{
+				New: func() interface{} {
+					return NewBucket(2*1000*1000, true)
+				},
+			}
+			buff := NewBuffer(123, pool, pool)
 			buff.codecType = webrtc.RTPCodecTypeVideo
 			assert.NotNil(t, buff)
 			assert.NotNil(t, TestPackets)
+			buff.OnFeedback(func(_ []rtcp.Packet) {
+			})
 
-			//for _, p := range TestPackets {
-			// buff.Write(p)
-			//}
+			buff.Bind(webrtc.RTPParameters{
+				HeaderExtensions: nil,
+				Codecs: []webrtc.RTPCodecParameters{{
+					RTPCodecCapability: webrtc.RTPCodecCapability{
+						MimeType:     "video/vp8",
+						ClockRate:    9600,
+						RTCPFeedback: nil,
+					},
+					PayloadType: 0,
+				}},
+			}, Options{})
+
+			for _, p := range TestPackets {
+				buf, _ := p.Marshal()
+				buff.Write(buf)
+			}
 			//assert.Equal(t, 6, buff.bucket.size)
 			assert.Equal(t, uint32(1<<16), buff.cycles)
 			assert.Equal(t, uint16(2), buff.maxSeqNo)
