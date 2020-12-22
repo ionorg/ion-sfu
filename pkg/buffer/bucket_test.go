@@ -3,9 +3,10 @@ package buffer
 import (
 	"testing"
 
+	"github.com/pion/rtcp"
+
 	"github.com/stretchr/testify/assert"
 
-	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 )
 
@@ -42,49 +43,11 @@ var TestPackets = []*rtp.Packet{
 	},
 }
 
-func Test_queue_nack(t *testing.T) {
-	type fields struct {
-		headSN uint16
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		want   *rtcp.NackPair
-	}{
-		{
-			name:   "Most generate correct pairs packet",
-			fields: fields{},
-			want: &rtcp.NackPair{
-				PacketID:    2,
-				LostPackets: 100,
-			},
-		},
-	}
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			q := &Bucket{
-				headSN: tt.fields.headSN,
-			}
-			for _, p := range TestPackets {
-				diff := p.SequenceNumber - q.headSN
-				for i := 1; i < int(diff); i++ {
-					q.push(nil)
-					q.counter++
-				}
-				q.headSN = p.SequenceNumber
-				q.counter++
-				// q.Write(p)
-			}
-			//if got := q.pairs(); !reflect.DeepEqual(got, tt.want) {
-			//	t.Errorf("pairs() = %v, want %v", got, tt.want)
-			//}
-		})
-	}
-}
-
 func Test_queue(t *testing.T) {
 	q := NewBucket(2*1000*1000, true)
+	q.onLost = func(_ []rtcp.NackPair, _ bool) {
+	}
+
 	for _, p := range TestPackets {
 		p := p
 		buf, err := p.Marshal()
@@ -112,7 +75,7 @@ func Test_queue(t *testing.T) {
 	assert.NoError(t, err)
 	expectedSN = 8
 	q.addPacket(buf, 8, false)
-	i, err = q.getPacket(buff, 9)
+	i, err = q.getPacket(buff, expectedSN)
 	assert.NoError(t, err)
 	err = np.Unmarshal(buff[:i])
 	assert.NoError(t, err)
@@ -138,6 +101,8 @@ func Test_queue_edges(t *testing.T) {
 		},
 	}
 	q := NewBucket(2*1000*1000, true)
+	q.onLost = func(_ []rtcp.NackPair, _ bool) {
+	}
 	q.headSN = 65532
 	q.step = q.maxSteps - 2
 	for _, p := range TestPackets {

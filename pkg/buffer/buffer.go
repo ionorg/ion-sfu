@@ -245,7 +245,7 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 		b.maxSeqNo = sn
 	}
 	b.totalByte += uint64(len(pkt))
-	b.packetCount += 1
+	b.packetCount++
 	b.packetChan <- b.bucket.addPacket(pkt, sn, sn == b.maxSeqNo)
 	arrival := uint32(arrivalTime / 1e6 * int64(b.clockRate/1e3))
 	transit := arrival - ts

@@ -20,7 +20,7 @@ func Test_nackQueue_pairs(t *testing.T) {
 		want   []rtcp.NackPair
 	}{
 		{
-			name: "Most return correct single pairs pair",
+			name: "Must return correct single pairs pair",
 			fields: fields{
 				nacks:  nil,
 				cycles: 0,
@@ -32,7 +32,7 @@ func Test_nackQueue_pairs(t *testing.T) {
 			}},
 		},
 		{
-			name: "Most return 2 pairs pair",
+			name: "Must return 2 pairs pair",
 			fields: fields{
 				nacks:  nil,
 				cycles: 0,
@@ -51,6 +51,7 @@ func Test_nackQueue_pairs(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			n := &nackQueue{
 				nacks:  tt.fields.nacks,
@@ -94,6 +95,7 @@ func Test_nackQueue_push(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			n := &nackQueue{
 				nacks:  tt.fields.nacks,
@@ -136,6 +138,7 @@ func Test_nackQueue_pushAndNack(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 
 		})
@@ -160,6 +163,7 @@ func Test_nackQueue_remove(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			n := nackQueue{}
 			for _, sn := range tt.args.sn {
