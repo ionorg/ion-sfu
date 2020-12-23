@@ -33,7 +33,9 @@ func NewBucket(size int, nack bool) *Bucket {
 
 func (b *Bucket) addPacket(pkt []byte, sn uint16, latest bool) []byte {
 	if !latest {
-		b.nacker.remove(sn)
+		if b.nacker != nil {
+			b.nacker.remove(sn)
+		}
 		return b.set(sn, pkt)
 	}
 	diff := sn - b.headSN

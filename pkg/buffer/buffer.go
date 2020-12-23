@@ -231,7 +231,7 @@ func (b *Buffer) OnClose(fn func()) {
 
 func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	sn := binary.BigEndian.Uint16(pkt[2:4])
-	ts := binary.BigEndian.Uint32(pkt[4:8])
+
 	if b.packetCount == 0 {
 		b.baseSN = sn
 		b.maxSeqNo = sn
@@ -247,12 +247,13 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	b.packetCount++
 
 	var p rtp.Packet
-	if err := p.Unmarshal(b.bucket.addPacket(pkt, sn, sn == b.maxSeqNo)); err == nil {
-		b.packetChan <- p
+	if err := p.Unmarshal(b.bucket.addPacket(pkt, sn, sn == b.maxSeqNo)); err != nil {
+		return
 	}
+	b.packetChan <- p
 
 	arrival := uint32(arrivalTime / 1e6 * int64(b.clockRate/1e3))
-	transit := arrival - ts
+	transit := arrival - p.Timestamp
 	if b.lastTransit != 0 {
 		d := int32(transit - b.lastTransit)
 		if d < 0 {
@@ -263,8 +264,8 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	b.lastTransit = transit
 
 	if b.tcc {
-		if ccSN, err := getTWCCRtpExt(pkt, b.twccExt); err == nil {
-			b.feedbackTWCC(ccSN, arrivalTime, (pkt[1]>>7&0x1) > 0)
+		if ext := p.GetExtension(b.twccExt); ext != nil && len(ext) > 1 {
+			b.feedbackTWCC(binary.BigEndian.Uint16(ext[0:2]), arrivalTime, (pkt[1]>>7&0x1) > 0)
 		}
 	}
 	if arrivalTime-b.lastReport >= reportDelta {
@@ -369,82 +370,4 @@ func (b *Buffer) OnTransportWideCC(fn func(sn uint16, timeNS int64, marker bool)
 
 func (b *Buffer) OnFeedback(fn func(fb []rtcp.Packet)) {
 	b.feedbackCB = fn
-}
-
-func getTWCCRtpExt(rawPacket []byte, extID uint8) (uint16, error) {
-	ext := (rawPacket[0] >> 4 & 0x1) > 0
-	nCSRC := int(rawPacket[0] & 0xf)
-	currOffset := 12 + (nCSRC * 4)
-
-	if len(rawPacket) < currOffset {
-		return 0, errExtNotFound
-	}
-
-	if ext {
-		if expected := currOffset + 4; len(rawPacket) < expected {
-			return 0, errExtNotFound
-		}
-
-		extensionProfile := binary.BigEndian.Uint16(rawPacket[currOffset:])
-		currOffset += 2
-		extensionLength := int(binary.BigEndian.Uint16(rawPacket[currOffset:])) * 4
-		currOffset += 2
-
-		if expected := currOffset + extensionLength; len(rawPacket) < expected {
-			return 0, errExtNotFound
-		}
-
-		switch extensionProfile {
-		// RFC 8285 RTP One Byte Header Extension
-		case 0xBEDE:
-			end := currOffset + extensionLength
-			for currOffset < end {
-				if rawPacket[currOffset] == 0x00 { // padding
-					currOffset++
-					continue
-				}
-
-				extid := rawPacket[currOffset] >> 4
-				extLen := int(rawPacket[currOffset]&^0xF0 + 1)
-				currOffset++
-
-				if extid == 0xf {
-					break
-				}
-
-				if extid == extID {
-					return binary.BigEndian.Uint16(rawPacket[currOffset : currOffset+extLen]), nil
-				}
-				currOffset += extLen
-			}
-
-		// RFC 8285 RTP Two Byte Header Extension
-		case 0x1000:
-			end := currOffset + extensionLength
-			for currOffset < end {
-				if rawPacket[currOffset] == 0x00 { // padding
-					currOffset++
-					continue
-				}
-				extid := rawPacket[currOffset]
-				currOffset++
-
-				extLen := int(rawPacket[currOffset])
-				currOffset++
-
-				if extid == extID {
-					return binary.BigEndian.Uint16(rawPacket[currOffset : currOffset+extLen]), nil
-				}
-
-				currOffset += extLen
-			}
-
-		default: // RFC3550 Extension
-			if len(rawPacket) < currOffset+extensionLength {
-				return 0, errExtNotFound
-			}
-			currOffset += extensionLength
-		}
-	}
-	return 0, errExtNotFound
 }

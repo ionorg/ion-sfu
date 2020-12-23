@@ -22,7 +22,7 @@ type Receiver interface {
 	AddUpTrack(track *webrtc.TrackRemote, buffer *buffer.Buffer)
 	AddDownTrack(track *DownTrack, bestQualityFirst bool)
 	SubDownTrack(track *DownTrack, layer int) error
-	GetBufferPacket(track *DownTrack, layer int, packets []uint16)
+	RetransmitPackets(track *DownTrack, packets []uint16)
 	DeleteDownTrack(layer int, id string)
 	OnCloseHandler(fn func())
 	SendRTCP(p []rtcp.Packet)
@@ -184,11 +184,11 @@ func (w *WebRTCReceiver) SetRTCPCh(ch chan []rtcp.Packet) {
 	w.rtcpCh = ch
 }
 
-func (w *WebRTCReceiver) GetBufferPacket(track *DownTrack, layer int, packets []uint16) {
+func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []uint16) {
 	w.nackWorker.Submit(func() {
 		pktBuff := packetFactory.Get().([]byte)
 		for _, sn := range packets {
-			i, err := w.buffers[layer].GetPacket(pktBuff, sn)
+			i, err := w.buffers[track.currentSpatialLayer].GetPacket(pktBuff, sn)
 			if err != nil {
 				continue
 			}
