@@ -5,6 +5,8 @@ import (
 	"strings"
 	"sync/atomic"
 
+	log "github.com/pion/ion-log"
+
 	"github.com/pion/webrtc/v3"
 )
 
@@ -202,7 +204,7 @@ func isH264Keyframe(payload []byte) bool {
 				return true
 			} else if n >= 24 {
 				// is this legal?
-				return false
+				log.Warnf("Non-simple NALU within a STAP")
 			}
 			i += int(length)
 		}
