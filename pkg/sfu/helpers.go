@@ -157,6 +157,73 @@ func setVP8TemporalLayer(pl []byte, s *DownTrack) (payload []byte, skip bool) {
 	return
 }
 
+// isH264Keyframe detects if h264 payload is a keyframe
+// this code was taken from https://github.com/jech/galene/blob/codecs/rtpconn/rtpreader.go#L45
+// all credits belongs to Juliusz Chroboczek @jech and the awesome Galene SFU
+func isH264Keyframe(payload []byte) bool {
+	if len(payload) < 1 {
+		return false
+	}
+	nalu := payload[0] & 0x1F
+	if nalu == 0 {
+		// reserved
+		return false
+	} else if nalu <= 23 {
+		// simple NALU
+		return nalu == 5
+	} else if nalu == 24 || nalu == 25 || nalu == 26 || nalu == 27 {
+		// STAP-A, STAP-B, MTAP16 or MTAP24
+		i := 1
+		if nalu == 25 || nalu == 26 || nalu == 27 {
+			// skip DON
+			i += 2
+		}
+		for i < len(payload) {
+			if i+2 > len(payload) {
+				return false
+			}
+			length := uint16(payload[i])<<8 |
+				uint16(payload[i+1])
+			i += 2
+			if i+int(length) > len(payload) {
+				return false
+			}
+			offset := 0
+			if nalu == 26 {
+				offset = 3
+			} else if nalu == 27 {
+				offset = 4
+			}
+			if offset >= int(length) {
+				return false
+			}
+			n := payload[i+offset] & 0x1F
+			if n == 5 {
+				return true
+			} else if n >= 24 {
+				// is this legal?
+				return false
+			}
+			i += int(length)
+		}
+		if i == len(payload) {
+			return false
+		}
+		return false
+	} else if nalu == 28 || nalu == 29 {
+		// FU-A or FU-B
+		if len(payload) < 2 {
+			return false
+		}
+		if (payload[1] & 0x80) == 0 {
+			// not a starting fragment
+			return false
+		}
+		return payload[1]&0x1F == 5
+	}
+	return false
+}
+
 func timeToNtp(ns int64) uint64 {
 	seconds := uint64(ns/1e9 + ntpEpoch)
 	fraction := uint64(((ns % 1e9) << 32) / 1e9)

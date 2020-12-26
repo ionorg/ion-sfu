@@ -1,8 +1,6 @@
 package sfu
 
 import (
-	"bytes"
-	"encoding/binary"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -200,14 +198,7 @@ func (d *DownTrack) writeSimpleRTP(pkt rtp.Packet) error {
 					relay = vp8Packet.IsKeyFrame
 				}
 			case "video/h264":
-				var word uint32
-				payload := bytes.NewReader(pkt.Payload)
-				err := binary.Read(payload, binary.BigEndian, &word)
-				if err != nil || (word&0x1F000000)>>24 != 24 {
-					relay = false
-				} else {
-					relay = word&0x1F == 7
-				}
+				relay = isH264Keyframe(pkt.Payload)
 			}
 			if !relay {
 				d.receiver.SendRTCP([]rtcp.Packet{
@@ -267,14 +258,7 @@ func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
 				}
 			}
 		case "video/h264":
-			var word uint32
-			payload := bytes.NewReader(pkt.Payload)
-			err := binary.Read(payload, binary.BigEndian, &word)
-			if err != nil || (word&0x1F000000)>>24 != 24 {
-				relay = false
-			} else {
-				relay = word&0x1F == 7
-			}
+			relay = isH264Keyframe(pkt.Payload)
 		default:
 			log.Warnf("codec payload don't support simulcast: %s", d.codec.MimeType)
 			return nil
