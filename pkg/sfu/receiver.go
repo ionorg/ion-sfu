@@ -190,6 +190,9 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []uint16) {
 		for _, sn := range packets {
 			i, err := w.buffers[track.currentSpatialLayer].GetPacket(pktBuff, sn)
 			if err != nil {
+				if err == io.EOF {
+					break
+				}
 				continue
 			}
 			var pkt rtp.Packet

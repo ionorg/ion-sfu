@@ -15,10 +15,11 @@ type nack struct {
 }
 
 type nackQueue struct {
-	nacks  []nack
-	maxSN  uint16
-	kfSN   uint32
-	cycles uint32
+	nacks   []nack
+	counter uint8
+	maxSN   uint16
+	kfSN    uint32
+	cycles  uint32
 }
 
 func newNACKQueue() *nackQueue {
@@ -31,6 +32,7 @@ func newNACKQueue() *nackQueue {
 
 func (n *nackQueue) reset() {
 	n.maxSN = 0
+	n.counter = 0
 	n.cycles = 0
 	n.kfSN = 0
 	n.nacks = n.nacks[:0]
@@ -83,9 +85,15 @@ func (n *nackQueue) push(sn uint16) {
 	if len(n.nacks) > maxNackCache {
 		n.nacks = n.nacks[1:]
 	}
+	n.counter++
 }
 
 func (n *nackQueue) pairs() ([]rtcp.NackPair, bool) {
+	if n.counter < 2 {
+		n.counter++
+		return nil, false
+	}
+	n.counter = 0
 	i := 0
 	askKF := false
 	var np rtcp.NackPair

@@ -361,6 +361,9 @@ func (b *Buffer) getRTCP() []rtcp.Packet {
 func (b *Buffer) GetPacket(buff []byte, sn uint16) (int, error) {
 	b.Lock()
 	defer b.Unlock()
+	if b.closed {
+		return 0, io.EOF
+	}
 	return b.bucket.getPacket(buff, sn)
 }
 
