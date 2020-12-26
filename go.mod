@@ -17,17 +17,17 @@ require (
 	github.com/pion/rtp v1.6.2
 	github.com/pion/sdp/v3 v3.0.3
 	github.com/pion/transport v0.12.1-0.20201219000622-967df9be8a00
-	github.com/pion/webrtc/v3 v3.0.1-0.20201220183145-dafe8f614bea
+	github.com/pion/webrtc/v3 v3.0.1-0.20201219004454-9e04a0a4122f
 	github.com/prometheus/client_golang v1.8.0
 	github.com/rs/cors v1.7.0 // indirect
 	github.com/soheilhy/cmux v0.1.4
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20200429184054-15c2290dcb37
 	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.6.1
-	golang.org/x/crypto v0.0.0-20201217014255-9d1352758620 // indirect
-	golang.org/x/net v0.0.0-20201216054612-986b41b23924 // indirect
+	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad // indirect
+	golang.org/x/net v0.0.0-20201224014010-6772e930b67b // indirect
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
-	golang.org/x/sys v0.0.0-20201218084310-7d0127a74742 // indirect
+	golang.org/x/sys v0.0.0-20201223074533-0d417f636930 // indirect
 	golang.org/x/tools v0.0.0-20201218024724-ae774e9781d2 // indirect
 	google.golang.org/grpc v1.33.2
 	google.golang.org/grpc/examples v0.0.0-20201209011439-fd32f6a4fefe // indirect
