@@ -80,17 +80,6 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		return nil, fmt.Errorf("error creating transport: %v", err)
 	}
 
-	p.session.AddPeer(p)
-
-	log.Infof("peer %s join session %s", p.id, sid)
-
-	answer, err := p.publisher.Answer(sdp)
-	if err != nil {
-		return nil, fmt.Errorf("error setting remote description: %v", err)
-	}
-
-	log.Infof("peer %s send answer", p.id)
-
 	p.subscriber.OnNegotiationNeeded(func() {
 		p.Lock()
 		defer p.Unlock()
@@ -113,8 +102,6 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 			p.OnOffer(&offer)
 		}
 	})
-
-	p.session.Subscribe(p)
 
 	p.subscriber.OnICECandidate(func(c *webrtc.ICECandidate) {
 		log.Debugf("on ice candidate called")
@@ -145,6 +132,19 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 			p.OnICEConnectionStateChange(s)
 		}
 	})
+
+	p.session.AddPeer(p)
+
+	log.Infof("peer %s join session %s", p.id, sid)
+
+	answer, err := p.publisher.Answer(sdp)
+	if err != nil {
+		return nil, fmt.Errorf("error setting remote description: %v", err)
+	}
+
+	log.Infof("peer %s send answer", p.id)
+
+	p.session.Subscribe(p)
 
 	return &answer, nil
 }
