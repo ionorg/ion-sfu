@@ -44,6 +44,11 @@ func (f *Factory) GetOrNew(packetType packetio.BufferPacketType, ssrc uint32) io
 		}
 		reader := NewRTCPReader(ssrc)
 		f.rtcpReaders[ssrc] = reader
+		reader.OnClose(func() {
+			f.Lock()
+			delete(f.rtcpReaders, ssrc)
+			f.Unlock()
+		})
 		return reader
 	case packetio.RTPBufferPacket:
 		if reader, ok := f.rtpBuffers[ssrc]; ok {
