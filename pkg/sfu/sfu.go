@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pion/ion-sfu/pkg/buffer"
+
 	"github.com/pion/webrtc/v3"
 
 	log "github.com/pion/ion-log"
@@ -48,6 +50,11 @@ type Config struct {
 	Router RouterConfig `mapstructure:"router"`
 }
 
+var (
+	bufferFactory *buffer.Factory
+	packetFactory *sync.Pool
+)
+
 // SFU represents an sfu instance
 type SFU struct {
 	webrtc   WebRTCTransportConfig
@@ -87,18 +94,20 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 		}
 	}
 
-	sdpsemantics := webrtc.SDPSemanticsUnifiedPlan
+	se.BufferFactory = bufferFactory.GetOrNew
+
+	sdpSemantics := webrtc.SDPSemanticsUnifiedPlan
 	switch c.WebRTC.SDPSemantics {
 	case "unified-plan-with-fallback":
-		sdpsemantics = webrtc.SDPSemanticsUnifiedPlanWithFallback
+		sdpSemantics = webrtc.SDPSemanticsUnifiedPlanWithFallback
 	case "plan-b":
-		sdpsemantics = webrtc.SDPSemanticsPlanB
+		sdpSemantics = webrtc.SDPSemanticsPlanB
 	}
 
 	w := WebRTCTransportConfig{
 		configuration: webrtc.Configuration{
 			ICEServers:   iceServers,
-			SDPSemantics: sdpsemantics,
+			SDPSemantics: sdpSemantics,
 		},
 		setting: se,
 		router:  c.Router,
@@ -117,6 +126,14 @@ func NewSFU(c Config) *SFU {
 	rand.Seed(time.Now().UnixNano())
 	// Init ballast
 	ballast := make([]byte, c.SFU.Ballast*1024*1024)
+	// Init buffer factory
+	bufferFactory = buffer.NewBufferFactory()
+	// Init packet factory
+	packetFactory = &sync.Pool{
+		New: func() interface{} {
+			return make([]byte, 1460)
+		},
+	}
 
 	w := NewWebRTCTransportConfig(c)
 

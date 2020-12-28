@@ -1,12 +1,14 @@
 package sfu
 
 import (
-	"bytes"
-	"encoding/binary"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/pion/ion-sfu/pkg/buffer"
+
+	"github.com/pion/transport/packetio"
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
@@ -88,6 +90,11 @@ func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters,
 		d.bound.set(true)
 		d.reSync.set(true)
 		d.enabled.set(true)
+		if rr := bufferFactory.GetOrNew(packetio.RTCPBufferPacket, uint32(t.SSRC())).(*buffer.RTCPReader); rr != nil {
+			rr.OnPacket(func(pkt []byte) {
+				d.handleRTCP(pkt)
+			})
+		}
 		d.onBind()
 		return codec, nil
 	}
@@ -125,15 +132,15 @@ func (d *DownTrack) Kind() webrtc.RTPCodecType {
 }
 
 // WriteRTP writes a RTP Packet to the DownTrack
-func (d *DownTrack) WriteRTP(p *rtp.Packet) error {
+func (d *DownTrack) WriteRTP(p rtp.Packet) error {
 	if !d.enabled.get() || !d.bound.get() {
 		return nil
 	}
 	switch d.trackType {
 	case SimpleDownTrack:
-		return d.writeSimpleRTP(*p)
+		return d.writeSimpleRTP(p)
 	case SimulcastDownTrack:
-		return d.writeSimulcastRTP(*p)
+		return d.writeSimulcastRTP(p)
 	}
 	return nil
 }
@@ -191,14 +198,7 @@ func (d *DownTrack) writeSimpleRTP(pkt rtp.Packet) error {
 					relay = vp8Packet.IsKeyFrame
 				}
 			case "video/h264":
-				var word uint32
-				payload := bytes.NewReader(pkt.Payload)
-				err := binary.Read(payload, binary.BigEndian, &word)
-				if err != nil || (word&0x1F000000)>>24 != 24 {
-					relay = false
-				} else {
-					relay = word&0x1F == 7
-				}
+				relay = isH264Keyframe(pkt.Payload)
 			}
 			if !relay {
 				d.receiver.SendRTCP([]rtcp.Packet{
@@ -258,14 +258,7 @@ func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
 				}
 			}
 		case "video/h264":
-			var word uint32
-			payload := bytes.NewReader(pkt.Payload)
-			err := binary.Read(payload, binary.BigEndian, &word)
-			if err != nil || (word&0x1F000000)>>24 != 24 {
-				relay = false
-			} else {
-				relay = word&0x1F == 7
-			}
+			relay = isH264Keyframe(pkt.Payload)
 		default:
 			log.Warnf("codec payload don't support simulcast: %s", d.codec.MimeType)
 			return nil
@@ -334,6 +327,53 @@ func (d *DownTrack) writeSimulcastRTP(pkt rtp.Packet) error {
 		log.Errorf("Write packet err %v", err)
 	}
 	return err
+}
+
+func (d *DownTrack) handleRTCP(bytes []byte) {
+	if !d.enabled.get() {
+		return
+	}
+
+	pkts, err := rtcp.Unmarshal(bytes)
+	if err != nil {
+		log.Errorf("Unmarshal rtcp receiver packets err: %v", err)
+	}
+
+	var fwdPkts []rtcp.Packet
+	pliOnce := true
+	firOnce := true
+	for _, pkt := range pkts {
+		switch p := pkt.(type) {
+		case *rtcp.PictureLossIndication:
+			if pliOnce {
+				p.MediaSSRC = d.lastSSRC
+				p.SenderSSRC = d.lastSSRC
+				fwdPkts = append(fwdPkts, p)
+				pliOnce = false
+			}
+		case *rtcp.FullIntraRequest:
+			if firOnce {
+				p.MediaSSRC = d.lastSSRC
+				p.SenderSSRC = d.ssrc
+				fwdPkts = append(fwdPkts, p)
+				firOnce = false
+			}
+		case *rtcp.ReceiverReport:
+			if len(p.Reports) > 0 && p.Reports[0].FractionLost > 25 {
+				log.Tracef("Slow link for sender %s, fraction packet lost %.2f", d.peerID, float64(p.Reports[0].FractionLost)/256)
+			}
+		case *rtcp.TransportLayerNack:
+			log.Tracef("sender got nack: %+v", p)
+			var nackedPackets []uint16
+			for _, pair := range p.Nacks {
+				nackedPackets = append(nackedPackets, d.nList.getNACKSeqNo(pair.PacketList())...)
+			}
+			d.receiver.RetransmitPackets(d, nackedPackets)
+		}
+	}
+	if len(fwdPkts) > 0 {
+		d.receiver.SendRTCP(fwdPkts)
+	}
 }
 
 func (d *DownTrack) getSRStats() (octets, packets uint32) {

@@ -1,4 +1,4 @@
-package buffer
+package sfu
 
 import (
 	"math/rand"

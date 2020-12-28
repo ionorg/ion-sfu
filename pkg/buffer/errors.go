@@ -4,5 +4,6 @@ import "errors"
 
 var (
 	errPacketNotFound = errors.New("packet not found in cache")
-	errPacketTooOld   = errors.New("packet not found in cache, too old")
+	errBufferTooSmall = errors.New("buffer too small")
+	errExtNotFound    = errors.New("ext not found")
 )
