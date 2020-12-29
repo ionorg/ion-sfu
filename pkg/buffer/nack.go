@@ -47,7 +47,7 @@ func (n *nackQueue) remove(sn uint16) {
 	}
 
 	i := sort.Search(len(n.nacks), func(i int) bool { return n.nacks[i].sn >= extSN })
-	if i > len(n.nacks) || n.nacks[i].sn != extSN {
+	if i >= len(n.nacks) || n.nacks[i].sn != extSN {
 		return
 	}
 	copy(n.nacks[i:], n.nacks[i+1:])
