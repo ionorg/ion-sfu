@@ -6,13 +6,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pion/ion-sfu/pkg/buffer"
-
-	"github.com/pion/transport/packetio"
-
 	log "github.com/pion/ion-log"
+	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
+	"github.com/pion/transport/packetio"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -368,7 +366,7 @@ func (d *DownTrack) handleRTCP(bytes []byte) {
 			for _, pair := range p.Nacks {
 				nackedPackets = append(nackedPackets, d.nList.getNACKSeqNo(pair.PacketList())...)
 			}
-			d.receiver.RetransmitPackets(d, nackedPackets)
+			d.receiver.RetransmitPackets(d, nackedPackets, d.snOffset)
 		}
 	}
 	if len(fwdPkts) > 0 {
