@@ -87,6 +87,9 @@ func (b *Bucket) push(pkt []byte) []byte {
 func (b *Bucket) get(sn uint16) []byte {
 	pos := b.step - int(b.headSN-sn+1)
 	if pos < 0 {
+		if pos*-1 > b.maxSteps {
+			return nil
+		}
 		pos = b.maxSteps + pos + 1
 	}
 	off := pos * maxPktSize
