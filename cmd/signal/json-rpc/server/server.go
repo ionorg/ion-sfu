@@ -55,12 +55,6 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 			break
 		}
 
-		answer, err := p.Join(join.Sid, join.Offer)
-		if err != nil {
-			replyError(err)
-			break
-		}
-
 		p.OnOffer = func(offer *webrtc.SessionDescription) {
 			if err := conn.Notify(ctx, "offer", offer); err != nil {
 				log.Errorf("error sending offer %s", err)
@@ -74,6 +68,12 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 			}); err != nil {
 				log.Errorf("error sending ice candidate %s", err)
 			}
+		}
+
+		answer, err := p.Join(join.Sid, join.Offer)
+		if err != nil {
+			replyError(err)
+			break
 		}
 
 		_ = conn.Reply(ctx, req.ID, answer)
