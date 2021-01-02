@@ -79,26 +79,6 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 				}
 			}
 
-			answer, err := peer.Join(payload.Join.Sid, offer)
-			if err != nil {
-				switch err {
-				case sfu.ErrTransportExists:
-					fallthrough
-				case sfu.ErrOfferIgnored:
-					err = stream.Send(&pb.SignalReply{
-						Payload: &pb.SignalReply_Error{
-							Error: fmt.Errorf("join error: %w", err).Error(),
-						},
-					})
-					if err != nil {
-						log.Errorf("grpc send error %v ", err)
-						return status.Errorf(codes.Internal, err.Error())
-					}
-				default:
-					return status.Errorf(codes.Unknown, err.Error())
-				}
-			}
-
 			// Notify user of new ice candidate
 			peer.OnIceCandidate = func(candidate *webrtc.ICECandidateInit, target int) {
 				bytes, err := json.Marshal(candidate)
@@ -153,6 +133,26 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 
 				if err != nil {
 					log.Errorf("oniceconnectionstatechange error %s", err)
+				}
+			}
+
+			answer, err := peer.Join(payload.Join.Sid, offer)
+			if err != nil {
+				switch err {
+				case sfu.ErrTransportExists:
+					fallthrough
+				case sfu.ErrOfferIgnored:
+					err = stream.Send(&pb.SignalReply{
+						Payload: &pb.SignalReply_Error{
+							Error: fmt.Errorf("join error: %w", err).Error(),
+						},
+					})
+					if err != nil {
+						log.Errorf("grpc send error %v ", err)
+						return status.Errorf(codes.Internal, err.Error())
+					}
+				default:
+					return status.Errorf(codes.Unknown, err.Error())
 				}
 			}
 
