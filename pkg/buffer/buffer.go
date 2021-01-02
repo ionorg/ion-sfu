@@ -40,7 +40,6 @@ type Buffer struct {
 	packetChan chan rtp.Packet
 	pPackets   []pendingPackets
 	mediaSSRC  uint32
-	MediaSSRC  uint32
 	clockRate  uint32
 	maxBitrate uint64
 	lastReport int64
@@ -268,23 +267,22 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	}
 	b.packetChan <- p
 
-	// arrival := uint32(arrivalTime / 1e6 * int64(b.clockRate/1e3))
-	// // if first time update or the timestamp is later (factoring timestamp wrap around)
-	// if (b.latestTimestampTime == 0) || IsLaterTimestamp(p.Timestamp, b.latestTimestamp) {
-	// 	b.latestTimestamp = p.Timestamp
-	// 	b.latestTimestampTime = b.lastPacketTime
-	// }
+	// if first time update or the timestamp is later (factoring timestamp wrap around)
+	if (b.latestTimestampTime == 0) || IsLaterTimestamp(p.Timestamp, b.latestTimestamp) {
+		b.latestTimestamp = p.Timestamp
+		b.latestTimestampTime = arrivalTime
+	}
 
-	// arrival := uint32(b.lastPacketTime / 1e6 * int64(b.clockRate/1e3))
-	// transit := arrival - p.Timestamp
-	// if b.lastTransit != 0 {
-	// 	d := int32(transit - b.lastTransit)
-	// 	if d < 0 {
-	// 		d = -d
-	// 	}
-	// 	b.jitter += (float64(d) - b.jitter) / 16
-	// }
-	// b.lastTransit = transit
+	arrival := uint32(arrivalTime / 1e6 * int64(b.clockRate/1e3))
+	transit := arrival - p.Timestamp
+	if b.lastTransit != 0 {
+		d := int32(transit - b.lastTransit)
+		if d < 0 {
+			d = -d
+		}
+		b.jitter += (float64(d) - b.jitter) / 16
+	}
+	b.lastTransit = transit
 
 	if b.tcc {
 		if ext := p.GetExtension(b.twccExt); ext != nil && len(ext) > 1 {
@@ -396,10 +394,6 @@ func (b *Buffer) OnTransportWideCC(fn func(sn uint16, timeNS int64, marker bool)
 
 func (b *Buffer) OnFeedback(fn func(fb []rtcp.Packet)) {
 	b.feedbackCB = fn
-}
-
-func (b *Buffer) onNack(fn func(fb *rtcp.TransportLayerNack)) {
-	b.pktQueue.onLost = fn
 }
 
 // GetMediaSSRC returns the associated SSRC of the RTP stream
