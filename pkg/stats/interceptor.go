@@ -7,7 +7,6 @@ import (
 	"github.com/pion/interceptor"
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/rtcp"
-	"github.com/pion/rtp"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -47,7 +46,7 @@ var (
 
 	lostRate = prometheus.NewSummary(prometheus.SummaryOpts{
 		Subsystem: "rtp",
-		Name:      "lostRate",
+		Name:      "lost_rate",
 	})
 
 	jitter = prometheus.NewSummary(prometheus.SummaryOpts{
@@ -69,67 +68,61 @@ func init() {
 
 type Interceptor struct {
 	sync.RWMutex
-	bufferInterceptor *buffer.Interceptor
-	streams           []*Stream
+	bufferFactory *buffer.Factory
+	streams       map[uint32]*Stream
 	interceptor.NoOp
 }
 
-func NewStreamInterceptor(interceptor *buffer.Interceptor) *Interceptor {
+func NewStreamInterceptor(f *buffer.Factory) *Interceptor {
 	return &Interceptor{
-		bufferInterceptor: interceptor,
+		bufferFactory: f,
+		streams:       make(map[uint32]*Stream),
 	}
 }
 
 func (i *Interceptor) BindRemoteStream(info *interceptor.StreamInfo, reader interceptor.RTPReader) interceptor.RTPReader {
-	return interceptor.RTPReaderFunc(func() (*rtp.Packet, interceptor.Attributes, error) {
+	return interceptor.RTPReaderFunc(func(b []byte, a interceptor.Attributes) (int, interceptor.Attributes, error) {
 		// ensure chained buffer interceptor has been called
-		p, att, err := reader.Read()
+		n, att, err := reader.Read(b, a)
 
-		stream := i.getStream(info.SSRC)
-		if stream == nil {
-			stream = i.newStream(info)
+		i.Lock()
+		if i.streams[info.SSRC] == nil {
+			i.streams[info.SSRC] = NewStream(i.bufferFactory.GetBuffer(info.SSRC), info)
 		}
+		i.Unlock()
 
-		return p, att, err
+		return n, att, err
 	})
 }
 
 func (i *Interceptor) UnbindRemoteStream(info *interceptor.StreamInfo) {
 	i.Lock()
-	idx := -1
-	for j, stream := range i.streams {
-		if stream.Buffer.GetMediaSSRC() == info.SSRC {
-			idx = j
-			break
-		}
+	if i.streams[info.SSRC] != nil {
+		delete(i.streams, info.SSRC)
 	}
-	if idx == -1 {
-		i.Unlock()
-		return
-	}
-	i.streams[idx] = i.streams[len(i.streams)-1]
-	i.streams[len(i.streams)-1] = nil
-	i.streams = i.streams[:len(i.streams)-1]
 	i.Unlock()
 }
 
 func (i *Interceptor) BindRTCPReader(reader interceptor.RTCPReader) interceptor.RTCPReader {
-	return interceptor.RTCPReaderFunc(func() ([]rtcp.Packet, interceptor.Attributes, error) {
-		pkts, attributes, err := reader.Read()
+	return interceptor.RTCPReaderFunc(func(b []byte, a interceptor.Attributes) (int, interceptor.Attributes, error) {
+		n, attributes, err := reader.Read(b, a)
 		if err != nil {
-			return nil, nil, err
+			return 0, nil, err
+		}
+
+		pkts, err := rtcp.Unmarshal(b[:n])
+		if err != nil {
+			return 0, nil, err
 		}
 
 		for _, pkt := range pkts {
 			switch pkt := pkt.(type) {
 			case *rtcp.SourceDescription:
 				for _, chunk := range pkt.Chunks {
-					for _, s := range i.streams {
-						if s.Buffer.GetMediaSSRC() == chunk.Source {
-							for _, item := range chunk.Items {
-								if item.Type == rtcp.SDESCNAME {
-									s.setCName(item.Text)
-								}
+					if s := i.streams[chunk.Source]; s != nil {
+						for _, item := range chunk.Items {
+							if item.Type == rtcp.SDESCNAME {
+								s.setCName(item.Text)
 							}
 						}
 					}
@@ -139,10 +132,7 @@ func (i *Interceptor) BindRTCPReader(reader interceptor.RTCPReader) interceptor.
 					i.RLock()
 					defer i.RUnlock()
 
-					for _, s := range i.streams {
-						if s.Buffer.GetMediaSSRC() != ssrc {
-							continue
-						}
+					if s := i.streams[ssrc]; s != nil {
 						bufferStats := s.Buffer.GetStats()
 
 						hadStats, diffStats := s.updateStats(bufferStats)
@@ -166,10 +156,8 @@ func (i *Interceptor) BindRTCPReader(reader interceptor.RTCPReader) interceptor.
 					i.RLock()
 					defer i.RUnlock()
 
-					for _, s := range i.streams {
-						if s.Buffer.GetMediaSSRC() == ssrc {
-							return s.GetCName()
-						}
+					if s := i.streams[ssrc]; s != nil {
+						return s.GetCName()
 					}
 					return ""
 				}
@@ -258,31 +246,12 @@ func (i *Interceptor) BindRTCPReader(reader interceptor.RTCPReader) interceptor.
 			}
 		}
 
-		return pkts, attributes, nil
+		return n, attributes, nil
 	})
 }
 
 func (i *Interceptor) BindRTCPWriter(writer interceptor.RTCPWriter) interceptor.RTCPWriter {
 	return writer
-}
-
-func (i *Interceptor) getStream(ssrc uint32) *Stream {
-	i.RLock()
-	defer i.RUnlock()
-	for _, b := range i.streams {
-		if b.Buffer.GetMediaSSRC() == ssrc {
-			return b
-		}
-	}
-	return nil
-}
-
-func (i *Interceptor) newStream(info *interceptor.StreamInfo) *Stream {
-	stream := NewStream(i.bufferInterceptor.GetBuffer(info.SSRC), info)
-	i.Lock()
-	i.streams = append(i.streams, stream)
-	i.Unlock()
-	return stream
 }
 
 func ntpToMillisSinceEpoch(ntp uint64) uint64 {

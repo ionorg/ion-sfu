@@ -18,8 +18,8 @@ type Stream struct {
 	cname         string
 	driftInMillis uint64
 	hasStats      bool
-	lastStats     buffer.BufferStats
-	diffStats     buffer.BufferStats
+	lastStats     buffer.Stats
+	diffStats     buffer.Stats
 }
 
 // NewStream constructs a new Stream
@@ -55,7 +55,7 @@ func (s *Stream) getDriftInMillis() uint64 {
 	return atomic.LoadUint64(&s.driftInMillis)
 }
 
-func (s *Stream) updateStats(stats buffer.BufferStats) (hasDiff bool, diffStats buffer.BufferStats) {
+func (s *Stream) updateStats(stats buffer.Stats) (hasDiff bool, diffStats buffer.Stats) {
 	s.Lock()
 	defer s.Unlock()
 

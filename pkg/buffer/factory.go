@@ -72,6 +72,12 @@ func (f *Factory) GetBufferPair(ssrc uint32) (*Buffer, *RTCPReader) {
 	return f.rtpBuffers[ssrc], f.rtcpReaders[ssrc]
 }
 
+func (f *Factory) GetBuffer(ssrc uint32) *Buffer {
+	f.RLock()
+	defer f.RUnlock()
+	return f.rtpBuffers[ssrc]
+}
+
 func (f *Factory) GetRTCPReader(ssrc uint32) *RTCPReader {
 	f.RLock()
 	defer f.RUnlock()

@@ -77,7 +77,7 @@ type Buffer struct {
 	feedbackTWCC func(sn uint16, timeNS int64, marker bool)
 }
 
-type BufferStats struct {
+type Stats struct {
 	LastExpected uint32
 	LastReceived uint32
 	LostRate     float32
@@ -416,7 +416,7 @@ func (b *Buffer) GetSenderReportData() (rtpTime uint32, ntpTime uint64, lastRece
 }
 
 // GetStats returns the raw statistics about a particular buffer state
-func (b *Buffer) GetStats() (stats BufferStats) {
+func (b *Buffer) GetStats() (stats Stats) {
 	stats.LastExpected = atomic.LoadUint32(&b.lastExpected)
 	stats.LastReceived = atomic.LoadUint32(&b.lastReceived)
 	raw32Lost := atomic.LoadUint32((*uint32)(unsafe.Pointer(&b.lostRate)))
