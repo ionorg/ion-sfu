@@ -57,12 +57,17 @@ func NewPeer(provider SessionProvider) *Peer {
 
 // Join initializes this peer for a given sessionID (takes an SDPOffer)
 func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
+	pid := cuid.New()
+	return p.JoinWithID(sid, sdp, pid)
+}
+
+// JoinWithID initializes this peer for a given sessionID (takes an SDPOffer). Peer Id can be set externally for debugging
+func (p *Peer) JoinWithID(sid string, sdp webrtc.SessionDescription, pid string) (*webrtc.SessionDescription, error) {
 	if p.publisher != nil {
 		log.Debugf("peer already exists")
 		return nil, ErrTransportExists
 	}
 
-	pid := cuid.New()
 	p.id = pid
 	var (
 		cfg WebRTCTransportConfig
