@@ -15,7 +15,7 @@ require (
 	github.com/pion/rtcp v1.2.6
 	github.com/pion/rtp v1.6.2
 	github.com/pion/sdp/v3 v3.0.3
-	github.com/pion/transport v0.12.1-0.20201219000622-967df9be8a00
+	github.com/pion/transport v0.12.2
 	github.com/pion/webrtc/v3 v3.0.1-0.20201219004454-9e04a0a4122f
 	github.com/prometheus/client_golang v1.8.0
 	github.com/rs/cors v1.7.0 // indirect
