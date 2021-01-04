@@ -1,15 +1,70 @@
 package stats
 
 import (
+	"math"
 	"sync"
 	"sync/atomic"
 
-	"github.com/pion/ion-sfu/pkg/buffer"
-
-	"github.com/pion/interceptor"
-
 	log "github.com/pion/ion-log"
+	"github.com/pion/ion-sfu/pkg/buffer"
+	"github.com/prometheus/client_golang/prometheus"
 )
+
+var (
+	driftBuckets = []float64{5, 10, 20, 40, 80, 160, math.Inf(+1)}
+
+	drift = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Subsystem: "rtp",
+		Name:      "drift_millis",
+		Buckets:   driftBuckets,
+	})
+
+	expectedCount = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: "rtp",
+		Name:      "expected",
+	})
+
+	receivedCount = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: "rtp",
+		Name:      "received",
+	})
+
+	packetCount = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: "rtp",
+		Name:      "packets",
+	})
+
+	totalBytes = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: "rtp",
+		Name:      "bytes",
+	})
+
+	expectedMinusReceived = prometheus.NewSummary(prometheus.SummaryOpts{
+		Subsystem: "rtp",
+		Name:      "expected_minus_received",
+	})
+
+	lostRate = prometheus.NewSummary(prometheus.SummaryOpts{
+		Subsystem: "rtp",
+		Name:      "lost_rate",
+	})
+
+	jitter = prometheus.NewSummary(prometheus.SummaryOpts{
+		Subsystem: "rtp",
+		Name:      "jitter",
+	})
+)
+
+func InitStats() {
+	prometheus.MustRegister(drift)
+	prometheus.MustRegister(expectedCount)
+	prometheus.MustRegister(receivedCount)
+	prometheus.MustRegister(packetCount)
+	prometheus.MustRegister(totalBytes)
+	prometheus.MustRegister(expectedMinusReceived)
+	prometheus.MustRegister(lostRate)
+	prometheus.MustRegister(jitter)
+}
 
 // Stream contains buffer statistics
 type Stream struct {
@@ -23,7 +78,7 @@ type Stream struct {
 }
 
 // NewStream constructs a new Stream
-func NewStream(buffer *buffer.Buffer, _ *interceptor.StreamInfo) *Stream {
+func NewStream(buffer *buffer.Buffer) *Stream {
 	s := &Stream{
 		Buffer: buffer,
 	}
@@ -40,22 +95,22 @@ func (s *Stream) GetCName() string {
 	return s.cname
 }
 
-func (s *Stream) setCName(cname string) {
+func (s *Stream) SetCName(cname string) {
 	s.Lock()
 	defer s.Unlock()
 
 	s.cname = cname
 }
 
-func (s *Stream) setDriftInMillis(driftInMillis uint64) {
+func (s *Stream) SetDriftInMillis(driftInMillis uint64) {
 	atomic.StoreUint64(&s.driftInMillis, driftInMillis)
 }
 
-func (s *Stream) getDriftInMillis() uint64 {
+func (s *Stream) GetDriftInMillis() uint64 {
 	return atomic.LoadUint64(&s.driftInMillis)
 }
 
-func (s *Stream) updateStats(stats buffer.Stats) (hasDiff bool, diffStats buffer.Stats) {
+func (s *Stream) UpdateStats(stats buffer.Stats) (hasDiff bool, diffStats buffer.Stats) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -73,4 +128,23 @@ func (s *Stream) updateStats(stats buffer.Stats) (hasDiff bool, diffStats buffer
 	s.hasStats = true
 
 	return hadStats, s.diffStats
+}
+
+func (s *Stream) CalcStats() {
+	bufferStats := s.Buffer.GetStats()
+	driftInMillis := s.GetDriftInMillis()
+
+	hadStats, diffStats := s.UpdateStats(bufferStats)
+
+	drift.Observe(float64(driftInMillis))
+	if hadStats {
+		expectedCount.Add(float64(diffStats.LastExpected))
+		receivedCount.Add(float64(diffStats.LastReceived))
+		packetCount.Add(float64(diffStats.PacketCount))
+		totalBytes.Add(float64(diffStats.TotalByte))
+	}
+
+	expectedMinusReceived.Observe(float64(bufferStats.LastExpected - bufferStats.LastReceived))
+	lostRate.Observe(float64(bufferStats.LostRate))
+	jitter.Observe(bufferStats.Jitter)
 }

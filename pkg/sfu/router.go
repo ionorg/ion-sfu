@@ -4,6 +4,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pion/ion-sfu/pkg/stats"
+
 	log "github.com/pion/ion-log"
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/rtcp"
@@ -20,6 +22,7 @@ type Router interface {
 
 // RouterConfig defines router configurations
 type RouterConfig struct {
+	WithStats     bool            `mapstructure:"withstats"`
 	MaxBandwidth  uint64          `mapstructure:"maxbandwidth"`
 	MaxBufferTime int             `mapstructure:"maxbuffertime"`
 	Simulcast     SimulcastConfig `mapstructure:"simulcast"`
@@ -33,6 +36,7 @@ type router struct {
 	rtcpCh    chan []rtcp.Packet
 	config    RouterConfig
 	receivers map[string]Receiver
+	stats     map[uint32]*stats.Stream
 }
 
 // newRouter for routing rtp/rtcp packets
@@ -45,6 +49,7 @@ func newRouter(peer *webrtc.PeerConnection, id string, config RouterConfig) Rout
 		rtcpCh:    ch,
 		config:    config,
 		receivers: make(map[string]Receiver),
+		stats:     make(map[uint32]*stats.Stream),
 	}
 
 	r.twcc.onFeedback = func(packet []rtcp.Packet) {
@@ -80,6 +85,10 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 		r.twcc.push(sn, timeNS, marker)
 	})
 
+	if r.config.WithStats {
+		r.stats[uint32(track.SSRC())] = stats.NewStream(buff)
+	}
+
 	rtcpReader.OnPacket(func(bytes []byte) {
 		pkts, err := rtcp.Unmarshal(bytes)
 		if err != nil {
@@ -88,8 +97,25 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 		}
 		for _, pkt := range pkts {
 			switch pkt := pkt.(type) {
+			case *rtcp.SourceDescription:
+				if r.config.WithStats {
+					for _, chunk := range pkt.Chunks {
+						if s, ok := r.stats[chunk.Source]; ok {
+							for _, item := range chunk.Items {
+								if item.Type == rtcp.SDESCNAME {
+									s.SetCName(item.Text)
+								}
+							}
+						}
+					}
+				}
 			case *rtcp.SenderReport:
 				buff.SetSenderReportData(pkt.RTPTime, pkt.NTPTime)
+				if r.config.WithStats {
+					if st := r.stats[pkt.SSRC]; st != nil {
+						r.updateStats(st)
+					}
+				}
 			}
 		}
 	})
@@ -100,7 +126,7 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 		r.receivers[trackID] = recv
 		recv.SetRTCPCh(r.rtcpCh)
 		recv.OnCloseHandler(func() {
-			r.deleteReceiver(trackID)
+			r.deleteReceiver(trackID, uint32(track.SSRC()))
 		})
 		publish = true
 	}
@@ -191,9 +217,10 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 	return nil
 }
 
-func (r *router) deleteReceiver(track string) {
+func (r *router) deleteReceiver(track string, ssrc uint32) {
 	r.Lock()
 	delete(r.receivers, track)
+	delete(r.stats, ssrc)
 	r.Unlock()
 }
 
@@ -203,4 +230,61 @@ func (r *router) sendRTCP() {
 			log.Errorf("Write rtcp to peer %s err :%v", r.id, err)
 		}
 	}
+}
+
+func (r *router) updateStats(stream *stats.Stream) {
+	calculateLatestMinMaxSenderNtpTime := func(cname string) (minPacketNtpTimeInMillisSinceSenderEpoch uint64, maxPacketNtpTimeInMillisSinceSenderEpoch uint64) {
+		if len(cname) < 1 {
+			return
+		}
+		r.RLock()
+		defer r.RUnlock()
+
+		for _, s := range r.stats {
+			if s.GetCName() != cname {
+				continue
+			}
+
+			clockRate := s.Buffer.GetClockRate()
+			srrtp, srntp, _ := s.Buffer.GetSenderReportData()
+			latestTimestamp, _ := s.Buffer.GetLatestTimestamp()
+
+			fastForwardTimestampInClockRate := fastForwardTimestampAmount(latestTimestamp, srrtp)
+			fastForwardTimestampInMillis := (fastForwardTimestampInClockRate * 1000) / clockRate
+			latestPacketNtpTimeInMillisSinceSenderEpoch := ntpToMillisSinceEpoch(srntp) + uint64(fastForwardTimestampInMillis)
+
+			if 0 == minPacketNtpTimeInMillisSinceSenderEpoch || latestPacketNtpTimeInMillisSinceSenderEpoch < minPacketNtpTimeInMillisSinceSenderEpoch {
+				minPacketNtpTimeInMillisSinceSenderEpoch = latestPacketNtpTimeInMillisSinceSenderEpoch
+			}
+			if 0 == maxPacketNtpTimeInMillisSinceSenderEpoch || latestPacketNtpTimeInMillisSinceSenderEpoch > maxPacketNtpTimeInMillisSinceSenderEpoch {
+				maxPacketNtpTimeInMillisSinceSenderEpoch = latestPacketNtpTimeInMillisSinceSenderEpoch
+			}
+		}
+		return minPacketNtpTimeInMillisSinceSenderEpoch, maxPacketNtpTimeInMillisSinceSenderEpoch
+	}
+
+	setDrift := func(cname string, driftInMillis uint64) {
+		if len(cname) < 1 {
+			return
+		}
+		r.RLock()
+		defer r.RUnlock()
+
+		for _, s := range r.stats {
+			if s.GetCName() != cname {
+				continue
+			}
+			s.SetDriftInMillis(driftInMillis)
+		}
+	}
+
+	cname := stream.GetCName()
+
+	minPacketNtpTimeInMillisSinceSenderEpoch, maxPacketNtpTimeInMillisSinceSenderEpoch := calculateLatestMinMaxSenderNtpTime(cname)
+
+	driftInMillis := maxPacketNtpTimeInMillisSinceSenderEpoch - minPacketNtpTimeInMillisSinceSenderEpoch
+
+	setDrift(cname, driftInMillis)
+
+	stream.CalcStats()
 }

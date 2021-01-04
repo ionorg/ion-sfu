@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pion/ion-sfu/pkg/stats"
+
 	"github.com/gammazero/workerpool"
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/rtcp"
@@ -46,6 +48,7 @@ type WebRTCReceiver struct {
 	rtcpCh         chan []rtcp.Packet
 	buffers        [3]*buffer.Buffer
 	upTracks       [3]*webrtc.TrackRemote
+	stats          [3]*stats.Stream
 	downTracks     [3][]*DownTrack
 	nackWorker     *workerpool.WorkerPool
 	isSimulcast    bool
