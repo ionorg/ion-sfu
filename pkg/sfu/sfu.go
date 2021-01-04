@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pion/ion-sfu/pkg/stats"
+
 	"github.com/pion/ion-sfu/pkg/buffer"
 
 	"github.com/pion/webrtc/v3"
@@ -115,6 +117,10 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 
 	if len(c.WebRTC.Candidates.NAT1To1IPs) > 0 {
 		w.setting.SetNAT1To1IPs(c.WebRTC.Candidates.NAT1To1IPs, webrtc.ICECandidateTypeHost)
+	}
+
+	if c.Router.WithStats {
+		stats.InitStats()
 	}
 
 	return w

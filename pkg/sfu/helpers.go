@@ -5,6 +5,8 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/pion/ion-sfu/pkg/buffer"
+
 	log "github.com/pion/ion-log"
 
 	"github.com/pion/webrtc/v3"
@@ -251,4 +253,21 @@ func codecParametersFuzzySearch(needle webrtc.RTPCodecParameters, haystack []web
 	}
 
 	return webrtc.RTPCodecParameters{}, webrtc.ErrCodecNotFound
+}
+
+func ntpToMillisSinceEpoch(ntp uint64) uint64 {
+	// ntp time since epoch calculate fractional ntp as milliseconds
+	// (lower 32 bits stored as 1/2^32 seconds) and add
+	// ntp seconds (stored in higher 32 bits) as milliseconds
+	return (((ntp & 0xFFFFFFFF) * 1000) >> 32) + ((ntp >> 32) * 1000)
+}
+
+func fastForwardTimestampAmount(newestTimestamp uint32, referenceTimestamp uint32) uint32 {
+	if buffer.IsTimestampWrapAround(newestTimestamp, referenceTimestamp) {
+		return uint32(uint64(newestTimestamp) + 0x100000000 - uint64(referenceTimestamp))
+	}
+	if newestTimestamp < referenceTimestamp {
+		return 0
+	}
+	return newestTimestamp - referenceTimestamp
 }

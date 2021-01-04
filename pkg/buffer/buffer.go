@@ -5,12 +5,12 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
-
-	"github.com/pion/rtp"
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
+	"github.com/pion/rtp"
 	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 )
@@ -44,7 +44,6 @@ type Buffer struct {
 	twccExt    uint8
 	bound      bool
 	closed     bool
-	onClose    func()
 
 	// supported feedbacks
 	remb bool
@@ -56,19 +55,29 @@ type Buffer struct {
 	lastSRRecv         int64 // Represents wall clock of the most recent sender report arrival
 	baseSN             uint16
 	cycles             uint32
-	lastExpected       uint32
-	lastReceived       uint32
-	lostRate           float32
-	lastRtcpPacketTime int64  // Time the last RTCP packet was received.
-	lastRtcpSrTime     int64  // Time the last RTCP SR was received. Required for DLSR computation.
-	packetCount        uint32 // Number of packets received from this source.
+	lastRtcpPacketTime int64 // Time the last RTCP packet was received.
+	lastRtcpSrTime     int64 // Time the last RTCP SR was received. Required for DLSR computation.
 	lastTransit        uint32
-	maxSeqNo           uint16  // The highest sequence number received in an RTP data packet
-	jitter             float64 // An estimate of the statistical variance of the RTP data packet inter-arrival time.
-	totalByte          uint64
+	maxSeqNo           uint16 // The highest sequence number received in an RTP data packet
+
+	stats Stats
+
+	latestTimestamp     uint32 // latest received RTP timestamp on packet
+	latestTimestampTime int64  // Time of the latest timestamp (in nanos since unix epoch)
+
 	// callbacks
+	onClose      func()
 	feedbackCB   func([]rtcp.Packet)
 	feedbackTWCC func(sn uint16, timeNS int64, marker bool)
+}
+
+type Stats struct {
+	LastExpected uint32
+	LastReceived uint32
+	LostRate     float32
+	PacketCount  uint32  // Number of packets received from this source.
+	Jitter       float64 // An estimate of the statistical variance of the RTP data packet inter-arrival time.
+	TotalByte    uint64
 }
 
 // BufferOptions provides configuration options for the buffer
@@ -232,7 +241,7 @@ func (b *Buffer) OnClose(fn func()) {
 func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	sn := binary.BigEndian.Uint16(pkt[2:4])
 
-	if b.packetCount == 0 {
+	if b.stats.PacketCount == 0 {
 		b.baseSN = sn
 		b.maxSeqNo = sn
 		b.bucket.headSN = sn - 1
@@ -243,14 +252,20 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 		}
 		b.maxSeqNo = sn
 	}
-	b.totalByte += uint64(len(pkt))
-	b.packetCount++
+	b.stats.TotalByte += uint64(len(pkt))
+	b.stats.PacketCount++
 
 	var p rtp.Packet
 	if err := p.Unmarshal(b.bucket.addPacket(pkt, sn, sn == b.maxSeqNo)); err != nil {
 		return
 	}
 	b.packetChan <- p
+
+	// if first time update or the timestamp is later (factoring timestamp wrap around)
+	if (b.latestTimestampTime == 0) || IsLaterTimestamp(p.Timestamp, b.latestTimestamp) {
+		b.latestTimestamp = p.Timestamp
+		b.latestTimestampTime = arrivalTime
+	}
 
 	arrival := uint32(arrivalTime / 1e6 * int64(b.clockRate/1e3))
 	transit := arrival - p.Timestamp
@@ -259,7 +274,7 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 		if d < 0 {
 			d = -d
 		}
-		b.jitter += (float64(d) - b.jitter) / 16
+		b.stats.Jitter += (float64(d) - b.stats.Jitter) / 16
 	}
 	b.lastTransit = transit
 
@@ -275,12 +290,12 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 }
 
 func (b *Buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
-	br := b.totalByte * 8
-	if b.lostRate < 0.02 {
+	br := b.stats.TotalByte * 8
+	if b.stats.LostRate < 0.02 {
 		br = uint64(float64(br)*1.09) + 2000
 	}
-	if b.lostRate > .1 {
-		br = uint64(float64(br) * float64(1-0.5*b.lostRate))
+	if b.stats.LostRate > .1 {
+		br = uint64(float64(br) * float64(1-0.5*b.stats.LostRate))
 	}
 	if br > b.maxBitrate {
 		br = b.maxBitrate
@@ -288,7 +303,7 @@ func (b *Buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
 	if br < 100000 {
 		br = 100000
 	}
-	b.totalByte = 0
+	b.stats.TotalByte = 0
 
 	return &rtcp.ReceiverEstimatedMaximumBitrate{
 		Bitrate: br,
@@ -299,19 +314,19 @@ func (b *Buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
 func (b *Buffer) buildReceptionReport() rtcp.ReceptionReport {
 	extMaxSeq := b.cycles | uint32(b.maxSeqNo)
 	expected := extMaxSeq - uint32(b.baseSN) + 1
-	lost := expected - b.packetCount
-	if b.packetCount == 0 {
+	lost := expected - b.stats.PacketCount
+	if b.stats.PacketCount == 0 {
 		lost = 0
 	}
-	expectedInterval := expected - b.lastExpected
-	b.lastExpected = expected
+	expectedInterval := expected - b.stats.LastExpected
+	b.stats.LastExpected = expected
 
-	receivedInterval := b.packetCount - b.lastReceived
-	b.lastReceived = b.packetCount
+	receivedInterval := b.stats.PacketCount - b.stats.LastReceived
+	b.stats.LastReceived = b.stats.PacketCount
 
 	lostInterval := expectedInterval - receivedInterval
 
-	b.lostRate = float32(lostInterval) / float32(expectedInterval)
+	b.stats.LostRate = float32(lostInterval) / float32(expectedInterval)
 	var fracLost uint8
 	if expectedInterval != 0 && lostInterval > 0 {
 		fracLost = uint8((lostInterval << 8) / expectedInterval)
@@ -329,7 +344,7 @@ func (b *Buffer) buildReceptionReport() rtcp.ReceptionReport {
 		FractionLost:       fracLost,
 		TotalLost:          lost,
 		LastSequenceNumber: extMaxSeq,
-		Jitter:             uint32(b.jitter),
+		Jitter:             uint32(b.stats.Jitter),
 		LastSenderReport:   uint32(b.lastSRNTPTime >> 16),
 		Delay:              dlsr,
 	}
@@ -373,4 +388,58 @@ func (b *Buffer) OnTransportWideCC(fn func(sn uint16, timeNS int64, marker bool)
 
 func (b *Buffer) OnFeedback(fn func(fb []rtcp.Packet)) {
 	b.feedbackCB = fn
+}
+
+// GetMediaSSRC returns the associated SSRC of the RTP stream
+func (b *Buffer) GetMediaSSRC() uint32 {
+	return b.mediaSSRC
+}
+
+// GetClockRate returns the RTP clock rate
+func (b *Buffer) GetClockRate() uint32 {
+	return b.clockRate
+}
+
+// GetSenderReportData returns the rtp, ntp and nanos of the last sender report
+func (b *Buffer) GetSenderReportData() (rtpTime uint32, ntpTime uint64, lastReceivedTimeInNanosSinceEpoch int64) {
+	rtpTime = atomic.LoadUint32(&b.lastSRRTPTime)
+	ntpTime = atomic.LoadUint64(&b.lastSRNTPTime)
+	lastReceivedTimeInNanosSinceEpoch = atomic.LoadInt64(&b.lastSRRecv)
+
+	return rtpTime, ntpTime, lastReceivedTimeInNanosSinceEpoch
+}
+
+// GetStats returns the raw statistics about a particular buffer state
+func (b *Buffer) GetStats() (stats Stats) {
+	b.Lock()
+	stats = b.stats
+	b.Unlock()
+	return
+}
+
+// GetLatestTimestamp returns the latest RTP timestamp factoring in potential RTP timestamp wrap-around
+func (b *Buffer) GetLatestTimestamp() (latestTimestamp uint32, latestTimestampTimeInNanosSinceEpoch int64) {
+	latestTimestamp = atomic.LoadUint32(&b.latestTimestamp)
+	latestTimestampTimeInNanosSinceEpoch = atomic.LoadInt64(&b.latestTimestampTime)
+
+	return latestTimestamp, latestTimestampTimeInNanosSinceEpoch
+}
+
+// IsTimestampWrapAround returns true if wrap around happens from timestamp1 to timestamp2
+func IsTimestampWrapAround(timestamp1 uint32, timestamp2 uint32) bool {
+	return (timestamp1&0xC000000 == 0) && (timestamp2&0xC000000 == 0xC000000)
+}
+
+// IsLaterTimestamp returns true if timestamp1 is later in time than timestamp2 factoring in timestamp wrap-around
+func IsLaterTimestamp(timestamp1 uint32, timestamp2 uint32) bool {
+	if timestamp1 > timestamp2 {
+		if IsTimestampWrapAround(timestamp2, timestamp1) {
+			return false
+		}
+		return true
+	}
+	if IsTimestampWrapAround(timestamp1, timestamp2) {
+		return true
+	}
+	return false
 }

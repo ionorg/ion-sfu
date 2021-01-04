@@ -11,6 +11,8 @@ maxbandwidth = 1500
 # max buffer time by ms for video tracks
 maxbuffertime = 1000
 
+withstats = false
+
 [router.simulcast]
 # Prefer best quality initially
 bestqualityfirst = true
