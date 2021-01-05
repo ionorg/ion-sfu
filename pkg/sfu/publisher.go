@@ -84,7 +84,9 @@ func (p *Publisher) Answer(offer webrtc.SessionDescription) (webrtc.SessionDescr
 	}
 
 	for _, c := range p.candidates {
-		p.pc.AddICECandidate(c)
+		if err := p.pc.AddICECandidate(c); err != nil {
+			log.Errorf("Add publisher ice candidate to peer %s err: %v", p.id, err)
+		}
 	}
 	p.candidates = nil
 
