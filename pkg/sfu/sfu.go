@@ -6,13 +6,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pion/ion-sfu/pkg/stats"
-
-	"github.com/pion/ion-sfu/pkg/buffer"
-
-	"github.com/pion/webrtc/v3"
-
 	log "github.com/pion/ion-log"
+	"github.com/pion/ion-sfu/pkg/buffer"
+	"github.com/pion/ion-sfu/pkg/stats"
+	"github.com/pion/turn/v2"
+	"github.com/pion/webrtc/v3"
 )
 
 // ICEServerConfig defines parameters for ice servers
@@ -50,6 +48,7 @@ type Config struct {
 	WebRTC WebRTCConfig `mapstructure:"webrtc"`
 	Log    log.Config   `mapstructure:"log"`
 	Router RouterConfig `mapstructure:"router"`
+	Turn   TurnConfig   `mapstructure:"turn"`
 }
 
 var (
@@ -61,6 +60,7 @@ var (
 type SFU struct {
 	webrtc   WebRTCTransportConfig
 	router   RouterConfig
+	turn     *turn.Server
 	mu       sync.RWMutex
 	sessions map[string]*Session
 }
@@ -74,6 +74,10 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 	if len(c.WebRTC.ICEPortRange) == 2 {
 		icePortStart = c.WebRTC.ICEPortRange[0]
 		icePortEnd = c.WebRTC.ICEPortRange[1]
+		if c.Turn.Enabled && len(c.Turn.PortRange) == 2 {
+			icePortStart = c.Turn.PortRange[0]
+			icePortEnd = c.Turn.PortRange[1]
+		}
 	}
 
 	if icePortStart != 0 || icePortEnd != 0 {
@@ -146,6 +150,14 @@ func NewSFU(c Config) *SFU {
 	s := &SFU{
 		webrtc:   w,
 		sessions: make(map[string]*Session),
+	}
+
+	if c.Turn.Enabled {
+		ts, err := initTurnServer(c.Turn, nil)
+		if err != nil {
+			log.Panicf("Could not init turn server err: %v", err)
+		}
+		s.turn = ts
 	}
 
 	runtime.KeepAlive(ballast)

@@ -51,5 +51,20 @@ sdpsemantics = "unified-plan"
 # nat1to1 = ["1.2.3.4"]
 # icelite = true
 
+[turn]
+# Enables embeded turn server
+enabled = true
+# Sets the realm for turn server
+realm ="ion"
+# The address the TURN server will listen on.
+address= "0.0.0.0:3478"
+# Sets the credentials pairs
+credentials= "pion=ion,pion2=ion2"
+# Range of ports that turn relays traffic on
+# Format: [min, max]   and max - min >= 100
+# THIS WILL OVERRIDE SFU PORT RANGE IF TURN ENABLED
+portrange = [5000, 5200]
+
+
 [log]
 level = "trace"
