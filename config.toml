@@ -3,6 +3,8 @@
 # size of ballast. Be aware that the ballast should be less than the half of memory
 # available.
 ballast = 0
+# enable prometheus sfu statistics
+withstats = false
 
 [router]
 # Limit the remb bandwidth in kbps
@@ -11,7 +13,6 @@ maxbandwidth = 1500
 # max buffer time by ms for video tracks
 maxbuffertime = 1000
 
-withstats = false
 
 [router.simulcast]
 # Prefer best quality initially

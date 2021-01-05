@@ -56,6 +56,10 @@ func newRouter(peer *webrtc.PeerConnection, id string, config RouterConfig) Rout
 		r.rtcpCh <- packet
 	}
 
+	if config.WithStats {
+		stats.Peers.Inc()
+	}
+
 	go r.sendRTCP()
 	return r
 }
@@ -66,6 +70,10 @@ func (r *router) ID() string {
 
 func (r *router) Stop() {
 	close(r.rtcpCh)
+
+	if r.config.WithStats {
+		stats.Peers.Dec()
+	}
 }
 
 func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote) (Receiver, bool) {
@@ -143,6 +151,14 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 		MaxBitRate: r.config.MaxBandwidth,
 	})
 
+	if r.config.WithStats {
+		if track.Kind() == webrtc.RTPCodecTypeVideo {
+			stats.VideoTracks.Inc()
+		} else {
+			stats.AudioTracks.Inc()
+		}
+	}
+
 	return recv, publish
 }
 
@@ -219,6 +235,14 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 
 func (r *router) deleteReceiver(track string, ssrc uint32) {
 	r.Lock()
+	if r.config.WithStats {
+		if r.receivers[track].Kind() == webrtc.RTPCodecTypeVideo {
+			stats.VideoTracks.Dec()
+		} else {
+			stats.AudioTracks.Dec()
+		}
+	}
+
 	delete(r.receivers, track)
 	delete(r.stats, ssrc)
 	r.Unlock()

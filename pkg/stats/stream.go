@@ -5,7 +5,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	log "github.com/pion/ion-log"
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -53,6 +52,30 @@ var (
 		Subsystem: "rtp",
 		Name:      "jitter",
 	})
+
+	Sessions = prometheus.NewGauge(prometheus.GaugeOpts{
+		Subsystem: "sfu",
+		Name:      "sessions",
+		Help:      "Current number of sessions",
+	})
+
+	Peers = prometheus.NewGauge(prometheus.GaugeOpts{
+		Subsystem: "sfu",
+		Name:      "peers",
+		Help:      "Current number of peers connected",
+	})
+
+	AudioTracks = prometheus.NewGauge(prometheus.GaugeOpts{
+		Subsystem: "sfu",
+		Name:      "audio_tracks",
+		Help:      "Current number of audio tracks",
+	})
+
+	VideoTracks = prometheus.NewGauge(prometheus.GaugeOpts{
+		Subsystem: "sfu",
+		Name:      "video_tracks",
+		Help:      "Current number of video tracks",
+	})
 )
 
 func InitStats() {
@@ -64,6 +87,9 @@ func InitStats() {
 	prometheus.MustRegister(expectedMinusReceived)
 	prometheus.MustRegister(lostRate)
 	prometheus.MustRegister(jitter)
+	prometheus.MustRegister(Sessions)
+	prometheus.MustRegister(AudioTracks)
+	prometheus.MustRegister(VideoTracks)
 }
 
 // Stream contains buffer statistics
@@ -82,8 +108,6 @@ func NewStream(buffer *buffer.Buffer) *Stream {
 	s := &Stream{
 		Buffer: buffer,
 	}
-
-	log.Debugf("NewStream")
 	return s
 }
 

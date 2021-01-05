@@ -43,7 +43,8 @@ type WebRTCConfig struct {
 // Config for base SFU
 type Config struct {
 	SFU struct {
-		Ballast int64 `mapstructure:"ballast"`
+		Ballast   int64 `mapstructure:"ballast"`
+		WithStats bool  `mapstructure:"withstats"`
 	} `mapstructure:"sfu"`
 	WebRTC WebRTCConfig `mapstructure:"webrtc"`
 	Log    log.Config   `mapstructure:"log"`
@@ -58,11 +59,12 @@ var (
 
 // SFU represents an sfu instance
 type SFU struct {
-	webrtc   WebRTCTransportConfig
-	router   RouterConfig
+	webrtc    WebRTCTransportConfig
+	router    RouterConfig
+	mu        sync.RWMutex
 	turn     *turn.Server
-	mu       sync.RWMutex
-	sessions map[string]*Session
+	sessions  map[string]*Session
+	withStats bool
 }
 
 // NewWebRTCTransportConfig parses our settings and returns a usable WebRTCTransportConfig for creating PeerConnections
@@ -123,7 +125,8 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 		w.setting.SetNAT1To1IPs(c.WebRTC.Candidates.NAT1To1IPs, webrtc.ICECandidateTypeHost)
 	}
 
-	if c.Router.WithStats {
+	if c.SFU.WithStats {
+		w.router.WithStats = true
 		stats.InitStats()
 	}
 
@@ -148,8 +151,9 @@ func NewSFU(c Config) *SFU {
 	w := NewWebRTCTransportConfig(c)
 
 	s := &SFU{
-		webrtc:   w,
-		sessions: make(map[string]*Session),
+		webrtc:    w,
+		sessions:  make(map[string]*Session),
+		withStats: c.Router.WithStats,
 	}
 
 	if c.Turn.Enabled {
@@ -167,15 +171,25 @@ func NewSFU(c Config) *SFU {
 // NewSession creates a new session instance
 func (s *SFU) newSession(id string) *Session {
 	session := NewSession(id)
+
 	session.OnClose(func() {
 		s.mu.Lock()
 		delete(s.sessions, id)
 		s.mu.Unlock()
+
+		if s.withStats {
+			stats.Sessions.Dec()
+		}
 	})
 
 	s.mu.Lock()
 	s.sessions[id] = session
 	s.mu.Unlock()
+
+	if s.withStats {
+		stats.Sessions.Inc()
+	}
+
 	return session
 }
 
