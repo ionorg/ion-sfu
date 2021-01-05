@@ -73,9 +73,9 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 
 	var icePortStart, icePortEnd uint16
 
-	if c.Turn.Enabled && len(c.Turn.PortRange) == 2 {
-		icePortStart = c.Turn.PortRange[0]
-		icePortEnd = c.Turn.PortRange[1]
+	if c.Turn.Enabled {
+		icePortStart = sfuMinPort
+		icePortEnd = sfuMaxPort
 	} else if len(c.WebRTC.ICEPortRange) == 2 {
 		icePortStart = c.WebRTC.ICEPortRange[0]
 		icePortEnd = c.WebRTC.ICEPortRange[1]

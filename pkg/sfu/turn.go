@@ -15,25 +15,26 @@ import (
 	"github.com/pion/turn/v2"
 )
 
+const (
+	turnMinPort = 32768
+	turnMaxPort = 46883
+	sfuMinPort  = 46884
+	sfuMaxPort  = 60999
+)
+
 // WebRTCConfig defines parameters for ice
 type TurnConfig struct {
-	Enabled     bool     `mapstructure:"enabled"`
-	Realm       string   `mapstructure:"realm"`
-	Address     string   `mapstructure:"address"`
-	Credentials string   `mapstructure:"credentials"`
-	PortRange   []uint16 `mapstructure:"portrange"`
-	Cert        string   `mapstructure:"cert"`
-	Key         string   `mapstructure:"key"`
+	Enabled     bool   `mapstructure:"enabled"`
+	Realm       string `mapstructure:"realm"`
+	Address     string `mapstructure:"address"`
+	Credentials string `mapstructure:"credentials"`
+	Cert        string `mapstructure:"cert"`
+	Key         string `mapstructure:"key"`
 }
 
 func initTurnServer(conf TurnConfig, auth func(username, real string, srcAddr net.Addr) ([]byte, bool)) (*turn.Server, error) {
 	var listeners []turn.ListenerConfig
 
-	var minPort, maxPort uint16
-	if conf.Enabled && len(conf.PortRange) == 2 {
-		minPort = conf.PortRange[0]
-		maxPort = conf.PortRange[1]
-	}
 	// Create a UDP listener to pass into pion/turn
 	// pion/turn itself doesn't allocate any UDP sockets, but lets the user pass them in
 	// this allows us to add logging, storage or modify inbound/outbound traffic
@@ -68,8 +69,8 @@ func initTurnServer(conf TurnConfig, auth func(username, real string, srcAddr ne
 			RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{
 				RelayAddress: net.ParseIP(addr[0]),
 				Address:      "0.0.0.0",
-				MinPort:      minPort,
-				MaxPort:      maxPort,
+				MinPort:      turnMinPort,
+				MaxPort:      turnMaxPort,
 			},
 		})
 		// Create a DTLS listener to pass into pion/turn
@@ -96,8 +97,8 @@ func initTurnServer(conf TurnConfig, auth func(username, real string, srcAddr ne
 			RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{
 				RelayAddress: net.ParseIP(addr[0]),
 				Address:      "0.0.0.0",
-				MinPort:      minPort,
-				MaxPort:      maxPort,
+				MinPort:      turnMinPort,
+				MaxPort:      turnMaxPort,
 			},
 		})
 	}
@@ -130,8 +131,8 @@ func initTurnServer(conf TurnConfig, auth func(username, real string, srcAddr ne
 			RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{
 				RelayAddress: net.ParseIP(addr[0]),
 				Address:      "0.0.0.0",
-				MinPort:      minPort,
-				MaxPort:      maxPort,
+				MinPort:      turnMinPort,
+				MaxPort:      turnMaxPort,
 			},
 		},
 		),
@@ -142,8 +143,8 @@ func initTurnServer(conf TurnConfig, auth func(username, real string, srcAddr ne
 				RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{
 					RelayAddress: net.ParseIP(addr[0]),
 					Address:      "0.0.0.0",
-					MinPort:      minPort,
-					MaxPort:      maxPort,
+					MinPort:      turnMinPort,
+					MaxPort:      turnMaxPort,
 				},
 			},
 		},
