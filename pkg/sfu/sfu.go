@@ -59,10 +59,10 @@ var (
 
 // SFU represents an sfu instance
 type SFU struct {
+	sync.RWMutex
 	webrtc    WebRTCTransportConfig
 	router    RouterConfig
-	mu        sync.RWMutex
-	turn     *turn.Server
+	turn      *turn.Server
 	sessions  map[string]*Session
 	withStats bool
 }
@@ -173,18 +173,18 @@ func (s *SFU) newSession(id string) *Session {
 	session := NewSession(id)
 
 	session.OnClose(func() {
-		s.mu.Lock()
+		s.Lock()
 		delete(s.sessions, id)
-		s.mu.Unlock()
+		s.Unlock()
 
 		if s.withStats {
 			stats.Sessions.Dec()
 		}
 	})
 
-	s.mu.Lock()
+	s.Lock()
 	s.sessions[id] = session
-	s.mu.Unlock()
+	s.Unlock()
 
 	if s.withStats {
 		stats.Sessions.Inc()
@@ -195,8 +195,8 @@ func (s *SFU) newSession(id string) *Session {
 
 // GetSession by id
 func (s *SFU) getSession(id string) *Session {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.RLock()
+	defer s.RUnlock()
 	return s.sessions[id]
 }
 
