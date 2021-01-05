@@ -104,7 +104,7 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 	})
 
 	p.subscriber.OnICECandidate(func(c *webrtc.ICECandidate) {
-		log.Debugf("on ice candidate called")
+		log.Debugf("on subscriber ice candidate called for peer " + p.id)
 		if c == nil {
 			return
 		}
@@ -116,7 +116,7 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 	})
 
 	p.publisher.OnICECandidate(func(c *webrtc.ICECandidate) {
-		log.Debugf("on ice candidate called")
+		log.Debugf("on publisher ice candidate called for peer " + p.id)
 		if c == nil {
 			return
 		}
