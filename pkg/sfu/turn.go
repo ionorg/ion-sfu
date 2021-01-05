@@ -26,6 +26,13 @@ func initTurnServer(conf TurnConfig, auth func(username, real string, srcAddr ne
 	if err != nil {
 		return nil, err
 	}
+	// Create a TCP listener to pass into pion/turn
+	// pion/turn itself doesn't allocate any TCP listeners, but lets the user pass them in
+	// this allows us to add logging, storage or modify inbound/outbound traffic
+	tcpListener, err := net.Listen("tcp4", conf.Address)
+	if err != nil {
+		return nil, err
+	}
 
 	if auth == nil {
 		usersMap := map[string][]byte{}
@@ -55,13 +62,25 @@ func initTurnServer(conf TurnConfig, auth func(username, real string, srcAddr ne
 		// This is called everytime a user tries to authenticate with the TURN server
 		// Return the key for that user, or false when no user is found
 		AuthHandler: auth,
+		// ListenerConfig is a list of Listeners and the configuration around them
+		ListenerConfigs: []turn.ListenerConfig{
+			{
+				Listener: tcpListener,
+				RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{
+					RelayAddress: net.ParseIP(strings.Split(conf.Address, ":")[0]),
+					Address:      "0.0.0.0",
+					MinPort:      minPort,
+					MaxPort:      maxPort,
+				},
+			},
+		},
 		// PacketConnConfigs is a list of UDP Listeners and the configuration around them
 		PacketConnConfigs: []turn.PacketConnConfig{
 			{
 				PacketConn: udpListener,
 				RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{
-					RelayAddress: net.ParseIP(strings.Split(conf.Address, ":")[0]), // Claim that we are listening on IP passed by user (This should be your Public IP)
-					Address:      "0.0.0.0",                                        // But actually be listening on every interface
+					RelayAddress: net.ParseIP(strings.Split(conf.Address, ":")[0]),
+					Address:      "0.0.0.0",
 					MinPort:      minPort,
 					MaxPort:      maxPort,
 				},
