@@ -1,10 +1,16 @@
 package sfu
 
 import (
+	"context"
+	"crypto/rand"
+	"crypto/tls"
 	"net"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
+	"github.com/pion/dtls/v2"
 	log "github.com/pion/ion-log"
 	"github.com/pion/turn/v2"
 )
@@ -16,9 +22,18 @@ type TurnConfig struct {
 	Address     string   `mapstructure:"address"`
 	Credentials string   `mapstructure:"credentials"`
 	PortRange   []uint16 `mapstructure:"portrange"`
+	Cert        string   `mapstructure:"cert"`
+	Key         string   `mapstructure:"key"`
 }
 
 func initTurnServer(conf TurnConfig, auth func(username, real string, srcAddr net.Addr) ([]byte, bool)) (*turn.Server, error) {
+	var listeners []turn.ListenerConfig
+
+	var minPort, maxPort uint16
+	if conf.Enabled && len(conf.PortRange) == 2 {
+		minPort = conf.PortRange[0]
+		maxPort = conf.PortRange[1]
+	}
 	// Create a UDP listener to pass into pion/turn
 	// pion/turn itself doesn't allocate any UDP sockets, but lets the user pass them in
 	// this allows us to add logging, storage or modify inbound/outbound traffic
@@ -32,6 +47,59 @@ func initTurnServer(conf TurnConfig, auth func(username, real string, srcAddr ne
 	tcpListener, err := net.Listen("tcp4", conf.Address)
 	if err != nil {
 		return nil, err
+	}
+
+	addr := strings.Split(conf.Address, ":")
+
+	if len(conf.Cert) > 0 && len(conf.Key) > 0 {
+		// Create a TLS listener to pass into pion/turn
+		cert, err := tls.LoadX509KeyPair(conf.Cert, conf.Key)
+		if err != nil {
+			return nil, err
+		}
+		config := tls.Config{Certificates: []tls.Certificate{cert}}
+		config.Rand = rand.Reader
+		tlsListener, err := tls.Listen("tcp4", conf.Address, &config)
+		if err != nil {
+			return nil, err
+		}
+		listeners = append(listeners, turn.ListenerConfig{
+			Listener: tlsListener,
+			RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{
+				RelayAddress: net.ParseIP(addr[0]),
+				Address:      "0.0.0.0",
+				MinPort:      minPort,
+				MaxPort:      maxPort,
+			},
+		})
+		// Create a DTLS listener to pass into pion/turn
+		ctx := context.Background()
+		dtlsConf := &dtls.Config{
+			Certificates:         []tls.Certificate{cert},
+			ExtendedMasterSecret: dtls.RequireExtendedMasterSecret,
+			// Create timeout context for accepted connection.
+			ConnectContextMaker: func() (context.Context, func()) {
+				return context.WithTimeout(ctx, 30*time.Second)
+			},
+		}
+		port, err := strconv.ParseInt(addr[1], 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		a := &net.UDPAddr{IP: net.ParseIP(addr[0]), Port: int(port)}
+		dtlsListener, err := dtls.Listen("udp4", a, dtlsConf)
+		if err != nil {
+			return nil, err
+		}
+		listeners = append(listeners, turn.ListenerConfig{
+			Listener: dtlsListener,
+			RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{
+				RelayAddress: net.ParseIP(addr[0]),
+				Address:      "0.0.0.0",
+				MinPort:      minPort,
+				MaxPort:      maxPort,
+			},
+		})
 	}
 
 	if auth == nil {
@@ -50,12 +118,6 @@ func initTurnServer(conf TurnConfig, auth func(username, real string, srcAddr ne
 		}
 	}
 
-	var minPort, maxPort uint16
-	if conf.Enabled && len(conf.PortRange) == 2 {
-		minPort = conf.PortRange[0]
-		maxPort = conf.PortRange[1]
-	}
-
 	return turn.NewServer(turn.ServerConfig{
 		Realm: conf.Realm,
 		// Set AuthHandler callback
@@ -63,23 +125,22 @@ func initTurnServer(conf TurnConfig, auth func(username, real string, srcAddr ne
 		// Return the key for that user, or false when no user is found
 		AuthHandler: auth,
 		// ListenerConfig is a list of Listeners and the configuration around them
-		ListenerConfigs: []turn.ListenerConfig{
-			{
-				Listener: tcpListener,
-				RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{
-					RelayAddress: net.ParseIP(strings.Split(conf.Address, ":")[0]),
-					Address:      "0.0.0.0",
-					MinPort:      minPort,
-					MaxPort:      maxPort,
-				},
+		ListenerConfigs: append(listeners, turn.ListenerConfig{
+			Listener: tcpListener,
+			RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{
+				RelayAddress: net.ParseIP(addr[0]),
+				Address:      "0.0.0.0",
+				MinPort:      minPort,
+				MaxPort:      maxPort,
 			},
 		},
+		),
 		// PacketConnConfigs is a list of UDP Listeners and the configuration around them
 		PacketConnConfigs: []turn.PacketConnConfig{
 			{
 				PacketConn: udpListener,
 				RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{
-					RelayAddress: net.ParseIP(strings.Split(conf.Address, ":")[0]),
+					RelayAddress: net.ParseIP(addr[0]),
 					Address:      "0.0.0.0",
 					MinPort:      minPort,
 					MaxPort:      maxPort,

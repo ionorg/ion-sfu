@@ -65,6 +65,9 @@ credentials= "pion=ion,pion2=ion2"
 # Format: [min, max]   and max - min >= 100
 # THIS WILL OVERRIDE SFU PORT RANGE IF TURN ENABLED
 portrange = [5000, 5200]
+# Certs path to config tls/dtls
+# cert="path/to/cert.pem"
+# key="path/to/key.pem"
 
 
 [log]
