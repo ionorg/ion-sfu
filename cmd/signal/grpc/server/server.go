@@ -65,20 +65,6 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 		case *pb.SignalRequest_Join:
 			log.Debugf("signal->join called:\n%v", string(payload.Join.Description))
 
-			var offer webrtc.SessionDescription
-			err := json.Unmarshal(payload.Join.Description, &offer)
-			if err != nil {
-				err = stream.Send(&pb.SignalReply{
-					Payload: &pb.SignalReply_Error{
-						Error: fmt.Errorf("join sdp unmarshal error: %w", err).Error(),
-					},
-				})
-				if err != nil {
-					log.Errorf("grpc send error %v ", err)
-					return status.Errorf(codes.Internal, err.Error())
-				}
-			}
-
 			// Notify user of new ice candidate
 			peer.OnIceCandidate = func(candidate *webrtc.ICECandidateInit, target int) {
 				bytes, err := json.Marshal(candidate)
@@ -133,6 +119,21 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 
 				if err != nil {
 					log.Errorf("oniceconnectionstatechange error %s", err)
+				}
+			}
+
+			var offer webrtc.SessionDescription
+			err := json.Unmarshal(payload.Join.Description, &offer)
+			if err != nil {
+				err = stream.Send(&pb.SignalReply{
+					Payload: &pb.SignalReply_Error{
+						Error: fmt.Errorf("join sdp unmarshal error: %w", err).Error(),
+					},
+				})
+
+				if err != nil {
+					log.Errorf("grpc send error %v ", err)
+					return status.Errorf(codes.Internal, err.Error())
 				}
 			}
 
