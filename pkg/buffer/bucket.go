@@ -2,6 +2,7 @@ package buffer
 
 import (
 	"encoding/binary"
+	"math"
 
 	"github.com/pion/rtcp"
 )
@@ -22,7 +23,7 @@ type Bucket struct {
 func NewBucket(size int, nack bool) *Bucket {
 	b := &Bucket{
 		buf:      make([]byte, size),
-		maxSteps: size/maxPktSize - 1,
+		maxSteps: int(math.Floor(float64(size)/float64(maxPktSize))) - 1,
 	}
 	if nack {
 		b.nacker = newNACKQueue()
@@ -109,7 +110,7 @@ func (b *Bucket) set(sn uint16, pkt []byte) []byte {
 		pos = b.maxSteps + pos + 1
 	}
 	off := pos * maxPktSize
-	if off > len(b.buf) {
+	if off > len(b.buf) || off < 0 {
 		return nil
 	}
 	binary.BigEndian.PutUint16(b.buf[off:], uint16(len(pkt)))
@@ -118,12 +119,10 @@ func (b *Bucket) set(sn uint16, pkt []byte) []byte {
 }
 
 func (b *Bucket) reset() {
-	if b.headSN != 0 {
-		b.headSN = 0
-		b.step = 0
-		b.onLost = nil
-		if b.nacker != nil {
-			b.nacker.reset()
-		}
+	b.headSN = 0
+	b.step = 0
+	b.onLost = nil
+	if b.nacker != nil {
+		b.nacker.reset()
 	}
 }

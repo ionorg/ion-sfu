@@ -153,7 +153,9 @@ func (s *Subscriber) SetRemoteDescription(desc webrtc.SessionDescription) error 
 	}
 
 	for _, c := range s.candidates {
-		s.pc.AddICECandidate(c)
+		if err := s.pc.AddICECandidate(c); err != nil {
+			log.Errorf("Add subscriber ice candidate to peer %s err: %v", s.id, err)
+		}
 	}
 	s.candidates = nil
 
