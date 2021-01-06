@@ -104,7 +104,6 @@ func Test_queue_edges(t *testing.T) {
 	q.onLost = func(_ []rtcp.NackPair, _ bool) {
 	}
 	q.headSN = 65532
-	q.step = q.maxSteps - 2
 	for _, p := range TestPackets {
 		p := p
 		assert.NotNil(t, p)
