@@ -6,13 +6,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pion/ion-sfu/pkg/stats"
-
-	"github.com/pion/ion-sfu/pkg/buffer"
-
-	"github.com/pion/webrtc/v3"
-
 	log "github.com/pion/ion-log"
+	"github.com/pion/ion-sfu/pkg/buffer"
+	"github.com/pion/ion-sfu/pkg/stats"
+	"github.com/pion/turn/v2"
+	"github.com/pion/webrtc/v3"
 )
 
 // ICEServerConfig defines parameters for ice servers
@@ -51,6 +49,7 @@ type Config struct {
 	WebRTC WebRTCConfig `mapstructure:"webrtc"`
 	Log    log.Config   `mapstructure:"log"`
 	Router RouterConfig `mapstructure:"router"`
+	Turn   TurnConfig   `mapstructure:"turn"`
 }
 
 var (
@@ -60,9 +59,10 @@ var (
 
 // SFU represents an sfu instance
 type SFU struct {
+	sync.RWMutex
 	webrtc    WebRTCTransportConfig
 	router    RouterConfig
-	mu        sync.RWMutex
+	turn      *turn.Server
 	sessions  map[string]*Session
 	withStats bool
 }
@@ -73,7 +73,10 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 
 	var icePortStart, icePortEnd uint16
 
-	if len(c.WebRTC.ICEPortRange) == 2 {
+	if c.Turn.Enabled {
+		icePortStart = sfuMinPort
+		icePortEnd = sfuMaxPort
+	} else if len(c.WebRTC.ICEPortRange) == 2 {
 		icePortStart = c.WebRTC.ICEPortRange[0]
 		icePortEnd = c.WebRTC.ICEPortRange[1]
 	}
@@ -152,6 +155,14 @@ func NewSFU(c Config) *SFU {
 		withStats: c.Router.WithStats,
 	}
 
+	if c.Turn.Enabled {
+		ts, err := initTurnServer(c.Turn, nil)
+		if err != nil {
+			log.Panicf("Could not init turn server err: %v", err)
+		}
+		s.turn = ts
+	}
+
 	runtime.KeepAlive(ballast)
 	return s
 }
@@ -161,18 +172,18 @@ func (s *SFU) newSession(id string) *Session {
 	session := NewSession(id)
 
 	session.OnClose(func() {
-		s.mu.Lock()
+		s.Lock()
 		delete(s.sessions, id)
-		s.mu.Unlock()
+		s.Unlock()
 
 		if s.withStats {
 			stats.Sessions.Dec()
 		}
 	})
 
-	s.mu.Lock()
+	s.Lock()
 	s.sessions[id] = session
-	s.mu.Unlock()
+	s.Unlock()
 
 	if s.withStats {
 		stats.Sessions.Inc()
@@ -183,8 +194,8 @@ func (s *SFU) newSession(id string) *Session {
 
 // GetSession by id
 func (s *SFU) getSession(id string) *Session {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.RLock()
+	defer s.RUnlock()
 	return s.sessions[id]
 }
 

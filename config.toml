@@ -52,5 +52,19 @@ sdpsemantics = "unified-plan"
 # nat1to1 = ["1.2.3.4"]
 # icelite = true
 
+[turn]
+# Enables embeded turn server
+enabled = false
+# Sets the realm for turn server
+realm ="ion"
+# The address the TURN server will listen on.
+address= "0.0.0.0:3478"
+# Sets the credentials pairs
+credentials= "pion=ion,pion2=ion2"
+# Certs path to config tls/dtls
+# cert="path/to/cert.pem"
+# key="path/to/key.pem"
+
+
 [log]
 level = "trace"
