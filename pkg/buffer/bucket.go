@@ -45,7 +45,7 @@ func (b *Bucket) addPacket(pkt []byte, sn uint16, latest bool) []byte {
 		if b.nacker != nil {
 			b.nacker.push(sn - i)
 		}
-		if b.step > b.maxSteps {
+		if b.step >= b.maxSteps {
 			b.step = 0
 		}
 	}
@@ -79,7 +79,7 @@ func (b *Bucket) push(pkt []byte) []byte {
 	off := b.step*maxPktSize + 2
 	copy(b.buf[off:], pkt)
 	b.step++
-	if b.step > b.maxSteps {
+	if b.step >= b.maxSteps {
 		b.step = 0
 	}
 	return b.buf[off : off+len(pkt)]
