@@ -54,7 +54,7 @@ sdpsemantics = "unified-plan"
 
 [turn]
 # Enables embeded turn server
-enabled = true
+enabled = false
 # Sets the realm for turn server
 realm ="ion"
 # The address the TURN server will listen on.
