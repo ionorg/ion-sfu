@@ -1,8 +1,10 @@
 package buffer
 
 import (
+	"math/rand"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/pion/rtcp"
 	"github.com/stretchr/testify/assert"
@@ -113,7 +115,7 @@ func Test_nackQueue_push(t *testing.T) {
 	}
 }
 
-func Test_nackQueue_pushAndNack(t *testing.T) {
+func Test_nackQueue(t *testing.T) {
 	type fields struct {
 		nacks  []nack
 		cycles uint32
@@ -140,7 +142,19 @@ func Test_nackQueue_pushAndNack(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			n := nackQueue{}
+			r := rand.New(rand.NewSource(time.Now().UnixNano()))
+			for i := 0; i < 100; i++ {
+				assert.NotPanics(t, func() {
+					n.push(uint16(r.Intn(60000)))
+					n.remove(uint16(r.Intn(60000)))
+					n.pairs()
+				})
+			}
 
+			for _, sn := range n.nacks {
+				print(sn.sn, ",")
+			}
 		})
 	}
 }

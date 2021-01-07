@@ -2,7 +2,6 @@ package sfu
 
 import (
 	"io"
-	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -214,24 +213,22 @@ func (s *Subscriber) downTracksReports() {
 			}
 		}
 		s.RUnlock()
-		i := math.Ceil(float64(len(sd)) / float64(20))
+		i := 0
 		j := 0
-		for i > 0 {
-			if i > 1 {
-				sd = sd[j*20 : (j+1)*20-1]
-			} else {
-				sd = sd[j*20 : cap(sd)]
+		for i < len(sd) {
+			i = (j + 1) * 15
+			if i >= len(sd) {
+				i = len(sd)
 			}
-			r = append(r, &rtcp.SourceDescription{Chunks: sd})
-			if err := s.pc.WriteRTCP(r); err != nil {
-				if err == io.EOF || err == io.ErrClosedPipe {
-					return
-				}
-				log.Errorf("Sending downtrack reports err: %v", err)
-			}
-			r = r[:0]
-			i--
+			nsd := sd[j*15 : i]
+			r = append(r, &rtcp.SourceDescription{Chunks: nsd})
 			j++
+		}
+		if err := s.pc.WriteRTCP(r); err != nil {
+			if err == io.EOF || err == io.ErrClosedPipe {
+				return
+			}
+			log.Errorf("Sending downtrack reports err: %v", err)
 		}
 	}
 }
