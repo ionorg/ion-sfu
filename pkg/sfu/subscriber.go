@@ -223,12 +223,13 @@ func (s *Subscriber) downTracksReports() {
 			nsd := sd[j*15 : i]
 			r = append(r, &rtcp.SourceDescription{Chunks: nsd})
 			j++
-		}
-		if err := s.pc.WriteRTCP(r); err != nil {
-			if err == io.EOF || err == io.ErrClosedPipe {
-				return
+			if err := s.pc.WriteRTCP(r); err != nil {
+				if err == io.EOF || err == io.ErrClosedPipe {
+					return
+				}
+				log.Errorf("Sending downtrack reports err: %v", err)
 			}
-			log.Errorf("Sending downtrack reports err: %v", err)
+			r = r[:0]
 		}
 	}
 }
