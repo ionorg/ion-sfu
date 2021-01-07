@@ -198,7 +198,7 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 		return err
 	}
 
-	outTrack, err := NewDownTrack(webrtc.RTPCodecCapability{
+	downTrack, err := NewDownTrack(webrtc.RTPCodecCapability{
 		MimeType:     codec.MimeType,
 		ClockRate:    codec.ClockRate,
 		Channels:     codec.Channels,
@@ -209,27 +209,28 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 		return err
 	}
 	// Create webrtc sender for the peer we are sending track to
-	if outTrack.transceiver, err = sub.pc.AddTransceiverFromTrack(outTrack, webrtc.RTPTransceiverInit{
+	if downTrack.transceiver, err = sub.pc.AddTransceiverFromTrack(downTrack, webrtc.RTPTransceiverInit{
 		Direction: webrtc.RTPTransceiverDirectionSendonly,
 	}); err != nil {
 		return err
 	}
 
 	// nolint:scopelint
-	outTrack.OnCloseHandler(func() {
-		if err := sub.pc.RemoveTrack(outTrack.transceiver.Sender()); err != nil {
+	downTrack.OnCloseHandler(func() {
+		if err := sub.pc.RemoveTrack(downTrack.transceiver.Sender()); err != nil {
 			log.Errorf("Error closing down track: %v", err)
 		} else {
+			sub.RemoveDownTrack(recv.StreamID(), downTrack)
 			sub.negotiate()
 		}
 	})
 
-	outTrack.OnBind(func() {
+	downTrack.OnBind(func() {
 		go sub.sendStreamDownTracksReports(recv.StreamID())
 	})
 
-	sub.AddDownTrack(recv.StreamID(), outTrack)
-	recv.AddDownTrack(outTrack, r.config.Simulcast.BestQualityFirst)
+	sub.AddDownTrack(recv.StreamID(), downTrack)
+	recv.AddDownTrack(downTrack, r.config.Simulcast.BestQualityFirst)
 	return nil
 }
 

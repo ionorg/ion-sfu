@@ -125,6 +125,23 @@ func (s *Subscriber) AddDownTrack(streamID string, downTrack *DownTrack) {
 	}
 }
 
+func (s *Subscriber) RemoveDownTrack(streamID string, downTrack *DownTrack) {
+	s.Lock()
+	defer s.Unlock()
+	if dts, ok := s.tracks[streamID]; ok {
+		idx := -1
+		for i, dt := range dts {
+			if dt == downTrack {
+				idx = i
+			}
+		}
+		dts[idx] = dts[len(dts)-1]
+		dts[len(dts)-1] = nil
+		dts = dts[:len(dts)-1]
+		s.tracks[streamID] = dts
+	}
+}
+
 func (s *Subscriber) AddDataChannel(label string) (*webrtc.DataChannel, error) {
 	s.Lock()
 	defer s.Unlock()
@@ -175,6 +192,10 @@ func (s *Subscriber) Close() error {
 func (s *Subscriber) downTracksReports() {
 	for {
 		time.Sleep(5 * time.Second)
+
+		if s.pc.ConnectionState() == webrtc.ICETransportStateClosed {
+			return
+		}
 
 		var r []rtcp.Packet
 		var sd []rtcp.SourceDescriptionChunk
