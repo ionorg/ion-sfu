@@ -20,13 +20,13 @@ func NewBufferFactory() *Factory {
 		videoPool: &sync.Pool{
 			New: func() interface{} {
 				// Make a 2MB buffer for video
-				return NewBucket(2*1000*1000, true)
+				return make([]byte, 2*1000*1000)
 			},
 		},
 		audioPool: &sync.Pool{
 			New: func() interface{} {
 				// Make a max 25 packets buffer for audio
-				return NewBucket(maxPktSize*25, false)
+				return make([]byte, maxPktSize*25)
 			},
 		},
 		rtpBuffers:  make(map[uint32]*Buffer),

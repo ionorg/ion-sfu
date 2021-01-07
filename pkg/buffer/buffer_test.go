@@ -90,7 +90,7 @@ func TestNewBuffer(t *testing.T) {
 			}
 			pool := &sync.Pool{
 				New: func() interface{} {
-					return NewBucket(2*1000*1000, true)
+					return make([]byte, 30000)
 				},
 			}
 			buff := NewBuffer(123, pool, pool)

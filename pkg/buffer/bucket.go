@@ -20,10 +20,10 @@ type Bucket struct {
 	onLost func(nack []rtcp.NackPair, askKeyframe bool)
 }
 
-func NewBucket(size int, nack bool) *Bucket {
+func NewBucket(buf []byte, nack bool) *Bucket {
 	b := &Bucket{
-		buf:      make([]byte, size),
-		maxSteps: int(math.Floor(float64(size)/float64(maxPktSize))) - 1,
+		buf:      buf,
+		maxSteps: int(math.Floor(float64(len(buf))/float64(maxPktSize))) - 1,
 	}
 	if nack {
 		b.nacker = newNACKQueue()
@@ -116,13 +116,4 @@ func (b *Bucket) set(sn uint16, pkt []byte) []byte {
 	binary.BigEndian.PutUint16(b.buf[off:], uint16(len(pkt)))
 	copy(b.buf[off+2:], pkt)
 	return b.buf[off+2 : off+2+len(pkt)]
-}
-
-func (b *Bucket) reset() {
-	b.headSN = 0
-	b.step = 0
-	b.onLost = nil
-	if b.nacker != nil {
-		b.nacker.reset()
-	}
 }

@@ -30,14 +30,6 @@ func newNACKQueue() *nackQueue {
 	}
 }
 
-func (n *nackQueue) reset() {
-	n.maxSN = 0
-	n.counter = 0
-	n.cycles = 0
-	n.kfSN = 0
-	n.nacks = n.nacks[:0]
-}
-
 func (n *nackQueue) remove(sn uint16) {
 	var extSN uint32
 	if sn > n.maxSN && sn&0x8000 == 1 && n.maxSN&0x8000 == 0 {
