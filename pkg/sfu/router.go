@@ -128,12 +128,19 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 		}
 	})
 
-	recv := r.receivers[trackID]
-	if recv == nil {
+	recv, ok := r.receivers[trackID]
+	if !ok {
 		recv = NewWebRTCReceiver(receiver, track, r.id)
 		r.receivers[trackID] = recv
 		recv.SetRTCPCh(r.rtcpCh)
 		recv.OnCloseHandler(func() {
+			if r.config.WithStats {
+				if track.Kind() == webrtc.RTPCodecTypeVideo {
+					stats.VideoTracks.Dec()
+				} else {
+					stats.AudioTracks.Dec()
+				}
+			}
 			r.deleteReceiver(trackID, uint32(track.SSRC()))
 		})
 		publish = true
@@ -217,11 +224,13 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 
 	// nolint:scopelint
 	downTrack.OnCloseHandler(func() {
-		if err := sub.pc.RemoveTrack(downTrack.transceiver.Sender()); err != nil {
-			log.Errorf("Error closing down track: %v", err)
-		} else {
-			sub.RemoveDownTrack(recv.StreamID(), downTrack)
-			sub.negotiate()
+		if sub.pc.ConnectionState() != webrtc.PeerConnectionStateClosed {
+			if err := sub.pc.RemoveTrack(downTrack.transceiver.Sender()); err != nil {
+				log.Errorf("Error closing down track: %v", err)
+			} else {
+				sub.RemoveDownTrack(recv.StreamID(), downTrack)
+				sub.negotiate()
+			}
 		}
 	})
 
@@ -236,14 +245,6 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 
 func (r *router) deleteReceiver(track string, ssrc uint32) {
 	r.Lock()
-	if r.config.WithStats {
-		if r.receivers[track].Kind() == webrtc.RTPCodecTypeVideo {
-			stats.VideoTracks.Dec()
-		} else {
-			stats.AudioTracks.Dec()
-		}
-	}
-
 	delete(r.receivers, track)
 	delete(r.stats, ssrc)
 	r.Unlock()

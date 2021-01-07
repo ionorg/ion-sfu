@@ -135,10 +135,12 @@ func (s *Subscriber) RemoveDownTrack(streamID string, downTrack *DownTrack) {
 				idx = i
 			}
 		}
-		dts[idx] = dts[len(dts)-1]
-		dts[len(dts)-1] = nil
-		dts = dts[:len(dts)-1]
-		s.tracks[streamID] = dts
+		if idx >= 0 {
+			dts[idx] = dts[len(dts)-1]
+			dts[len(dts)-1] = nil
+			dts = dts[:len(dts)-1]
+			s.tracks[streamID] = dts
+		}
 	}
 }
 
@@ -193,7 +195,7 @@ func (s *Subscriber) downTracksReports() {
 	for {
 		time.Sleep(5 * time.Second)
 
-		if s.pc.ConnectionState() == webrtc.ICETransportStateClosed {
+		if s.pc.ConnectionState() == webrtc.PeerConnectionStateClosed {
 			return
 		}
 

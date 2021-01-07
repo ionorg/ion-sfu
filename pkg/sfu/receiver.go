@@ -34,7 +34,8 @@ type Receiver interface {
 // WebRTCReceiver receives a video track
 type WebRTCReceiver struct {
 	sync.Mutex
-	rtcpMu sync.RWMutex
+	rtcpMu    sync.RWMutex
+	closeOnce sync.Once
 
 	peerID         string
 	trackID        string
@@ -215,7 +216,7 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 		w.closeTracks(layer)
 		w.nackWorker.Stop()
 		if w.onCloseHandler != nil {
-			w.onCloseHandler()
+			w.closeOnce.Do(w.onCloseHandler)
 		}
 	}()
 	for pkt := range w.buffers[layer].PacketChan() {
