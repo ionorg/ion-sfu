@@ -37,6 +37,7 @@ type Buffer struct {
 	audioPool  *sync.Pool
 	packetChan chan rtp.Packet
 	pPackets   []pendingPackets
+	closeOnce  sync.Once
 	mediaSSRC  uint32
 	clockRate  uint32
 	maxBitrate uint64
@@ -220,15 +221,17 @@ func (b *Buffer) Close() error {
 	b.Lock()
 	defer b.Unlock()
 
-	b.closed = true
-	if b.bucket != nil && b.codecType == webrtc.RTPCodecTypeVideo {
-		b.videoPool.Put(b.bucket.buf)
-	}
-	if b.bucket != nil && b.codecType == webrtc.RTPCodecTypeAudio {
-		b.audioPool.Put(b.bucket.buf)
-	}
-	b.onClose()
-	close(b.packetChan)
+	b.closeOnce.Do(func() {
+		b.closed = true
+		if b.bucket != nil && b.codecType == webrtc.RTPCodecTypeVideo {
+			b.videoPool.Put(b.bucket.buf)
+		}
+		if b.bucket != nil && b.codecType == webrtc.RTPCodecTypeAudio {
+			b.audioPool.Put(b.bucket.buf)
+		}
+		b.onClose()
+		close(b.packetChan)
+	})
 	return nil
 }
 
