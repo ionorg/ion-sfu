@@ -11,3 +11,5 @@ vendor
 *.pem
 bin
 *.generated.go
+.stignore
+okteto.yml
