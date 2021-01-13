@@ -17,8 +17,6 @@ import (
 
 const (
 	maxSN = 1 << 16
-	// default buffer time by ms
-	defaultBufferTime = 1000
 
 	reportDelta = 1e9
 )
@@ -28,6 +26,16 @@ type pendingPackets struct {
 	packet      []byte
 }
 
+type ExtPacket struct {
+	Head          bool
+	RtxSN         uint16
+	Cycle         uint32
+	Packet        rtp.Packet
+	Payload       interface{}
+	KeyFrame      bool
+	Retransmitted bool
+}
+
 // Buffer contains all packets
 type Buffer struct {
 	sync.Mutex
@@ -35,7 +43,7 @@ type Buffer struct {
 	codecType  webrtc.RTPCodecType
 	videoPool  *sync.Pool
 	audioPool  *sync.Pool
-	packetChan chan rtp.Packet
+	packetChan chan ExtPacket
 	pPackets   []pendingPackets
 	closeOnce  sync.Once
 	mediaSSRC  uint32
@@ -45,6 +53,7 @@ type Buffer struct {
 	twccExt    uint8
 	bound      bool
 	closed     bool
+	mime       string
 
 	// supported feedbacks
 	remb bool
@@ -93,12 +102,12 @@ func NewBuffer(ssrc uint32, vp, ap *sync.Pool) *Buffer {
 		mediaSSRC:  ssrc,
 		videoPool:  vp,
 		audioPool:  ap,
-		packetChan: make(chan rtp.Packet, 100),
+		packetChan: make(chan ExtPacket, 100),
 	}
 	return b
 }
 
-func (b *Buffer) PacketChan() chan rtp.Packet {
+func (b *Buffer) PacketChan() chan ExtPacket {
 	return b.packetChan
 }
 
@@ -108,12 +117,13 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 	codec := params.Codecs[0]
 	b.clockRate = codec.ClockRate
 	b.maxBitrate = o.MaxBitRate
+	b.mime = strings.ToLower(codec.MimeType)
 
 	switch {
-	case strings.HasPrefix(codec.MimeType, "audio/"):
+	case strings.HasPrefix(b.mime, "audio/"):
 		b.codecType = webrtc.RTPCodecTypeAudio
 		b.bucket = NewBucket(b.audioPool.Get().([]byte), false)
-	case strings.HasPrefix(codec.MimeType, "video/"):
+	case strings.HasPrefix(b.mime, "video/"):
 		b.codecType = webrtc.RTPCodecTypeVideo
 		b.bucket = NewBucket(b.videoPool.Get().([]byte), true)
 	default:
@@ -125,10 +135,6 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 			b.twccExt = uint8(ext.ID)
 			break
 		}
-	}
-
-	if o.BufferTime <= 0 {
-		o.BufferTime = defaultBufferTime
 	}
 
 	for _, fb := range codec.RTCPFeedback {
@@ -260,7 +266,26 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	if err := p.Unmarshal(b.bucket.addPacket(pkt, sn, sn == b.maxSeqNo)); err != nil {
 		return
 	}
-	b.packetChan <- p
+
+	ep := ExtPacket{
+		Head:   sn == b.maxSeqNo,
+		Cycle:  b.cycles,
+		Packet: p,
+	}
+
+	switch b.mime {
+	case "video/vp8":
+		vp8Packet := VP8{}
+		if err := vp8Packet.Unmarshal(p.Payload); err != nil {
+			return
+		}
+		ep.Payload = vp8Packet
+		ep.KeyFrame = vp8Packet.IsKeyFrame
+	case "video/h264":
+		ep.KeyFrame = isH264Keyframe(p.Payload)
+	}
+
+	b.packetChan <- ep
 
 	// if first time update or the timestamp is later (factoring timestamp wrap around)
 	if (b.latestTimestampTime == 0) || IsLaterTimestamp(p.Timestamp, b.latestTimestamp) {
@@ -281,7 +306,7 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 
 	if b.tcc {
 		if ext := p.GetExtension(b.twccExt); ext != nil && len(ext) > 1 {
-			b.feedbackTWCC(binary.BigEndian.Uint16(ext[0:2]), arrivalTime, (pkt[1]>>7&0x1) > 0)
+			b.feedbackTWCC(binary.BigEndian.Uint16(ext[0:2]), arrivalTime, p.Marker)
 		}
 	}
 	if arrivalTime-b.lastReport >= reportDelta {

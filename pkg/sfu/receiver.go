@@ -5,10 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pion/ion-sfu/pkg/stats"
-
 	"github.com/gammazero/workerpool"
 	"github.com/pion/ion-sfu/pkg/buffer"
+	"github.com/pion/ion-sfu/pkg/stats"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
@@ -24,7 +23,7 @@ type Receiver interface {
 	AddUpTrack(track *webrtc.TrackRemote, buffer *buffer.Buffer)
 	AddDownTrack(track *DownTrack, bestQualityFirst bool)
 	SubDownTrack(track *DownTrack, layer int) error
-	RetransmitPackets(track *DownTrack, packets []uint16, snOffset uint16)
+	RetransmitPackets(track *DownTrack, packets []uint32)
 	DeleteDownTrack(layer int, id string)
 	OnCloseHandler(fn func())
 	SendRTCP(p []rtcp.Packet)
@@ -124,6 +123,7 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 		}
 		track.currentSpatialLayer = layer
 		track.simulcast.targetSpatialLayer = layer
+		track.simulcast.currentTempLayer = 2
 		track.trackType = SimulcastDownTrack
 	} else {
 		track.trackType = SimpleDownTrack
@@ -188,11 +188,11 @@ func (w *WebRTCReceiver) SetRTCPCh(ch chan []rtcp.Packet) {
 	w.rtcpCh = ch
 }
 
-func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []uint16, snOffset uint16) {
+func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []uint32) {
 	w.nackWorker.Submit(func() {
 		pktBuff := packetFactory.Get().([]byte)
 		for _, sn := range packets {
-			i, err := w.buffers[track.currentSpatialLayer].GetPacket(pktBuff, sn+snOffset)
+			i, err := w.buffers[track.currentSpatialLayer].GetPacket(pktBuff, uint16(sn>>16))
 			if err != nil {
 				if err == io.EOF {
 					break
@@ -203,7 +203,12 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []uint16, s
 			if err = pkt.Unmarshal(pktBuff[:i]); err != nil {
 				continue
 			}
-			if err = track.WriteRTP(pkt); err == io.EOF {
+			if err = track.WriteRTP(buffer.ExtPacket{
+				Head:          false,
+				RtxSN:         uint16(sn),
+				Packet:        pkt,
+				Retransmitted: true,
+			}); err == io.EOF {
 				break
 			}
 		}
