@@ -69,9 +69,12 @@ func getPublisherMediaEngine() (*webrtc.MediaEngine, error) {
 		if err := me.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: extension}, webrtc.RTPCodecTypeVideo); err != nil {
 			return nil, err
 		}
-		if extension == sdp.TransportCCURI {
-			continue
-		}
+	}
+	for _, extension := range []string{
+		sdp.SDESMidURI,
+		sdp.SDESRTPStreamIDURI,
+		sdp.AudioLevelURI,
+	} {
 		if err := me.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: extension}, webrtc.RTPCodecTypeAudio); err != nil {
 			return nil, err
 		}
