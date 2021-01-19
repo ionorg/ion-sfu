@@ -180,13 +180,15 @@
         console.log("got track", track.id, "for stream", stream.id);
         if (track.kind === "video") {
           track.onunmute = () => {
-            const remoteVideo = document.createElement("video");
-            remoteVideo.srcObject = stream;
-            remoteVideo.autoplay = true;
-            remoteVideo.muted = true;
-            remotesDiv.appendChild(remoteVideo);
-
-            track.onremovetrack = () => remotesDiv.removeChild(remoteVideo);
+            let remoteVideo = remotesDiv.getElementsByTagName("video");
+            if (remoteVideo.length === 0){
+              remoteVideo = document.createElement("video");
+              remoteVideo.srcObject = stream;
+              remoteVideo.autoplay = true;
+              remoteVideo.muted = true;
+              remotesDiv.appendChild(remoteVideo);
+              stream.onremovetrack = () => remotesDiv.removeChild(remoteVideo);
+            }
           };
         }
       };

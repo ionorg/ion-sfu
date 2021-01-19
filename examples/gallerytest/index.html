@@ -98,13 +98,15 @@
 
           this.client.ontrack = (track, stream) => {
             if (track.kind === "video") {
-              const remoteVideo = document.createElement("video");
-              remoteVideo.srcObject = stream;
-              remoteVideo.autoplay = true;
-              remoteVideo.muted = true;
-              videosDiv.appendChild(remoteVideo);
-
-              track.onremovetrack = () => videosDiv.removeChild(removeVideo);
+              let remoteVideo = remotesDiv.getElementsByTagName("video");
+              if (remoteVideo.length === 0){
+                remoteVideo = document.createElement("video");
+                remoteVideo.srcObject = stream;
+                remoteVideo.autoplay = true;
+                remoteVideo.muted = true;
+                videosDiv.appendChild(remoteVideo);
+                stream.onremovetrack = () => videosDiv.removeChild(remoteVideo);
+              }
             }
           };
         }

@@ -39,6 +39,11 @@ portrange = [5000, 5200]
 # "unified-plan-with-fallback"
 sdpsemantics = "unified-plan"
 
+# mdns
+# false save many FD and Goroutines
+# true when using sfu in LAN
+mdns = false
+
 [webrtc.candidates]
 # In case you're deploying ion-sfu on a server which is configured with
 # a 1:1 NAT (e.g., Amazon EC2), you might want to also specify the public
