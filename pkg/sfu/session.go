@@ -121,7 +121,7 @@ func (s *Session) AddDatachannelHandleFunc(owner string, dc *webrtc.DataChannel,
 }
 
 func (s *Session) recipientDataChannelsFor(sender, label string) map[string]*webrtc.DataChannel {
-	val := make(map[string]*webrtc.DataChannel)
+	peers := make(map[string]*webrtc.DataChannel)
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -131,10 +131,10 @@ func (s *Session) recipientDataChannelsFor(sender, label string) map[string]*web
 			continue
 		}
 
-		val[sender] = p.subscriber.channels[label]
+		peers[sender] = p.subscriber.channels[label]
 	}
 
-	return val
+	return peers
 }
 
 // Publish will add a Sender to all peers in current Session from given
