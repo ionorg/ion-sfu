@@ -72,7 +72,7 @@ func (s *Session) onMessage(origin, label string, msg webrtc.DataChannelMessage)
 }
 
 func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
-	s.AddDatachannelHandleFunc(owner, dc, func(origin, label string, msg webrtc.DataChannelMessage, outputs map[string]*webrtc.DataChannel) {
+	s.AddDatachannelHandleFunc(owner, dc, func(origin string, msg webrtc.DataChannelMessage, outputs map[string]*webrtc.DataChannel) {
 		for _, c := range outputs {
 			if msg.IsString {
 				if err := c.SendText(string(msg.Data)); err != nil {
@@ -87,7 +87,7 @@ func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 	})
 }
 
-func (s *Session) AddDatachannelHandleFunc(owner string, dc *webrtc.DataChannel, handler func(origin, label string, msg webrtc.DataChannelMessage, outputs map[string]*webrtc.DataChannel)) {
+func (s *Session) AddDatachannelHandleFunc(owner string, dc *webrtc.DataChannel, handler func(origin string, msg webrtc.DataChannelMessage, outputs map[string]*webrtc.DataChannel)) {
 	label := dc.Label()
 
 	s.mu.RLock()
@@ -96,7 +96,7 @@ func (s *Session) AddDatachannelHandleFunc(owner string, dc *webrtc.DataChannel,
 	s.peers[owner].subscriber.channels[label] = dc
 
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-		handler(owner, label, msg, s.recipientDataChannelsFor(owner, label))
+		handler(owner, msg, s.recipientDataChannelsFor(owner, label))
 	})
 
 	for pid, p := range s.peers {
@@ -113,7 +113,7 @@ func (s *Session) AddDatachannelHandleFunc(owner string, dc *webrtc.DataChannel,
 
 		pid := pid
 		n.OnMessage(func(msg webrtc.DataChannelMessage) {
-			handler(pid, label, msg, s.recipientDataChannelsFor(pid, label))
+			handler(pid, msg, s.recipientDataChannelsFor(pid, label))
 		})
 
 		p.subscriber.negotiate()
