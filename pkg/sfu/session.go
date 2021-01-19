@@ -88,36 +88,36 @@ func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 }
 
 func (s *Session) AddDatachannelHandleFunc(owner string, dc *webrtc.DataChannel, handler func(origin, label string, msg webrtc.DataChannelMessage, outputs map[string]*webrtc.DataChannel)) {
-		label := dc.Label()
+	label := dc.Label()
 
-		s.mu.RLock()
-		defer s.mu.RUnlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-		s.peers[owner].subscriber.channels[label] = dc
+	s.peers[owner].subscriber.channels[label] = dc
 
-		dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-			handler(owner, label, msg, s.recipientDataChannelsFor(owner, label))
+	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
+		handler(owner, label, msg, s.recipientDataChannelsFor(owner, label))
+	})
+
+	for pid, p := range s.peers {
+		// Don't add to self
+		if owner == pid {
+			continue
+		}
+		n, err := p.subscriber.AddDataChannel(label)
+
+		if err != nil {
+			log.Errorf("error adding datachannel: %s", err)
+			continue
+		}
+
+		pid := pid
+		n.OnMessage(func(msg webrtc.DataChannelMessage) {
+			handler(pid, label, msg, s.recipientDataChannelsFor(pid, label))
 		})
 
-		for pid, p := range s.peers {
-			// Don't add to self
-			if owner == pid {
-				continue
-			}
-			n, err := p.subscriber.AddDataChannel(label)
-
-			if err != nil {
-				log.Errorf("error adding datachannel: %s", err)
-				continue
-			}
-
-			pid := pid
-			n.OnMessage(func(msg webrtc.DataChannelMessage) {
-				handler(pid, label, msg, s.recipientDataChannelsFor(pid, label))
-			})
-
-			p.subscriber.negotiate()
-		}
+		p.subscriber.negotiate()
+	}
 }
 
 func (s *Session) recipientDataChannelsFor(sender, label string) map[string]*webrtc.DataChannel {
