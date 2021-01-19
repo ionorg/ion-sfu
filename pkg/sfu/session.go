@@ -50,6 +50,7 @@ func (s *Session) RemovePeer(pid string) {
 func (s *Session) onMessage(origin, label string, msg webrtc.DataChannelMessage) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	for pid, p := range s.peers {
 		if origin == pid {
 			continue
@@ -71,36 +72,69 @@ func (s *Session) onMessage(origin, label string, msg webrtc.DataChannelMessage)
 }
 
 func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
-	label := dc.Label()
+	s.AddDatachannelHandleFunc(owner, dc, func(origin, label string, msg webrtc.DataChannelMessage, outputs map[string]*webrtc.DataChannel) {
+		for _, c := range outputs {
+			if msg.IsString {
+				if err := c.SendText(string(msg.Data)); err != nil {
+					log.Errorf("Sending dc message err: %v", err)
+				}
+			} else {
+				if err := c.Send(msg.Data); err != nil {
+					log.Errorf("Sending dc message err: %v", err)
+				}
+			}
+		}
+	})
+}
+
+func (s *Session) AddDatachannelHandleFunc(owner string, dc *webrtc.DataChannel, handler func(origin, label string, msg webrtc.DataChannelMessage, outputs map[string]*webrtc.DataChannel)) {
+		label := dc.Label()
+
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+
+		s.peers[owner].subscriber.channels[label] = dc
+
+		dc.OnMessage(func(msg webrtc.DataChannelMessage) {
+			handler(owner, label, msg, s.recipientDataChannelsFor(owner, label))
+		})
+
+		for pid, p := range s.peers {
+			// Don't add to self
+			if owner == pid {
+				continue
+			}
+			n, err := p.subscriber.AddDataChannel(label)
+
+			if err != nil {
+				log.Errorf("error adding datachannel: %s", err)
+				continue
+			}
+
+			pid := pid
+			n.OnMessage(func(msg webrtc.DataChannelMessage) {
+				handler(pid, label, msg, s.recipientDataChannelsFor(pid, label))
+			})
+
+			p.subscriber.negotiate()
+		}
+}
+
+func (s *Session) recipientDataChannelsFor(sender, label string) map[string]*webrtc.DataChannel {
+	val := make(map[string]*webrtc.DataChannel)
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	s.peers[owner].subscriber.channels[label] = dc
-
-	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-		s.onMessage(owner, label, msg)
-	})
-
 	for pid, p := range s.peers {
-		// Don't add to self
-		if owner == pid {
-			continue
-		}
-		n, err := p.subscriber.AddDataChannel(label)
-
-		if err != nil {
-			log.Errorf("error adding datachannel: %s", err)
+		if sender == pid {
 			continue
 		}
 
-		pid := pid
-		n.OnMessage(func(msg webrtc.DataChannelMessage) {
-			s.onMessage(pid, label, msg)
-		})
-
-		p.subscriber.negotiate()
+		val[sender] = p.subscriber.channels[label]
 	}
+
+	return val
 }
 
 // Publish will add a Sender to all peers in current Session from given
