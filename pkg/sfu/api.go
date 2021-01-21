@@ -17,9 +17,10 @@ const (
 )
 
 type setRemoteMedia struct {
-	StreamID string `json:"streamId"`
-	Video    string `json:"video"`
-	Audio    bool   `json:"audio"`
+	StreamID  string `json:"streamId"`
+	Video     string `json:"video"`
+	Framerate string `json:"framerate"`
+	Audio     bool   `json:"audio"`
 }
 
 func handleAPICommand(s *Subscriber, dc *webrtc.DataChannel) {
@@ -49,7 +50,18 @@ func handleAPICommand(s *Subscriber, dc *webrtc.DataChannel) {
 				case videoMuted:
 					dt.Mute(true)
 				}
+				switch srm.Framerate {
+				case videoHighQuality:
+					dt.SwitchSpatialLayer(2)
+				case videoMediumQuality:
+					dt.SwitchSpatialLayer(1)
+				case videoLowQuality:
+					dt.SwitchSpatialLayer(0)
+				case videoMuted:
+					dt.Mute(true)
+				}
 			}
+
 		}
 	})
 }

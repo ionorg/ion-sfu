@@ -237,15 +237,8 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 			return nil
 		}
 		// Wait for a keyframe to sync new source
-		switch d.mime {
-		case "video/vp8":
-		case "video/h264":
-		default:
-			log.Warnf("codec payload don't support simulcast: %s", d.codec.MimeType)
-			return nil
-		}
-		// Packet is not a keyframe, discard it
 		if !extPkt.KeyFrame {
+			// Packet is not a keyframe, discard it
 			d.receiver.SendRTCP([]rtcp.Packet{
 				&rtcp.PictureLossIndication{SenderSSRC: d.ssrc, MediaSSRC: extPkt.Packet.SSRC},
 			})
