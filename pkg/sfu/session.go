@@ -72,8 +72,17 @@ func (s *Session) onMessage(origin, label string, msg webrtc.DataChannelMessage)
 }
 
 func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
-	s.AddDatachannelHandleFunc(owner, dc, func(origin string, msg webrtc.DataChannelMessage, outputs map[string]*webrtc.DataChannel) {
-		for _, c := range outputs {
+	s.AddDatachannelHandleFunc(owner, dc, func(origin string, msg webrtc.DataChannelMessage) {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+
+		for pid, p := range s.peers {
+			if owner == pid {
+				continue
+			}
+
+			c := p.subscriber.channels[dc.Label()]
+
 			if msg.IsString {
 				if err := c.SendText(string(msg.Data)); err != nil {
 					log.Errorf("Sending dc message err: %v", err)
@@ -87,7 +96,7 @@ func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 	})
 }
 
-func (s *Session) AddDatachannelHandleFunc(owner string, dc *webrtc.DataChannel, handler func(origin string, msg webrtc.DataChannelMessage, outputs map[string]*webrtc.DataChannel)) {
+func (s *Session) AddDatachannelHandleFunc(owner string, dc *webrtc.DataChannel, handler func(origin string, msg webrtc.DataChannelMessage)) {
 	label := dc.Label()
 
 	s.mu.RLock()
@@ -96,7 +105,7 @@ func (s *Session) AddDatachannelHandleFunc(owner string, dc *webrtc.DataChannel,
 	s.peers[owner].subscriber.channels[label] = dc
 
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-		handler(owner, msg, s.recipientDataChannelsFor(owner, label))
+		handler(owner, msg)
 	})
 
 	for pid, p := range s.peers {
@@ -113,28 +122,11 @@ func (s *Session) AddDatachannelHandleFunc(owner string, dc *webrtc.DataChannel,
 
 		pid := pid
 		n.OnMessage(func(msg webrtc.DataChannelMessage) {
-			handler(pid, msg, s.recipientDataChannelsFor(pid, label))
+			handler(pid, msg)
 		})
 
 		p.subscriber.negotiate()
 	}
-}
-
-func (s *Session) recipientDataChannelsFor(sender, label string) map[string]*webrtc.DataChannel {
-	peers := make(map[string]*webrtc.DataChannel)
-
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	for pid, p := range s.peers {
-		if sender == pid {
-			continue
-		}
-
-		peers[sender] = p.subscriber.channels[label]
-	}
-
-	return peers
 }
 
 // Publish will add a Sender to all peers in current Session from given

@@ -233,3 +233,7 @@ func (p *Peer) Close() error {
 	}
 	return nil
 }
+
+func (p *Peer) GetDataChannel(label string) *webrtc.DataChannel {
+	return p.subscriber.channels[label]
+}
