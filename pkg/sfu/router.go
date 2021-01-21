@@ -226,6 +226,9 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 	downTrack.OnCloseHandler(func() {
 		if sub.pc.ConnectionState() != webrtc.PeerConnectionStateClosed {
 			if err := sub.pc.RemoveTrack(downTrack.transceiver.Sender()); err != nil {
+				if err == webrtc.ErrConnectionClosed {
+					return
+				}
 				log.Errorf("Error closing down track: %v", err)
 			} else {
 				sub.RemoveDownTrack(recv.StreamID(), downTrack)

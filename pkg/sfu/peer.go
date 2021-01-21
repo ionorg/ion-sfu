@@ -215,6 +215,13 @@ func (p *Peer) Trickle(candidate webrtc.ICECandidateInit, target int) error {
 
 // Close shuts down the peer connection and sends true to the done channel
 func (p *Peer) Close() error {
+	p.Lock()
+	defer p.Unlock()
+
+	p.OnOffer = nil
+	p.OnIceCandidate = nil
+	p.OnICEConnectionStateChange = nil
+
 	if p.session != nil {
 		p.session.RemovePeer(p.id)
 	}
