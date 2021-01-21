@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/lucsky/cuid"
 
@@ -40,9 +41,9 @@ type Peer struct {
 	publisher  *Publisher
 	subscriber *Subscriber
 
-	OnOffer                    func(*webrtc.SessionDescription)
-	OnIceCandidate             func(*webrtc.ICECandidateInit, int)
-	OnICEConnectionStateChange func(webrtc.ICEConnectionState)
+	onOffer                    atomic.Value // func(*webrtc.SessionDescription)
+	onIceCandidate             atomic.Value // func(*webrtc.ICECandidateInit, int)
+	onICEConnectionStateChange atomic.Value // func(webrtc.ICEConnectionState)
 
 	remoteAnswerPending bool
 	negotiationPending  bool
@@ -97,9 +98,10 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		}
 
 		p.remoteAnswerPending = true
-		if p.OnOffer != nil {
+
+		if handler, ok := p.onOffer.Load().(func(*webrtc.SessionDescription)); ok && handler != nil {
 			log.Infof("peer %s send offer", p.id)
-			p.OnOffer(&offer)
+			handler(&offer)
 		}
 	})
 
@@ -109,9 +111,9 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 			return
 		}
 
-		if p.OnIceCandidate != nil {
+		if handler, ok := p.onIceCandidate.Load().(func(*webrtc.ICECandidateInit, int)); ok && handler != nil {
 			json := c.ToJSON()
-			p.OnIceCandidate(&json, subscriber)
+			handler(&json, subscriber)
 		}
 	})
 
@@ -121,15 +123,15 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 			return
 		}
 
-		if p.OnIceCandidate != nil {
+		if handler, ok := p.onIceCandidate.Load().(func(*webrtc.ICECandidateInit, int)); ok && handler != nil {
 			json := c.ToJSON()
-			p.OnIceCandidate(&json, publisher)
+			handler(&json, publisher)
 		}
 	})
 
 	p.publisher.OnICEConnectionStateChange(func(s webrtc.ICEConnectionState) {
-		if p.OnICEConnectionStateChange != nil {
-			p.OnICEConnectionStateChange(s)
+		if handler, ok := p.onICEConnectionStateChange.Load().(func(webrtc.ICEConnectionState)); ok && handler != nil {
+			handler(s)
 		}
 	})
 
@@ -213,8 +215,24 @@ func (p *Peer) Trickle(candidate webrtc.ICECandidateInit, target int) error {
 	return nil
 }
 
+func (p *Peer) OnOffer(f func(*webrtc.SessionDescription)) {
+	p.onOffer.Store(f)
+}
+
+func (p *Peer) OnIceCandidate(f func(*webrtc.ICECandidateInit, int)) {
+	p.onIceCandidate.Store(f)
+}
+
+func (p *Peer) OnICEConnectionStateChange(f func(webrtc.ICEConnectionState)) {
+	p.onICEConnectionStateChange.Store(f)
+}
+
 // Close shuts down the peer connection and sends true to the done channel
 func (p *Peer) Close() error {
+	p.onOffer.Store(nil)
+	p.onIceCandidate.Store(nil)
+	p.onICEConnectionStateChange.Store(nil)
+
 	if p.session != nil {
 		p.session.RemovePeer(p.id)
 	}

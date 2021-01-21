@@ -225,7 +225,7 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 	// nolint:scopelint
 	downTrack.OnCloseHandler(func() {
 		if sub.pc.ConnectionState() != webrtc.PeerConnectionStateClosed {
-			if err := sub.pc.RemoveTrack(downTrack.transceiver.Sender()); err != nil {
+			if err := sub.pc.RemoveTrack(downTrack.transceiver.Sender()); err != nil && err != webrtc.ErrConnectionClosed {
 				log.Errorf("Error closing down track: %v", err)
 			} else {
 				sub.RemoveDownTrack(recv.StreamID(), downTrack)

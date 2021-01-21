@@ -341,16 +341,16 @@ func TestSFU_SessionScenarios(t *testing.T) {
 								}
 							})
 
-							p.local.OnIceCandidate = func(init *webrtc.ICECandidateInit, i int) {
+							p.local.OnIceCandidate(func(init *webrtc.ICECandidateInit, i int) {
 								switch i {
 								case subscriber:
 									p.remoteSub.AddICECandidate(*init)
 								case publisher:
 									p.remotePub.AddICECandidate(*init)
 								}
-							}
+							})
 
-							p.local.OnOffer = func(o *webrtc.SessionDescription) {
+							p.local.OnOffer(func(o *webrtc.SessionDescription) {
 								if testDone.get() {
 									return
 								}
@@ -369,7 +369,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 									err = p.local.SetRemoteDescription(a)
 									assert.NoError(t, err)
 								}()
-							}
+							})
 
 							offer, err := p.remotePub.CreateOffer(nil)
 							assert.NoError(t, err)

@@ -80,7 +80,7 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 			}
 
 			// Notify user of new ice candidate
-			peer.OnIceCandidate = func(candidate *webrtc.ICECandidateInit, target int) {
+			peer.OnIceCandidate(func(candidate *webrtc.ICECandidateInit, target int) {
 				bytes, err := json.Marshal(candidate)
 				if err != nil {
 					log.Errorf("OnIceCandidate error %s", err)
@@ -96,10 +96,10 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 				if err != nil {
 					log.Errorf("OnIceCandidate send error %v ", err)
 				}
-			}
+			})
 
 			// Notify user of new offer
-			peer.OnOffer = func(o *webrtc.SessionDescription) {
+			peer.OnOffer(func(o *webrtc.SessionDescription) {
 				marshalled, err := json.Marshal(o)
 				if err != nil {
 					err = stream.Send(&pb.SignalReply{
@@ -122,9 +122,9 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 				if err != nil {
 					log.Errorf("negotiation error %s", err)
 				}
-			}
+			})
 
-			peer.OnICEConnectionStateChange = func(c webrtc.ICEConnectionState) {
+			peer.OnICEConnectionStateChange(func(c webrtc.ICEConnectionState) {
 				err = stream.Send(&pb.SignalReply{
 					Payload: &pb.SignalReply_IceConnectionState{
 						IceConnectionState: c.String(),
@@ -134,7 +134,7 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 				if err != nil {
 					log.Errorf("oniceconnectionstatechange error %s", err)
 				}
-			}
+			})
 
 			answer, err := peer.Join(payload.Join.Sid, offer)
 			if err != nil {

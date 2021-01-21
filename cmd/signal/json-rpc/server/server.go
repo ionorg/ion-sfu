@@ -55,20 +55,20 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 			break
 		}
 
-		p.OnOffer = func(offer *webrtc.SessionDescription) {
+		p.OnOffer(func(offer *webrtc.SessionDescription) {
 			if err := conn.Notify(ctx, "offer", offer); err != nil {
 				log.Errorf("error sending offer %s", err)
 			}
+		})
 
-		}
-		p.OnIceCandidate = func(candidate *webrtc.ICECandidateInit, target int) {
+		p.OnIceCandidate(func(candidate *webrtc.ICECandidateInit, target int) {
 			if err := conn.Notify(ctx, "trickle", Trickle{
 				Candidate: *candidate,
 				Target:    target,
 			}); err != nil {
 				log.Errorf("error sending ice candidate %s", err)
 			}
-		}
+		})
 
 		answer, err := p.Join(join.Sid, join.Offer)
 		if err != nil {
