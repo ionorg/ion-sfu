@@ -55,6 +55,11 @@ func NewPeer(provider SessionProvider) *Peer {
 	}
 }
 
+// ID returns the peers unique id.
+func (p *Peer) ID() string {
+	return p.id
+}
+
 // Join initializes this peer for a given sessionID (takes an SDPOffer)
 func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
 	if p.publisher != nil {
