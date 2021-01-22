@@ -21,7 +21,7 @@ type setRemoteMedia struct {
 }
 
 func SubscriberAPI(next sfu.MessageProcessor) sfu.MessageProcessor {
-	return sfu.ProcessFunc(func(peer *sfu.Peer, msg webrtc.DataChannelMessage) {
+	return sfu.ProcessFunc(func(peer *sfu.Peer, dc *webrtc.DataChannel, msg webrtc.DataChannelMessage) {
 		srm := &setRemoteMedia{}
 		if err := json.Unmarshal(msg.Data, srm); err != nil {
 			return
@@ -48,6 +48,6 @@ func SubscriberAPI(next sfu.MessageProcessor) sfu.MessageProcessor {
 				}
 			}
 		}
-		next.Process(peer, msg)
+		next.Process(peer, dc, msg)
 	})
 }

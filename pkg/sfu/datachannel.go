@@ -8,10 +8,10 @@ type (
 	Middlewares []func(processor MessageProcessor) MessageProcessor
 
 	MessageProcessor interface {
-		Process(peer *Peer, msg webrtc.DataChannelMessage)
+		Process(peer *Peer, dc *webrtc.DataChannel, msg webrtc.DataChannelMessage)
 	}
 
-	ProcessFunc func(peer *Peer, msg webrtc.DataChannelMessage)
+	ProcessFunc func(peer *Peer, dc *webrtc.DataChannel, msg webrtc.DataChannelMessage)
 
 	ChainHandler struct {
 		Middlewares Middlewares
@@ -21,12 +21,12 @@ type (
 )
 
 func noOpProcess() MessageProcessor {
-	return ProcessFunc(func(_ *Peer, _ webrtc.DataChannelMessage) {
+	return ProcessFunc(func(_ *Peer, _ *webrtc.DataChannel, _ webrtc.DataChannelMessage) {
 	})
 }
 
-func (p ProcessFunc) Process(peer *Peer, msg webrtc.DataChannelMessage) {
-	p(peer, msg)
+func (p ProcessFunc) Process(peer *Peer, dc *webrtc.DataChannel, msg webrtc.DataChannelMessage) {
+	p(peer, dc, msg)
 }
 
 func (mws Middlewares) Process(h MessageProcessor) MessageProcessor {
@@ -42,8 +42,8 @@ func NewDCChain(m []func(p MessageProcessor) MessageProcessor) Middlewares {
 	return Middlewares(m)
 }
 
-func (c *ChainHandler) Process(peer *Peer, msg webrtc.DataChannelMessage) {
-	c.current.Process(peer, msg)
+func (c *ChainHandler) Process(peer *Peer, dc *webrtc.DataChannel, msg webrtc.DataChannelMessage) {
+	c.current.Process(peer, dc, msg)
 }
 
 func chain(mws []func(processor MessageProcessor) MessageProcessor, last MessageProcessor) MessageProcessor {

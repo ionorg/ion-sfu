@@ -12,7 +12,7 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-const ApiChannelLabel = "ion-sfu"
+const APIChannelLabel = "ion-sfu"
 
 type Subscriber struct {
 	sync.RWMutex
@@ -83,7 +83,7 @@ func (s *Subscriber) UseDatachannel(peer *Peer, channel string, m []func(p Messa
 	mws := NewDCChain(m)
 	p := mws.Process(noOpProcess())
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-		p.Process(peer, msg)
+		p.Process(peer, dc, msg)
 	})
 
 	return nil

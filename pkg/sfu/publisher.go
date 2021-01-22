@@ -53,7 +53,7 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 	})
 
 	pc.OnDataChannel(func(dc *webrtc.DataChannel) {
-		if dc.Label() == ApiChannelLabel {
+		if dc.Label() == APIChannelLabel {
 			// terminate api data channel
 			return
 		}

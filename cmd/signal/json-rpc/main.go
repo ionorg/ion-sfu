@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"time"
 
 	_ "net/http/pprof"
 
@@ -130,7 +131,7 @@ func main() {
 	// Register default middlewares
 	set := sfu.Settings{
 		FeedbackDatachannelMiddlewares: map[string][]func(p sfu.MessageProcessor) sfu.MessageProcessor{
-			sfu.ApiChannelLabel: sfu.Middlewares{datachannel.SubscriberAPI},
+			sfu.APIChannelLabel: sfu.Middlewares{datachannel.KeepAlive(5 * time.Second), datachannel.SubscriberAPI},
 		},
 	}
 

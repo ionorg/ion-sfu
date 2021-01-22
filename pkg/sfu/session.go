@@ -92,7 +92,7 @@ func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 
 	if withMiddleware {
 		ch := NewDCChain(middlewares)
-		process = ch.Process(ProcessFunc(func(_ *Peer, msg webrtc.DataChannelMessage) {
+		process = ch.Process(ProcessFunc(func(_ *Peer, _ *webrtc.DataChannel, msg webrtc.DataChannelMessage) {
 			s.onMessage(owner, label, msg)
 		}))
 	}
@@ -101,7 +101,7 @@ func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 		if !withMiddleware {
 			s.onMessage(owner, label, msg)
 		} else {
-			process.Process(peer, msg)
+			process.Process(peer, dc, msg)
 		}
 	})
 

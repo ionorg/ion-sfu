@@ -140,7 +140,7 @@ func main() {
 	// Register default middlewares
 	set := sfu.Settings{
 		FeedbackDatachannelMiddlewares: map[string][]func(p sfu.MessageProcessor) sfu.MessageProcessor{
-			sfu.ApiChannelLabel: sfu.Middlewares{datachannel.SubscriberAPI},
+			sfu.APIChannelLabel: sfu.Middlewares{datachannel.SubscriberAPI},
 		},
 	}
 
