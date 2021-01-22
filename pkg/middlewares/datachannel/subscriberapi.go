@@ -1,15 +1,14 @@
-package sfu
+package datachannel
 
 import (
+	"context"
 	"encoding/json"
 
-	log "github.com/pion/ion-log"
+	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/pion/webrtc/v3"
 )
 
 const (
-	apiChannelLabel = "ion-sfu"
-
 	videoHighQuality   = "high"
 	videoMediumQuality = "medium"
 	videoLowQuality    = "low"
@@ -23,14 +22,13 @@ type setRemoteMedia struct {
 	Audio     bool   `json:"audio"`
 }
 
-func handleAPICommand(s *Subscriber, dc *webrtc.DataChannel) {
-	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
+func SubscriberAPI(next sfu.MessageProcessor) sfu.MessageProcessor {
+	return sfu.ProcessFunc(func(ctx context.Context, args sfu.ProcessArgs) {
 		srm := &setRemoteMedia{}
-		if err := json.Unmarshal(msg.Data, srm); err != nil {
-			log.Errorf("Unmarshal api command err: %v", err)
+		if err := json.Unmarshal(args.Message.Data, srm); err != nil {
 			return
 		}
-		downTracks := s.GetDownTracks(srm.StreamID)
+		downTracks := args.Peer.Subscriber().GetDownTracks(srm.StreamID)
 
 		for _, dt := range downTracks {
 			switch dt.Kind() {
@@ -63,5 +61,6 @@ func handleAPICommand(s *Subscriber, dc *webrtc.DataChannel) {
 			}
 
 		}
+		next.Process(ctx, args)
 	})
 }

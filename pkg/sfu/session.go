@@ -13,16 +13,19 @@ type Session struct {
 	id             string
 	mu             sync.RWMutex
 	peers          map[string]*Peer
-	onCloseHandler func()
 	closed         bool
+	fanOutDCs      []string
+	datachannels   []*Datachannel
+	onCloseHandler func()
 }
 
 // NewSession creates a new session
-func NewSession(id string) *Session {
+func NewSession(id string, dcs []*Datachannel) *Session {
 	return &Session{
-		id:     id,
-		peers:  make(map[string]*Peer),
-		closed: false,
+		id:           id,
+		peers:        make(map[string]*Peer),
+		closed:       false,
+		datachannels: dcs,
 	}
 }
 
@@ -70,12 +73,28 @@ func (s *Session) onMessage(origin, label string, msg webrtc.DataChannelMessage)
 	}
 }
 
+func (s *Session) getDataChannels(origin, label string) (dcs []*webrtc.DataChannel) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for pid, p := range s.peers {
+		if origin == pid {
+			continue
+		}
+
+		if dc, ok := p.subscriber.channels[label]; ok {
+			dcs = append(dcs, dc)
+		}
+	}
+	return
+}
+
 func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 	label := dc.Label()
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
+	s.fanOutDCs = append(s.fanOutDCs, label)
 	s.peers[owner].subscriber.channels[label] = dc
 
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
@@ -99,7 +118,7 @@ func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 			s.onMessage(pid, label, msg)
 		})
 
-		p.subscriber.negotiate()
+		go p.subscriber.negotiate()
 	}
 }
 
@@ -129,7 +148,22 @@ func (s *Session) Subscribe(peer *Peer) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	subdChans := false
+	// Subscribe to fan out datachannels
+	for _, label := range s.fanOutDCs {
+		n, err := peer.subscriber.AddDataChannel(label)
+
+		if err != nil {
+			log.Errorf("error adding datachannel: %s", err)
+			continue
+		}
+
+		label := label
+		n.OnMessage(func(msg webrtc.DataChannelMessage) {
+			s.onMessage(peer.id, label, msg)
+		})
+	}
+
+	// Subscribe to publisher streams
 	for pid, p := range s.peers {
 		if pid == peer.id {
 			continue
@@ -139,26 +173,9 @@ func (s *Session) Subscribe(peer *Peer) {
 			log.Errorf("Subscribing to router err: %v", err)
 			continue
 		}
-
-		if !subdChans {
-			for _, dc := range p.subscriber.channels {
-				label := dc.Label()
-				n, err := peer.subscriber.AddDataChannel(label)
-
-				if err != nil {
-					log.Errorf("error adding datachannel: %s", err)
-					continue
-				}
-
-				n.OnMessage(func(msg webrtc.DataChannelMessage) {
-					s.onMessage(peer.id, label, msg)
-				})
-			}
-			subdChans = true
-
-			peer.subscriber.negotiate()
-		}
 	}
+
+	peer.subscriber.negotiate()
 }
 
 // Transports returns peers in this session

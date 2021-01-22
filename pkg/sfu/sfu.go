@@ -60,11 +60,12 @@ var (
 // SFU represents an sfu instance
 type SFU struct {
 	sync.RWMutex
-	webrtc    WebRTCTransportConfig
-	router    RouterConfig
-	turn      *turn.Server
-	sessions  map[string]*Session
-	withStats bool
+	webrtc       WebRTCTransportConfig
+	router       RouterConfig
+	turn         *turn.Server
+	sessions     map[string]*Session
+	datachannels []*Datachannel
+	withStats    bool
 }
 
 // NewWebRTCTransportConfig parses our settings and returns a usable WebRTCTransportConfig for creating PeerConnections
@@ -149,7 +150,7 @@ func NewSFU(c Config) *SFU {
 
 	w := NewWebRTCTransportConfig(c)
 
-	s := &SFU{
+	sfu := &SFU{
 		webrtc:    w,
 		sessions:  make(map[string]*Session),
 		withStats: c.Router.WithStats,
@@ -160,16 +161,16 @@ func NewSFU(c Config) *SFU {
 		if err != nil {
 			log.Panicf("Could not init turn server err: %v", err)
 		}
-		s.turn = ts
+		sfu.turn = ts
 	}
 
 	runtime.KeepAlive(ballast)
-	return s
+	return sfu
 }
 
 // NewSession creates a new session instance
 func (s *SFU) newSession(id string) *Session {
-	session := NewSession(id)
+	session := NewSession(id, s.datachannels)
 
 	session.OnClose(func() {
 		s.Lock()
@@ -205,4 +206,10 @@ func (s *SFU) GetSession(sid string) (*Session, WebRTCTransportConfig) {
 		session = s.newSession(sid)
 	}
 	return session, s.webrtc
+}
+
+func (s *SFU) NewDatachannel(label string) *Datachannel {
+	dc := &Datachannel{label: label}
+	s.datachannels = append(s.datachannels, dc)
+	return dc
 }
