@@ -61,6 +61,7 @@ var (
 type SFU struct {
 	sync.RWMutex
 	webrtc    WebRTCTransportConfig
+	settings  Settings
 	router    RouterConfig
 	turn      *turn.Server
 	sessions  map[string]*Session
@@ -133,7 +134,7 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 }
 
 // NewSFU creates a new sfu instance
-func NewSFU(c Config) *SFU {
+func NewSFU(c Config, s Settings) *SFU {
 	// Init random seed
 	rand.Seed(time.Now().UnixNano())
 	// Init ballast
@@ -149,27 +150,28 @@ func NewSFU(c Config) *SFU {
 
 	w := NewWebRTCTransportConfig(c)
 
-	s := &SFU{
+	sfu := &SFU{
 		webrtc:    w,
 		sessions:  make(map[string]*Session),
 		withStats: c.Router.WithStats,
+		settings:  s,
 	}
 
 	if c.Turn.Enabled {
-		ts, err := initTurnServer(c.Turn, nil)
+		ts, err := initTurnServer(c.Turn, s.TurnAuth)
 		if err != nil {
 			log.Panicf("Could not init turn server err: %v", err)
 		}
-		s.turn = ts
+		sfu.turn = ts
 	}
 
 	runtime.KeepAlive(ballast)
-	return s
+	return sfu
 }
 
 // NewSession creates a new session instance
 func (s *SFU) newSession(id string) *Session {
-	session := NewSession(id)
+	session := NewSession(id, &s.settings)
 
 	session.OnClose(func() {
 		s.Lock()

@@ -53,7 +53,7 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 	})
 
 	pc.OnDataChannel(func(dc *webrtc.DataChannel) {
-		if dc.Label() == apiChannelLabel {
+		if dc.Label() == ApiChannelLabel {
 			// terminate api data channel
 			return
 		}
@@ -85,7 +85,7 @@ func (p *Publisher) Answer(offer webrtc.SessionDescription) (webrtc.SessionDescr
 
 	for _, c := range p.candidates {
 		if err := p.pc.AddICECandidate(c); err != nil {
-			log.Errorf("Add publisher ice candidate to peer %s err: %v", p.id, err)
+			log.Errorf("Add Publisher ice candidate to peer %s err: %v", p.id, err)
 		}
 	}
 	p.candidates = nil

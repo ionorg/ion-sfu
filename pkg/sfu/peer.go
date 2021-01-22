@@ -34,11 +34,12 @@ type SessionProvider interface {
 // Peer represents a pair peer connection
 type Peer struct {
 	sync.Mutex
-	id         string
-	session    *Session
-	provider   SessionProvider
-	publisher  *Publisher
-	subscriber *Subscriber
+	id       string
+	session  *Session
+	provider SessionProvider
+
+	Publisher  *Publisher
+	Subscriber *Subscriber
 
 	OnOffer                    func(*webrtc.SessionDescription)
 	OnIceCandidate             func(*webrtc.ICECandidateInit, int)
@@ -57,7 +58,7 @@ func NewPeer(provider SessionProvider) *Peer {
 
 // Join initializes this peer for a given sessionID (takes an SDPOffer)
 func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
-	if p.publisher != nil {
+	if p.Publisher != nil {
 		log.Debugf("peer already exists")
 		return nil, ErrTransportExists
 	}
@@ -71,16 +72,22 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 
 	p.session, cfg = p.provider.GetSession(sid)
 
-	p.subscriber, err = NewSubscriber(pid, cfg)
+	p.Subscriber, err = NewSubscriber(pid, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("error creating transport: %v", err)
 	}
-	p.publisher, err = NewPublisher(p.session, pid, cfg)
+	p.Publisher, err = NewPublisher(p.session, pid, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("error creating transport: %v", err)
 	}
 
-	p.subscriber.OnNegotiationNeeded(func() {
+	for channel, mws := range p.session.settings.FanOutDatachannelMiddlewares {
+		if err = p.Subscriber.UseDatachannel(p, channel, mws); err != nil {
+			return nil, fmt.Errorf("error setting subscriber default dc datachannel")
+		}
+	}
+
+	p.Subscriber.OnNegotiationNeeded(func() {
 		p.Lock()
 		defer p.Unlock()
 
@@ -90,7 +97,7 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		}
 
 		log.Debugf("peer %s negotiation needed", p.id)
-		offer, err := p.subscriber.CreateOffer()
+		offer, err := p.Subscriber.CreateOffer()
 		if err != nil {
 			log.Errorf("CreateOffer error: %v", err)
 			return
@@ -103,8 +110,8 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		}
 	})
 
-	p.subscriber.OnICECandidate(func(c *webrtc.ICECandidate) {
-		log.Debugf("on subscriber ice candidate called for peer " + p.id)
+	p.Subscriber.OnICECandidate(func(c *webrtc.ICECandidate) {
+		log.Debugf("on Subscriber ice candidate called for peer " + p.id)
 		if c == nil {
 			return
 		}
@@ -115,8 +122,8 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		}
 	})
 
-	p.publisher.OnICECandidate(func(c *webrtc.ICECandidate) {
-		log.Debugf("on publisher ice candidate called for peer " + p.id)
+	p.Publisher.OnICECandidate(func(c *webrtc.ICECandidate) {
+		log.Debugf("on Publisher ice candidate called for peer " + p.id)
 		if c == nil {
 			return
 		}
@@ -127,7 +134,7 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		}
 	})
 
-	p.publisher.OnICEConnectionStateChange(func(s webrtc.ICEConnectionState) {
+	p.Publisher.OnICEConnectionStateChange(func(s webrtc.ICEConnectionState) {
 		if p.OnICEConnectionStateChange != nil {
 			p.OnICEConnectionStateChange(s)
 		}
@@ -137,7 +144,7 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 
 	log.Infof("peer %s join session %s", p.id, sid)
 
-	answer, err := p.publisher.Answer(sdp)
+	answer, err := p.Publisher.Answer(sdp)
 	if err != nil {
 		return nil, fmt.Errorf("error setting remote description: %v", err)
 	}
@@ -151,17 +158,17 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 
 // Answer an offer from remote
 func (p *Peer) Answer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
-	if p.subscriber == nil {
+	if p.Subscriber == nil {
 		return nil, ErrNoTransportEstablished
 	}
 
 	log.Infof("peer %s got offer", p.id)
 
-	if p.publisher.SignalingState() != webrtc.SignalingStateStable {
+	if p.Publisher.SignalingState() != webrtc.SignalingStateStable {
 		return nil, ErrOfferIgnored
 	}
 
-	answer, err := p.publisher.Answer(sdp)
+	answer, err := p.Publisher.Answer(sdp)
 	if err != nil {
 		return nil, fmt.Errorf("error creating answer: %v", err)
 	}
@@ -173,14 +180,14 @@ func (p *Peer) Answer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription
 
 // SetRemoteDescription when receiving an answer from remote
 func (p *Peer) SetRemoteDescription(sdp webrtc.SessionDescription) error {
-	if p.subscriber == nil {
+	if p.Subscriber == nil {
 		return ErrNoTransportEstablished
 	}
 	p.Lock()
 	defer p.Unlock()
 
 	log.Infof("peer %s got answer", p.id)
-	if err := p.subscriber.SetRemoteDescription(sdp); err != nil {
+	if err := p.Subscriber.SetRemoteDescription(sdp); err != nil {
 		return fmt.Errorf("error setting remote description: %v", err)
 	}
 
@@ -188,7 +195,7 @@ func (p *Peer) SetRemoteDescription(sdp webrtc.SessionDescription) error {
 
 	if p.negotiationPending {
 		p.negotiationPending = false
-		go p.subscriber.negotiate()
+		go p.Subscriber.negotiate()
 	}
 
 	return nil
@@ -196,17 +203,17 @@ func (p *Peer) SetRemoteDescription(sdp webrtc.SessionDescription) error {
 
 // Trickle candidates available for this peer
 func (p *Peer) Trickle(candidate webrtc.ICECandidateInit, target int) error {
-	if p.subscriber == nil || p.publisher == nil {
+	if p.Subscriber == nil || p.Publisher == nil {
 		return ErrNoTransportEstablished
 	}
 	log.Infof("peer %s trickle", p.id)
 	switch target {
 	case publisher:
-		if err := p.publisher.AddICECandidate(candidate); err != nil {
+		if err := p.Publisher.AddICECandidate(candidate); err != nil {
 			return fmt.Errorf("error setting ice candidate: %s", err)
 		}
 	case subscriber:
-		if err := p.subscriber.AddICECandidate(candidate); err != nil {
+		if err := p.Subscriber.AddICECandidate(candidate); err != nil {
 			return fmt.Errorf("error setting ice candidate: %s", err)
 		}
 	}
@@ -225,11 +232,11 @@ func (p *Peer) Close() error {
 	if p.session != nil {
 		p.session.RemovePeer(p.id)
 	}
-	if p.publisher != nil {
-		p.publisher.Close()
+	if p.Publisher != nil {
+		p.Publisher.Close()
 	}
-	if p.subscriber != nil {
-		if err := p.subscriber.Close(); err != nil {
+	if p.Subscriber != nil {
+		if err := p.Subscriber.Close(); err != nil {
 			return err
 		}
 	}

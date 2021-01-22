@@ -12,6 +12,7 @@ import (
 	log "github.com/pion/ion-log"
 	pb "github.com/pion/ion-sfu/cmd/signal/grpc/proto"
 	"github.com/pion/ion-sfu/cmd/signal/grpc/server"
+	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
 	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/viper"
@@ -135,7 +136,15 @@ func main() {
 	s := grpc.NewServer(
 		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
 	)
-	pb.RegisterSFUServer(s, server.NewServer(sfu.NewSFU(conf.Config)))
+
+	// Register default middlewares
+	set := sfu.Settings{
+		FanOutDatachannelMiddlewares: map[string][]func(p sfu.MessageProcessor) sfu.MessageProcessor{
+			sfu.ApiChannelLabel: sfu.Middlewares{datachannel.SubscriberAPI},
+		},
+	}
+
+	pb.RegisterSFUServer(s, server.NewServer(sfu.NewSFU(conf.Config, set)))
 	grpc_prometheus.Register(s)
 
 	go startMetrics(metricsAddr)

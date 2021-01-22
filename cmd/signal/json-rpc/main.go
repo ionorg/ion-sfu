@@ -11,14 +11,14 @@ import (
 	_ "net/http/pprof"
 
 	"github.com/gorilla/websocket"
+	log "github.com/pion/ion-log"
+	"github.com/pion/ion-sfu/cmd/signal/json-rpc/server"
+	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
+	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sourcegraph/jsonrpc2"
 	websocketjsonrpc2 "github.com/sourcegraph/jsonrpc2/websocket"
 	"github.com/spf13/viper"
-
-	log "github.com/pion/ion-log"
-	"github.com/pion/ion-sfu/cmd/signal/json-rpc/server"
-	"github.com/pion/ion-sfu/pkg/sfu"
 )
 
 var (
@@ -126,7 +126,15 @@ func main() {
 	log.Init(conf.Log.Level, fixByFile, fixByFunc)
 
 	log.Infof("--- Starting SFU Node ---")
-	s := sfu.NewSFU(conf)
+
+	// Register default middlewares
+	set := sfu.Settings{
+		FanOutDatachannelMiddlewares: map[string][]func(p sfu.MessageProcessor) sfu.MessageProcessor{
+			sfu.ApiChannelLabel: sfu.Middlewares{datachannel.SubscriberAPI},
+		},
+	}
+
+	s := sfu.NewSFU(conf, set)
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			return true

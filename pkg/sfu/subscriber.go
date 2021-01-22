@@ -6,12 +6,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pion/rtcp"
-
 	"github.com/bep/debounce"
 	log "github.com/pion/ion-log"
+	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 )
+
+const ApiChannelLabel = "ion-sfu"
 
 type Subscriber struct {
 	sync.RWMutex
@@ -52,13 +53,6 @@ func NewSubscriber(id string, cfg WebRTCTransportConfig) (*Subscriber, error) {
 		channels: make(map[string]*webrtc.DataChannel),
 	}
 
-	dc, err := pc.CreateDataChannel(apiChannelLabel, &webrtc.DataChannelInit{})
-	if err != nil {
-		log.Errorf("DC creation error: %v", err)
-		return nil, errPeerConnectionInitFailed
-	}
-	handleAPICommand(s, dc)
-
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		log.Debugf("ice connection state: %s", connectionState)
 		switch connectionState {
@@ -77,6 +71,22 @@ func NewSubscriber(id string, cfg WebRTCTransportConfig) (*Subscriber, error) {
 	go s.downTracksReports()
 
 	return s, nil
+}
+
+func (s *Subscriber) UseDatachannel(peer *Peer, channel string, m []func(p MessageProcessor) MessageProcessor) error {
+	dc, err := s.pc.CreateDataChannel(channel, &webrtc.DataChannelInit{})
+	if err != nil {
+		log.Errorf("DC creation error: %v", err)
+		return err
+	}
+
+	mws := NewDCChain(m)
+	p := mws.Process(noOpProcess())
+	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
+		p.Process(peer, msg)
+	})
+
+	return nil
 }
 
 func (s *Subscriber) OnNegotiationNeeded(f func()) {
@@ -172,7 +182,7 @@ func (s *Subscriber) SetRemoteDescription(desc webrtc.SessionDescription) error 
 
 	for _, c := range s.candidates {
 		if err := s.pc.AddICECandidate(c); err != nil {
-			log.Errorf("Add subscriber ice candidate to peer %s err: %v", s.id, err)
+			log.Errorf("Add Subscriber ice candidate to peer %s err: %v", s.id, err)
 		}
 	}
 	s.candidates = nil
