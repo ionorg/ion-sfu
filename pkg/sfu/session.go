@@ -157,6 +157,7 @@ func (s *Session) Subscribe(peer *Peer) {
 			continue
 		}
 
+		label := label
 		n.OnMessage(func(msg webrtc.DataChannelMessage) {
 			s.onMessage(peer.id, label, msg)
 		})

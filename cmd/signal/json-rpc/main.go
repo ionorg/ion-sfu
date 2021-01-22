@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net"
@@ -9,6 +10,8 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"time"
+
+	"github.com/pion/webrtc/v3"
 
 	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
 
@@ -131,6 +134,9 @@ func main() {
 	s := sfu.NewSFU(conf)
 	dc := s.NewDatachannel(sfu.APIChannelLabel)
 	dc.Use(datachannel.KeepAlive(5*time.Second), datachannel.SubscriberAPI)
+	dc.OnMessage(func(ctx context.Context, msg webrtc.DataChannelMessage, in *webrtc.DataChannel, out []*webrtc.DataChannel) {
+
+	})
 
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
