@@ -80,10 +80,10 @@ func (s *Subscriber) AddDatachannel(peer *Peer, dc *Datachannel) error {
 		return err
 	}
 
-	mws := NewDCChain(dc.middlewares)
+	mws := newDCChain(dc.middlewares)
 	p := mws.Process(ProcessFunc(func(ctx context.Context, args ProcessArgs) {
 		if dc.onMessage != nil {
-			dc.onMessage(ctx, args.Message, ndc, peer.session.getDataChannels(peer.id, dc.label))
+			dc.onMessage(ctx, args, peer.session.getDataChannels(peer.id, dc.label))
 		}
 	}))
 	ndc.OnMessage(func(msg webrtc.DataChannelMessage) {

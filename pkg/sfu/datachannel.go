@@ -7,10 +7,13 @@ import (
 )
 
 type (
+	// Datachannel is a wrapper to define middlewares executed on defined label.
+	// The datachannels created will be negotiated on join to all peers that joins
+	// the SFU.
 	Datachannel struct {
 		label       string
 		middlewares []func(MessageProcessor) MessageProcessor
-		onMessage   func(ctx context.Context, msg webrtc.DataChannelMessage, in *webrtc.DataChannel, out []*webrtc.DataChannel)
+		onMessage   func(ctx context.Context, args ProcessArgs, out []*webrtc.DataChannel)
 	}
 
 	ProcessArgs struct {
@@ -27,25 +30,23 @@ type (
 
 	ProcessFunc func(ctx context.Context, args ProcessArgs)
 
-	ChainHandler struct {
-		Middlewares Middlewares
+	chainHandler struct {
+		middlewares Middlewares
 		Last        MessageProcessor
 		current     MessageProcessor
 	}
 )
 
+// Use adds the middlewares to the current Datachannel.
+// The middlewares are going to be executed before the OnMessage event fires.
 func (dc *Datachannel) Use(middlewares ...func(MessageProcessor) MessageProcessor) {
 	dc.middlewares = append(dc.middlewares, middlewares...)
 }
 
-func (dc *Datachannel) OnMessage(fn func(ctx context.Context, msg webrtc.DataChannelMessage,
-	in *webrtc.DataChannel, out []*webrtc.DataChannel)) {
+// OnMessage sets the message callback for the datachannel, the event is fired
+// after all the middlewares have processed the message.
+func (dc *Datachannel) OnMessage(fn func(ctx context.Context, args ProcessArgs, out []*webrtc.DataChannel)) {
 	dc.onMessage = fn
-}
-
-func noOpProcess() MessageProcessor {
-	return ProcessFunc(func(_ context.Context, _ ProcessArgs) {
-	})
 }
 
 func (p ProcessFunc) Process(ctx context.Context, args ProcessArgs) {
@@ -53,19 +54,18 @@ func (p ProcessFunc) Process(ctx context.Context, args ProcessArgs) {
 }
 
 func (mws Middlewares) Process(h MessageProcessor) MessageProcessor {
-	return &ChainHandler{mws, h, chain(mws, h)}
+	return &chainHandler{mws, h, chain(mws, h)}
 }
 
 func (mws Middlewares) ProcessFunc(h MessageProcessor) MessageProcessor {
-	return &ChainHandler{mws, h, chain(mws, h)}
+	return &chainHandler{mws, h, chain(mws, h)}
 }
 
-// NewDCChain returns a new Chain interceptor.
-func NewDCChain(m []func(p MessageProcessor) MessageProcessor) Middlewares {
+func newDCChain(m []func(p MessageProcessor) MessageProcessor) Middlewares {
 	return Middlewares(m)
 }
 
-func (c *ChainHandler) Process(ctx context.Context, args ProcessArgs) {
+func (c *chainHandler) Process(ctx context.Context, args ProcessArgs) {
 	c.current.Process(ctx, args)
 }
 

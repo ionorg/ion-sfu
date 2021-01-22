@@ -250,3 +250,7 @@ func (p *Peer) Subscriber() *Subscriber {
 func (p *Peer) Publisher() *Publisher {
 	return p.publisher
 }
+
+func (p *Peer) Session() *Session {
+	return p.session
+}

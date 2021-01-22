@@ -2,22 +2,17 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"time"
-
-	"github.com/pion/webrtc/v3"
-
-	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
 
 	"github.com/gorilla/websocket"
 	log "github.com/pion/ion-log"
 	"github.com/pion/ion-sfu/cmd/signal/json-rpc/server"
+	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
 	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sourcegraph/jsonrpc2"
@@ -133,10 +128,7 @@ func main() {
 
 	s := sfu.NewSFU(conf)
 	dc := s.NewDatachannel(sfu.APIChannelLabel)
-	dc.Use(datachannel.KeepAlive(5*time.Second), datachannel.SubscriberAPI)
-	dc.OnMessage(func(ctx context.Context, msg webrtc.DataChannelMessage, in *webrtc.DataChannel, out []*webrtc.DataChannel) {
-
-	})
+	dc.Use(datachannel.SubscriberAPI)
 
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
