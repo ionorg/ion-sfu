@@ -107,13 +107,11 @@ func main() {
 	options.Addr = addr
 	options.AllowAllOrigins = true
 	options.UseWebSocket = true
-	// Register default middlewares
-	set := sfu.Settings{
-		FeedbackDatachannelMiddlewares: map[string][]func(p sfu.MessageProcessor) sfu.MessageProcessor{
-			sfu.APIChannelLabel: sfu.Middlewares{datachannel.SubscriberAPI},
-		},
-	}
-	s := server.NewWrapperedGRPCWebServer(options, sfu.NewSFU(conf.Config, set))
+
+	nsfu := sfu.NewSFU(conf.Config)
+	dc := nsfu.NewDatachannel(sfu.APIChannelLabel)
+	dc.Use(datachannel.SubscriberAPI)
+	s := server.NewWrapperedGRPCWebServer(options, nsfu)
 	if err := s.Serve(); err != nil {
 		log.Panicf("failed to serve: %v", err)
 	}

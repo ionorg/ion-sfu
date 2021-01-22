@@ -13,18 +13,19 @@ type Session struct {
 	id             string
 	mu             sync.RWMutex
 	peers          map[string]*Peer
-	settings       *Settings
-	onCloseHandler func()
 	closed         bool
+	fanOutDCs      []string
+	datachannels   []*Datachannel
+	onCloseHandler func()
 }
 
 // NewSession creates a new session
-func NewSession(id string, s *Settings) *Session {
+func NewSession(id string, dcs []*Datachannel) *Session {
 	return &Session{
-		id:       id,
-		peers:    make(map[string]*Peer),
-		closed:   false,
-		settings: s,
+		id:           id,
+		peers:        make(map[string]*Peer),
+		closed:       false,
+		datachannels: dcs,
 	}
 }
 
@@ -57,7 +58,7 @@ func (s *Session) onMessage(origin, label string, msg webrtc.DataChannelMessage)
 			continue
 		}
 
-		dc := p.Subscriber.channels[label]
+		dc := p.subscriber.channels[label]
 		if dc != nil && dc.ReadyState() == webrtc.DataChannelStateOpen {
 			if msg.IsString {
 				if err := dc.SendText(string(msg.Data)); err != nil {
@@ -72,37 +73,32 @@ func (s *Session) onMessage(origin, label string, msg webrtc.DataChannelMessage)
 	}
 }
 
+func (s *Session) getDataChannels(origin, label string) (dcs []*webrtc.DataChannel) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for pid, p := range s.peers {
+		if origin == pid {
+			continue
+		}
+
+		if dc, ok := p.subscriber.channels[label]; ok {
+			dcs = append(dcs, dc)
+		}
+	}
+	return
+}
+
 func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 	label := dc.Label()
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	peer := s.peers[owner]
-	peer.Subscriber.channels[label] = dc
-	var (
-		process        MessageProcessor
-		middlewares    []func(p MessageProcessor) MessageProcessor
-		withMiddleware bool
-	)
-
-	if s.settings.FanOutDatachannelMiddlewares != nil {
-		middlewares, withMiddleware = s.settings.FanOutDatachannelMiddlewares[dc.Label()]
-	}
-
-	if withMiddleware {
-		ch := NewDCChain(middlewares)
-		process = ch.Process(ProcessFunc(func(_ *Peer, _ *webrtc.DataChannel, msg webrtc.DataChannelMessage) {
-			s.onMessage(owner, label, msg)
-		}))
-	}
+	s.fanOutDCs = append(s.fanOutDCs, label)
+	s.peers[owner].subscriber.channels[label] = dc
 
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-		if !withMiddleware {
-			s.onMessage(owner, label, msg)
-		} else {
-			process.Process(peer, dc, msg)
-		}
+		s.onMessage(owner, label, msg)
 	})
 
 	for pid, p := range s.peers {
@@ -110,7 +106,7 @@ func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 		if owner == pid {
 			continue
 		}
-		n, err := p.Subscriber.AddDataChannel(label)
+		n, err := p.subscriber.AddDataChannel(label)
 
 		if err != nil {
 			log.Errorf("error adding datachannel: %s", err)
@@ -122,7 +118,7 @@ func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 			s.onMessage(pid, label, msg)
 		})
 
-		p.Subscriber.negotiate()
+		go p.subscriber.negotiate()
 	}
 }
 
@@ -140,7 +136,7 @@ func (s *Session) Publish(router Router, r Receiver) {
 
 		log.Infof("Publishing track to peer %s", pid)
 
-		if err := router.AddDownTracks(p.Subscriber, r); err != nil {
+		if err := router.AddDownTracks(p.subscriber, r); err != nil {
 			log.Errorf("Error subscribing transport to router: %s", err)
 			continue
 		}
@@ -152,34 +148,29 @@ func (s *Session) Subscribe(peer *Peer) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	subdChans := false
+	// Subscribe to fan out datachannels
+	for _, label := range s.fanOutDCs {
+		n, err := peer.subscriber.AddDataChannel(label)
+
+		if err != nil {
+			log.Errorf("error adding datachannel: %s", err)
+			continue
+		}
+
+		n.OnMessage(func(msg webrtc.DataChannelMessage) {
+			s.onMessage(peer.id, label, msg)
+		})
+	}
+
+	// Subscribe to publisher streams
 	for pid, p := range s.peers {
 		if pid == peer.id {
 			continue
 		}
-		err := p.Publisher.GetRouter().AddDownTracks(peer.Subscriber, nil)
+		err := p.publisher.GetRouter().AddDownTracks(peer.subscriber, nil)
 		if err != nil {
 			log.Errorf("Subscribing to router err: %v", err)
 			continue
-		}
-
-		if !subdChans {
-			for _, dc := range p.Subscriber.channels {
-				label := dc.Label()
-				n, err := peer.Subscriber.AddDataChannel(label)
-
-				if err != nil {
-					log.Errorf("error adding datachannel: %s", err)
-					continue
-				}
-
-				n.OnMessage(func(msg webrtc.DataChannelMessage) {
-					s.onMessage(peer.id, label, msg)
-				})
-			}
-			subdChans = true
-
-			peer.Subscriber.negotiate()
 		}
 	}
 }

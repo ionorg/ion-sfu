@@ -60,12 +60,12 @@ var (
 // SFU represents an sfu instance
 type SFU struct {
 	sync.RWMutex
-	webrtc    WebRTCTransportConfig
-	settings  Settings
-	router    RouterConfig
-	turn      *turn.Server
-	sessions  map[string]*Session
-	withStats bool
+	webrtc       WebRTCTransportConfig
+	router       RouterConfig
+	turn         *turn.Server
+	sessions     map[string]*Session
+	datachannels []*Datachannel
+	withStats    bool
 }
 
 // NewWebRTCTransportConfig parses our settings and returns a usable WebRTCTransportConfig for creating PeerConnections
@@ -134,7 +134,7 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 }
 
 // NewSFU creates a new sfu instance
-func NewSFU(c Config, s Settings) *SFU {
+func NewSFU(c Config) *SFU {
 	// Init random seed
 	rand.Seed(time.Now().UnixNano())
 	// Init ballast
@@ -154,11 +154,10 @@ func NewSFU(c Config, s Settings) *SFU {
 		webrtc:    w,
 		sessions:  make(map[string]*Session),
 		withStats: c.Router.WithStats,
-		settings:  s,
 	}
 
 	if c.Turn.Enabled {
-		ts, err := initTurnServer(c.Turn, s.TurnAuth)
+		ts, err := initTurnServer(c.Turn, nil)
 		if err != nil {
 			log.Panicf("Could not init turn server err: %v", err)
 		}
@@ -171,7 +170,7 @@ func NewSFU(c Config, s Settings) *SFU {
 
 // NewSession creates a new session instance
 func (s *SFU) newSession(id string) *Session {
-	session := NewSession(id, &s.settings)
+	session := NewSession(id, s.datachannels)
 
 	session.OnClose(func() {
 		s.Lock()
@@ -207,4 +206,10 @@ func (s *SFU) GetSession(sid string) (*Session, WebRTCTransportConfig) {
 		session = s.newSession(sid)
 	}
 	return session, s.webrtc
+}
+
+func (s *SFU) NewDatachannel(label string) *Datachannel {
+	dc := &Datachannel{label: label}
+	s.datachannels = append(s.datachannels, dc)
+	return dc
 }

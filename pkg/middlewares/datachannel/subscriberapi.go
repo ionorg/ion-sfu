@@ -1,6 +1,7 @@
 package datachannel
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/pion/ion-sfu/pkg/sfu"
@@ -21,12 +22,12 @@ type setRemoteMedia struct {
 }
 
 func SubscriberAPI(next sfu.MessageProcessor) sfu.MessageProcessor {
-	return sfu.ProcessFunc(func(peer *sfu.Peer, dc *webrtc.DataChannel, msg webrtc.DataChannelMessage) {
+	return sfu.ProcessFunc(func(ctx context.Context, args sfu.ProcessArgs) {
 		srm := &setRemoteMedia{}
-		if err := json.Unmarshal(msg.Data, srm); err != nil {
+		if err := json.Unmarshal(args.Message.Data, srm); err != nil {
 			return
 		}
-		downTracks := peer.Subscriber.GetDownTracks(srm.StreamID)
+		downTracks := args.Peer.Subscriber().GetDownTracks(srm.StreamID)
 
 		for _, dt := range downTracks {
 			switch dt.Kind() {
@@ -48,6 +49,6 @@ func SubscriberAPI(next sfu.MessageProcessor) sfu.MessageProcessor {
 				}
 			}
 		}
-		next.Process(peer, dc, msg)
+		next.Process(ctx, args)
 	})
 }

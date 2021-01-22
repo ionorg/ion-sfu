@@ -2,30 +2,30 @@ package datachannel
 
 import (
 	"bytes"
+	"context"
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/sfu"
-	"github.com/pion/webrtc/v3"
 )
 
 func KeepAlive(timeout time.Duration) func(next sfu.MessageProcessor) sfu.MessageProcessor {
 	var timer *time.Timer
 	return func(next sfu.MessageProcessor) sfu.MessageProcessor {
-		return sfu.ProcessFunc(func(peer *sfu.Peer, dc *webrtc.DataChannel, msg webrtc.DataChannelMessage) {
+		return sfu.ProcessFunc(func(ctx context.Context, args sfu.ProcessArgs) {
 			if timer == nil {
 				timer = time.AfterFunc(timeout, func() {
-					_ = peer.Close()
+					_ = args.Peer.Close()
 				})
 			}
-			if msg.IsString && bytes.Equal(msg.Data, []byte("ping")) {
+			if args.Message.IsString && bytes.Equal(args.Message.Data, []byte("ping")) {
 				if !timer.Stop() {
 					<-timer.C
 				}
 				timer.Reset(timeout)
-				_ = dc.SendText("pong")
+				_ = args.DataChannel.SendText("pong")
 				return
 			}
-			next.Process(peer, dc, msg)
+			next.Process(ctx, args)
 		})
 	}
 }

@@ -28,14 +28,11 @@ type Server struct {
 
 // New create a server which support grpc/jsonrpc
 func New(c sfu.Config) *Server { // Register default middlewares
-	set := sfu.Settings{
-		FeedbackDatachannelMiddlewares: map[string][]func(p sfu.MessageProcessor) sfu.MessageProcessor{
-			sfu.APIChannelLabel: sfu.Middlewares{datachannel.SubscriberAPI},
-		},
-	}
-
+	s := sfu.NewSFU(c)
+	dc := s.NewDatachannel(sfu.APIChannelLabel)
+	dc.Use(datachannel.SubscriberAPI)
 	return &Server{
-		sfu: sfu.NewSFU(c, set),
+		sfu: s,
 	}
 }
 

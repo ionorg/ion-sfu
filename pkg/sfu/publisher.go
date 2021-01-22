@@ -16,7 +16,6 @@ type Publisher struct {
 	session    *Session
 	candidates []webrtc.ICECandidateInit
 
-	onTrackHandler                    func(*webrtc.TrackRemote, *webrtc.RTPReceiver)
 	onICEConnectionStateChangeHandler atomic.Value // func(webrtc.ICEConnectionState)
 
 	closeOnce sync.Once
@@ -85,7 +84,7 @@ func (p *Publisher) Answer(offer webrtc.SessionDescription) (webrtc.SessionDescr
 
 	for _, c := range p.candidates {
 		if err := p.pc.AddICECandidate(c); err != nil {
-			log.Errorf("Add Publisher ice candidate to peer %s err: %v", p.id, err)
+			log.Errorf("Add publisher ice candidate to peer %s err: %v", p.id, err)
 		}
 	}
 	p.candidates = nil

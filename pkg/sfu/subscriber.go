@@ -1,6 +1,7 @@
 package sfu
 
 import (
+	"context"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -73,18 +74,27 @@ func NewSubscriber(id string, cfg WebRTCTransportConfig) (*Subscriber, error) {
 	return s, nil
 }
 
-func (s *Subscriber) UseDatachannel(peer *Peer, channel string, m []func(p MessageProcessor) MessageProcessor) error {
-	dc, err := s.pc.CreateDataChannel(channel, &webrtc.DataChannelInit{})
+func (s *Subscriber) AddDatachannel(peer *Peer, dc *Datachannel) error {
+	ndc, err := s.pc.CreateDataChannel(dc.label, &webrtc.DataChannelInit{})
 	if err != nil {
-		log.Errorf("DC creation error: %v", err)
 		return err
 	}
 
-	mws := NewDCChain(m)
-	p := mws.Process(noOpProcess())
-	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-		p.Process(peer, dc, msg)
+	mws := NewDCChain(dc.middlewares)
+	p := mws.Process(ProcessFunc(func(ctx context.Context, args ProcessArgs) {
+		if dc.onMessage != nil {
+			dc.onMessage(ctx, args.Message, ndc, peer.session.getDataChannels(peer.id, dc.label))
+		}
+	}))
+	ndc.OnMessage(func(msg webrtc.DataChannelMessage) {
+		p.Process(context.Background(), ProcessArgs{
+			Peer:        peer,
+			Message:     msg,
+			DataChannel: ndc,
+		})
 	})
+
+	s.channels[dc.label] = ndc
 
 	return nil
 }
@@ -182,7 +192,7 @@ func (s *Subscriber) SetRemoteDescription(desc webrtc.SessionDescription) error 
 
 	for _, c := range s.candidates {
 		if err := s.pc.AddICECandidate(c); err != nil {
-			log.Errorf("Add Subscriber ice candidate to peer %s err: %v", s.id, err)
+			log.Errorf("Add subscriber ice candidate to peer %s err: %v", s.id, err)
 		}
 	}
 	s.candidates = nil
