@@ -57,6 +57,13 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 			// terminate api data channel
 			return
 		}
+
+		handler, ok := session.dataChannelHandlers[dc.Label()]
+		if ok {
+			p.session.AddDatachannelHandleFunc(id, dc, handler)
+			return
+		}
+
 		p.session.AddDatachannel(id, dc)
 	})
 

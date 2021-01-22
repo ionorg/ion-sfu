@@ -15,6 +15,8 @@ type Session struct {
 	peers          map[string]*Peer
 	onCloseHandler func()
 	closed         bool
+
+	dataChannelHandlers map[string]func(origin string, msg webrtc.DataChannelMessage)
 }
 
 // NewSession creates a new session
@@ -23,6 +25,7 @@ func NewSession(id string) *Session {
 		id:     id,
 		peers:  make(map[string]*Peer),
 		closed: false,
+		dataChannelHandlers: make(map[string]func(origin string, msg webrtc.DataChannelMessage)),
 	}
 }
 
@@ -94,6 +97,12 @@ func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 			}
 		}
 	})
+}
+
+// @TODO cleanup
+
+func (s *Session) AddDatachannelHandler(label string, handler func(origin string, msg webrtc.DataChannelMessage)) {
+	s.dataChannelHandlers[label] = handler
 }
 
 func (s *Session) AddDatachannelHandleFunc(owner string, dc *webrtc.DataChannel, handler func(origin string, msg webrtc.DataChannelMessage)) {
