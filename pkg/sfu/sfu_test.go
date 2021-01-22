@@ -133,7 +133,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 	fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go", "jsonrpc2"}
 	fixByFunc := []string{"Handle"}
 	log.Init("trace", fixByFile, fixByFunc)
-	sfu := NewSFU(Config{Log: log.Config{Level: "trace"}}, Settings{})
+	sfu := NewSFU(Config{Log: log.Config{Level: "trace"}})
 
 	tests := []struct {
 		name  string

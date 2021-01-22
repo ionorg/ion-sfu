@@ -173,6 +173,8 @@ func (s *Session) Subscribe(peer *Peer) {
 			continue
 		}
 	}
+
+	peer.subscriber.negotiate()
 }
 
 // Transports returns peers in this session
