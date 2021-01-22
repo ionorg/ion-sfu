@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
+
 	log "github.com/pion/ion-log"
 	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/spf13/viper"
@@ -105,7 +107,13 @@ func main() {
 	options.Addr = addr
 	options.AllowAllOrigins = true
 	options.UseWebSocket = true
-	s := server.NewWrapperedGRPCWebServer(options, sfu.NewSFU(conf.Config))
+	// Register default middlewares
+	set := sfu.Settings{
+		FeedbackDatachannelMiddlewares: map[string][]func(p sfu.MessageProcessor) sfu.MessageProcessor{
+			sfu.ApiChannelLabel: sfu.Middlewares{datachannel.SubscriberAPI},
+		},
+	}
+	s := server.NewWrapperedGRPCWebServer(options, sfu.NewSFU(conf.Config, set))
 	if err := s.Serve(); err != nil {
 		log.Panicf("failed to serve: %v", err)
 	}
