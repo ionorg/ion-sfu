@@ -81,7 +81,7 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		return nil, fmt.Errorf("error creating transport: %v", err)
 	}
 
-	for channel, mws := range p.session.settings.FanOutDatachannelMiddlewares {
+	for channel, mws := range p.session.settings.FeedbackDatachannelMiddlewares {
 		if err = p.Subscriber.UseDatachannel(p, channel, mws); err != nil {
 			return nil, fmt.Errorf("error setting subscriber default dc datachannel")
 		}

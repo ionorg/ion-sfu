@@ -47,15 +47,12 @@ func (c *ChainHandler) Process(peer *Peer, msg webrtc.DataChannelMessage) {
 }
 
 func chain(mws []func(processor MessageProcessor) MessageProcessor, last MessageProcessor) MessageProcessor {
-	print("1")
 	if len(mws) == 0 {
-		print("2")
 		return last
 	}
 	h := mws[len(mws)-1](last)
 	for i := len(mws) - 2; i >= 0; i-- {
 		h = mws[i](h)
 	}
-	print("3")
 	return h
 }

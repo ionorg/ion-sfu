@@ -78,10 +78,31 @@ func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	s.peers[owner].Subscriber.channels[label] = dc
+	peer := s.peers[owner]
+	peer.Subscriber.channels[label] = dc
+	var (
+		process        MessageProcessor
+		middlewares    []func(p MessageProcessor) MessageProcessor
+		withMiddleware bool
+	)
+
+	if s.settings.FanOutDatachannelMiddlewares != nil {
+		middlewares, withMiddleware = s.settings.FanOutDatachannelMiddlewares[dc.Label()]
+	}
+
+	if withMiddleware {
+		ch := NewDCChain(middlewares)
+		process = ch.Process(ProcessFunc(func(_ *Peer, msg webrtc.DataChannelMessage) {
+			s.onMessage(owner, label, msg)
+		}))
+	}
 
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-		s.onMessage(owner, label, msg)
+		if !withMiddleware {
+			s.onMessage(owner, label, msg)
+		} else {
+			process.Process(peer, msg)
+		}
 	})
 
 	for pid, p := range s.peers {

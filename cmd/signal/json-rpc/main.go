@@ -129,7 +129,7 @@ func main() {
 
 	// Register default middlewares
 	set := sfu.Settings{
-		FanOutDatachannelMiddlewares: map[string][]func(p sfu.MessageProcessor) sfu.MessageProcessor{
+		FeedbackDatachannelMiddlewares: map[string][]func(p sfu.MessageProcessor) sfu.MessageProcessor{
 			sfu.ApiChannelLabel: sfu.Middlewares{datachannel.SubscriberAPI},
 		},
 	}
