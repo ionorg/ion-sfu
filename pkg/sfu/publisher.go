@@ -16,7 +16,6 @@ type Publisher struct {
 	session    *Session
 	candidates []webrtc.ICECandidateInit
 
-	onTrackHandler                    func(*webrtc.TrackRemote, *webrtc.RTPReceiver)
 	onICEConnectionStateChangeHandler atomic.Value // func(webrtc.ICEConnectionState)
 
 	closeOnce sync.Once
@@ -53,7 +52,7 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 	})
 
 	pc.OnDataChannel(func(dc *webrtc.DataChannel) {
-		if dc.Label() == apiChannelLabel {
+		if dc.Label() == APIChannelLabel {
 			// terminate api data channel
 			return
 		}

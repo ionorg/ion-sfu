@@ -34,9 +34,10 @@ type SessionProvider interface {
 // Peer represents a pair peer connection
 type Peer struct {
 	sync.Mutex
-	id         string
-	session    *Session
-	provider   SessionProvider
+	id       string
+	session  *Session
+	provider SessionProvider
+
 	publisher  *Publisher
 	subscriber *Subscriber
 
@@ -78,6 +79,12 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 	p.publisher, err = NewPublisher(p.session, pid, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("error creating transport: %v", err)
+	}
+
+	for _, dc := range p.session.datachannels {
+		if err := p.subscriber.AddDatachannel(p, dc); err != nil {
+			return nil, fmt.Errorf("error setting subscriber default dc datachannel")
+		}
 	}
 
 	p.subscriber.OnNegotiationNeeded(func() {
@@ -234,4 +241,16 @@ func (p *Peer) Close() error {
 		}
 	}
 	return nil
+}
+
+func (p *Peer) Subscriber() *Subscriber {
+	return p.subscriber
+}
+
+func (p *Peer) Publisher() *Publisher {
+	return p.publisher
+}
+
+func (p *Peer) Session() *Session {
+	return p.session
 }

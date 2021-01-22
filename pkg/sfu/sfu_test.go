@@ -134,7 +134,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 	fixByFunc := []string{"Handle"}
 	log.Init("trace", fixByFile, fixByFunc)
 	sfu := NewSFU(Config{Log: log.Config{Level: "trace"}})
-
+	sfu.NewDatachannel(APIChannelLabel)
 	tests := []struct {
 		name  string
 		steps []step

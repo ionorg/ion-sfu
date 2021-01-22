@@ -4,6 +4,8 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
+
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	log "github.com/pion/ion-log"
 	pb "github.com/pion/ion-sfu/cmd/signal/grpc/proto"
@@ -25,9 +27,12 @@ type Server struct {
 }
 
 // New create a server which support grpc/jsonrpc
-func New(c sfu.Config) *Server {
+func New(c sfu.Config) *Server { // Register default middlewares
+	s := sfu.NewSFU(c)
+	dc := s.NewDatachannel(sfu.APIChannelLabel)
+	dc.Use(datachannel.SubscriberAPI)
 	return &Server{
-		sfu: sfu.NewSFU(c),
+		sfu: s,
 	}
 }
 
