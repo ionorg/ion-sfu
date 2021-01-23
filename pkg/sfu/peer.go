@@ -116,9 +116,13 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 			return
 		}
 
-		if p.OnIceCandidate != nil {
+		p.Lock()
+		handler := p.OnIceCandidate
+		p.Unlock()
+
+		if handler != nil {
 			json := c.ToJSON()
-			p.OnIceCandidate(&json, subscriber)
+			handler(&json, subscriber)
 		}
 	})
 
@@ -128,15 +132,23 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 			return
 		}
 
-		if p.OnIceCandidate != nil {
+		p.Lock()
+		handler := p.OnIceCandidate
+		p.Unlock()
+
+		if handler != nil {
 			json := c.ToJSON()
-			p.OnIceCandidate(&json, publisher)
+			handler(&json, publisher)
 		}
 	})
 
 	p.publisher.OnICEConnectionStateChange(func(s webrtc.ICEConnectionState) {
-		if p.OnICEConnectionStateChange != nil {
-			p.OnICEConnectionStateChange(s)
+		p.Lock()
+		handler := p.OnICEConnectionStateChange
+		p.Unlock()
+
+		if handler != nil {
+			handler(s)
 		}
 	})
 
