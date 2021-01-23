@@ -13,7 +13,6 @@ maxbandwidth = 1500
 # max buffer time by ms for video tracks
 maxbuffertime = 1000
 
-
 [router.simulcast]
 # Prefer best quality initially
 bestqualityfirst = true
@@ -56,15 +55,18 @@ sdpsemantics = "unified-plan"
 # Enables embeded turn server
 enabled = false
 # Sets the realm for turn server
-realm ="ion"
+realm = "ion"
 # The address the TURN server will listen on.
-address= "0.0.0.0:3478"
-# Sets the credentials pairs
-credentials= "pion=ion,pion2=ion2"
+address = "0.0.0.0:3478"
 # Certs path to config tls/dtls
 # cert="path/to/cert.pem"
 # key="path/to/key.pem"
-
+[turn.auth]
+# Use an auth secret to generate long-term credentials defined in RFC5389-10.2
+# NOTE: This takes precedence over `credentials` if defined.
+# secret = "secret"
+# Sets the credentials pairs
+credentials = "pion=ion,pion2=ion2"
 
 [log]
 level = "trace"
