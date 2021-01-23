@@ -39,10 +39,8 @@ portrange = [5000, 5200]
 # "unified-plan-with-fallback"
 sdpsemantics = "unified-plan"
 
-# mdns
-# false save many FD and Goroutines
-# true when using sfu in LAN
-mdns = false
+# toggle multicast dns support: https://tools.ietf.org/html/draft-mdns-ice-candidates-00
+mdns = true
 
 [webrtc.candidates]
 # In case you're deploying ion-sfu on a server which is configured with
