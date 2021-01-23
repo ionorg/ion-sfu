@@ -123,7 +123,7 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 		}
 		track.currentSpatialLayer = layer
 		track.simulcast.targetSpatialLayer = layer
-		track.simulcast.currentTempLayer = 2
+		track.simulcast.currentTempLayer = 3
 		track.trackType = SimulcastDownTrack
 	} else {
 		track.trackType = SimpleDownTrack

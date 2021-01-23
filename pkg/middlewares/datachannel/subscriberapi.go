@@ -9,10 +9,10 @@ import (
 )
 
 const (
-	videoHighQuality   = "high"
-	videoMediumQuality = "medium"
-	videoLowQuality    = "low"
-	videoMuted         = "none"
+	highValue   = "high"
+	mediumValue = "medium"
+	lowValue    = "low"
+	mutedValue  = "none"
 )
 
 type setRemoteMedia struct {
@@ -29,34 +29,32 @@ func SubscriberAPI(next sfu.MessageProcessor) sfu.MessageProcessor {
 			return
 		}
 		downTracks := args.Peer.Subscriber().GetDownTracks(srm.StreamID)
-
+		println(string(args.Message.Data))
 		for _, dt := range downTracks {
 			switch dt.Kind() {
 			case webrtc.RTPCodecTypeAudio:
 				dt.Mute(!srm.Audio)
 			case webrtc.RTPCodecTypeVideo:
 				switch srm.Video {
-				case videoHighQuality:
+				case highValue:
 					dt.Mute(false)
 					dt.SwitchSpatialLayer(2)
-				case videoMediumQuality:
+				case mediumValue:
 					dt.Mute(false)
 					dt.SwitchSpatialLayer(1)
-				case videoLowQuality:
+				case lowValue:
 					dt.Mute(false)
 					dt.SwitchSpatialLayer(0)
-				case videoMuted:
+				case mutedValue:
 					dt.Mute(true)
 				}
 				switch srm.Framerate {
-				case videoHighQuality:
-					dt.SwitchSpatialLayer(2)
-				case videoMediumQuality:
-					dt.SwitchSpatialLayer(1)
-				case videoLowQuality:
-					dt.SwitchSpatialLayer(0)
-				case videoMuted:
-					dt.Mute(true)
+				case highValue:
+					dt.SwitchTemporalLayer(2)
+				case mediumValue:
+					dt.SwitchTemporalLayer(1)
+				case lowValue:
+					dt.SwitchTemporalLayer(0)
 				}
 			}
 

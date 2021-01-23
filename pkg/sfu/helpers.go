@@ -35,23 +35,27 @@ func (b *atomicBool) get() bool {
 // setVp8TemporalLayer is a helper to detect and modify accordingly the vp8 payload to reflect
 // temporal changes in the SFU.
 // VP8 temporal layers implemented according https://tools.ietf.org/html/rfc7741
-func setVP8TemporalLayer(pl []byte, sn uint16, head bool, s *DownTrack) (payload []byte, skip bool) {
-	var pkt buffer.VP8
-	if err := pkt.Unmarshal(pl); err != nil {
-		return nil, false
+func setVP8TemporalLayer(p buffer.ExtPacket, sn uint16, s *DownTrack) (payload []byte, drop bool) {
+	pkt, ok := p.Payload.(buffer.VP8)
+	if !ok {
+		return p.Packet.Payload, false
 	}
 
 	// Check if temporal layer is requested
-	if pkt.TID > uint8(s.simulcast.currentTempLayer) {
-		skip = true
+	if s.simulcast.targetTempLayer != s.simulcast.currentTempLayer {
+		if pkt.TID <= uint8(s.simulcast.targetTempLayer) {
+			s.simulcast.currentTempLayer = s.simulcast.targetTempLayer
+		}
+	} else if pkt.TID > uint8(s.simulcast.currentTempLayer) {
+		drop = true
 		return
 	}
 	// If we are here modify payload
 	payload = packetFactory.Get().([]byte)
-	payload = payload[:len(pl)]
-	copy(payload, pl)
+	payload = payload[:len(p.Packet.Payload)]
+	copy(payload, p.Packet.Payload)
 	picID := uint16(0)
-	if head {
+	if p.Head {
 		s.simulcast.refPicID++
 		if pkt.MBit && s.simulcast.refPicID > maxVP8PIDMBit {
 			s.simulcast.refPicID = 0

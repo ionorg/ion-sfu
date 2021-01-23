@@ -18,16 +18,16 @@ func Test_sequencer(t *testing.T) {
 
 	time.Sleep(20 * time.Millisecond)
 	req := []uint16{17, 18, 22, 33}
-	res := seq.getNACKSeqNo(req)
+	res := seq.getSeqNoPairs(req)
 	assert.Equal(t, len(req), len(res))
 	for i, val := range res {
 		assert.Equal(t, uint16(val), req[i])
 		assert.Equal(t, uint16(val>>16), req[i]-off)
 	}
-	res = seq.getNACKSeqNo(req)
+	res = seq.getSeqNoPairs(req)
 	assert.Equal(t, 0, len(res))
 	time.Sleep(60 * time.Millisecond)
-	res = seq.getNACKSeqNo(req)
+	res = seq.getSeqNoPairs(req)
 	assert.Equal(t, len(req), len(res))
 	for i, val := range res {
 		assert.Equal(t, uint16(val), req[i])
@@ -71,13 +71,13 @@ func Test_sequencer_getNACKSeqNo(t *testing.T) {
 				n.push(i, i+tt.fields.offset, true)
 			}
 
-			g := n.getNACKSeqNo(tt.args.seqNo)
+			g := n.getSeqNoPairs(tt.args.seqNo)
 			var got []uint16
 			for _, sn := range g {
 				got = append(got, uint16(sn>>16))
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getNACKSeqNo() = %v, want %v", got, tt.want)
+				t.Errorf("getSeqNoPairs() = %v, want %v", got, tt.want)
 			}
 		})
 	}

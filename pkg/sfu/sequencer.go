@@ -56,7 +56,7 @@ func (n *sequencer) push(sn, offSn uint16, head bool) {
 	n.Unlock()
 }
 
-func (n *sequencer) getNACKSeqNo(seqNo []uint16) []uint32 {
+func (n *sequencer) getSeqNoPairs(seqNo []uint16) []uint32 {
 	n.Lock()
 	packets := make([]uint32, 0, 17)
 	refTime := time.Now().UnixNano()/1e6 - n.startTime
