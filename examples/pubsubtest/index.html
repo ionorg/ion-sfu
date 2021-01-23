@@ -176,19 +176,30 @@
           .catch(console.error);
       };
 
+      let Exist = (stream) => {
+        let remoteVideos = remotesDiv.getElementsByTagName("video");
+        let find = false
+        for(let item of remoteVideos){
+          if (stream === item.srcObject){
+            find = true
+          }
+        }
+        return find
+      }
+
       clientLocal.ontrack = (track, stream) => {
         console.log("got track", track.id, "for stream", stream.id);
         if (track.kind === "video") {
           track.onunmute = () => {
-            let remoteVideo = remotesDiv.getElementsByTagName("video");
-            if (remoteVideo.length === 0){
-              remoteVideo = document.createElement("video");
-              remoteVideo.srcObject = stream;
-              remoteVideo.autoplay = true;
-              remoteVideo.muted = true;
-              remotesDiv.appendChild(remoteVideo);
-              stream.onremovetrack = () => remotesDiv.removeChild(remoteVideo);
-            }
+            if (!Exist(stream)){
+                remoteVideo = document.createElement("video");
+                remoteVideo.srcObject = stream;
+                remoteVideo.autoplay = true;
+                remoteVideo.muted = true;
+
+                remotesDiv.appendChild(remoteVideo);
+                stream.onremovetrack = () => remotesDiv.removeChild(remoteVideo);
+              }
           };
         }
       };

@@ -96,16 +96,27 @@
           this.client = new IonSDK.Client(this.signal);
           this.signal.onopen = () => this.client.join("test session");
 
+          let Exist = (stream) => {
+            let remoteVideos = remotesDiv.getElementsByTagName("video");
+            let find = false
+            for(let item of remoteVideos){
+              if (stream === item.srcObject){
+                find = true
+              }
+            }
+            return find
+          };
+
           this.client.ontrack = (track, stream) => {
             if (track.kind === "video") {
-              let remoteVideo = remotesDiv.getElementsByTagName("video");
-              if (remoteVideo.length === 0){
+              if (!Exist(stream)){
                 remoteVideo = document.createElement("video");
                 remoteVideo.srcObject = stream;
                 remoteVideo.autoplay = true;
                 remoteVideo.muted = true;
-                videosDiv.appendChild(remoteVideo);
-                stream.onremovetrack = () => videosDiv.removeChild(remoteVideo);
+
+                remotesDiv.appendChild(remoteVideo);
+                stream.onremovetrack = () => remotesDiv.removeChild(remoteVideo);
               }
             }
           };
