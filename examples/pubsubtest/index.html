@@ -158,6 +158,7 @@
       const clientLocal = new IonSDK.Client(signalLocal, config);
       signalLocal.onopen = () => clientLocal.join("test session");
 
+      const streams = {};
       let localStream;
       const start = () => {
         IonSDK.LocalStream.getUserMedia({
@@ -180,13 +181,18 @@
         console.log("got track", track.id, "for stream", stream.id);
         if (track.kind === "video") {
           track.onunmute = () => {
-            const remoteVideo = document.createElement("video");
-            remoteVideo.srcObject = stream;
-            remoteVideo.autoplay = true;
-            remoteVideo.muted = true;
-            remotesDiv.appendChild(remoteVideo);
+            if (!streams[stream.id]) {
+              remoteVideo = document.createElement("video");
+              remoteVideo.srcObject = stream;
+              remoteVideo.autoplay = true;
+              remoteVideo.muted = true;
 
-            track.onremovetrack = () => remotesDiv.removeChild(remoteVideo);
+              remotesDiv.appendChild(remoteVideo);
+              stream.onremovetrack = () => {
+                remotesDiv.removeChild(remoteVideo);
+                streams[stream.id] = null;
+              };
+            }
           };
         }
       };
