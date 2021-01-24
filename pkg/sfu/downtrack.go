@@ -373,6 +373,9 @@ func (d *DownTrack) handleRTCP(bytes []byte) {
 				nackedPackets = append(nackedPackets, d.sequencer.getSeqNoPairs(pair.PacketList())...)
 			}
 			d.receiver.RetransmitPackets(d, nackedPackets)
+			if err = d.receiver.RetransmitPackets(d, nackedPackets, d.snOffset); err != nil {
+				return
+			}
 		}
 	}
 	if len(fwdPkts) > 0 {

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pion/ice/v2"
 	log "github.com/pion/ion-log"
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/ion-sfu/pkg/stats"
@@ -38,6 +39,7 @@ type WebRTCConfig struct {
 	ICEServers   []ICEServerConfig `mapstructure:"iceserver"`
 	Candidates   Candidates        `mapstructure:"candidates"`
 	SDPSemantics string            `mapstructure:"sdpsemantics"`
+	MDNS         bool              `mapstructure:"mdns"`
 }
 
 // Config for base SFU
@@ -123,6 +125,10 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 
 	if len(c.WebRTC.Candidates.NAT1To1IPs) > 0 {
 		w.setting.SetNAT1To1IPs(c.WebRTC.Candidates.NAT1To1IPs, webrtc.ICECandidateTypeHost)
+	}
+
+	if !c.WebRTC.MDNS {
+		w.setting.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
 	}
 
 	if c.SFU.WithStats {

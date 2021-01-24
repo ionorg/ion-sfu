@@ -89,22 +89,29 @@
             "ws://localhost:7000/ws"
           );
 
+          const streams = {};
           const videosDiv = document.createElement("div");
           videosDiv.style.display = "flex";
           remotesDiv.appendChild(videosDiv);
 
           this.client = new IonSDK.Client(this.signal);
           this.signal.onopen = () => this.client.join("test session");
-
           this.client.ontrack = (track, stream) => {
             if (track.kind === "video") {
-              const remoteVideo = document.createElement("video");
-              remoteVideo.srcObject = stream;
-              remoteVideo.autoplay = true;
-              remoteVideo.muted = true;
-              videosDiv.appendChild(remoteVideo);
+              if (!streams[stream.id]) {
+                const remoteVideo = document.createElement("video");
+                remoteVideo.srcObject = stream;
+                remoteVideo.autoplay = true;
+                remoteVideo.muted = true;
 
-              track.onremovetrack = () => videosDiv.removeChild(removeVideo);
+                remotesDiv.appendChild(remoteVideo);
+                stream.onremovetrack = () => {
+                  remotesDiv.removeChild(remoteVideo);
+                  streams[stream.id] = null;
+                };
+
+                streams[stream.id] = stream;
+              }
             }
           };
         }

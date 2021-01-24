@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"net"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/pion/dtls/v2"
 	log "github.com/pion/ion-log"
+	"github.com/pion/logging"
 	"github.com/pion/turn/v2"
 )
 
@@ -22,14 +24,19 @@ const (
 	sfuMaxPort  = 60999
 )
 
+type TurnAuth struct {
+	Credentials string `mapstructure:"credentials"`
+	Secret      string `mapstructure:"secret"`
+}
+
 // WebRTCConfig defines parameters for ice
 type TurnConfig struct {
-	Enabled     bool   `mapstructure:"enabled"`
-	Realm       string `mapstructure:"realm"`
-	Address     string `mapstructure:"address"`
-	Credentials string `mapstructure:"credentials"`
-	Cert        string `mapstructure:"cert"`
-	Key         string `mapstructure:"key"`
+	Enabled bool     `mapstructure:"enabled"`
+	Realm   string   `mapstructure:"realm"`
+	Address string   `mapstructure:"address"`
+	Cert    string   `mapstructure:"cert"`
+	Key     string   `mapstructure:"key"`
+	Auth    TurnAuth `mapstructure:"auth"`
 }
 
 func initTurnServer(conf TurnConfig, auth func(username, realm string, srcAddr net.Addr) ([]byte, bool)) (*turn.Server, error) {
@@ -104,18 +111,23 @@ func initTurnServer(conf TurnConfig, auth func(username, realm string, srcAddr n
 	}
 
 	if auth == nil {
-		usersMap := map[string][]byte{}
-		for _, kv := range regexp.MustCompile(`(\w+)=(\w+)`).FindAllStringSubmatch(conf.Credentials, -1) {
-			usersMap[kv[1]] = turn.GenerateAuthKey(kv[1], conf.Realm, kv[2])
-		}
-		if len(usersMap) == 0 {
-			log.Panicf("No turn auth provided")
-		}
-		auth = func(username string, realm string, srcAddr net.Addr) ([]byte, bool) {
-			if key, ok := usersMap[username]; ok {
-				return key, true
+		if conf.Auth.Secret != "" {
+			logger := logging.NewDefaultLeveledLoggerForScope("lt-creds", logging.LogLevelTrace, os.Stdout)
+			auth = turn.NewLongTermAuthHandler(conf.Auth.Secret, logger)
+		} else {
+			usersMap := map[string][]byte{}
+			for _, kv := range regexp.MustCompile(`(\w+)=(\w+)`).FindAllStringSubmatch(conf.Auth.Credentials, -1) {
+				usersMap[kv[1]] = turn.GenerateAuthKey(kv[1], conf.Realm, kv[2])
 			}
-			return nil, false
+			if len(usersMap) == 0 {
+				log.Panicf("No turn auth provided")
+			}
+			auth = func(username string, realm string, srcAddr net.Addr) ([]byte, bool) {
+				if key, ok := usersMap[username]; ok {
+					return key, true
+				}
+				return nil, false
+			}
 		}
 	}
 
