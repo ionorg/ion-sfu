@@ -10,26 +10,21 @@ import (
 )
 
 const (
-	ntpEpoch      = 2208988800
-	maxVP8PID     = 127
-	maxVP8PIDMBit = 32767
+	ntpEpoch = 2208988800
 )
 
-type atomicBool struct {
-	val int32
-}
+type atomicBool int32
 
-func (b *atomicBool) set(value bool) { // nolint: unparam
+func (a *atomicBool) set(value bool) {
 	var i int32
 	if value {
 		i = 1
 	}
-
-	atomic.StoreInt32(&(b.val), i)
+	atomic.StoreInt32((*int32)(a), i)
 }
 
-func (b *atomicBool) get() bool {
-	return atomic.LoadInt32(&(b.val)) != 0
+func (a *atomicBool) get() bool {
+	return atomic.LoadInt32((*int32)(a)) != 0
 }
 
 // setVp8TemporalLayer is a helper to detect and modify accordingly the vp8 payload to reflect
@@ -54,40 +49,23 @@ func setVP8TemporalLayer(p buffer.ExtPacket, sn uint16, s *DownTrack) (payload [
 	payload = packetFactory.Get().([]byte)
 	payload = payload[:len(p.Packet.Payload)]
 	copy(payload, p.Packet.Payload)
-	picID := uint16(0)
+
+	picID := pkt.PictureID - s.simulcast.refPicID + s.simulcast.pRefPicID + 1
+	lZ0Idx := pkt.TL0PICIDX - s.simulcast.refTlZIdx + s.simulcast.pRefTlZIdx + 1
+
 	if p.Head {
-		s.simulcast.refPicID++
-		if pkt.MBit && s.simulcast.refPicID > maxVP8PIDMBit {
-			s.simulcast.refPicID = 0
-		}
-		if !pkt.MBit && s.simulcast.refPicID > maxVP8PID {
-			s.simulcast.refPicID = 0
-		}
-		s.simulcast.refSN = sn
-		picID = s.simulcast.refPicID
-	} else {
-		diff := s.simulcast.refSN - sn
-		refOff := int(s.simulcast.refPicID) - int(diff)
-		if refOff < 0 {
-			if pkt.MBit {
-				picID = uint16(maxVP8PIDMBit + refOff)
-			} else {
-				picID = uint16(maxVP8PID + refOff)
-			}
-		} else {
-			picID = uint16(refOff)
-		}
+		s.simulcast.lPicID = picID
+		s.simulcast.lTlZIdx = lZ0Idx
 	}
 
-	if pkt.PicIDIdx > 0 {
-		pid := make([]byte, 2)
-		binary.BigEndian.PutUint16(pid, picID)
-		payload[pkt.PicIDIdx] = pid[0]
-		if pkt.MBit {
-			payload[pkt.PicIDIdx] |= 0x80
-			payload[pkt.PicIDIdx+1] = pid[1]
-		}
+	pid := make([]byte, 2)
+	binary.BigEndian.PutUint16(pid, picID)
+	payload[pkt.PicIDIdx] = pid[0]
+	if pkt.MBit {
+		payload[pkt.PicIDIdx] |= 0x80
+		payload[pkt.PicIDIdx+1] = pid[1]
 	}
+	payload[pkt.TlzIdx] = lZ0Idx
 	return
 }
 

@@ -22,6 +22,11 @@ type simulcastTrackHelpers struct {
 	lTSCalc            time.Time
 
 	// VP8Helper temporal helpers
-	refPicID uint16
-	refSN    uint16
+	pRefPicID  uint16
+	refPicID   uint16
+	lPicID     uint16
+	pRefTlZIdx uint8
+	refTlZIdx  uint8
+	lTlZIdx    uint8
+	refSN      uint16
 }

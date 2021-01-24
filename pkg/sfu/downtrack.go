@@ -261,6 +261,16 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 			go d.receiver.DeleteDownTrack(d.currentSpatialLayer, d.peerID)
 		}
 		d.currentSpatialLayer = d.simulcast.targetSpatialLayer
+		if d.simulcast.temporalSupported {
+			if d.mime == "video/vp8" {
+				if vp8, ok := extPkt.Payload.(buffer.VP8); ok {
+					d.simulcast.pRefPicID = d.simulcast.lPicID
+					d.simulcast.refPicID = vp8.PictureID
+					d.simulcast.pRefTlZIdx = d.simulcast.lTlZIdx
+					d.simulcast.refTlZIdx = vp8.TL0PICIDX
+				}
+			}
+		}
 	}
 	// Compute how much time passed between the old RTP extPkt
 	// and the current packet, and fix timestamp on source change
@@ -372,8 +382,7 @@ func (d *DownTrack) handleRTCP(bytes []byte) {
 			for _, pair := range p.Nacks {
 				nackedPackets = append(nackedPackets, d.sequencer.getSeqNoPairs(pair.PacketList())...)
 			}
-			d.receiver.RetransmitPackets(d, nackedPackets)
-			if err = d.receiver.RetransmitPackets(d, nackedPackets, d.snOffset); err != nil {
+			if err = d.receiver.RetransmitPackets(d, nackedPackets); err != nil {
 				return
 			}
 		}

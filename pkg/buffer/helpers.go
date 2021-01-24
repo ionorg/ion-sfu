@@ -37,7 +37,7 @@ type VP8 struct {
 	PicIDIdx  uint8
 	MBit      bool
 	TL0PICIDX uint8 /* 8 bits temporal level zero index */
-	tlzIdx    uint8
+	TlzIdx    uint8
 
 	// Optional Header If either of the T or K bits are set to 1,
 	// the TID/Y/KEYIDX extension field MUST be present.
@@ -84,7 +84,7 @@ func (p *VP8) Unmarshal(payload []byte) error {
 		// Check if TL0PICIDX is present
 		if L {
 			idx++
-			p.tlzIdx = idx
+			p.TlzIdx = idx
 			p.TL0PICIDX = payload[idx]
 		}
 		if p.TemporalSupported || K {

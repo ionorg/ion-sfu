@@ -23,7 +23,7 @@ type Receiver interface {
 	AddUpTrack(track *webrtc.TrackRemote, buffer *buffer.Buffer)
 	AddDownTrack(track *DownTrack, bestQualityFirst bool)
 	SubDownTrack(track *DownTrack, layer int) error
-	RetransmitPackets(track *DownTrack, packets []uint16, snOffset uint16) error
+	RetransmitPackets(track *DownTrack, packets []uint32) error
 	DeleteDownTrack(layer int, id string)
 	OnCloseHandler(fn func())
 	SendRTCP(p []rtcp.Packet)
@@ -124,6 +124,7 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 		track.currentSpatialLayer = layer
 		track.simulcast.targetSpatialLayer = layer
 		track.simulcast.currentTempLayer = 3
+		track.simulcast.targetTempLayer = 3
 		track.trackType = SimulcastDownTrack
 	} else {
 		track.trackType = SimpleDownTrack
@@ -188,7 +189,7 @@ func (w *WebRTCReceiver) SetRTCPCh(ch chan []rtcp.Packet) {
 	w.rtcpCh = ch
 }
 
-func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []uint16, snOffset uint16) error {
+func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []uint32) error {
 	if w.nackWorker.Stopped() {
 		return io.ErrClosedPipe
 	}
