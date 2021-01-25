@@ -14,12 +14,9 @@ type SimulcastConfig struct {
 }
 
 type simulcastTrackHelpers struct {
-	targetSpatialLayer int
-	temporalSupported  bool
-	targetTempLayer    int
-	currentTempLayer   int
-	temporalEnabled    bool
-	lTSCalc            time.Time
+	temporalSupported bool
+	temporalEnabled   bool
+	lTSCalc           time.Time
 
 	// VP8Helper temporal helpers
 	pRefPicID  uint16

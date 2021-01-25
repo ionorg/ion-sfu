@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/pion/ion-log"
+
 	"github.com/gammazero/workerpool"
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/ion-sfu/pkg/stats"
@@ -23,7 +25,7 @@ type Receiver interface {
 	AddUpTrack(track *webrtc.TrackRemote, buffer *buffer.Buffer)
 	AddDownTrack(track *DownTrack, bestQualityFirst bool)
 	SubDownTrack(track *DownTrack, layer int) error
-	RetransmitPackets(track *DownTrack, packets []uint32) error
+	RetransmitPackets(track *DownTrack, packets []packetMeta) error
 	DeleteDownTrack(layer int, id string)
 	OnCloseHandler(fn func())
 	SendRTCP(p []rtcp.Packet)
@@ -121,12 +123,10 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 				}
 			}
 		}
-		track.currentSpatialLayer = layer
-		track.simulcast.targetSpatialLayer = layer
-		track.simulcast.currentTempLayer = 3
-		track.simulcast.targetTempLayer = 3
+		track.SetInitialLayers(layer, 2)
 		track.trackType = SimulcastDownTrack
 	} else {
+		track.SetInitialLayers(0, 2)
 		track.trackType = SimpleDownTrack
 	}
 
@@ -189,14 +189,14 @@ func (w *WebRTCReceiver) SetRTCPCh(ch chan []rtcp.Packet) {
 	w.rtcpCh = ch
 }
 
-func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []uint32) error {
+func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMeta) error {
 	if w.nackWorker.Stopped() {
 		return io.ErrClosedPipe
 	}
 	w.nackWorker.Submit(func() {
 		pktBuff := packetFactory.Get().([]byte)
-		for _, sn := range packets {
-			i, err := w.buffers[track.currentSpatialLayer].GetPacket(pktBuff, uint16(sn>>16))
+		for _, meta := range packets {
+			i, err := w.buffers[meta.layer()].GetPacket(pktBuff, meta.getSourceSeqNo())
 			if err != nil {
 				if err == io.EOF {
 					break
@@ -207,13 +207,10 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []uint32) e
 			if err = pkt.Unmarshal(pktBuff[:i]); err != nil {
 				continue
 			}
-			if err = track.WriteRTP(buffer.ExtPacket{
-				Head:          false,
-				RtxSN:         uint16(sn),
-				Packet:        pkt,
-				Retransmitted: true,
-			}); err == io.EOF {
-				break
+			pkt.Header.SequenceNumber = meta.getTargetSeqNo()
+			pkt.Header.Timestamp = meta.getTimestamp()
+			if _, err = track.writeStream.WriteRTP(&pkt.Header, pkt.Payload); err != nil {
+				log.Errorf("Writing rtx packet err: %v", err)
 			}
 		}
 		packetFactory.Put(pktBuff)

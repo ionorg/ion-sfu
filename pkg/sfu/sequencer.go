@@ -1,18 +1,67 @@
 package sfu
 
 import (
+	"encoding/binary"
 	"sync"
 	"time"
 )
 
 const (
+	packetMetaSize       = 16
+	maxPacketMetaHistory = 500
+
 	ignoreRetransmission = 50 // Ignore packet retransmission after ignoreRetransmission milliseconds
-	maxSequencerSize     = 256
 )
 
-type NACK struct {
-	SN  uint16
-	LRX int64
+type packetMeta []byte
+
+// Returns the original sequence number from stream.
+// The original sequence number is used to find the original
+// packet from publisher
+func (p packetMeta) getSourceSeqNo() uint16 {
+	return binary.BigEndian.Uint16(p[0:2])
+}
+
+// Returns the modified sequence number after offset.
+// This sequence number is used for the associated
+// down track, is modified according the offsets, and
+// must not be shared
+func (p packetMeta) getTargetSeqNo() uint16 {
+	return binary.BigEndian.Uint16(p[2:4])
+}
+
+// Returns the modified timestamp for current associated
+// down track.
+func (p packetMeta) getTimestamp() uint32 {
+	return binary.BigEndian.Uint32(p[4:8])
+}
+
+// Last nack returns the last time this packet was nack requested.
+// Sometimes clients request the same packet more than once, so keep
+// track of the requested packets helps to avoid writing multiple times
+// the same packet.
+// The resolution is 1 ms counting after the sequencer start time.
+func (p packetMeta) getLastNack() uint32 {
+	return binary.BigEndian.Uint32(p[8:12])
+}
+
+// Sets the last time this packet was requested by a nack.
+func (p packetMeta) setLastNack(tm uint32) {
+	binary.BigEndian.PutUint32(p[8:12], tm)
+}
+
+// Returns the layer from this packet belongs.
+func (p packetMeta) layer() uint8 {
+	return p[13]
+}
+
+func (p packetMeta) setVP8PayloadMeta(tlz0Idx uint8, picID uint16) {
+	p[14] = tlz0Idx
+	binary.BigEndian.PutUint16(p[14:16], picID)
+}
+
+func (p packetMeta) getVP8PayloadMeta() (uint8, uint16) {
+	return p[14], binary.BigEndian.Uint16(p[14:16])
 }
 
 // Sequencer stores the packet sequence received by the down track in the following format:
@@ -21,8 +70,8 @@ type NACK struct {
 // - 32 bits last nack timestamp 1 ms counting after time start
 type sequencer struct {
 	sync.RWMutex
-	seq       [maxSequencerSize]uint64
-	step      uint8
+	seq       []byte
+	step      int
 	headSN    uint16
 	startTime int64
 }
@@ -30,47 +79,63 @@ type sequencer struct {
 func newSequencer() *sequencer {
 	return &sequencer{
 		startTime: time.Now().UnixNano() / 1e6,
+		seq:       make([]byte, packetMetaSize*maxPacketMetaHistory),
 	}
 }
 
-func (n *sequencer) push(sn, offSn uint16, head bool) {
+func (n *sequencer) push(sn, offSn uint16, timeStamp uint32, head bool) packetMeta {
 	n.Lock()
+	defer n.Unlock()
 	if n.headSN == 0 {
 		n.headSN = offSn
 	}
 
-	step := uint8(0)
+	step := 0
 	if head {
 		inc := offSn - n.headSN
 		for i := uint16(1); i < inc; i++ {
 			n.step++
+			if n.step >= maxPacketMetaHistory {
+				n.step = 0
+			}
 		}
-		n.step++
 		step = n.step
 		n.headSN = offSn
 	} else {
-		step = n.step - uint8(n.headSN-offSn)
+		step = n.step - int(n.headSN-offSn) + 1
 	}
-
-	n.seq[step] = uint64(sn)<<16 | uint64(offSn)
-	n.Unlock()
+	off := step * packetMetaSize
+	binary.BigEndian.PutUint16(n.seq[off:off+2], sn)
+	binary.BigEndian.PutUint16(n.seq[off+2:off+4], offSn)
+	binary.BigEndian.PutUint32(n.seq[off+4:off+8], timeStamp)
+	n.step++
+	if n.step >= maxPacketMetaHistory {
+		n.step = 0
+	}
+	return n.seq[off : off+packetMetaSize]
 }
 
-func (n *sequencer) getSeqNoPairs(seqNo []uint16) []uint32 {
+func (n *sequencer) getSeqNoPairs(seqNo []uint16) []packetMeta {
 	n.Lock()
-	packets := make([]uint32, 0, 17)
-	refTime := time.Now().UnixNano()/1e6 - n.startTime
+	meta := make([]packetMeta, 0, 17)
+	refTime := uint32(time.Now().UnixNano()/1e6 - n.startTime)
 	for _, sn := range seqNo {
-		step := n.step - uint8(n.headSN-sn)
-		seq := n.seq[step]
-		if uint16(seq) == sn {
-			tm := int64(seq >> 32)
+		step := n.step - int(n.headSN-sn) + 1
+		if step < 0 {
+			if step*-1 >= maxPacketMetaHistory {
+				continue
+			}
+			step = maxPacketMetaHistory + step + 1
+		}
+		seq := packetMeta(n.seq[step : step+maxPacketMetaHistory])
+		if seq.getTargetSeqNo() == sn {
+			tm := seq.getLastNack()
 			if tm == 0 || refTime-tm > ignoreRetransmission {
-				packets = append(packets, uint32(seq))
-				n.seq[step] = uint64(refTime)<<32 | uint64(uint32(seq))
+				seq.setLastNack(refTime)
+				meta = append(meta, seq)
 			}
 		}
 	}
 	n.Unlock()
-	return packets
+	return meta
 }

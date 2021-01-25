@@ -25,18 +25,18 @@ const (
 // to SFU Subscriber, the track handle the packets for simple, simulcast
 // and SVC Publisher.
 type DownTrack struct {
-	sync.Mutex
+	id          string
+	peerID      string
+	bound       atomicBool
+	mime        string
+	ssrc        uint32
+	streamID    string
+	payloadType uint8
+	sequencer   *sequencer
+	trackType   DownTrackType
 
-	id                  string
-	peerID              string
-	bound               atomicBool
-	mime                string
-	ssrc                uint32
-	streamID            string
-	payloadType         uint8
-	sequencer           *sequencer
-	trackType           DownTrackType
-	currentSpatialLayer int
+	spatialLayer  int32
+	temporalLayer int32
 
 	enabled  atomicBool
 	reSync   atomicBool
@@ -165,28 +165,40 @@ func (d *DownTrack) Close() {
 	})
 }
 
+func (d *DownTrack) SetInitialLayers(spatialLayer, temporalLayer int) {
+	atomic.StoreInt32(&d.spatialLayer, int32(spatialLayer<<16)|int32(spatialLayer))
+	atomic.StoreInt32(&d.temporalLayer, int32(temporalLayer<<16)|int32(temporalLayer))
+}
+
 func (d *DownTrack) SwitchSpatialLayer(targetLayer int) {
 	if d.trackType == SimulcastDownTrack {
+		layer := atomic.LoadInt32(&d.spatialLayer)
+		currentLayer := uint16(layer)
+		currentTargetLayer := uint16(layer >> 16)
+
 		// Don't switch until previous switch is done or canceled
-		if d.currentSpatialLayer != d.simulcast.targetSpatialLayer ||
-			d.currentSpatialLayer == targetLayer {
+		if currentLayer != currentTargetLayer ||
+			currentLayer == uint16(targetLayer) {
 			return
 		}
 		if err := d.receiver.SubDownTrack(d, targetLayer); err == nil {
-			d.simulcast.targetSpatialLayer = targetLayer
+			atomic.StoreInt32(&d.spatialLayer, int32(targetLayer<<16)|int32(currentLayer))
 		}
 	}
 }
 
 func (d *DownTrack) SwitchTemporalLayer(targetLayer int) {
 	if d.trackType == SimulcastDownTrack {
+		layer := atomic.LoadInt32(&d.temporalLayer)
+		currentLayer := uint16(layer)
+		currentTargetLayer := uint16(layer >> 16)
+
 		// Don't switch until previous switch is done or canceled
-		if d.simulcast.currentTempLayer != d.simulcast.targetTempLayer {
+		if currentLayer != currentTargetLayer {
 			return
 		}
-		d.simulcast.targetTempLayer = targetLayer
+		atomic.StoreInt32(&d.temporalLayer, int32(targetLayer<<16)|int32(currentLayer))
 	}
-
 }
 
 // OnCloseHandler method to be called on remote tracked removed
@@ -221,7 +233,7 @@ func (d *DownTrack) writeSimpleRTP(extPkt buffer.ExtPacket) error {
 	newSN := extPkt.Packet.SequenceNumber - d.snOffset
 	newTS := extPkt.Packet.Timestamp - d.tsOffset
 	if d.sequencer != nil && !extPkt.Retransmitted {
-		d.sequencer.push(extPkt.Packet.SequenceNumber, newSN, extPkt.Head)
+		d.sequencer.push(extPkt.Packet.SequenceNumber, newSN, newTS, extPkt.Head)
 	}
 	if (newSN-d.lastSN)&0x8000 == 0 || d.lastSN == 0 {
 		d.lastSN = newSN
@@ -244,7 +256,10 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 	// Check if packet SSRC is different from before
 	// if true, the video source changed
 	if d.lastSSRC != extPkt.Packet.SSRC {
-		if d.currentSpatialLayer == d.simulcast.targetSpatialLayer && d.lastSSRC != 0 {
+		layer := atomic.LoadInt32(&d.spatialLayer)
+		currentLayer := uint16(layer)
+		currentTargetLayer := uint16(layer >> 16)
+		if currentLayer == currentTargetLayer && d.lastSSRC != 0 {
 			return nil
 		}
 		// Wait for a keyframe to sync new source
@@ -257,10 +272,11 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 		}
 		// Switch is done remove sender from previous layer
 		// and update current layer
-		if d.currentSpatialLayer != d.simulcast.targetSpatialLayer {
-			go d.receiver.DeleteDownTrack(d.currentSpatialLayer, d.peerID)
+		if currentLayer != currentTargetLayer {
+			go d.receiver.DeleteDownTrack(int(currentLayer), d.peerID)
 		}
-		d.currentSpatialLayer = d.simulcast.targetSpatialLayer
+
+		atomic.StoreInt32(&d.spatialLayer, int32(currentTargetLayer)<<16|int32(currentTargetLayer))
 		if d.simulcast.temporalSupported {
 			if d.mime == "video/vp8" {
 				if vp8, ok := extPkt.Payload.(buffer.VP8); ok {
@@ -315,7 +331,7 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 	atomic.AddUint32(&d.packetCount, 1)
 
 	if d.sequencer != nil && !extPkt.Retransmitted {
-		d.sequencer.push(extPkt.Packet.SequenceNumber, newSN, extPkt.Head)
+		d.sequencer.push(extPkt.Packet.SequenceNumber, newSN, newTS, extPkt.Head)
 	}
 	if (newSN-d.lastSN)&0x8000 == 0 {
 		d.lastSN = newSN
@@ -378,7 +394,7 @@ func (d *DownTrack) handleRTCP(bytes []byte) {
 			}
 		case *rtcp.TransportLayerNack:
 			log.Tracef("sender got nack: %+v", p)
-			var nackedPackets []uint32
+			var nackedPackets []packetMeta
 			for _, pair := range p.Nacks {
 				nackedPackets = append(nackedPackets, d.sequencer.getSeqNoPairs(pair.PacketList())...)
 			}
