@@ -5,6 +5,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/pion/ion-sfu/pkg/buffer"
 )
 
 func Test_setVP8TemporalLayer(t *testing.T) {
@@ -30,8 +32,7 @@ func Test_setVP8TemporalLayer(t *testing.T) {
 				dt: &DownTrack{
 					mime: "video/vp8",
 					simulcast: simulcastTrackHelpers{
-						refPicID:         0,
-						currentTempLayer: 2,
+						refPicID: 0,
 					},
 				},
 				pl: []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0xdf, 0x5, 0x6},
@@ -45,8 +46,7 @@ func Test_setVP8TemporalLayer(t *testing.T) {
 				dt: &DownTrack{
 					mime: "video/vp8",
 					simulcast: simulcastTrackHelpers{
-						refPicID:         32764,
-						currentTempLayer: 3,
+						refPicID: 32764,
 					},
 				},
 				pl: []byte{0xff, 0xff, 0xff, 0xfd, 0xb4, 0xdf, 0x5, 0x6},
@@ -58,7 +58,7 @@ func Test_setVP8TemporalLayer(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			gotPayload, gotSkip := setVP8TemporalLayer(tt.args.pl, 1, true, tt.args.dt)
+			gotPayload, gotSkip := setVP8TemporalLayer(buffer.ExtPacket{}, 1, tt.args.dt)
 			if !reflect.DeepEqual(gotPayload, tt.wantPayload) {
 				t.Errorf("setVP8TemporalLayer() gotPayload = %v, want %v", gotPayload, tt.wantPayload)
 			}

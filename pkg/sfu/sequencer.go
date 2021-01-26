@@ -105,6 +105,7 @@ func (n *sequencer) push(sn, offSn uint16, timeStamp uint32, head bool) packetMe
 		step = n.step - int(n.headSN-offSn) + 1
 	}
 	off := step * packetMetaSize
+	println(off)
 	binary.BigEndian.PutUint16(n.seq[off:off+2], sn)
 	binary.BigEndian.PutUint16(n.seq[off+2:off+4], offSn)
 	binary.BigEndian.PutUint32(n.seq[off+4:off+8], timeStamp)
@@ -120,14 +121,16 @@ func (n *sequencer) getSeqNoPairs(seqNo []uint16) []packetMeta {
 	meta := make([]packetMeta, 0, 17)
 	refTime := uint32(time.Now().UnixNano()/1e6 - n.startTime)
 	for _, sn := range seqNo {
-		step := n.step - int(n.headSN-sn) + 1
+		step := n.step - int(n.headSN-sn) - 1
 		if step < 0 {
 			if step*-1 >= maxPacketMetaHistory {
 				continue
 			}
 			step = maxPacketMetaHistory + step + 1
 		}
-		seq := packetMeta(n.seq[step : step+maxPacketMetaHistory])
+		off := step * packetMetaSize
+		seq := packetMeta(n.seq[off : off+packetMetaSize])
+		println("=", off)
 		if seq.getTargetSeqNo() == sn {
 			tm := seq.getLastNack()
 			if tm == 0 || refTime-tm > ignoreRetransmission {

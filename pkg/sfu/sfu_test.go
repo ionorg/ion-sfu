@@ -285,7 +285,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			testDone := atomicBool{}
+			testDone := atomicBool(0)
 			var mu sync.RWMutex
 			done := make(chan struct{})
 			peers := make(map[string]*peer)
