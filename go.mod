@@ -20,7 +20,7 @@ require (
 	github.com/pion/sdp/v3 v3.0.4
 	github.com/pion/transport v0.12.2
 	github.com/pion/turn/v2 v2.0.5
-	github.com/pion/webrtc/v3 v3.0.5-0.20210125020415-61ffc413e6e9 // go get -u github.com/pion/webrtc/v3@robin-20210119-seqnum
+	github.com/pion/webrtc/v3 v3.0.5-0.20210126162320-9196c1ec9a48 // go get -u github.com/pion/webrtc/v3@robin-20210119-seqnum
 	github.com/prometheus/client_golang v1.9.0
 	github.com/rs/cors v1.7.0 // indirect
 	github.com/soheilhy/cmux v0.1.4
