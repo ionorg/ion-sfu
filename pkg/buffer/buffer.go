@@ -27,13 +27,11 @@ type pendingPackets struct {
 }
 
 type ExtPacket struct {
-	Head          bool
-	RtxSN         uint16
-	Cycle         uint32
-	Packet        rtp.Packet
-	Payload       interface{}
-	KeyFrame      bool
-	Retransmitted bool
+	Head     bool
+	Cycle    uint32
+	Packet   rtp.Packet
+	Payload  interface{}
+	KeyFrame bool
 }
 
 // Buffer contains all packets
@@ -52,7 +50,7 @@ type Buffer struct {
 	lastReport int64
 	twccExt    uint8
 	bound      bool
-	closed     bool
+	closed     atomicBool
 	mime       string
 
 	// supported feedbacks
@@ -180,7 +178,7 @@ func (b *Buffer) Write(pkt []byte) (n int, err error) {
 	b.Lock()
 	defer b.Unlock()
 
-	if b.closed {
+	if b.closed.get() {
 		err = io.EOF
 		return
 	}
@@ -202,7 +200,7 @@ func (b *Buffer) Write(pkt []byte) (n int, err error) {
 
 func (b *Buffer) Read(buff []byte) (n int, err error) {
 	for {
-		if b.closed {
+		if b.closed.get() {
 			err = io.EOF
 			return
 		}
@@ -228,7 +226,7 @@ func (b *Buffer) Close() error {
 	defer b.Unlock()
 
 	b.closeOnce.Do(func() {
-		b.closed = true
+		b.closed.set(true)
 		if b.bucket != nil && b.codecType == webrtc.RTPCodecTypeVideo {
 			b.videoPool.Put(b.bucket.buf)
 		}
@@ -402,7 +400,7 @@ func (b *Buffer) getRTCP() []rtcp.Packet {
 func (b *Buffer) GetPacket(buff []byte, sn uint16) (int, error) {
 	b.Lock()
 	defer b.Unlock()
-	if b.closed {
+	if b.closed.get() {
 		return 0, io.EOF
 	}
 	return b.bucket.getPacket(buff, sn)
