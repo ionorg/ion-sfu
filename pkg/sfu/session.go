@@ -29,6 +29,12 @@ func NewSession(id string, dcs []*Datachannel) *Session {
 	}
 }
 
+func (s *Session) AddDataChannel(dc *Datachannel) {
+	s.mu.Lock()
+	s.datachannels = append(s.datachannels, dc)
+	s.mu.Unlock()
+}
+
 // AddPublisher adds a transport to the session
 func (s *Session) AddPeer(peer *Peer) {
 	s.mu.Lock()
