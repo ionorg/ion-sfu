@@ -49,10 +49,10 @@ type VP8 struct {
 	TemporalSupported bool
 	// Optional Header
 	PictureID uint16 /* 8 or 16 bits, picture ID */
-	PicIDIdx  uint8
+	PicIDIdx  int
 	MBit      bool
 	TL0PICIDX uint8 /* 8 bits temporal level zero index */
-	TlzIdx    uint8
+	TlzIdx    int
 
 	// Optional Header If either of the T or K bits are set to 1,
 	// the TID/Y/KEYIDX extension field MUST be present.
@@ -73,7 +73,7 @@ func (p *VP8) Unmarshal(payload []byte) error {
 		return errShortPacket
 	}
 
-	var idx uint8
+	idx := 0
 	S := payload[idx]&0x10 > 0
 	// Check for extended bit control
 	if payload[idx]&0x80 > 0 {

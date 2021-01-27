@@ -61,15 +61,21 @@ func setVP8TemporalLayer(p buffer.ExtPacket, sn uint16, s *DownTrack) (payload [
 		s.simulcast.lTlZIdx = lZ0Idx
 	}
 
+	modifyVP8TemporalPayload(payload, pkt.PicIDIdx, pkt.TlzIdx, picID, lZ0Idx, pkt.MBit)
+
+	return
+}
+
+func modifyVP8TemporalPayload(payload []byte, picIDIdx, tlz0Idx int, picID uint16, tlz0ID uint8, mBit bool) {
 	pid := make([]byte, 2)
 	binary.BigEndian.PutUint16(pid, picID)
-	payload[pkt.PicIDIdx] = pid[0]
-	if pkt.MBit {
-		payload[pkt.PicIDIdx] |= 0x80
-		payload[pkt.PicIDIdx+1] = pid[1]
+	payload[picIDIdx] = pid[0]
+	if mBit {
+		payload[picIDIdx] |= 0x80
+		payload[picIDIdx+1] = pid[1]
 	}
-	payload[pkt.TlzIdx] = lZ0Idx
-	return
+	payload[tlz0Idx] = tlz0ID
+
 }
 
 func timeToNtp(ns int64) uint64 {

@@ -194,8 +194,8 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 		return io.ErrClosedPipe
 	}
 	w.nackWorker.Submit(func() {
-		pktBuff := packetFactory.Get().([]byte)
 		for _, meta := range packets {
+			pktBuff := packetFactory.Get().([]byte)
 			i, err := w.buffers[meta.layer()].GetPacket(pktBuff, meta.getSourceSeqNo())
 			if err != nil {
 				if err == io.EOF {
@@ -209,11 +209,24 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 			}
 			pkt.Header.SequenceNumber = meta.getTargetSeqNo()
 			pkt.Header.Timestamp = meta.getTimestamp()
+			if track.simulcast.temporalSupported {
+				switch track.mime {
+				case "video/vp8":
+					var vp8 buffer.VP8
+					if err = vp8.Unmarshal(pkt.Payload); err != nil {
+						continue
+					}
+					tlzoID, picID := meta.getVP8PayloadMeta()
+					modifyVP8TemporalPayload(pkt.Payload, vp8.PicIDIdx, vp8.TlzIdx, picID, tlzoID, vp8.MBit)
+				}
+			}
+
 			if _, err = track.writeStream.WriteRTP(&pkt.Header, pkt.Payload); err != nil {
 				log.Errorf("Writing rtx packet err: %v", err)
 			}
+
+			packetFactory.Put(pktBuff)
 		}
-		packetFactory.Put(pktBuff)
 	})
 	return nil
 }
