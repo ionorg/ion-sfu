@@ -12,11 +12,12 @@ func Test_sequencer(t *testing.T) {
 	seq := newSequencer()
 	off := uint16(15)
 
-	for i := uint16(1); i < 100; i++ {
+	for i := uint16(1); i < 520; i++ {
 		seq.push(i, i+off, 123, true)
 	}
 
-	req := []uint16{17, 18, 22, 33}
+	time.Sleep(60 * time.Millisecond)
+	req := []uint16{57, 58, 62, 63, 513, 514, 515, 516, 517}
 	res := seq.getSeqNoPairs(req)
 	assert.Equal(t, len(req), len(res))
 	for i, val := range res {
@@ -29,7 +30,7 @@ func Test_sequencer(t *testing.T) {
 	res = seq.getSeqNoPairs(req)
 	assert.Equal(t, len(req), len(res))
 	for i, val := range res {
-		assert.Equal(t, val.getSourceSeqNo(), req[i])
+		assert.Equal(t, val.getTargetSeqNo(), req[i])
 		assert.Equal(t, val.getSourceSeqNo(), req[i]-off)
 	}
 }

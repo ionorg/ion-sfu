@@ -64,10 +64,7 @@ func (p packetMeta) getVP8PayloadMeta() (uint8, uint16) {
 	return p[14], binary.BigEndian.Uint16(p[14:16])
 }
 
-// Sequencer stores the packet sequence received by the down track in the following format:
-// - 16 bits modified sequence number
-// - 16 bits original sequence number
-// - 32 bits last nack timestamp 1 ms counting after time start
+// Sequencer stores the packet sequence received by the down track
 type sequencer struct {
 	sync.RWMutex
 	seq       []byte
@@ -105,7 +102,6 @@ func (n *sequencer) push(sn, offSn uint16, timeStamp uint32, head bool) packetMe
 		step = n.step - int(n.headSN-offSn) + 1
 	}
 	off := step * packetMetaSize
-	println(off)
 	binary.BigEndian.PutUint16(n.seq[off:off+2], sn)
 	binary.BigEndian.PutUint16(n.seq[off+2:off+4], offSn)
 	binary.BigEndian.PutUint32(n.seq[off+4:off+8], timeStamp)
@@ -126,11 +122,10 @@ func (n *sequencer) getSeqNoPairs(seqNo []uint16) []packetMeta {
 			if step*-1 >= maxPacketMetaHistory {
 				continue
 			}
-			step = maxPacketMetaHistory + step + 1
+			step = maxPacketMetaHistory + step
 		}
 		off := step * packetMetaSize
 		seq := packetMeta(n.seq[off : off+packetMetaSize])
-		println("=", off)
 		if seq.getTargetSeqNo() == sn {
 			tm := seq.getLastNack()
 			if tm == 0 || refTime-tm > ignoreRetransmission {

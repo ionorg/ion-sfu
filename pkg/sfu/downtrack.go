@@ -232,7 +232,7 @@ func (d *DownTrack) writeSimpleRTP(extPkt buffer.ExtPacket) error {
 	d.lastSSRC = extPkt.Packet.SSRC
 	newSN := extPkt.Packet.SequenceNumber - d.snOffset
 	newTS := extPkt.Packet.Timestamp - d.tsOffset
-	if d.sequencer != nil && !extPkt.Retransmitted {
+	if d.sequencer != nil {
 		d.sequencer.push(extPkt.Packet.SequenceNumber, newSN, newTS, extPkt.Head)
 	}
 	if (newSN-d.lastSN)&0x8000 == 0 || d.lastSN == 0 {
@@ -308,12 +308,7 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 		}
 	}
 
-	newSN := uint16(0)
-	if extPkt.Retransmitted {
-		newSN = extPkt.RtxSN
-	} else {
-		newSN = extPkt.Packet.SequenceNumber - d.snOffset
-	}
+	newSN := extPkt.Packet.SequenceNumber - d.snOffset
 	newTS := extPkt.Packet.Timestamp - d.tsOffset
 
 	if d.simulcast.temporalSupported {
@@ -330,7 +325,7 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 	atomic.AddUint32(&d.octetCount, uint32(len(extPkt.Packet.Payload)))
 	atomic.AddUint32(&d.packetCount, 1)
 
-	if d.sequencer != nil && !extPkt.Retransmitted {
+	if d.sequencer != nil {
 		d.sequencer.push(extPkt.Packet.SequenceNumber, newSN, newTS, extPkt.Head)
 	}
 	if (newSN-d.lastSN)&0x8000 == 0 {
