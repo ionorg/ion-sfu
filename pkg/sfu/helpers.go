@@ -30,10 +30,10 @@ func (a *atomicBool) get() bool {
 // setVp8TemporalLayer is a helper to detect and modify accordingly the vp8 payload to reflect
 // temporal changes in the SFU.
 // VP8 temporal layers implemented according https://tools.ietf.org/html/rfc7741
-func setVP8TemporalLayer(p buffer.ExtPacket, sn uint16, s *DownTrack) (payload []byte, drop bool) {
+func setVP8TemporalLayer(p buffer.ExtPacket, s *DownTrack) (payload []byte, picID uint16, tlz0Idx uint8, drop bool) {
 	pkt, ok := p.Payload.(buffer.VP8)
 	if !ok {
-		return p.Packet.Payload, false
+		return p.Packet.Payload, 0, 0, false
 	}
 
 	layer := atomic.LoadInt32(&s.temporalLayer)
@@ -53,15 +53,15 @@ func setVP8TemporalLayer(p buffer.ExtPacket, sn uint16, s *DownTrack) (payload [
 	payload = payload[:len(p.Packet.Payload)]
 	copy(payload, p.Packet.Payload)
 
-	picID := pkt.PictureID - s.simulcast.refPicID + s.simulcast.pRefPicID + 1
-	lZ0Idx := pkt.TL0PICIDX - s.simulcast.refTlZIdx + s.simulcast.pRefTlZIdx + 1
+	picID = pkt.PictureID - s.simulcast.refPicID + s.simulcast.pRefPicID + 1
+	tlz0Idx = pkt.TL0PICIDX - s.simulcast.refTlZIdx + s.simulcast.pRefTlZIdx + 1
 
 	if p.Head {
 		s.simulcast.lPicID = picID
-		s.simulcast.lTlZIdx = lZ0Idx
+		s.simulcast.lTlZIdx = tlz0Idx
 	}
 
-	modifyVP8TemporalPayload(payload, pkt.PicIDIdx, pkt.TlzIdx, picID, lZ0Idx, pkt.MBit)
+	modifyVP8TemporalPayload(payload, pkt.PicIDIdx, pkt.TlzIdx, picID, tlz0Idx, pkt.MBit)
 
 	return
 }

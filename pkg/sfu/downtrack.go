@@ -311,10 +311,14 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 	newSN := extPkt.Packet.SequenceNumber - d.snOffset
 	newTS := extPkt.Packet.Timestamp - d.tsOffset
 
+	var (
+		picID   uint16
+		tlz0Idx uint8
+	)
 	if d.simulcast.temporalSupported {
 		if d.mime == "video/vp8" {
 			drop := false
-			if extPkt.Packet.Payload, drop = setVP8TemporalLayer(extPkt, newSN, d); drop {
+			if extPkt.Packet.Payload, picID, tlz0Idx, drop = setVP8TemporalLayer(extPkt, d); drop {
 				// Pkt not in temporal layer update sequence number offset to avoid gaps
 				d.snOffset++
 				return nil
@@ -322,12 +326,16 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 		}
 	}
 
+	if d.sequencer != nil {
+		meta := d.sequencer.push(extPkt.Packet.SequenceNumber, newSN, newTS, extPkt.Head)
+		if d.simulcast.temporalSupported && d.mime == "video/vp8" {
+			meta.setVP8PayloadMeta(tlz0Idx, picID)
+		}
+	}
+
 	atomic.AddUint32(&d.octetCount, uint32(len(extPkt.Packet.Payload)))
 	atomic.AddUint32(&d.packetCount, 1)
 
-	if d.sequencer != nil {
-		d.sequencer.push(extPkt.Packet.SequenceNumber, newSN, newTS, extPkt.Head)
-	}
 	if (newSN-d.lastSN)&0x8000 == 0 {
 		d.lastSN = newSN
 		atomic.StoreInt64(&d.lastPacketMs, time.Now().UnixNano()/1e6)
