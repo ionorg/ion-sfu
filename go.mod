@@ -16,11 +16,11 @@ require (
 	github.com/pion/ice/v2 v2.0.15 // indirect
 	github.com/pion/ion-log v1.0.0
 	github.com/pion/rtcp v1.2.6
-	github.com/pion/rtp v1.6.3-0.20210115141156-37a568a6961c // go get -u github.com/pion/rtp@robin-20210119-seqnum
+	github.com/pion/rtp v1.6.3-0.20210128035234-5b3f2454a01a // go get -u github.com/pion/rtp@robin-20210119-seqnum
 	github.com/pion/sdp/v3 v3.0.4
 	github.com/pion/transport v0.12.2
 	github.com/pion/turn/v2 v2.0.5
-	github.com/pion/webrtc/v3 v3.0.5-0.20210126162320-9196c1ec9a48 // go get -u github.com/pion/webrtc/v3@robin-20210119-seqnum
+	github.com/pion/webrtc/v3 v3.0.5-0.20210128035718-4aca7f6ee9b5 // go get -u github.com/pion/webrtc/v3@robin-20210119-seqnum
 	github.com/prometheus/client_golang v1.9.0
 	github.com/rs/cors v1.7.0 // indirect
 	github.com/soheilhy/cmux v0.1.4
