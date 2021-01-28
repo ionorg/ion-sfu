@@ -51,6 +51,8 @@ type Buffer struct {
 	nack bool
 	tcc  bool
 
+	minPacketProbe     int
+	lastPacketRead     int
 	lastSRNTPTime      uint64
 	lastSRRTPTime      uint32
 	lastSRRecv         int64 // Represents wall clock of the most recent sender report arrival
@@ -202,18 +204,20 @@ func (b *Buffer) Read(buff []byte) (n int, err error) {
 		}
 
 		b.Lock()
-		if b.pPackets != nil && len(b.pPackets) > 0 {
-			if len(buff) < len(b.pPackets[0].packet) {
+		if b.pPackets != nil && len(b.pPackets) > b.lastPacketRead {
+			if len(buff) < len(b.pPackets[b.lastPacketRead].packet) {
 				err = errBufferTooSmall
 				b.Unlock()
 				return
 			}
-			n = len(b.pPackets[0].packet)
-			copy(buff, b.pPackets[0].packet)
+			n = len(b.pPackets[b.lastPacketRead].packet)
+			copy(buff, b.pPackets[b.lastPacketRead].packet)
+			b.lastPacketRead++
 			b.Unlock()
 			return
 		}
 		b.Unlock()
+		time.Sleep(25 * time.Millisecond)
 	}
 }
 
@@ -253,6 +257,14 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 		}
 		b.maxSeqNo = sn
 	}
+
+	if b.minPacketProbe < 25 {
+		if sn < b.baseSN {
+			b.baseSN = sn
+		}
+		b.minPacketProbe++
+	}
+
 	b.stats.TotalByte += uint64(len(pkt))
 	b.stats.PacketCount++
 
