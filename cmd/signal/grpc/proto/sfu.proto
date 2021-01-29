@@ -14,6 +14,7 @@ message SignalRequest {
         JoinRequest join = 2;
         bytes description = 3;
         Trickle trickle = 4;
+        string identify = 5;
     }
 }
 

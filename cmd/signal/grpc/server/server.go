@@ -17,11 +17,15 @@ import (
 type SFUServer struct {
 	pb.UnimplementedSFUServer
 	sync.Mutex
-	SFU *sfu.SFU
+	SFU   *sfu.SFU
+	peers map[string]*sfu.Peer
 }
 
-func NewServer(sfu *sfu.SFU) *SFUServer {
-	return &SFUServer{SFU: sfu}
+func NewServer(s *sfu.SFU) *SFUServer {
+	return &SFUServer{
+		SFU:   s,
+		peers: make(map[string]*sfu.Peer),
+	}
 }
 
 // Publish a stream to the sfu. Publish creates a bidirectional
@@ -41,14 +45,19 @@ func NewServer(sfu *sfu.SFU) *SFUServer {
 // message must *always* be sent first.
 // 2. `Trickle` containing candidate information for Trickle ICE.
 //
-// If the client closes this stream, the webrtc stream will be closed.
+// If an unidentified client closes this stream, the webrtc stream will be closed.
+// Identified clients (sent SignalRequest_Identify) keep running so that they
+// can reconnect.
 func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
-	peer := sfu.NewPeer(s.SFU)
+	var peer *sfu.Peer
 	for {
 		in, err := stream.Recv()
 
 		if err != nil {
-			peer.Close()
+			if !peer.IsIdentified() {
+				// we can only reconnect if the peer identified itself
+				peer.Close()
+			}
 
 			if err == io.EOF {
 				return nil
@@ -64,8 +73,23 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 		}
 
 		switch payload := in.Payload.(type) {
+		case *pb.SignalRequest_Identify:
+			ident := payload.Identify
+			if p, ok := s.peers[ident]; ok {
+				peer = p
+				log.Debugf("signal->identify Restored peer %s", ident)
+			} else {
+				peer = sfu.NewPeer(s.SFU)
+				peer.SetIdentity(ident)
+				s.peers[ident] = peer
+				log.Debugf("signal->identify Created peer %s", ident)
+			}
+
 		case *pb.SignalRequest_Join:
 			log.Debugf("signal->join called:\n%v", string(payload.Join.Description))
+			if peer == nil {
+				peer = sfu.NewPeer(s.SFU)
+			}
 
 			var offer webrtc.SessionDescription
 			err := json.Unmarshal(payload.Join.Description, &offer)
@@ -146,6 +170,13 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 				if err != nil {
 					log.Errorf("oniceconnectionstatechange error %s", err)
 				}
+
+				if c == webrtc.ICEConnectionStateClosed {
+					if peer != nil && peer.IsIdentified() {
+						peer.Close()
+						delete(s.peers, peer.GetIdentity())
+					}
+				}
 			}
 
 			answer, err := peer.Join(payload.Join.Sid, offer)
@@ -193,6 +224,9 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 			}
 
 		case *pb.SignalRequest_Description:
+			if peer == nil {
+				peer = sfu.NewPeer(s.SFU)
+			}
 			var sdp webrtc.SessionDescription
 			err := json.Unmarshal(payload.Description, &sdp)
 			if err != nil {
@@ -284,6 +318,12 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 			}
 
 		case *pb.SignalRequest_Trickle:
+			if peer == nil {
+				return status.Error(
+					codes.FailedPrecondition,
+					"Received Trickle before Join",
+				)
+			}
 			var candidate webrtc.ICECandidateInit
 			err := json.Unmarshal([]byte(payload.Trickle.Init), &candidate)
 			if err != nil {
