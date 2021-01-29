@@ -60,6 +60,8 @@ type Buffer struct {
 
 	minPacketProbe     int
 	lastPacketRead     int
+	bitrate            uint64
+	bitrateHelper      uint64
 	lastSRNTPTime      uint64
 	lastSRRTPTime      uint32
 	lastSRRecv         int64 // Represents wall clock of the most recent sender report arrival
@@ -137,17 +139,19 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 		}
 	}
 
-	for _, fb := range codec.RTCPFeedback {
-		switch fb.Type {
-		case webrtc.TypeRTCPFBGoogREMB:
-			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBGoogREMB)
-			b.remb = true
-		case webrtc.TypeRTCPFBTransportCC:
-			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBTransportCC)
-			b.tcc = true
-		case webrtc.TypeRTCPFBNACK:
-			log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBNACK)
-			b.nack = true
+	if b.codecType == webrtc.RTPCodecTypeVideo {
+		for _, fb := range codec.RTCPFeedback {
+			switch fb.Type {
+			case webrtc.TypeRTCPFBGoogREMB:
+				log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBGoogREMB)
+				b.remb = true
+			case webrtc.TypeRTCPFBTransportCC:
+				log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBTransportCC)
+				b.tcc = true
+			case webrtc.TypeRTCPFBNACK:
+				log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBNACK)
+				b.nack = true
+			}
 		}
 	}
 
@@ -270,6 +274,7 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	}
 
 	b.stats.TotalByte += uint64(len(pkt))
+	b.bitrateHelper += uint64(len(pkt))
 	b.stats.PacketCount++
 
 	var p rtp.Packet
@@ -319,14 +324,19 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 			b.feedbackTWCC(binary.BigEndian.Uint16(ext[0:2]), arrivalTime, p.Marker)
 		}
 	}
-	if arrivalTime-b.lastReport >= reportDelta {
+
+	diff := arrivalTime - b.lastReport
+	if diff >= reportDelta {
+		br := (8 * b.bitrateHelper * uint64(reportDelta)) / uint64(diff)
+		atomic.StoreUint64(&b.bitrate, br)
 		b.feedbackCB(b.getRTCP())
 		b.lastReport = arrivalTime
+		b.bitrateHelper = 0
 	}
 }
 
 func (b *Buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
-	br := b.stats.TotalByte * 8
+	br := b.bitrate
 	if b.stats.LostRate < 0.02 {
 		br = uint64(float64(br)*1.09) + 2000
 	}
@@ -416,6 +426,10 @@ func (b *Buffer) GetPacket(buff []byte, sn uint16) (int, error) {
 		return 0, io.EOF
 	}
 	return b.bucket.getPacket(buff, sn)
+}
+
+func (b *Buffer) Bitrate() uint64 {
+	return atomic.LoadUint64(&b.bitrate)
 }
 
 func (b *Buffer) OnTransportWideCC(fn func(sn uint16, timeNS int64, marker bool)) {
