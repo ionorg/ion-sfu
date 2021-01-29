@@ -82,6 +82,7 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 
 	publish := false
 	trackID := track.ID()
+	rid := track.RID()
 
 	buff, rtcpReader := bufferFactory.GetBufferPair(uint32(track.SSRC()))
 
@@ -143,7 +144,16 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 			}
 			r.deleteReceiver(trackID, uint32(track.SSRC()))
 		})
-		publish = true
+		if len(rid) == 0 || r.config.Simulcast.BestQualityFirst && rid == fullResolution ||
+			!r.config.Simulcast.BestQualityFirst && rid == quarterResolution {
+			publish = true
+		}
+	} else {
+		if r.config.Simulcast.BestQualityFirst && rid == fullResolution ||
+			!r.config.Simulcast.BestQualityFirst && rid == quarterResolution ||
+			!r.config.Simulcast.BestQualityFirst && rid == halfResolution {
+			publish = true
+		}
 	}
 
 	recv.AddUpTrack(track, buff)
