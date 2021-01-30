@@ -25,6 +25,8 @@ type Receiver interface {
 	AddUpTrack(track *webrtc.TrackRemote, buffer *buffer.Buffer)
 	AddDownTrack(track *DownTrack, bestQualityFirst bool)
 	SubDownTrack(track *DownTrack, layer int) error
+	GetBitrate() [3]uint64
+	GetMaxTemporalLayer() [3]int64
 	RetransmitPackets(track *DownTrack, packets []packetMeta) error
 	DeleteDownTrack(layer int, id string)
 	OnCloseHandler(fn func())
@@ -123,10 +125,12 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 				}
 			}
 		}
-		track.SetInitialLayers(layer, 2)
+		track.SetInitialLayers(int64(layer), 2)
+		track.maxSpatialLayer = 2
+		track.maxTemporalLayer = 2
 		track.trackType = SimulcastDownTrack
 	} else {
-		track.SetInitialLayers(0, 2)
+		track.SetInitialLayers(0, 0)
 		track.trackType = SimpleDownTrack
 	}
 
@@ -145,6 +149,26 @@ func (w *WebRTCReceiver) SubDownTrack(track *DownTrack, layer int) error {
 	}
 	w.Unlock()
 	return nil
+}
+
+func (w *WebRTCReceiver) GetBitrate() [3]uint64 {
+	var br [3]uint64
+	for i, buff := range w.buffers {
+		if buff != nil {
+			br[i] = buff.Bitrate()
+		}
+	}
+	return br
+}
+
+func (w *WebRTCReceiver) GetMaxTemporalLayer() [3]int64 {
+	var tls [3]int64
+	for i, buff := range w.buffers {
+		if buff != nil {
+			tls[i] = buff.MaxTemporalLayer()
+		}
+	}
+	return tls
 }
 
 // OnCloseHandler method to be called on remote tracked removed

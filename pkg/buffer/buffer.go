@@ -60,6 +60,7 @@ type Buffer struct {
 
 	minPacketProbe     int
 	lastPacketRead     int
+	maxTemporalLayer   int64
 	bitrate            uint64
 	bitrateHelper      uint64
 	lastSRNTPTime      uint64
@@ -266,13 +267,6 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 		b.maxSeqNo = sn
 	}
 
-	if b.minPacketProbe < 25 {
-		if sn < b.baseSN {
-			b.baseSN = sn
-		}
-		b.minPacketProbe++
-	}
-
 	b.stats.TotalByte += uint64(len(pkt))
 	b.bitrateHelper += uint64(len(pkt))
 	b.stats.PacketCount++
@@ -298,6 +292,22 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 		ep.KeyFrame = vp8Packet.IsKeyFrame
 	case "video/h264":
 		ep.KeyFrame = isH264Keyframe(p.Payload)
+	}
+
+	if b.minPacketProbe < 25 {
+		if sn < b.baseSN {
+			b.baseSN = sn
+		}
+
+		if b.mime == "video/vp8" {
+			pld := ep.Payload.(VP8)
+			mtl := atomic.LoadInt64(&b.maxTemporalLayer)
+			if mtl < int64(pld.TID) {
+				atomic.StoreInt64(&b.maxTemporalLayer, int64(pld.TID))
+			}
+		}
+
+		b.minPacketProbe++
 	}
 
 	b.packetChan <- ep
@@ -428,8 +438,13 @@ func (b *Buffer) GetPacket(buff []byte, sn uint16) (int, error) {
 	return b.bucket.getPacket(buff, sn)
 }
 
+//Bitrate returns the current publisher stream bitrate.
 func (b *Buffer) Bitrate() uint64 {
 	return atomic.LoadUint64(&b.bitrate)
+}
+
+func (b *Buffer) MaxTemporalLayer() int64 {
+	return atomic.LoadInt64(&b.maxTemporalLayer)
 }
 
 func (b *Buffer) OnTransportWideCC(fn func(sn uint16, timeNS int64, marker bool)) {

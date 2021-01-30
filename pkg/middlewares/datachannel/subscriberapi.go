@@ -29,7 +29,6 @@ func SubscriberAPI(next sfu.MessageProcessor) sfu.MessageProcessor {
 			return
 		}
 		downTracks := args.Peer.Subscriber().GetDownTracks(srm.StreamID)
-		println(string(args.Message.Data))
 		for _, dt := range downTracks {
 			switch dt.Kind() {
 			case webrtc.RTPCodecTypeAudio:
@@ -38,23 +37,23 @@ func SubscriberAPI(next sfu.MessageProcessor) sfu.MessageProcessor {
 				switch srm.Video {
 				case highValue:
 					dt.Mute(false)
-					dt.SwitchSpatialLayer(2)
+					dt.SwitchSpatialLayer(2, false)
 				case mediumValue:
 					dt.Mute(false)
-					dt.SwitchSpatialLayer(1)
+					dt.SwitchSpatialLayer(1, false)
 				case lowValue:
 					dt.Mute(false)
-					dt.SwitchSpatialLayer(0)
+					dt.SwitchSpatialLayer(0, false)
 				case mutedValue:
 					dt.Mute(true)
 				}
 				switch srm.Framerate {
 				case highValue:
-					dt.SwitchTemporalLayer(2)
+					dt.SwitchTemporalLayer(2, false)
 				case mediumValue:
-					dt.SwitchTemporalLayer(1)
+					dt.SwitchTemporalLayer(1, false)
 				case lowValue:
-					dt.SwitchTemporalLayer(0)
+					dt.SwitchTemporalLayer(0, false)
 				}
 			}
 
