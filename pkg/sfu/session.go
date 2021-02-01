@@ -210,14 +210,14 @@ func (s *Session) audioLevelObserver(audioLevelInterval int) {
 		}
 		levels := s.audioObserver.calc()
 
-		s.mu.RLock()
-		defer s.mu.RUnlock()
 		l, err := json.Marshal(&levels)
 		if err != nil {
 			log.Errorf("Marshaling audio levels err: %v", err)
+			continue
 		}
-		sl := string(l)
 
+		sl := string(l)
+		s.mu.RLock()
 		for _, peer := range s.peers {
 			if ch, ok := peer.subscriber.channels[APIChannelLabel]; ok {
 				if err = ch.SendText(sl); err != nil {
@@ -225,5 +225,6 @@ func (s *Session) audioLevelObserver(audioLevelInterval int) {
 				}
 			}
 		}
+		s.mu.RUnlock()
 	}
 }
