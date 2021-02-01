@@ -431,53 +431,56 @@ func (d *DownTrack) handleRTCP(bytes []byte) {
 		}
 	}
 	if d.trackType == SimulcastDownTrack && maxRatePacketLoss != 0 || expectedMinBitrate != 0 {
-		spatialLayer := atomic.LoadInt32(&d.spatialLayer)
-		currentSpatialLayer := int64(spatialLayer & 0x0f)
-		targetSpatialLayer := int64(spatialLayer >> 16)
-
-		temporalLayer := atomic.LoadInt32(&d.temporalLayer)
-		currentTemporalLayer := int64(temporalLayer & 0x0f)
-		targetTemporalLayer := int64(temporalLayer >> 16)
-
-		if targetSpatialLayer == currentSpatialLayer && currentTemporalLayer == targetTemporalLayer {
-			skipFB := atomic.LoadInt64(&d.skipFB)
-			if skipFB == 0 {
-				brs := d.receiver.GetBitrate()
-				cbr := brs[currentSpatialLayer]
-				mtl := d.receiver.GetMaxTemporalLayer()
-				mctl := mtl[currentSpatialLayer]
-
-				if maxRatePacketLoss <= 5 {
-					if currentTemporalLayer < mctl && currentTemporalLayer+1 <= d.maxTemporalLayer &&
-						expectedMinBitrate >= 3*cbr/4 {
-						d.SwitchTemporalLayer(currentTemporalLayer+1, false)
-					}
-					if currentTemporalLayer >= mctl && expectedMinBitrate >= 3*cbr/2 && currentSpatialLayer+1 <= d.maxSpatialLayer &&
-						currentSpatialLayer+1 <= 2 {
-						d.SwitchSpatialLayer(currentSpatialLayer+1, false)
-						d.SwitchTemporalLayer(0, false)
-					}
-				}
-				if maxRatePacketLoss >= 25 {
-					if (expectedMinBitrate <= 5*cbr/8 || currentTemporalLayer == 0) &&
-						currentSpatialLayer > 0 &&
-						brs[currentSpatialLayer-1] != 0 {
-						d.SwitchSpatialLayer(currentSpatialLayer-1, false)
-						d.SwitchTemporalLayer(mtl[currentSpatialLayer-1], false)
-					} else {
-						d.SwitchTemporalLayer(currentTemporalLayer-1, false)
-					}
-				}
-			} else {
-				atomic.AddInt64(&d.skipFB, -1)
-			}
-		}
-
 	}
 
 	if len(fwdPkts) > 0 {
 		d.receiver.SendRTCP(fwdPkts)
 	}
+}
+
+func (d *DownTrack) handleLayerChange(maxRatePacketLoss uint8, expectedMinBitrate uint64) {
+	spatialLayer := atomic.LoadInt32(&d.spatialLayer)
+	currentSpatialLayer := int64(spatialLayer & 0x0f)
+	targetSpatialLayer := int64(spatialLayer >> 16)
+
+	temporalLayer := atomic.LoadInt32(&d.temporalLayer)
+	currentTemporalLayer := int64(temporalLayer & 0x0f)
+	targetTemporalLayer := int64(temporalLayer >> 16)
+
+	if targetSpatialLayer == currentSpatialLayer && currentTemporalLayer == targetTemporalLayer {
+		skipFB := atomic.LoadInt64(&d.skipFB)
+		if skipFB == 0 {
+			brs := d.receiver.GetBitrate()
+			cbr := brs[currentSpatialLayer]
+			mtl := d.receiver.GetMaxTemporalLayer()
+			mctl := mtl[currentSpatialLayer]
+
+			if maxRatePacketLoss <= 5 {
+				if currentTemporalLayer < mctl && currentTemporalLayer+1 <= d.maxTemporalLayer &&
+					expectedMinBitrate >= 3*cbr/4 {
+					d.SwitchTemporalLayer(currentTemporalLayer+1, false)
+				}
+				if currentTemporalLayer >= mctl && expectedMinBitrate >= 3*cbr/2 && currentSpatialLayer+1 <= d.maxSpatialLayer &&
+					currentSpatialLayer+1 <= 2 {
+					d.SwitchSpatialLayer(currentSpatialLayer+1, false)
+					d.SwitchTemporalLayer(0, false)
+				}
+			}
+			if maxRatePacketLoss >= 25 {
+				if (expectedMinBitrate <= 5*cbr/8 || currentTemporalLayer == 0) &&
+					currentSpatialLayer > 0 &&
+					brs[currentSpatialLayer-1] != 0 {
+					d.SwitchSpatialLayer(currentSpatialLayer-1, false)
+					d.SwitchTemporalLayer(mtl[currentSpatialLayer-1], false)
+				} else {
+					d.SwitchTemporalLayer(currentTemporalLayer-1, false)
+				}
+			}
+		} else {
+			atomic.AddInt64(&d.skipFB, -1)
+		}
+	}
+
 }
 
 func (d *DownTrack) getSRStats() (octets, packets uint32) {
