@@ -99,6 +99,7 @@ func Test_audioLevel_calc(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			a := &audioLevel{
 				streams:  tt.fields.streams,
@@ -260,6 +261,7 @@ func Test_newAudioLevel(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			if got := newAudioLevel(tt.args.threshold, tt.args.interval, tt.args.filter); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("newAudioLevel() = %v, want %v", got, tt.want)
