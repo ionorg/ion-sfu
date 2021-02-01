@@ -39,7 +39,7 @@ func setVP8TemporalLayer(p buffer.ExtPacket, s *DownTrack) (payload []byte, picI
 	layer := atomic.LoadInt32(&s.temporalLayer)
 	currentLayer := uint16(layer)
 	currentTargetLayer := uint16(layer >> 16)
-	// Check if temporal layer is requested
+	// Check if temporal getLayer is requested
 	if currentTargetLayer != currentLayer {
 		if pkt.TID <= uint8(currentTargetLayer) {
 			atomic.StoreInt32(&s.temporalLayer, int32(currentTargetLayer)<<16|int32(currentTargetLayer))

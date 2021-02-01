@@ -49,14 +49,16 @@ type Buffer struct {
 	maxBitrate uint64
 	lastReport int64
 	twccExt    uint8
+	audioExt   uint8
 	bound      bool
 	closed     atomicBool
 	mime       string
 
 	// supported feedbacks
-	remb bool
-	nack bool
-	tcc  bool
+	remb       bool
+	nack       bool
+	twcc       bool
+	audioLevel bool
 
 	minPacketProbe     int
 	lastPacketRead     int
@@ -80,6 +82,7 @@ type Buffer struct {
 
 	// callbacks
 	onClose      func()
+	onAudioLevel func(level uint8)
 	feedbackCB   func([]rtcp.Packet)
 	feedbackTWCC func(sn uint16, timeNS int64, marker bool)
 }
@@ -148,10 +151,17 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 				b.remb = true
 			case webrtc.TypeRTCPFBTransportCC:
 				log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBTransportCC)
-				b.tcc = true
+				b.twcc = true
 			case webrtc.TypeRTCPFBNACK:
 				log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBNACK)
 				b.nack = true
+			}
+		}
+	} else if b.codecType == webrtc.RTPCodecTypeAudio {
+		for _, h := range params.HeaderExtensions {
+			if h.URI == sdp.AudioLevelURI {
+				b.audioLevel = true
+				b.audioExt = uint8(h.ID)
 			}
 		}
 	}
@@ -329,9 +339,18 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	}
 	b.lastTransit = transit
 
-	if b.tcc {
+	if b.twcc {
 		if ext := p.GetExtension(b.twccExt); ext != nil && len(ext) > 1 {
 			b.feedbackTWCC(binary.BigEndian.Uint16(ext[0:2]), arrivalTime, p.Marker)
+		}
+	}
+
+	if b.audioLevel {
+		if e := p.GetExtension(b.audioExt); e != nil && b.onAudioLevel != nil {
+			ext := rtp.AudioLevelExtension{}
+			if err := ext.Unmarshal(e); err == nil {
+				b.onAudioLevel(ext.Level)
+			}
 		}
 	}
 
@@ -422,7 +441,7 @@ func (b *Buffer) getRTCP() []rtcp.Packet {
 		Reports: []rtcp.ReceptionReport{b.buildReceptionReport()},
 	})
 
-	if b.remb && !b.tcc {
+	if b.remb && !b.twcc {
 		pkts = append(pkts, b.buildREMBPacket())
 	}
 
@@ -453,6 +472,10 @@ func (b *Buffer) OnTransportWideCC(fn func(sn uint16, timeNS int64, marker bool)
 
 func (b *Buffer) OnFeedback(fn func(fb []rtcp.Packet)) {
 	b.feedbackCB = fn
+}
+
+func (b *Buffer) OnAudioLevel(fn func(level uint8)) {
+	b.onAudioLevel = fn
 }
 
 // GetMediaSSRC returns the associated SSRC of the RTP stream

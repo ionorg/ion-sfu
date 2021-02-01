@@ -41,7 +41,7 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 		id:      id,
 		pc:      pc,
 		session: session,
-		router:  newRouter(pc, id, cfg.router),
+		router:  newRouter(pc, id, session, cfg.router),
 	}
 
 	pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {

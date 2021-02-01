@@ -19,7 +19,15 @@ bestqualityfirst = true
 # EXPERIMENTAL enable temporal layer change is currently an experimental feature,
 # enable only for testing.
 enabletemporallayer = false
-
+# Sets the audio level volume threshold.
+# Values from [0-127] where 0 is the loudest.
+# Audio levels are read from rtp extension header according to:
+# https://tools.ietf.org/html/rfc6464
+audiolevelthreshold = 40
+# Sets the interval in which the SFU will emit the audio level
+# events in [ms]
+# Values 500-5000
+audiolevelinterval=1000
 [webrtc]
 # Range of ports that ion accepts WebRTC traffic on
 # Format: [min, max]   and max - min >= 100
@@ -37,7 +45,6 @@ portrange = [5000, 5200]
 # "plan-b"
 # "unified-plan-with-fallback"
 sdpsemantics = "unified-plan"
-
 # toggle multicast dns support: https://tools.ietf.org/html/draft-mdns-ice-candidates-00
 mdns = true
 

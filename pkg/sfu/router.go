@@ -22,10 +22,12 @@ type Router interface {
 
 // RouterConfig defines router configurations
 type RouterConfig struct {
-	WithStats     bool            `mapstructure:"withstats"`
-	MaxBandwidth  uint64          `mapstructure:"maxbandwidth"`
-	MaxBufferTime int             `mapstructure:"maxbuffertime"`
-	Simulcast     SimulcastConfig `mapstructure:"simulcast"`
+	WithStats           bool            `mapstructure:"withstats"`
+	MaxBandwidth        uint64          `mapstructure:"maxbandwidth"`
+	MaxBufferTime       int             `mapstructure:"maxbuffertime"`
+	Simulcast           SimulcastConfig `mapstructure:"simulcast"`
+	AudioLevelInterval  int             `mapstructur:"audiolevelinterval"`
+	AudioLevelThreshold uint8           `mapstructure:"audiolevelthreshold"`
 }
 
 type router struct {
@@ -33,14 +35,15 @@ type router struct {
 	id        string
 	twcc      *TransportWideCC
 	peer      *webrtc.PeerConnection
+	stats     map[uint32]*stats.Stream
 	rtcpCh    chan []rtcp.Packet
 	config    RouterConfig
+	session   *Session
 	receivers map[string]Receiver
-	stats     map[uint32]*stats.Stream
 }
 
 // newRouter for routing rtp/rtcp packets
-func newRouter(peer *webrtc.PeerConnection, id string, config RouterConfig) Router {
+func newRouter(peer *webrtc.PeerConnection, id string, session *Session, config RouterConfig) Router {
 	ch := make(chan []rtcp.Packet, 10)
 	r := &router{
 		id:        id,
@@ -48,6 +51,7 @@ func newRouter(peer *webrtc.PeerConnection, id string, config RouterConfig) Rout
 		twcc:      newTransportWideCC(),
 		rtcpCh:    ch,
 		config:    config,
+		session:   session,
 		receivers: make(map[string]Receiver),
 		stats:     make(map[uint32]*stats.Stream),
 	}
@@ -90,9 +94,18 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 		r.rtcpCh <- fb
 	})
 
-	buff.OnTransportWideCC(func(sn uint16, timeNS int64, marker bool) {
-		r.twcc.push(sn, timeNS, marker)
-	})
+	if track.Kind() == webrtc.RTPCodecTypeAudio {
+		streamID := track.StreamID()
+		buff.OnAudioLevel(func(level uint8) {
+			r.session.audioObserver.observe(streamID, level)
+		})
+		r.session.audioObserver.addStream(streamID)
+
+	} else if track.Kind() == webrtc.RTPCodecTypeVideo {
+		buff.OnTransportWideCC(func(sn uint16, timeNS int64, marker bool) {
+			r.twcc.push(sn, timeNS, marker)
+		})
+	}
 
 	if r.config.WithStats {
 		r.stats[uint32(track.SSRC())] = stats.NewStream(buff)
@@ -141,6 +154,9 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 				} else {
 					stats.AudioTracks.Dec()
 				}
+			}
+			if recv.Kind() == webrtc.RTPCodecTypeAudio {
+				r.session.audioObserver.removeStream(track.StreamID())
 			}
 			r.deleteReceiver(trackID, uint32(track.SSRC()))
 		})
