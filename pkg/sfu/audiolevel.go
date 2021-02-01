@@ -90,7 +90,7 @@ func (a *audioLevel) calc() []string {
 
 	streamIDs := make([]string, 0, len(a.streams))
 	for _, s := range a.streams {
-		if s.total > a.expected {
+		if s.total >= a.expected {
 			streamIDs = append(streamIDs, s.id)
 		}
 		s.total = 0
