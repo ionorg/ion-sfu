@@ -57,7 +57,7 @@ func (a *audioLevel) observe(streamID string, dBov uint8) {
 		if as.id == streamID {
 			if dBov <= a.threshold {
 				as.sum += int(dBov)
-				as.total += 1
+				as.total++
 			}
 			return
 		}

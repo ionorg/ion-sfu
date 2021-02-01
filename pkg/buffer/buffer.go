@@ -457,7 +457,7 @@ func (b *Buffer) GetPacket(buff []byte, sn uint16) (int, error) {
 	return b.bucket.getPacket(buff, sn)
 }
 
-//Bitrate returns the current publisher stream bitrate.
+// Bitrate returns the current publisher stream bitrate.
 func (b *Buffer) Bitrate() uint64 {
 	return atomic.LoadUint64(&b.bitrate)
 }
