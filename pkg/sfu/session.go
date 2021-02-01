@@ -219,7 +219,7 @@ func (s *Session) audioLevelObserver(audioLevelInterval int) {
 		sl := string(l)
 		s.mu.RLock()
 		for _, peer := range s.peers {
-			if ch, ok := peer.subscriber.channels[APIChannelLabel]; ok {
+			if ch, ok := peer.subscriber.channels[APIChannelLabel]; ok && ch.ReadyState() == webrtc.DataChannelStateOpen {
 				if err = ch.SendText(sl); err != nil {
 					log.Errorf("Sending audio levels to peer: %s, err: %v", peer.id, err)
 				}
