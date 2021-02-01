@@ -28,7 +28,7 @@ func NewSession(id string, dcs []*Datachannel, cfg RouterConfig) *Session {
 		id:            id,
 		peers:         make(map[string]*Peer),
 		datachannels:  dcs,
-		audioObserver: newAudioLevel(cfg.AudioLevelThreshold),
+		audioObserver: newAudioLevel(cfg.AudioLevelThreshold, cfg.AudioLevelInterval),
 	}
 	go s.audioLevelObserver(cfg.AudioLevelInterval)
 	return s
@@ -197,11 +197,8 @@ func (s *Session) OnClose(f func()) {
 }
 
 func (s *Session) audioLevelObserver(audioLevelInterval int) {
-	if audioLevelInterval < 500 {
-		audioLevelInterval = 500
-	}
-	if audioLevelInterval > 5000 {
-		audioLevelInterval = 5000
+	if audioLevelInterval <= 50 {
+		log.Warnf("Values near/under 20ms may return unexpected values")
 	}
 	for {
 		time.Sleep(time.Duration(audioLevelInterval) * time.Millisecond)

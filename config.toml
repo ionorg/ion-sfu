@@ -26,7 +26,6 @@ enabletemporallayer = false
 audiolevelthreshold = 40
 # Sets the interval in which the SFU will emit the audio level
 # events in [ms]
-# Values 500-5000
 audiolevelinterval=1000
 [webrtc]
 # Range of ports that ion accepts WebRTC traffic on

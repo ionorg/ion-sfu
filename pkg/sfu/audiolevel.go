@@ -13,16 +13,18 @@ type audioStream struct {
 
 type audioLevel struct {
 	sync.RWMutex
-	threshold uint8
 	streams   []*audioStream
+	expected  int
+	threshold uint8
 }
 
-func newAudioLevel(threshold uint8) *audioLevel {
+func newAudioLevel(threshold uint8, interval int) *audioLevel {
 	if threshold > 127 {
 		threshold = 127
 	}
 	return &audioLevel{
 		threshold: threshold,
+		expected:  interval / (20 * 6),
 	}
 }
 
@@ -80,7 +82,7 @@ func (a *audioLevel) calc() []string {
 
 	streamIDs := make([]string, len(a.streams))
 	for idx, s := range a.streams {
-		if s.total > 0 {
+		if s.total > a.expected {
 			streamIDs[idx] = s.id
 		}
 		s.total = 0
