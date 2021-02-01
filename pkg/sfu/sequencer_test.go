@@ -13,7 +13,7 @@ func Test_sequencer(t *testing.T) {
 	off := uint16(15)
 
 	for i := uint16(1); i < 520; i++ {
-		seq.push(i, i+off, 123, true)
+		seq.push(i, i+off, 123, 2, true)
 	}
 
 	time.Sleep(60 * time.Millisecond)
@@ -23,6 +23,7 @@ func Test_sequencer(t *testing.T) {
 	for i, val := range res {
 		assert.Equal(t, val.getTargetSeqNo(), req[i])
 		assert.Equal(t, val.getSourceSeqNo(), req[i]-off)
+		assert.Equal(t, val.getLayer(), uint8(2))
 	}
 	res = seq.getSeqNoPairs(req)
 	assert.Equal(t, 0, len(res))
@@ -32,6 +33,7 @@ func Test_sequencer(t *testing.T) {
 	for i, val := range res {
 		assert.Equal(t, val.getTargetSeqNo(), req[i])
 		assert.Equal(t, val.getSourceSeqNo(), req[i]-off)
+		assert.Equal(t, val.getLayer(), uint8(2))
 	}
 }
 
@@ -68,7 +70,7 @@ func Test_sequencer_getNACKSeqNo(t *testing.T) {
 			n := newSequencer()
 
 			for _, i := range tt.fields.input {
-				n.push(i, i+tt.fields.offset, 123, true)
+				n.push(i, i+tt.fields.offset, 123, 3, true)
 			}
 
 			g := n.getSeqNoPairs(tt.args.seqNo)

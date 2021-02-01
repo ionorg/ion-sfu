@@ -50,8 +50,8 @@ func (p packetMeta) setLastNack(tm uint32) {
 	binary.BigEndian.PutUint32(p[8:12], tm)
 }
 
-// Returns the layer from this packet belongs.
-func (p packetMeta) layer() uint8 {
+// Returns the getLayer from this packet belongs.
+func (p packetMeta) getLayer() uint8 {
 	return p[13]
 }
 
@@ -80,7 +80,7 @@ func newSequencer() *sequencer {
 	}
 }
 
-func (n *sequencer) push(sn, offSn uint16, timeStamp uint32, head bool) packetMeta {
+func (n *sequencer) push(sn, offSn uint16, timeStamp uint32, layer uint8, head bool) packetMeta {
 	n.Lock()
 	defer n.Unlock()
 	if n.headSN == 0 {
@@ -105,6 +105,7 @@ func (n *sequencer) push(sn, offSn uint16, timeStamp uint32, head bool) packetMe
 	binary.BigEndian.PutUint16(n.seq[off:off+2], sn)
 	binary.BigEndian.PutUint16(n.seq[off+2:off+4], offSn)
 	binary.BigEndian.PutUint32(n.seq[off+4:off+8], timeStamp)
+	n.seq[off+13] = layer
 	n.step++
 	if n.step >= maxPacketMetaHistory {
 		n.step = 0
