@@ -16,15 +16,23 @@ type audioLevel struct {
 	streams   []*audioStream
 	expected  int
 	threshold uint8
+	previous  []string
 }
 
-func newAudioLevel(threshold uint8, interval int) *audioLevel {
+func newAudioLevel(threshold uint8, interval, filter int) *audioLevel {
 	if threshold > 127 {
 		threshold = 127
 	}
+	if filter < 0 {
+		filter = 0
+	}
+	if filter > 100 {
+		filter = 100
+	}
+
 	return &audioLevel{
 		threshold: threshold,
-		expected:  interval / (20 * 6),
+		expected:  interval * filter / 2000,
 	}
 }
 
@@ -80,14 +88,25 @@ func (a *audioLevel) calc() []string {
 		}
 	})
 
-	streamIDs := make([]string, len(a.streams))
-	for idx, s := range a.streams {
+	streamIDs := make([]string, 0, len(a.streams))
+	for _, s := range a.streams {
 		if s.total > a.expected {
-			streamIDs[idx] = s.id
+			streamIDs = append(streamIDs, s.id)
 		}
 		s.total = 0
 		s.sum = 0
 	}
 
+	if len(a.previous) == len(streamIDs) {
+		for i, s := range a.previous {
+			if s != streamIDs[i] {
+				a.previous = streamIDs
+				return streamIDs
+			}
+		}
+		return nil
+	}
+
+	a.previous = streamIDs
 	return streamIDs
 }

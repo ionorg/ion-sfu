@@ -28,7 +28,7 @@ func NewSession(id string, dcs []*Datachannel, cfg RouterConfig) *Session {
 		id:            id,
 		peers:         make(map[string]*Peer),
 		datachannels:  dcs,
-		audioObserver: newAudioLevel(cfg.AudioLevelThreshold, cfg.AudioLevelInterval),
+		audioObserver: newAudioLevel(cfg.AudioLevelThreshold, cfg.AudioLevelInterval, cfg.AudioLevelFilter),
 	}
 	go s.audioLevelObserver(cfg.AudioLevelInterval)
 	return s
@@ -206,6 +206,10 @@ func (s *Session) audioLevelObserver(audioLevelInterval int) {
 			return
 		}
 		levels := s.audioObserver.calc()
+
+		if levels == nil {
+			continue
+		}
 
 		l, err := json.Marshal(&levels)
 		if err != nil {

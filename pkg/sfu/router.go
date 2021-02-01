@@ -28,6 +28,7 @@ type RouterConfig struct {
 	Simulcast           SimulcastConfig `mapstructure:"simulcast"`
 	AudioLevelInterval  int             `mapstructur:"audiolevelinterval"`
 	AudioLevelThreshold uint8           `mapstructure:"audiolevelthreshold"`
+	AudioLevelFilter    int             `mapstructure:"audiolevelfilter"`
 }
 
 type router struct {
