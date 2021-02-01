@@ -220,7 +220,11 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 	w.nackWorker.Submit(func() {
 		for _, meta := range packets {
 			pktBuff := packetFactory.Get().([]byte)
-			i, err := w.buffers[meta.getLayer()].GetPacket(pktBuff, meta.getSourceSeqNo())
+			buff := w.buffers[meta.getLayer()]
+			if buff == nil {
+				break
+			}
+			i, err := buff.GetPacket(pktBuff, meta.getSourceSeqNo())
 			if err != nil {
 				if err == io.EOF {
 					break

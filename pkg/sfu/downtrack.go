@@ -431,6 +431,7 @@ func (d *DownTrack) handleRTCP(bytes []byte) {
 		}
 	}
 	if d.trackType == SimulcastDownTrack && maxRatePacketLoss != 0 || expectedMinBitrate != 0 {
+		d.handleLayerChange(maxRatePacketLoss, expectedMinBitrate)
 	}
 
 	if len(fwdPkts) > 0 {
