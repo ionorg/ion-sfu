@@ -244,7 +244,7 @@ func (d *DownTrack) writeSimpleRTP(extPkt buffer.ExtPacket) error {
 	newSN := extPkt.Packet.SequenceNumber - d.snOffset
 	newTS := extPkt.Packet.Timestamp - d.tsOffset
 	if d.sequencer != nil {
-		d.sequencer.push(extPkt.Packet.SequenceNumber, newSN, newTS, extPkt.Head)
+		d.sequencer.push(extPkt.Packet.SequenceNumber, newSN, newTS, 0, extPkt.Head)
 	}
 	if (newSN-d.lastSN)&0x8000 == 0 || d.lastSN == 0 {
 		d.lastSN = newSN
@@ -281,8 +281,8 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 			})
 			return nil
 		}
-		// Switch is done remove sender from previous layer
-		// and update current layer
+		// Switch is done remove sender from previous getLayer
+		// and update current getLayer
 		if currentLayer != targetLayer {
 			go d.receiver.DeleteDownTrack(int(currentLayer), d.peerID)
 		}
@@ -330,7 +330,7 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 		if d.mime == "video/vp8" {
 			drop := false
 			if extPkt.Packet.Payload, picID, tlz0Idx, drop = setVP8TemporalLayer(extPkt, d); drop {
-				// Pkt not in temporal layer update sequence number offset to avoid gaps
+				// Pkt not in temporal getLayer update sequence number offset to avoid gaps
 				d.snOffset++
 				return nil
 			}
@@ -338,7 +338,8 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 	}
 
 	if d.sequencer != nil {
-		meta := d.sequencer.push(extPkt.Packet.SequenceNumber, newSN, newTS, extPkt.Head)
+		layer := atomic.LoadInt32(&d.spatialLayer)
+		meta := d.sequencer.push(extPkt.Packet.SequenceNumber, newSN, newTS, uint8(layer), extPkt.Head)
 		if d.simulcast.temporalSupported && d.mime == "video/vp8" {
 			meta.setVP8PayloadMeta(tlz0Idx, picID)
 		}
@@ -458,11 +459,11 @@ func (d *DownTrack) handleRTCP(bytes []byte) {
 					}
 				}
 				if maxRatePacketLoss >= 25 {
-					if expectedMinBitrate <= 5*cbr/8 || currentTemporalLayer == 0 {
-						if currentSpatialLayer > 0 {
-							d.SwitchSpatialLayer(currentSpatialLayer-1, false)
-							d.SwitchTemporalLayer(mtl[currentSpatialLayer-1], false)
-						}
+					if (expectedMinBitrate <= 5*cbr/8 || currentTemporalLayer == 0) &&
+						currentSpatialLayer > 0 &&
+						brs[currentSpatialLayer-1] != 0 {
+						d.SwitchSpatialLayer(currentSpatialLayer-1, false)
+						d.SwitchTemporalLayer(mtl[currentSpatialLayer-1], false)
 					} else {
 						d.SwitchTemporalLayer(currentTemporalLayer-1, false)
 					}

@@ -37,23 +37,23 @@ func SubscriberAPI(next sfu.MessageProcessor) sfu.MessageProcessor {
 				switch srm.Video {
 				case highValue:
 					dt.Mute(false)
-					dt.SwitchSpatialLayer(2, false)
+					dt.SwitchSpatialLayer(2, true)
 				case mediumValue:
 					dt.Mute(false)
-					dt.SwitchSpatialLayer(1, false)
+					dt.SwitchSpatialLayer(1, true)
 				case lowValue:
 					dt.Mute(false)
-					dt.SwitchSpatialLayer(0, false)
+					dt.SwitchSpatialLayer(0, true)
 				case mutedValue:
 					dt.Mute(true)
 				}
 				switch srm.Framerate {
 				case highValue:
-					dt.SwitchTemporalLayer(2, false)
+					dt.SwitchTemporalLayer(2, true)
 				case mediumValue:
-					dt.SwitchTemporalLayer(1, false)
+					dt.SwitchTemporalLayer(1, true)
 				case lowValue:
-					dt.SwitchTemporalLayer(0, false)
+					dt.SwitchTemporalLayer(0, true)
 				}
 			}
 
