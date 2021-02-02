@@ -252,7 +252,7 @@ func (d *DownTrack) writeSimpleRTP(extPkt buffer.ExtPacket) error {
 	}
 	if (newSN-d.lastSN)&0x8000 == 0 || d.lastSN == 0 {
 		d.lastSN = newSN
-		atomic.StoreInt64(&d.lastPacketMs, time.Now().UnixNano()/1e6)
+		atomic.StoreInt64(&d.lastPacketMs, extPkt.Arrival/1e6)
 		atomic.StoreUint32(&d.lastTS, newTS)
 	}
 	extPkt.Packet.PayloadType = d.payloadType
@@ -305,15 +305,15 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 	}
 	// Compute how much time passed between the old RTP extPkt
 	// and the current packet, and fix timestamp on source change
-	if !d.simulcast.lTSCalc.IsZero() && d.lastSSRC != extPkt.Packet.SSRC {
-		tDiff := time.Now().Sub(d.simulcast.lTSCalc)
-		td := uint32((tDiff.Milliseconds() * 90) / 1000)
+	if !(d.simulcast.lTSCalc == 0) && d.lastSSRC != extPkt.Packet.SSRC {
+		tDiff := (extPkt.Arrival - d.simulcast.lTSCalc) / 1e6
+		td := uint32((tDiff * 90) / 1000)
 		if td == 0 {
 			td = 1
 		}
 		d.tsOffset = extPkt.Packet.Timestamp - (d.lastTS + td)
 		d.snOffset = extPkt.Packet.SequenceNumber - d.lastSN - 1
-	} else if d.simulcast.lTSCalc.IsZero() {
+	} else if d.simulcast.lTSCalc == 0 {
 		d.lastTS = extPkt.Packet.Timestamp
 		d.lastSN = extPkt.Packet.SequenceNumber
 		if d.mime == "video/vp8" {
@@ -352,13 +352,14 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 	atomic.AddUint32(&d.octetCount, uint32(len(extPkt.Packet.Payload)))
 	atomic.AddUint32(&d.packetCount, 1)
 
-	if (newSN-d.lastSN)&0x8000 == 0 {
+	if extPkt.Head {
 		d.lastSN = newSN
+		d.lastTS = newTS
 		atomic.StoreInt64(&d.lastPacketMs, time.Now().UnixNano()/1e6)
 		atomic.StoreUint32(&d.lastTS, newTS)
 	}
 	// Update base
-	d.simulcast.lTSCalc = time.Now()
+	d.simulcast.lTSCalc = extPkt.Arrival
 	d.lastSSRC = extPkt.Packet.SSRC
 	// Update extPkt headers
 	extPkt.Packet.SequenceNumber = newSN
@@ -420,7 +421,6 @@ func (d *DownTrack) handleRTCP(bytes []byte) {
 				}
 			}
 		case *rtcp.TransportLayerNack:
-			log.Tracef("sender got nack: %+v", p)
 			var nackedPackets []packetMeta
 			for _, pair := range p.Nacks {
 				nackedPackets = append(nackedPackets, d.sequencer.getSeqNoPairs(pair.PacketList())...)
@@ -431,7 +431,7 @@ func (d *DownTrack) handleRTCP(bytes []byte) {
 		}
 	}
 	if d.trackType == SimulcastDownTrack && maxRatePacketLoss != 0 || expectedMinBitrate != 0 {
-		d.handleLayerChange(maxRatePacketLoss, expectedMinBitrate)
+		// d.handleLayerChange(maxRatePacketLoss, expectedMinBitrate)
 	}
 
 	if len(fwdPkts) > 0 {

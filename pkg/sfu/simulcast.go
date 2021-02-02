@@ -1,7 +1,5 @@
 package sfu
 
-import "time"
-
 const (
 	quarterResolution = "q"
 	halfResolution    = "h"
@@ -16,7 +14,7 @@ type SimulcastConfig struct {
 type simulcastTrackHelpers struct {
 	temporalSupported bool
 	temporalEnabled   bool
-	lTSCalc           time.Time
+	lTSCalc           int64
 
 	// VP8Helper temporal helpers
 	pRefPicID  uint16

@@ -10,7 +10,7 @@ const (
 	packetMetaSize       = 16
 	maxPacketMetaHistory = 500
 
-	ignoreRetransmission = 50 // Ignore packet retransmission after ignoreRetransmission milliseconds
+	ignoreRetransmission = 100 // Ignore packet retransmission after ignoreRetransmission milliseconds
 )
 
 type packetMeta []byte

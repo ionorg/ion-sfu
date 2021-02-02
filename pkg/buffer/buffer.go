@@ -29,6 +29,7 @@ type pendingPackets struct {
 type ExtPacket struct {
 	Head     bool
 	Cycle    uint32
+	Arrival  int64
 	Packet   rtp.Packet
 	Payload  interface{}
 	KeyFrame bool
@@ -287,9 +288,10 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	}
 
 	ep := ExtPacket{
-		Head:   sn == b.maxSeqNo,
-		Cycle:  b.cycles,
-		Packet: p,
+		Head:    sn == b.maxSeqNo,
+		Cycle:   b.cycles,
+		Packet:  p,
+		Arrival: arrivalTime,
 	}
 
 	switch b.mime {

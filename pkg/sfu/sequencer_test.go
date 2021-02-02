@@ -27,7 +27,7 @@ func Test_sequencer(t *testing.T) {
 	}
 	res = seq.getSeqNoPairs(req)
 	assert.Equal(t, 0, len(res))
-	time.Sleep(60 * time.Millisecond)
+	time.Sleep(150 * time.Millisecond)
 	res = seq.getSeqNoPairs(req)
 	assert.Equal(t, len(req), len(res))
 	for i, val := range res {
