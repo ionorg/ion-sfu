@@ -49,7 +49,7 @@ func setVP8TemporalLayer(p buffer.ExtPacket, s *DownTrack) (payload []byte, picI
 		return
 	}
 	// If we are here modify payload
-	payload = packetFactory.Get().([]byte)
+	payload = s.payload
 	payload = payload[:len(p.Packet.Payload)]
 	copy(payload, p.Packet.Payload)
 

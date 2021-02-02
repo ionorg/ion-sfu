@@ -129,6 +129,7 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 		track.maxSpatialLayer = 2
 		track.maxTemporalLayer = 2
 		track.trackType = SimulcastDownTrack
+		track.payload = packetFactory.Get().([]byte)
 	} else {
 		track.SetInitialLayers(0, 0)
 		track.trackType = SimpleDownTrack

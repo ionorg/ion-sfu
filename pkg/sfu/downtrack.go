@@ -35,6 +35,7 @@ type DownTrack struct {
 	sequencer   *sequencer
 	trackType   DownTrackType
 	skipFB      int64
+	payload     []byte
 
 	spatialLayer  int32
 	temporalLayer int32
@@ -162,6 +163,9 @@ func (d *DownTrack) Mute(val bool) {
 func (d *DownTrack) Close() {
 	d.closeOnce.Do(func() {
 		log.Debugf("Closing sender %s", d.peerID)
+		if d.payload != nil {
+			packetFactory.Put(d.payload)
+		}
 		if d.onCloseHandler != nil {
 			d.onCloseHandler()
 		}
@@ -365,10 +369,6 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 	_, err := d.writeStream.WriteRTP(&extPkt.Packet.Header, extPkt.Packet.Payload)
 	if err != nil {
 		log.Errorf("Write packet err %v", err)
-	}
-
-	if d.simulcast.temporalSupported {
-		packetFactory.Put(extPkt.Packet.Payload)
 	}
 
 	return err
