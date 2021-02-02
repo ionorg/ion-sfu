@@ -38,6 +38,7 @@ type router struct {
 	peer      *webrtc.PeerConnection
 	stats     map[uint32]*stats.Stream
 	rtcpCh    chan []rtcp.Packet
+	stopCh    chan struct{}
 	config    RouterConfig
 	session   *Session
 	receivers map[string]Receiver
@@ -51,6 +52,7 @@ func newRouter(peer *webrtc.PeerConnection, id string, session *Session, config 
 		peer:      peer,
 		twcc:      newTransportWideCC(),
 		rtcpCh:    ch,
+		stopCh:    make(chan struct{}),
 		config:    config,
 		session:   session,
 		receivers: make(map[string]Receiver),
@@ -74,7 +76,7 @@ func (r *router) ID() string {
 }
 
 func (r *router) Stop() {
-	close(r.rtcpCh)
+	r.stopCh <- struct{}{}
 
 	if r.config.WithStats {
 		stats.Peers.Dec()
@@ -279,9 +281,14 @@ func (r *router) deleteReceiver(track string, ssrc uint32) {
 }
 
 func (r *router) sendRTCP() {
-	for pkts := range r.rtcpCh {
-		if err := r.peer.WriteRTCP(pkts); err != nil {
-			log.Errorf("Write rtcp to peer %s err :%v", r.id, err)
+	for {
+		select {
+		case pkts := <-r.rtcpCh:
+			if err := r.peer.WriteRTCP(pkts); err != nil {
+				log.Errorf("Write rtcp to peer %s err :%v", r.id, err)
+			}
+		case <-r.stopCh:
+			return
 		}
 	}
 }
