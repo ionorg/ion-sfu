@@ -79,3 +79,13 @@ For an example of recording a MediaStream to webm, checkout the [save-to-webm](h
 ### License
 
 MIT License - see [LICENSE](LICENSE) for full text
+
+## Development
+
+Generate the protocol buffers and grpc code:
+ 1. Best choice (uses docker): `make protos`.
+ 2. Manually: 
+     - Install protocol buffers and the protcol buffers compiler. On Fedora `dnf install protobuf protobuf-compiler`.
+     - `go get google.golang.org/grpc/cmd/protoc-gen-go-grpc`
+     - `go get google.golang.org/protobuf/cmd/protoc-gen-go`
+     - `protoc --go_out=. --go-grpc_out=. --go_opt=paths=source_relative --go-grpc_opt=paths=source_relative cmd/signal/grpc/proto/sfu.proto`

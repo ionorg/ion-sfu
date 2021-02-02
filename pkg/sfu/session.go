@@ -1,7 +1,9 @@
 package sfu
 
 import (
+	"encoding/json"
 	"sync"
+	"time"
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/webrtc/v3"
@@ -13,20 +15,24 @@ type Session struct {
 	id             string
 	mu             sync.RWMutex
 	peers          map[string]*Peer
-	closed         bool
+	closed         atomicBool
 	fanOutDCs      []string
 	datachannels   []*Datachannel
+	audioObserver  *audioLevel
 	onCloseHandler func()
 }
 
 // NewSession creates a new session
-func NewSession(id string, dcs []*Datachannel) *Session {
-	return &Session{
-		id:           id,
-		peers:        make(map[string]*Peer),
-		closed:       false,
-		datachannels: dcs,
+func NewSession(id string, dcs []*Datachannel, cfg RouterConfig) *Session {
+	s := &Session{
+		id:            id,
+		peers:         make(map[string]*Peer),
+		datachannels:  dcs,
+		audioObserver: newAudioLevel(cfg.AudioLevelThreshold, cfg.AudioLevelInterval, cfg.AudioLevelFilter),
 	}
+	go s.audioLevelObserver(cfg.AudioLevelInterval)
+	return s
+
 }
 
 func (s *Session) AddDataChannel(dc *Datachannel) {
@@ -50,9 +56,9 @@ func (s *Session) RemovePeer(pid string) {
 	s.mu.Unlock()
 
 	// Close session if no peers
-	if len(s.peers) == 0 && s.onCloseHandler != nil && !s.closed {
+	if len(s.peers) == 0 && s.onCloseHandler != nil && !s.closed.get() {
 		s.onCloseHandler()
-		s.closed = true
+		s.closed.set(true)
 	}
 }
 
@@ -194,4 +200,38 @@ func (s *Session) Peers() map[string]*Peer {
 // OnClose is called when the session is closed
 func (s *Session) OnClose(f func()) {
 	s.onCloseHandler = f
+}
+
+func (s *Session) audioLevelObserver(audioLevelInterval int) {
+	if audioLevelInterval <= 50 {
+		log.Warnf("Values near/under 20ms may return unexpected values")
+	}
+	for {
+		time.Sleep(time.Duration(audioLevelInterval) * time.Millisecond)
+		if s.closed.get() {
+			return
+		}
+		levels := s.audioObserver.calc()
+
+		if levels == nil {
+			continue
+		}
+
+		l, err := json.Marshal(&levels)
+		if err != nil {
+			log.Errorf("Marshaling audio levels err: %v", err)
+			continue
+		}
+
+		sl := string(l)
+		s.mu.RLock()
+		for _, peer := range s.peers {
+			if ch, ok := peer.subscriber.channels[APIChannelLabel]; ok && ch.ReadyState() == webrtc.DataChannelStateOpen {
+				if err = ch.SendText(sl); err != nil {
+					log.Errorf("Sending audio levels to peer: %s, err: %v", peer.id, err)
+				}
+			}
+		}
+		s.mu.RUnlock()
+	}
 }

@@ -4,7 +4,7 @@ import "io"
 
 type RTCPReader struct {
 	ssrc     uint32
-	closed   bool
+	closed   atomicBool
 	onPacket func([]byte)
 	onClose  func()
 }
@@ -14,7 +14,7 @@ func NewRTCPReader(ssrc uint32) *RTCPReader {
 }
 
 func (r *RTCPReader) Write(p []byte) (n int, err error) {
-	if r.closed {
+	if r.closed.get() {
 		err = io.EOF
 		return
 	}
@@ -29,7 +29,7 @@ func (r *RTCPReader) OnClose(fn func()) {
 }
 
 func (r *RTCPReader) Close() error {
-	r.closed = true
+	r.closed.set(true)
 	r.onClose()
 	return nil
 }

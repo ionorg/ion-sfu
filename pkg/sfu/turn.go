@@ -39,7 +39,7 @@ type TurnConfig struct {
 	Auth    TurnAuth `mapstructure:"auth"`
 }
 
-func initTurnServer(conf TurnConfig, auth func(username, real string, srcAddr net.Addr) ([]byte, bool)) (*turn.Server, error) {
+func initTurnServer(conf TurnConfig, auth func(username, realm string, srcAddr net.Addr) ([]byte, bool)) (*turn.Server, error) {
 	var listeners []turn.ListenerConfig
 
 	// Create a UDP listener to pass into pion/turn

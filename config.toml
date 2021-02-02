@@ -12,6 +12,20 @@ withstats = false
 maxbandwidth = 1500
 # max buffer time by ms for video tracks
 maxbuffertime = 1000
+# Sets the audio level volume threshold.
+# Values from [0-127] where 0 is the loudest.
+# Audio levels are read from rtp extension header according to:
+# https://tools.ietf.org/html/rfc6464
+audiolevelthreshold = 40
+# Sets the interval in which the SFU will check the audio level
+# in [ms]. If the active speaker has changed, the sfu will
+# emit an event to clients.
+audiolevelinterval=1000
+# Sets minimum percentage of events required to fire an audio level
+# according to the expected events from the audiolevelinterval,
+# calculated as audiolevelinterval/packetization time (20ms for 8kHz)
+# Values from [0-100]
+audiolevelfilter = 20
 
 [router.simulcast]
 # Prefer best quality initially
@@ -19,7 +33,6 @@ bestqualityfirst = true
 # EXPERIMENTAL enable temporal layer change is currently an experimental feature,
 # enable only for testing.
 enabletemporallayer = false
-
 [webrtc]
 # Range of ports that ion accepts WebRTC traffic on
 # Format: [min, max]   and max - min >= 100
@@ -37,7 +50,6 @@ portrange = [5000, 5200]
 # "plan-b"
 # "unified-plan-with-fallback"
 sdpsemantics = "unified-plan"
-
 # toggle multicast dns support: https://tools.ietf.org/html/draft-mdns-ice-candidates-00
 mdns = true
 
