@@ -149,7 +149,7 @@
           ></span>
           <span
             id="br-tag"
-            style="position: absolute; left: 270px; top: 225px"
+            style="position: absolute; left: 215px; top: 225px"
             class="badge badge-primary"
           ></span>
           <video
@@ -512,7 +512,7 @@
                 timestampPrev = now;
               }
               if (bitrate) {
-                brTag.innerHTML = `${bitrate} kbps`;
+                brTag.innerHTML = `${bitrate} kbps @ ${report.framesPerSecond} fps`;
               }
             });
           });

@@ -5,10 +5,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pion/ion-sfu/pkg/stats"
+	log "github.com/pion/ion-log"
 
 	"github.com/gammazero/workerpool"
 	"github.com/pion/ion-sfu/pkg/buffer"
+	"github.com/pion/ion-sfu/pkg/stats"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
@@ -24,7 +25,9 @@ type Receiver interface {
 	AddUpTrack(track *webrtc.TrackRemote, buffer *buffer.Buffer)
 	AddDownTrack(track *DownTrack, bestQualityFirst bool)
 	SubDownTrack(track *DownTrack, layer int) error
-	RetransmitPackets(track *DownTrack, packets []uint16, snOffset uint16) error
+	GetBitrate() [3]uint64
+	GetMaxTemporalLayer() [3]int64
+	RetransmitPackets(track *DownTrack, packets []packetMeta) error
 	DeleteDownTrack(layer int, id string)
 	OnCloseHandler(fn func())
 	SendRTCP(p []rtcp.Packet)
@@ -122,10 +125,13 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 				}
 			}
 		}
-		track.currentSpatialLayer = layer
-		track.simulcast.targetSpatialLayer = layer
+		track.SetInitialLayers(int64(layer), 2)
+		track.maxSpatialLayer = 2
+		track.maxTemporalLayer = 2
 		track.trackType = SimulcastDownTrack
+		track.payload = packetFactory.Get().([]byte)
 	} else {
+		track.SetInitialLayers(0, 0)
 		track.trackType = SimpleDownTrack
 	}
 
@@ -144,6 +150,26 @@ func (w *WebRTCReceiver) SubDownTrack(track *DownTrack, layer int) error {
 	}
 	w.Unlock()
 	return nil
+}
+
+func (w *WebRTCReceiver) GetBitrate() [3]uint64 {
+	var br [3]uint64
+	for i, buff := range w.buffers {
+		if buff != nil {
+			br[i] = buff.Bitrate()
+		}
+	}
+	return br
+}
+
+func (w *WebRTCReceiver) GetMaxTemporalLayer() [3]int64 {
+	var tls [3]int64
+	for i, buff := range w.buffers {
+		if buff != nil {
+			tls[i] = buff.MaxTemporalLayer()
+		}
+	}
+	return tls
 }
 
 // OnCloseHandler method to be called on remote tracked removed
@@ -188,14 +214,18 @@ func (w *WebRTCReceiver) SetRTCPCh(ch chan []rtcp.Packet) {
 	w.rtcpCh = ch
 }
 
-func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []uint16, snOffset uint16) error {
+func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMeta) error {
 	if w.nackWorker.Stopped() {
 		return io.ErrClosedPipe
 	}
 	w.nackWorker.Submit(func() {
-		pktBuff := packetFactory.Get().([]byte)
-		for _, sn := range packets {
-			i, err := w.buffers[track.currentSpatialLayer].GetPacket(pktBuff, sn+snOffset)
+		for _, meta := range packets {
+			pktBuff := packetFactory.Get().([]byte)
+			buff := w.buffers[meta.getLayer()]
+			if buff == nil {
+				break
+			}
+			i, err := buff.GetPacket(pktBuff, meta.getSourceSeqNo())
 			if err != nil {
 				if err == io.EOF {
 					break
@@ -206,11 +236,26 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []uint16, s
 			if err = pkt.Unmarshal(pktBuff[:i]); err != nil {
 				continue
 			}
-			if err = track.WriteRTP(pkt); err == io.EOF {
-				break
+			pkt.Header.SequenceNumber = meta.getTargetSeqNo()
+			pkt.Header.Timestamp = meta.getTimestamp()
+			if track.simulcast.temporalSupported {
+				switch track.mime {
+				case "video/vp8":
+					var vp8 buffer.VP8
+					if err = vp8.Unmarshal(pkt.Payload); err != nil {
+						continue
+					}
+					tlzoID, picID := meta.getVP8PayloadMeta()
+					modifyVP8TemporalPayload(pkt.Payload, vp8.PicIDIdx, vp8.TlzIdx, picID, tlzoID, vp8.MBit)
+				}
 			}
+
+			if _, err = track.writeStream.WriteRTP(&pkt.Header, pkt.Payload); err != nil {
+				log.Errorf("Writing rtx packet err: %v", err)
+			}
+
+			packetFactory.Put(pktBuff)
 		}
-		packetFactory.Put(pktBuff)
 	})
 	return nil
 }

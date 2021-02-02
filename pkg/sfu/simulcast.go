@@ -1,7 +1,5 @@
 package sfu
 
-import "time"
-
 const (
 	quarterResolution = "q"
 	halfResolution    = "h"
@@ -14,16 +12,16 @@ type SimulcastConfig struct {
 }
 
 type simulcastTrackHelpers struct {
-	targetSpatialLayer int
-	temporalSupported  bool
-	targetTempLayer    int
-	currentTempLayer   int
-	temporalEnabled    bool
-	lTSCalc            time.Time
+	temporalSupported bool
+	temporalEnabled   bool
+	lTSCalc           int64
 
 	// VP8Helper temporal helpers
-	refPicID  uint16
-	lastPicID uint16
-	refTlzi   uint8
-	lastTlzi  uint8
+	pRefPicID  uint16
+	refPicID   uint16
+	lPicID     uint16
+	pRefTlZIdx uint8
+	refTlZIdx  uint8
+	lTlZIdx    uint8
+	refSN      uint16
 }

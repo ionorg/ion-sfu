@@ -63,7 +63,6 @@ var (
 type SFU struct {
 	sync.RWMutex
 	webrtc       WebRTCTransportConfig
-	router       RouterConfig
 	turn         *turn.Server
 	sessions     map[string]*Session
 	datachannels []*Datachannel
@@ -176,7 +175,7 @@ func NewSFU(c Config) *SFU {
 
 // NewSession creates a new session instance
 func (s *SFU) newSession(id string) *Session {
-	session := NewSession(id, s.datachannels)
+	session := NewSession(id, s.datachannels, s.webrtc.router)
 
 	session.OnClose(func() {
 		s.Lock()

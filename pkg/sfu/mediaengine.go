@@ -12,6 +12,8 @@ const (
 	mimeTypeVP9  = "video/vp9"
 )
 
+const frameMarking = "urn:ietf:params:rtp-hdrext:framemarking"
+
 func getPublisherMediaEngine() (*webrtc.MediaEngine, error) {
 	me := &webrtc.MediaEngine{}
 	if err := me.RegisterCodec(webrtc.RTPCodecParameters{
@@ -65,6 +67,7 @@ func getPublisherMediaEngine() (*webrtc.MediaEngine, error) {
 		sdp.SDESMidURI,
 		sdp.SDESRTPStreamIDURI,
 		sdp.TransportCCURI,
+		frameMarking,
 	} {
 		if err := me.RegisterHeaderExtension(webrtc.RTPHeaderExtensionCapability{URI: extension}, webrtc.RTPCodecTypeVideo); err != nil {
 			return nil, err
