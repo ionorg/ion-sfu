@@ -270,12 +270,16 @@ func (d *DownTrack) writeSimpleRTP(extPkt buffer.ExtPacket) error {
 func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 	// Check if packet SSRC is different from before
 	// if true, the video source changed
-	if d.lastSSRC != extPkt.Packet.SSRC {
+	reSync := d.reSync.get()
+	if d.lastSSRC != extPkt.Packet.SSRC || reSync {
 		layer := atomic.LoadInt32(&d.spatialLayer)
 		currentLayer := uint16(layer)
 		targetLayer := uint16(layer >> 16)
-		if currentLayer == targetLayer && d.lastSSRC != 0 {
+		if currentLayer == targetLayer && d.lastSSRC != 0 && !reSync {
 			return nil
+		}
+		if reSync && d.simulcast.lTSCalc != 0 {
+			d.simulcast.lTSCalc = extPkt.Arrival
 		}
 		// Wait for a keyframe to sync new source
 		if !extPkt.KeyFrame {
@@ -285,8 +289,8 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 			})
 			return nil
 		}
-		// Switch is done remove sender from previous getLayer
-		// and update current getLayer
+		// Switch is done remove sender from previous layer
+		// and update current layer
 		if currentLayer != targetLayer {
 			go d.receiver.DeleteDownTrack(int(currentLayer), d.peerID)
 		}
@@ -302,10 +306,11 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 				}
 			}
 		}
+		d.reSync.set(false)
 	}
 	// Compute how much time passed between the old RTP extPkt
 	// and the current packet, and fix timestamp on source change
-	if !(d.simulcast.lTSCalc == 0) && d.lastSSRC != extPkt.Packet.SSRC {
+	if d.simulcast.lTSCalc != 0 && d.lastSSRC != extPkt.Packet.SSRC {
 		tDiff := (extPkt.Arrival - d.simulcast.lTSCalc) / 1e6
 		td := uint32((tDiff * 90) / 1000)
 		if td == 0 {
@@ -431,7 +436,7 @@ func (d *DownTrack) handleRTCP(bytes []byte) {
 		}
 	}
 	if d.trackType == SimulcastDownTrack && maxRatePacketLoss != 0 || expectedMinBitrate != 0 {
-		// d.handleLayerChange(maxRatePacketLoss, expectedMinBitrate)
+		d.handleLayerChange(maxRatePacketLoss, expectedMinBitrate)
 	}
 
 	if len(fwdPkts) > 0 {
