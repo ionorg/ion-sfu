@@ -25,10 +25,10 @@ type RouterConfig struct {
 	WithStats           bool            `mapstructure:"withstats"`
 	MaxBandwidth        uint64          `mapstructure:"maxbandwidth"`
 	MaxBufferTime       int             `mapstructure:"maxbuffertime"`
-	Simulcast           SimulcastConfig `mapstructure:"simulcast"`
-	AudioLevelInterval  int             `mapstructur:"audiolevelinterval"`
+	AudioLevelInterval  int             `mapstructure:"audiolevelinterval"`
 	AudioLevelThreshold uint8           `mapstructure:"audiolevelthreshold"`
 	AudioLevelFilter    int             `mapstructure:"audiolevelfilter"`
+	Simulcast           SimulcastConfig `mapstructure:"simulcast"`
 }
 
 type router struct {

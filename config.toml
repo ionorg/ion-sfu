@@ -12,13 +12,6 @@ withstats = false
 maxbandwidth = 1500
 # max buffer time by ms for video tracks
 maxbuffertime = 1000
-
-[router.simulcast]
-# Prefer best quality initially
-bestqualityfirst = true
-# EXPERIMENTAL enable temporal layer change is currently an experimental feature,
-# enable only for testing.
-enabletemporallayer = false
 # Sets the audio level volume threshold.
 # Values from [0-127] where 0 is the loudest.
 # Audio levels are read from rtp extension header according to:
@@ -33,6 +26,13 @@ audiolevelinterval=1000
 # calculated as audiolevelinterval/packetization time (20ms for 8kHz)
 # Values from [0-100]
 audiolevelfilter = 20
+
+[router.simulcast]
+# Prefer best quality initially
+bestqualityfirst = true
+# EXPERIMENTAL enable temporal layer change is currently an experimental feature,
+# enable only for testing.
+enabletemporallayer = false
 [webrtc]
 # Range of ports that ion accepts WebRTC traffic on
 # Format: [min, max]   and max - min >= 100
