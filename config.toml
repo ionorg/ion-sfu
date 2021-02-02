@@ -24,8 +24,9 @@ enabletemporallayer = false
 # Audio levels are read from rtp extension header according to:
 # https://tools.ietf.org/html/rfc6464
 audiolevelthreshold = 40
-# Sets the interval in which the SFU will emit the audio level
-# events in [ms]
+# Sets the interval in which the SFU will check the audio level
+# in [ms]. If the active speaker has changed, the sfu will
+# emit an event to clients.
 audiolevelinterval=1000
 # Sets minimum percentage of events required to fire an audio level
 # according to the expected events from the audiolevelinterval,
