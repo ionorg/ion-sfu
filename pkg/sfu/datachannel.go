@@ -11,7 +11,7 @@ type (
 	// The datachannels created will be negotiated on join to all peers that joins
 	// the SFU.
 	Datachannel struct {
-		label       string
+		Label       string
 		middlewares []func(MessageProcessor) MessageProcessor
 		onMessage   func(ctx context.Context, args ProcessArgs, out []*webrtc.DataChannel)
 	}
