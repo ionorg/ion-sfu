@@ -138,12 +138,7 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 	return w
 }
 
-// NewSFU creates a new sfu instance
-func NewSFU(c Config) *SFU {
-	// Init random seed
-	rand.Seed(time.Now().UnixNano())
-	// Init ballast
-	ballast := make([]byte, c.SFU.Ballast*1024*1024)
+func init() {
 	// Init buffer factory
 	bufferFactory = buffer.NewBufferFactory()
 	// Init packet factory
@@ -152,6 +147,14 @@ func NewSFU(c Config) *SFU {
 			return make([]byte, 1460)
 		},
 	}
+}
+
+// NewSFU creates a new sfu instance
+func NewSFU(c Config) *SFU {
+	// Init random seed
+	rand.Seed(time.Now().UnixNano())
+	// Init ballast
+	ballast := make([]byte, c.SFU.Ballast*1024*1024)
 
 	w := NewWebRTCTransportConfig(c)
 
@@ -162,7 +165,7 @@ func NewSFU(c Config) *SFU {
 	}
 
 	if c.Turn.Enabled {
-		ts, err := initTurnServer(c.Turn, nil)
+		ts, err := InitTurnServer(c.Turn, nil)
 		if err != nil {
 			log.Panicf("Could not init turn server err: %v", err)
 		}
