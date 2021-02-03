@@ -1,4 +1,4 @@
-package sfu
+package twcc
 
 import (
 	"encoding/binary"
@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/gammazero/deque"
 	"github.com/pion/rtcp"
@@ -25,18 +26,22 @@ type rtpExtInfo struct {
 	Timestamp int64
 }
 
-type TransportWideCC struct {
+// Responder will get the transport wide sequence number from rtp
+// extension header, and reply with the rtcp feedback message
+// according to:
+// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01
+type Responder struct {
 	sync.Mutex
 
-	tccExtInfo    []rtpExtInfo
-	tccLastReport int64
-	tccCycles     uint32
-	tccLastExtSN  uint32
-	tccPktCtn     uint8
-	tccLastSn     uint16
-	lastExtInfo   uint16
-	mSSRC         uint32
-	sSSRC         uint32
+	extInfo     []rtpExtInfo
+	lastReport  int64
+	cycles      uint32
+	lastExtSN   uint32
+	pktCtn      uint8
+	lastSn      uint16
+	lastExtInfo uint16
+	mSSRC       uint32
+	sSSRC       uint32
 
 	len      uint16
 	deltaLen uint16
@@ -44,59 +49,67 @@ type TransportWideCC struct {
 	deltas   [200]byte
 	chunk    uint16
 
-	onFeedback func(packet []rtcp.Packet)
+	onFeedback func(packet rtcp.RawPacket)
 }
 
-func newTransportWideCC() *TransportWideCC {
-	return &TransportWideCC{
-		tccExtInfo: make([]rtpExtInfo, 0, 101),
+func NewTransportWideCCResponder(ssrc uint32) *Responder {
+	return &Responder{
+		extInfo:    make([]rtpExtInfo, 0, 101),
 		sSSRC:      rand.Uint32(),
+		mSSRC:      ssrc,
+		lastReport: time.Now().Add(100 * time.Millisecond).UnixNano(),
 	}
 }
 
-func (t *TransportWideCC) push(sn uint16, timeNS int64, marker bool) {
+// Push a sequence number read from rtp packet ext packet
+func (t *Responder) Push(sn uint16, timeNS int64, marker bool) {
 	t.Lock()
 	defer t.Unlock()
 
-	if sn < 0x0fff && (t.tccLastSn&0xffff) > 0xf000 {
-		t.tccCycles += 1 << 16
+	if sn < 0x0fff && (t.lastSn&0xffff) > 0xf000 {
+		t.cycles += 1 << 16
 	}
-	t.tccExtInfo = append(t.tccExtInfo, rtpExtInfo{
-		ExtTSN:    t.tccCycles | uint32(sn),
+	t.extInfo = append(t.extInfo, rtpExtInfo{
+		ExtTSN:    t.cycles | uint32(sn),
 		Timestamp: timeNS / 1e3,
 	})
-	t.tccLastSn = sn
-	delta := timeNS - t.tccLastReport
-	if len(t.tccExtInfo) > 20 && t.mSSRC != 0 &&
-		(delta >= tccReportDelta || len(t.tccExtInfo) > 100 || (marker && delta >= tccReportDeltaAfterMark)) {
+	t.lastSn = sn
+	delta := timeNS - t.lastReport
+	if len(t.extInfo) > 20 && t.mSSRC != 0 &&
+		(delta >= tccReportDelta || len(t.extInfo) > 100 || (marker && delta >= tccReportDeltaAfterMark)) {
 		if pkt := t.buildTransportCCPacket(); pkt != nil {
-			t.onFeedback([]rtcp.Packet{pkt})
+			t.onFeedback(pkt)
 		}
-		t.tccLastReport = timeNS
+		t.lastReport = timeNS
 	}
 }
 
-func (t *TransportWideCC) buildTransportCCPacket() *rtcp.RawPacket {
-	if len(t.tccExtInfo) == 0 {
+// OnFeedback sets the callback for the formed twcc feedback rtcp packet
+func (t *Responder) OnFeedback(f func(p rtcp.RawPacket)) {
+	t.onFeedback = f
+}
+
+func (t *Responder) buildTransportCCPacket() rtcp.RawPacket {
+	if len(t.extInfo) == 0 {
 		return nil
 	}
-	sort.Slice(t.tccExtInfo, func(i, j int) bool {
-		return t.tccExtInfo[i].ExtTSN < t.tccExtInfo[j].ExtTSN
+	sort.Slice(t.extInfo, func(i, j int) bool {
+		return t.extInfo[i].ExtTSN < t.extInfo[j].ExtTSN
 	})
-	tccPkts := make([]rtpExtInfo, 0, int(float64(len(t.tccExtInfo))*1.2))
-	for _, tccExtInfo := range t.tccExtInfo {
-		if tccExtInfo.ExtTSN < t.tccLastExtSN {
+	tccPkts := make([]rtpExtInfo, 0, int(float64(len(t.extInfo))*1.2))
+	for _, tccExtInfo := range t.extInfo {
+		if tccExtInfo.ExtTSN < t.lastExtSN {
 			continue
 		}
-		if t.tccLastExtSN != 0 {
-			for j := t.tccLastExtSN + 1; j < tccExtInfo.ExtTSN; j++ {
+		if t.lastExtSN != 0 {
+			for j := t.lastExtSN + 1; j < tccExtInfo.ExtTSN; j++ {
 				tccPkts = append(tccPkts, rtpExtInfo{ExtTSN: j})
 			}
 		}
-		t.tccLastExtSN = tccExtInfo.ExtTSN
+		t.lastExtSN = tccExtInfo.ExtTSN
 		tccPkts = append(tccPkts, tccExtInfo)
 	}
-	t.tccExtInfo = t.tccExtInfo[:0]
+	t.extInfo = t.extInfo[:0]
 
 	firstRecv := false
 	same := true
@@ -120,7 +133,7 @@ func (t *TransportWideCC) buildTransportCCPacket() *rtcp.RawPacket {
 					uint16(len(tccPkts)),
 					uint32(refTime),
 				)
-				t.tccPktCtn++
+				t.pktCtn++
 			}
 
 			delta = (stat.Timestamp - timestamp) / 250
@@ -227,10 +240,10 @@ func (t *TransportWideCC) buildTransportCCPacket() *rtcp.RawPacket {
 		pkt[len(pkt)-1] = padSize
 	}
 	t.deltaLen = 0
-	return &pkt
+	return pkt
 }
 
-func (t *TransportWideCC) writeHeader(bSN, packetCount uint16, refTime uint32) {
+func (t *Responder) writeHeader(bSN, packetCount uint16, refTime uint32) {
 	/*
 	   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 	   |                     SSRC of packet sender                     |
@@ -246,11 +259,11 @@ func (t *TransportWideCC) writeHeader(bSN, packetCount uint16, refTime uint32) {
 	binary.BigEndian.PutUint32(t.payload[4:], t.mSSRC)
 	binary.BigEndian.PutUint16(t.payload[baseSequenceNumberOffset:], bSN)
 	binary.BigEndian.PutUint16(t.payload[packetStatusCountOffset:], packetCount)
-	binary.BigEndian.PutUint32(t.payload[referenceTimeOffset:], refTime<<8|uint32(t.tccPktCtn))
+	binary.BigEndian.PutUint32(t.payload[referenceTimeOffset:], refTime<<8|uint32(t.pktCtn))
 	t.len = 16
 }
 
-func (t *TransportWideCC) writeRunLengthChunk(symbol uint16, runLength uint16) {
+func (t *Responder) writeRunLengthChunk(symbol uint16, runLength uint16) {
 	/*
 	   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 	   |T| S |       Run Length        |
@@ -260,7 +273,7 @@ func (t *TransportWideCC) writeRunLengthChunk(symbol uint16, runLength uint16) {
 	t.len += 2
 }
 
-func (t *TransportWideCC) createStatusSymbolChunk(symbolSize, symbol uint16, i int) {
+func (t *Responder) createStatusSymbolChunk(symbolSize, symbol uint16, i int) {
 	/*
 		+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 		|T|S|       symbol list         |
@@ -270,7 +283,7 @@ func (t *TransportWideCC) createStatusSymbolChunk(symbolSize, symbol uint16, i i
 	t.chunk = setNBitsOfUint16(t.chunk, numOfBits, numOfBits*uint16(i)+2, symbol)
 }
 
-func (t *TransportWideCC) writeStatusSymbolChunk(symbolSize uint16) {
+func (t *Responder) writeStatusSymbolChunk(symbolSize uint16) {
 	t.chunk = setNBitsOfUint16(t.chunk, 1, 0, 1)
 	t.chunk = setNBitsOfUint16(t.chunk, 1, 1, symbolSize)
 	binary.BigEndian.PutUint16(t.payload[t.len:], t.chunk)
@@ -278,7 +291,7 @@ func (t *TransportWideCC) writeStatusSymbolChunk(symbolSize uint16) {
 	t.len += 2
 }
 
-func (t *TransportWideCC) writeDelta(deltaType, delta uint16) {
+func (t *Responder) writeDelta(deltaType, delta uint16) {
 	if deltaType == rtcp.TypeTCCPacketReceivedSmallDelta {
 		t.deltas[t.deltaLen] = byte(delta)
 		t.deltaLen++
