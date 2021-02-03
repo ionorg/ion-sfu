@@ -175,7 +175,7 @@ func NewSFU(c Config) *SFU {
 
 // NewSession creates a new session instance
 func (s *SFU) newSession(id string) *Session {
-	session := NewSession(id, s.datachannels, s.webrtc.router)
+	session := NewSession(id, s.datachannels, s.webrtc)
 
 	session.OnClose(func() {
 		s.Lock()
