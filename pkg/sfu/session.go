@@ -23,14 +23,14 @@ type Session struct {
 }
 
 // NewSession creates a new session
-func NewSession(id string, dcs []*Datachannel, cfg RouterConfig) *Session {
+func NewSession(id string, dcs []*Datachannel, cfg WebRTCTransportConfig) *Session {
 	s := &Session{
 		id:            id,
 		peers:         make(map[string]*Peer),
 		datachannels:  dcs,
-		audioObserver: newAudioLevel(cfg.AudioLevelThreshold, cfg.AudioLevelInterval, cfg.AudioLevelFilter),
+		audioObserver: newAudioLevel(cfg.router.AudioLevelThreshold, cfg.router.AudioLevelInterval, cfg.router.AudioLevelFilter),
 	}
-	go s.audioLevelObserver(cfg.AudioLevelInterval)
+	go s.audioLevelObserver(cfg.router.AudioLevelInterval)
 	return s
 
 }

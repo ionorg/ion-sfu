@@ -75,7 +75,7 @@ func NewSubscriber(id string, cfg WebRTCTransportConfig) (*Subscriber, error) {
 }
 
 func (s *Subscriber) AddDatachannel(peer *Peer, dc *Datachannel) error {
-	ndc, err := s.pc.CreateDataChannel(dc.label, &webrtc.DataChannelInit{})
+	ndc, err := s.pc.CreateDataChannel(dc.Label, &webrtc.DataChannelInit{})
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func (s *Subscriber) AddDatachannel(peer *Peer, dc *Datachannel) error {
 		})
 	})
 
-	s.channels[dc.label] = ndc
+	s.channels[dc.Label] = ndc
 
 	return nil
 }
