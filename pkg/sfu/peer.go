@@ -179,7 +179,7 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 
 // Answer an offer from remote
 func (p *Peer) Answer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
-	if p.subscriber == nil {
+	if p.publisher == nil {
 		return nil, ErrNoTransportEstablished
 	}
 

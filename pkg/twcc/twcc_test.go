@@ -1,4 +1,4 @@
-package sfu
+package twcc
 
 import (
 	"math/rand"
@@ -48,7 +48,7 @@ func TestTransportWideCC_writeRunLengthChunk(t1 *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t1.Run(tt.name, func(t1 *testing.T) {
-			t := &TransportWideCC{
+			t := &Responder{
 				len: tt.fields.len,
 			}
 			t.writeRunLengthChunk(tt.args.symbol, tt.args.runLength)
@@ -114,7 +114,7 @@ func TestTransportWideCC_writeStatusSymbolChunk(t1 *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t1.Run(tt.name, func(t1 *testing.T) {
-			t := &TransportWideCC{
+			t := &Responder{
 				len: tt.fields.len,
 			}
 			for i, v := range tt.args.symbolList {
@@ -183,7 +183,7 @@ func TestTransportWideCC_writeDelta(t1 *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t1.Run(tt.name, func(t1 *testing.T) {
-			t := &TransportWideCC{
+			t := &Responder{
 				deltaLen: tt.fields.deltaLen,
 			}
 			t.writeDelta(tt.args.deltaType, tt.args.delta)
@@ -232,10 +232,10 @@ func TestTransportWideCC_writeHeader(t1 *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t1.Run(tt.name, func(t1 *testing.T) {
-			t := &TransportWideCC{
-				tccPktCtn: tt.fields.tccPktCtn,
-				sSSRC:     tt.fields.sSSRC,
-				mSSRC:     tt.fields.mSSRC,
+			t := &Responder{
+				pktCtn: tt.fields.tccPktCtn,
+				sSSRC:  tt.fields.sSSRC,
+				mSSRC:  tt.fields.mSSRC,
 			}
 			t.writeHeader(tt.args.bSN, tt.args.packetCount, tt.args.refTime)
 			assert.Equal(t1, tt.want, t.payload[0:16])
@@ -280,10 +280,10 @@ func TestTccPacket(t1 *testing.T) {
 		rtcp.TypeTCCPacketNotReceived,
 		rtcp.TypeTCCPacketNotReceived}
 
-	t := &TransportWideCC{
-		tccPktCtn: 23,
-		sSSRC:     4195875351,
-		mSSRC:     1124282272,
+	t := &Responder{
+		pktCtn: 23,
+		sSSRC:  4195875351,
+		mSSRC:  1124282272,
 	}
 	t.writeHeader(153, 1, 4057090)
 	t.writeRunLengthChunk(rtcp.TypeTCCPacketReceivedWithoutDelta, 24)
@@ -331,11 +331,11 @@ func BenchmarkBuildPacket(b *testing.B) {
 	rand.Seed(time.Now().UnixNano())
 	b.ReportAllocs()
 	n := 1 + rand.Intn(4-1+1)
-	var twcc TransportWideCC
+	var twcc Responder
 	tm := time.Now()
 	for i := 1; i < 100; i++ {
 		tm := tm.Add(time.Duration(60*n) * time.Millisecond)
-		twcc.tccExtInfo = append(twcc.tccExtInfo, rtpExtInfo{
+		twcc.extInfo = append(twcc.extInfo, rtpExtInfo{
 			ExtTSN:    uint32(i),
 			Timestamp: tm.UnixNano(),
 		})
