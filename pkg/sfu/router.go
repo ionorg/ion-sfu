@@ -2,12 +2,11 @@ package sfu
 
 import (
 	"sync"
-	"time"
-
-	"github.com/pion/ion-sfu/pkg/stats"
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/ion-sfu/pkg/buffer"
+	"github.com/pion/ion-sfu/pkg/stats"
+	"github.com/pion/ion-sfu/pkg/twcc"
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 )
@@ -34,7 +33,7 @@ type RouterConfig struct {
 type router struct {
 	sync.RWMutex
 	id        string
-	twcc      *TransportWideCC
+	twcc      *twcc.Responder
 	peer      *webrtc.PeerConnection
 	stats     map[uint32]*stats.Stream
 	rtcpCh    chan []rtcp.Packet
@@ -50,17 +49,12 @@ func newRouter(peer *webrtc.PeerConnection, id string, session *Session, config 
 	r := &router{
 		id:        id,
 		peer:      peer,
-		twcc:      newTransportWideCC(),
 		rtcpCh:    ch,
 		stopCh:    make(chan struct{}),
 		config:    config,
 		session:   session,
 		receivers: make(map[string]Receiver),
 		stats:     make(map[uint32]*stats.Stream),
-	}
-
-	r.twcc.onFeedback = func(packet []rtcp.Packet) {
-		r.rtcpCh <- packet
 	}
 
 	if config.WithStats {
@@ -105,8 +99,14 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 		r.session.audioObserver.addStream(streamID)
 
 	} else if track.Kind() == webrtc.RTPCodecTypeVideo {
+		if r.twcc == nil {
+			r.twcc = twcc.NewTransportWideCCResponder(uint32(track.SSRC()))
+			r.twcc.OnFeedback(func(p rtcp.RawPacket) {
+				r.rtcpCh <- []rtcp.Packet{&p}
+			})
+		}
 		buff.OnTransportWideCC(func(sn uint16, timeNS int64, marker bool) {
-			r.twcc.push(sn, timeNS, marker)
+			r.twcc.Push(sn, timeNS, marker)
 		})
 	}
 
@@ -174,11 +174,6 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 	}
 
 	recv.AddUpTrack(track, buff)
-
-	if r.twcc.mSSRC == 0 {
-		r.twcc.tccLastReport = time.Now().UnixNano()
-		r.twcc.mSSRC = uint32(track.SSRC())
-	}
 
 	buff.Bind(receiver.GetParameters(), buffer.Options{
 		BufferTime: r.config.MaxBufferTime,
