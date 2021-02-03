@@ -214,7 +214,7 @@ func (s *SFU) GetSession(sid string) (*Session, WebRTCTransportConfig) {
 }
 
 func (s *SFU) NewDatachannel(label string) *Datachannel {
-	dc := &Datachannel{label: label}
+	dc := &Datachannel{Label: label}
 	s.datachannels = append(s.datachannels, dc)
 	return dc
 }
