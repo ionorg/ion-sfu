@@ -88,7 +88,6 @@ func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters,
 		d.payloadType = uint8(codec.PayloadType)
 		d.writeStream = t.WriteStream()
 		d.mime = strings.ToLower(codec.MimeType)
-		d.bound.set(true)
 		d.reSync.set(true)
 		d.enabled.set(true)
 		if rr := bufferFactory.GetOrNew(packetio.RTCPBufferPacket, uint32(t.SSRC())).(*buffer.RTCPReader); rr != nil {
@@ -100,6 +99,7 @@ func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters,
 			d.sequencer = newSequencer()
 		}
 		d.onBind()
+		d.bound.set(true)
 		return codec, nil
 	}
 	return webrtc.RTPCodecParameters{}, webrtc.ErrUnsupportedCodec
