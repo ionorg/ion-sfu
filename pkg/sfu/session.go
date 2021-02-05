@@ -57,23 +57,15 @@ func (s *Session) RemovePeer(pid string) {
 }
 
 func (s *Session) onMessage(origin, label string, msg webrtc.DataChannelMessage) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	for pid, p := range s.peers {
-		if origin == pid {
-			continue
-		}
-
-		dc := p.subscriber.channels[label]
-		if dc != nil && dc.ReadyState() == webrtc.DataChannelStateOpen {
-			if msg.IsString {
-				if err := dc.SendText(string(msg.Data)); err != nil {
-					log.Errorf("Sending dc message err: %v", err)
-				}
-			} else {
-				if err := dc.Send(msg.Data); err != nil {
-					log.Errorf("Sending dc message err: %v", err)
-				}
+	dcs := s.getDataChannels(origin, label)
+	for _, dc := range dcs {
+		if msg.IsString {
+			if err := dc.SendText(string(msg.Data)); err != nil {
+				log.Errorf("Sending dc message err: %v", err)
+			}
+		} else {
+			if err := dc.Send(msg.Data); err != nil {
+				log.Errorf("Sending dc message err: %v", err)
 			}
 		}
 	}
@@ -87,7 +79,7 @@ func (s *Session) getDataChannels(origin, label string) (dcs []*webrtc.DataChann
 			continue
 		}
 
-		if dc, ok := p.subscriber.channels[label]; ok {
+		if dc, ok := p.subscriber.channels[label]; ok && dc.ReadyState() == webrtc.DataChannelStateOpen {
 			dcs = append(dcs, dc)
 		}
 	}
@@ -200,6 +192,9 @@ func (s *Session) audioLevelObserver(audioLevelInterval int) {
 	if audioLevelInterval <= 50 {
 		log.Warnf("Values near/under 20ms may return unexpected values")
 	}
+	if audioLevelInterval == 0 {
+		audioLevelInterval = 1000
+	}
 	for {
 		time.Sleep(time.Duration(audioLevelInterval) * time.Millisecond)
 		if s.closed.get() {
@@ -218,14 +213,12 @@ func (s *Session) audioLevelObserver(audioLevelInterval int) {
 		}
 
 		sl := string(l)
-		s.mu.RLock()
-		for _, peer := range s.peers {
-			if ch, ok := peer.subscriber.channels[APIChannelLabel]; ok && ch.ReadyState() == webrtc.DataChannelStateOpen {
-				if err = ch.SendText(sl); err != nil {
-					log.Errorf("Sending audio levels to peer: %s, err: %v", peer.id, err)
-				}
+		dcs := s.getDataChannels("", APIChannelLabel)
+
+		for _, ch := range dcs {
+			if err = ch.SendText(sl); err != nil {
+				log.Errorf("Sending audio levels err: %v", err)
 			}
 		}
-		s.mu.RUnlock()
 	}
 }
