@@ -135,6 +135,10 @@ func (d *DownTrack) Kind() webrtc.RTPCodecType {
 	}
 }
 
+func (d *DownTrack) SetTransceiver(transceiver *webrtc.RTPTransceiver) {
+	d.transceiver = transceiver
+}
+
 // WriteRTP writes a RTP Packet to the DownTrack
 func (d *DownTrack) WriteRTP(p buffer.ExtPacket) error {
 	if !d.enabled.get() || !d.bound.get() {
