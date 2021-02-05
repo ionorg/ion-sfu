@@ -229,6 +229,46 @@ func (d *DownTrack) OnBind(fn func()) {
 	d.onBind = fn
 }
 
+func (d *DownTrack) CreateSourceDescriptionChunks() []rtcp.SourceDescriptionChunk {
+	if !d.bound.get() {
+		return nil
+	}
+	return []rtcp.SourceDescriptionChunk{
+		{
+			Source: d.ssrc,
+			Items: []rtcp.SourceDescriptionItem{{
+				Type: rtcp.SDESCNAME,
+				Text: d.streamID,
+			}},
+		}, {
+			Source: d.ssrc,
+			Items: []rtcp.SourceDescriptionItem{{
+				Type: rtcp.SDESType(15),
+				Text: d.transceiver.Mid(),
+			}},
+		},
+	}
+}
+
+func (d *DownTrack) CreateSenderReport() *rtcp.SenderReport {
+	if !d.bound.get() {
+		return nil
+	}
+	now := time.Now().UnixNano()
+	nowNTP := timeToNtp(now)
+	lastPktMs := atomic.LoadInt64(&d.lastPacketMs)
+	maxPktTs := atomic.LoadUint32(&d.lastTS)
+	diffTs := uint32((now/1e6)-lastPktMs) * d.codec.ClockRate / 1000
+	octets, packets := d.getSRStats()
+	return &rtcp.SenderReport{
+		SSRC:        d.ssrc,
+		NTPTime:     nowNTP,
+		RTPTime:     maxPktTs + diffTs,
+		PacketCount: packets,
+		OctetCount:  octets,
+	}
+}
+
 func (d *DownTrack) writeSimpleRTP(extPkt buffer.ExtPacket) error {
 	if d.reSync.get() {
 		if d.Kind() == webrtc.RTPCodecTypeVideo {
