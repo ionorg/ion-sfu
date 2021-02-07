@@ -35,6 +35,7 @@ type SessionProvider interface {
 type Peer struct {
 	sync.Mutex
 	id       string
+	closed   atomicBool
 	session  *Session
 	provider SessionProvider
 
@@ -113,7 +114,7 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		}
 
 		p.remoteAnswerPending = true
-		if p.OnOffer != nil {
+		if p.OnOffer != nil && !p.closed.get() {
 			log.Infof("peer %s send offer", p.id)
 			p.OnOffer(&offer)
 		}
@@ -125,13 +126,9 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 			return
 		}
 
-		p.Lock()
-		handler := p.OnIceCandidate
-		p.Unlock()
-
-		if handler != nil {
+		if p.OnIceCandidate != nil && !p.closed.get() {
 			json := c.ToJSON()
-			handler(&json, subscriber)
+			p.OnIceCandidate(&json, subscriber)
 		}
 	})
 
@@ -141,23 +138,15 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 			return
 		}
 
-		p.Lock()
-		handler := p.OnIceCandidate
-		p.Unlock()
-
-		if handler != nil {
+		if p.OnIceCandidate != nil && !p.closed.get() {
 			json := c.ToJSON()
-			handler(&json, publisher)
+			p.OnIceCandidate(&json, publisher)
 		}
 	})
 
 	p.publisher.OnICEConnectionStateChange(func(s webrtc.ICEConnectionState) {
-		p.Lock()
-		handler := p.OnICEConnectionStateChange
-		p.Unlock()
-
-		if handler != nil {
-			handler(s)
+		if p.OnICEConnectionStateChange != nil && !p.closed.get() {
+			p.OnICEConnectionStateChange(s)
 		}
 	})
 
@@ -246,9 +235,7 @@ func (p *Peer) Close() error {
 	p.Lock()
 	defer p.Unlock()
 
-	p.OnOffer = nil
-	p.OnIceCandidate = nil
-	p.OnICEConnectionStateChange = nil
+	p.closed.set(true)
 
 	if p.session != nil {
 		p.session.RemovePeer(p.id)
