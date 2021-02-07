@@ -39,7 +39,7 @@ type (
 
 func NewDataChannel(label string) *Datachannel {
 	return &Datachannel{
-		label:       label,
+		Label:       label,
 		middlewares: make([]func(MessageProcessor) MessageProcessor, 0),
 	}
 }
