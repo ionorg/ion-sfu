@@ -57,11 +57,11 @@ func NewPeer(provider SessionProvider) *Peer {
 	}
 }
 
-// Join initializes this peer for a given sessionID (takes an SDPOffer)
-func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
+// Join initializes this peer for a given sessionID
+func (p *Peer) Join(sid string) error {
 	if p.publisher != nil {
 		log.Debugf("peer already exists")
-		return nil, ErrTransportExists
+		return ErrTransportExists
 	}
 
 	pid := cuid.New()
@@ -75,16 +75,16 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 
 	p.subscriber, err = NewSubscriber(pid, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("error creating transport: %v", err)
+		return fmt.Errorf("error creating transport: %v", err)
 	}
 	p.publisher, err = NewPublisher(p.session, pid, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("error creating transport: %v", err)
+		return fmt.Errorf("error creating transport: %v", err)
 	}
 
 	for _, dc := range p.session.datachannels {
 		if err := p.subscriber.AddDatachannel(p, dc); err != nil {
-			return nil, fmt.Errorf("error setting subscriber default dc datachannel")
+			return fmt.Errorf("error setting subscriber default dc datachannel")
 		}
 	}
 
@@ -145,16 +145,9 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 
 	log.Infof("peer %s join session %s", p.id, sid)
 
-	answer, err := p.publisher.Answer(sdp)
-	if err != nil {
-		return nil, fmt.Errorf("error setting remote description: %v", err)
-	}
-
-	log.Infof("peer %s send answer", p.id)
-
 	p.session.Subscribe(p)
 
-	return &answer, nil
+	return nil
 }
 
 // Answer an offer from remote
