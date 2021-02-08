@@ -56,7 +56,7 @@ func NewPeer(provider SessionProvider) *Peer {
 	}
 }
 
-// Join initializes this peer for a given sessionID (takes an SDPOffer)
+// Join initializes this peer for a given sessionID
 func (p *Peer) Join(sid string) error {
 	if p.publisher != nil {
 		log.Debugf("peer already exists")
