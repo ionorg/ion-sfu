@@ -25,17 +25,18 @@ const (
 // to SFU Subscriber, the track handle the packets for simple, simulcast
 // and SVC Publisher.
 type DownTrack struct {
-	id          string
-	peerID      string
-	bound       atomicBool
-	mime        string
-	ssrc        uint32
-	streamID    string
-	payloadType uint8
-	sequencer   *sequencer
-	trackType   DownTrackType
-	skipFB      int64
-	payload     []byte
+	id            string
+	peerID        string
+	bound         atomicBool
+	mime          string
+	ssrc          uint32
+	streamID      string
+	payloadType   uint8
+	sequencer     *sequencer
+	trackType     DownTrackType
+	skipFB        int64
+	payload       []byte
+	bufferFactory *buffer.Factory
 
 	spatialLayer  int32
 	temporalLayer int32
@@ -90,7 +91,11 @@ func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters,
 		d.mime = strings.ToLower(codec.MimeType)
 		d.reSync.set(true)
 		d.enabled.set(true)
-		if rr := bufferFactory.GetOrNew(packetio.RTCPBufferPacket, uint32(t.SSRC())).(*buffer.RTCPReader); rr != nil {
+		bf := d.bufferFactory
+		if bf == nil {
+			bf = bufferFactory
+		}
+		if rr := bf.GetOrNew(packetio.RTCPBufferPacket, uint32(t.SSRC())).(*buffer.RTCPReader); rr != nil {
 			rr.OnPacket(func(pkt []byte) {
 				d.handleRTCP(pkt)
 			})
@@ -137,6 +142,10 @@ func (d *DownTrack) Kind() webrtc.RTPCodecType {
 
 func (d *DownTrack) SetTransceiver(transceiver *webrtc.RTPTransceiver) {
 	d.transceiver = transceiver
+}
+
+func (d *DownTrack) SetBufferFactory(bf *buffer.Factory) {
+	d.bufferFactory = bf
 }
 
 // WriteRTP writes a RTP Packet to the DownTrack
