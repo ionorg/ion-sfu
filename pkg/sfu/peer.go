@@ -3,9 +3,9 @@ package sfu
 import (
 	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/lucsky/cuid"
+	"github.com/sasha-s/go-deadlock"
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/webrtc/v3"
@@ -33,7 +33,7 @@ type SessionProvider interface {
 
 // Peer represents a pair peer connection
 type Peer struct {
-	sync.Mutex
+	deadlock.Mutex
 	id       string
 	closed   atomicBool
 	session  *Session

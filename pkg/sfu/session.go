@@ -2,18 +2,18 @@ package sfu
 
 import (
 	"encoding/json"
-	"sync"
 	"time"
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/webrtc/v3"
+	"github.com/sasha-s/go-deadlock"
 )
 
 // Session represents a set of peers. Transports inside a session
 // are automatically subscribed to each other.
 type Session struct {
 	id             string
-	mu             sync.RWMutex
+	mu             deadlock.RWMutex
 	peers          map[string]*Peer
 	closed         atomicBool
 	fanOutDCs      []string
