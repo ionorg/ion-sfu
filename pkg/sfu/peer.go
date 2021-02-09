@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/lucsky/cuid"
-
 	log "github.com/pion/ion-log"
 	"github.com/pion/webrtc/v3"
 )
@@ -189,7 +188,7 @@ func (p *Peer) SetRemoteDescription(sdp webrtc.SessionDescription) error {
 
 	if p.negotiationPending {
 		p.negotiationPending = false
-		go p.subscriber.negotiate()
+		p.subscriber.negotiate()
 	}
 
 	return nil
