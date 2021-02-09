@@ -11,7 +11,6 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/improbable-eng/grpc-web v0.13.0
 	github.com/lucsky/cuid v1.0.2
-	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
 	github.com/pion/dtls/v2 v2.0.4
 	github.com/pion/ice/v2 v2.0.15
 	github.com/pion/ion-log v1.0.0
@@ -24,7 +23,6 @@ require (
 	github.com/pion/webrtc/v3 v3.0.4
 	github.com/prometheus/client_golang v1.9.0
 	github.com/rs/cors v1.7.0 // indirect
-	github.com/sasha-s/go-deadlock v0.2.0
 	github.com/soheilhy/cmux v0.1.4
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20200429184054-15c2290dcb37
 	github.com/spf13/viper v1.7.1

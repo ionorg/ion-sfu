@@ -1,7 +1,7 @@
 package sfu
 
 import (
-	"github.com/sasha-s/go-deadlock"
+	"sync"
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/ion-sfu/pkg/buffer"
@@ -31,7 +31,7 @@ type RouterConfig struct {
 }
 
 type router struct {
-	deadlock.RWMutex
+	sync.RWMutex
 	id        string
 	twcc      *twcc.Responder
 	peer      *webrtc.PeerConnection

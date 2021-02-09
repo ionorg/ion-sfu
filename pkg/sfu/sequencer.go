@@ -2,10 +2,10 @@ package sfu
 
 import (
 	"encoding/binary"
+	"sync"
 	"time"
 
 	log "github.com/pion/ion-log"
-	"github.com/sasha-s/go-deadlock"
 )
 
 const (
@@ -68,7 +68,7 @@ func (p packetMeta) getVP8PayloadMeta() (uint8, uint16) {
 
 // Sequencer stores the packet sequence received by the down track
 type sequencer struct {
-	deadlock.Mutex
+	sync.Mutex
 	init      bool
 	seq       []byte
 	step      int
