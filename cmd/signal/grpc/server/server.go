@@ -148,7 +148,7 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 				}
 			}
 
-			answer, err := peer.Join(payload.Join.Sid, offer)
+			err = peer.Join(payload.Join.Sid)
 			if err != nil {
 				switch err {
 				case sfu.ErrTransportExists:
@@ -168,6 +168,11 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 				default:
 					return status.Errorf(codes.Unknown, err.Error())
 				}
+			}
+
+			answer, err := peer.Answer(offer)
+			if err != nil {
+				return status.Errorf(codes.Internal, fmt.Sprintf("answer error: %v", err))
 			}
 
 			marshalled, err := json.Marshal(answer)

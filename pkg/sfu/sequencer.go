@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"sync"
 	"time"
+
+	log "github.com/pion/ion-log"
 )
 
 const (
@@ -66,7 +68,8 @@ func (p packetMeta) getVP8PayloadMeta() (uint8, uint16) {
 
 // Sequencer stores the packet sequence received by the down track
 type sequencer struct {
-	sync.RWMutex
+	sync.Mutex
+	init      bool
 	seq       []byte
 	step      int
 	headSN    uint16
@@ -83,8 +86,9 @@ func newSequencer() *sequencer {
 func (n *sequencer) push(sn, offSn uint16, timeStamp uint32, layer uint8, head bool) packetMeta {
 	n.Lock()
 	defer n.Unlock()
-	if n.headSN == 0 {
+	if !n.init {
 		n.headSN = offSn
+		n.init = true
 	}
 
 	step := 0
@@ -99,7 +103,14 @@ func (n *sequencer) push(sn, offSn uint16, timeStamp uint32, layer uint8, head b
 		step = n.step
 		n.headSN = offSn
 	} else {
-		step = n.step - int(n.headSN-offSn) + 1
+		step = n.step - int(n.headSN-offSn)
+		if step < 0 {
+			if step*-1 >= maxPacketMetaHistory {
+				log.Warnf("old packet received, can not be sequenced, head: %d received: %d", sn, offSn)
+				return packetMeta{}
+			}
+			step = maxPacketMetaHistory + step
+		}
 	}
 	off := step * packetMetaSize
 	binary.BigEndian.PutUint16(n.seq[off:off+2], sn)

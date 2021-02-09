@@ -57,8 +57,8 @@ func (s *Session) RemovePeer(pid string) {
 
 	// Close session if no peers
 	if len(s.peers) == 0 && s.onCloseHandler != nil && !s.closed.get() {
-		s.onCloseHandler()
 		s.closed.set(true)
+		s.onCloseHandler()
 	}
 }
 
@@ -96,20 +96,22 @@ func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 	label := dc.Label()
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	s.fanOutDCs = append(s.fanOutDCs, label)
 	s.peers[owner].subscriber.channels[label] = dc
+	peers := make([]*Peer, 0, len(s.peers))
+	for _, p := range s.peers {
+		if p.id == owner {
+			continue
+		}
+		peers = append(peers, p)
+	}
+	s.mu.Unlock()
 
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 		s.onMessage(owner, label, msg)
 	})
 
-	for pid, p := range s.peers {
-		// Don't add to self
-		if owner == pid {
-			continue
-		}
+	for _, p := range peers {
 		n, err := p.subscriber.AddDataChannel(label)
 
 		if err != nil {
@@ -117,28 +119,27 @@ func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 			continue
 		}
 
-		pid := pid
+		pid := p.id
 		n.OnMessage(func(msg webrtc.DataChannelMessage) {
 			s.onMessage(pid, label, msg)
 		})
 
-		go p.subscriber.negotiate()
+		p.subscriber.negotiate()
 	}
 }
 
 // Publish will add a Sender to all peers in current Session from given
 // Receiver
 func (s *Session) Publish(router Router, r Receiver) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	peers := s.Peers()
 
-	for pid, p := range s.peers {
+	for _, p := range peers {
 		// Don't sub to self
-		if router.ID() == pid {
+		if router.ID() == p.id {
 			continue
 		}
 
-		log.Infof("Publishing track to peer %s", pid)
+		log.Infof("Publishing track to peer %s", p.id)
 
 		if err := router.AddDownTracks(p.subscriber, r); err != nil {
 			log.Errorf("Error subscribing transport to router: %s", err)
@@ -150,28 +151,32 @@ func (s *Session) Publish(router Router, r Receiver) {
 // Subscribe will create a Sender for every other Receiver in the session
 func (s *Session) Subscribe(peer *Peer) {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
+	fdc := make([]string, len(s.fanOutDCs))
+	copy(fdc, s.fanOutDCs)
+	peers := make([]*Peer, 0, len(s.peers))
+	for _, p := range s.peers {
+		if p == peer {
+			continue
+		}
+		peers = append(peers, p)
+	}
+	s.mu.RUnlock()
 
 	// Subscribe to fan out datachannels
-	for _, label := range s.fanOutDCs {
+	for _, label := range fdc {
 		n, err := peer.subscriber.AddDataChannel(label)
-
 		if err != nil {
 			log.Errorf("error adding datachannel: %s", err)
 			continue
 		}
-
-		label := label
+		l := label
 		n.OnMessage(func(msg webrtc.DataChannelMessage) {
-			s.onMessage(peer.id, label, msg)
+			s.onMessage(peer.id, l, msg)
 		})
 	}
 
 	// Subscribe to publisher streams
-	for pid, p := range s.peers {
-		if pid == peer.id {
-			continue
-		}
+	for _, p := range peers {
 		err := p.publisher.GetRouter().AddDownTracks(peer.subscriber, nil)
 		if err != nil {
 			log.Errorf("Subscribing to router err: %v", err)
@@ -183,10 +188,14 @@ func (s *Session) Subscribe(peer *Peer) {
 }
 
 // Transports returns peers in this session
-func (s *Session) Peers() map[string]*Peer {
+func (s *Session) Peers() []*Peer {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.peers
+	p := make([]*Peer, 0, len(s.peers))
+	for _, peer := range s.peers {
+		p = append(p, peer)
+	}
+	return p
 }
 
 // OnClose is called when the session is closed
