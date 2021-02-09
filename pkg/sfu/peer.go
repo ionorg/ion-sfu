@@ -196,7 +196,7 @@ func (p *Peer) SetRemoteDescription(sdp webrtc.SessionDescription) error {
 
 	if p.negotiationPending {
 		p.negotiationPending = false
-		go p.subscriber.negotiate()
+		p.subscriber.negotiate()
 	}
 
 	return nil
