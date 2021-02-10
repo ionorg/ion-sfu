@@ -70,7 +70,13 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 			}
 		}
 
-		answer, err := p.Join(join.Sid, join.Offer)
+		err = p.Join(join.Sid)
+		if err != nil {
+			replyError(err)
+			break
+		}
+
+		answer, err := p.Answer(join.Offer)
 		if err != nil {
 			replyError(err)
 			break

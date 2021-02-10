@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/bep/debounce"
@@ -75,7 +74,7 @@ func NewSubscriber(id string, cfg WebRTCTransportConfig) (*Subscriber, error) {
 }
 
 func (s *Subscriber) AddDatachannel(peer *Peer, dc *Datachannel) error {
-	ndc, err := s.pc.CreateDataChannel(dc.label, &webrtc.DataChannelInit{})
+	ndc, err := s.pc.CreateDataChannel(dc.Label, &webrtc.DataChannelInit{})
 	if err != nil {
 		return err
 	}
@@ -83,7 +82,7 @@ func (s *Subscriber) AddDatachannel(peer *Peer, dc *Datachannel) error {
 	mws := newDCChain(dc.middlewares)
 	p := mws.Process(ProcessFunc(func(ctx context.Context, args ProcessArgs) {
 		if dc.onMessage != nil {
-			dc.onMessage(ctx, args, peer.session.getDataChannels(peer.id, dc.label))
+			dc.onMessage(ctx, args, peer.session.getDataChannels(peer.id, dc.Label))
 		}
 	}))
 	ndc.OnMessage(func(msg webrtc.DataChannelMessage) {
@@ -94,7 +93,7 @@ func (s *Subscriber) AddDatachannel(peer *Peer, dc *Datachannel) error {
 		})
 	})
 
-	s.channels[dc.label] = ndc
+	s.channels[dc.Label] = ndc
 
 	return nil
 }
@@ -227,32 +226,8 @@ func (s *Subscriber) downTracksReports() {
 				if !dt.bound.get() {
 					continue
 				}
-				now := time.Now().UnixNano()
-				nowNTP := timeToNtp(now)
-				lastPktMs := atomic.LoadInt64(&dt.lastPacketMs)
-				maxPktTs := atomic.LoadUint32(&dt.lastTS)
-				diffTs := uint32((now/1e6)-lastPktMs) * dt.codec.ClockRate / 1000
-				octets, packets := dt.getSRStats()
-				r = append(r, &rtcp.SenderReport{
-					SSRC:        dt.ssrc,
-					NTPTime:     nowNTP,
-					RTPTime:     maxPktTs + diffTs,
-					PacketCount: packets,
-					OctetCount:  octets,
-				})
-				sd = append(sd, rtcp.SourceDescriptionChunk{
-					Source: dt.ssrc,
-					Items: []rtcp.SourceDescriptionItem{{
-						Type: rtcp.SDESCNAME,
-						Text: dt.streamID,
-					}},
-				}, rtcp.SourceDescriptionChunk{
-					Source: dt.ssrc,
-					Items: []rtcp.SourceDescriptionItem{{
-						Type: rtcp.SDESType(15),
-						Text: dt.transceiver.Mid(),
-					}},
-				})
+				r = append(r, dt.CreateSenderReport())
+				sd = append(sd, dt.CreateSourceDescriptionChunks()...)
 			}
 		}
 		s.RUnlock()
@@ -287,19 +262,7 @@ func (s *Subscriber) sendStreamDownTracksReports(streamID string) {
 		if !dt.bound.get() {
 			continue
 		}
-		sd = append(sd, rtcp.SourceDescriptionChunk{
-			Source: dt.ssrc,
-			Items: []rtcp.SourceDescriptionItem{{
-				Type: rtcp.SDESCNAME,
-				Text: dt.streamID,
-			}},
-		}, rtcp.SourceDescriptionChunk{
-			Source: dt.ssrc,
-			Items: []rtcp.SourceDescriptionItem{{
-				Type: rtcp.SDESType(15),
-				Text: dt.transceiver.Mid(),
-			}},
-		})
+		sd = append(sd, dt.CreateSourceDescriptionChunks()...)
 	}
 	s.RUnlock()
 	r = append(r, &rtcp.SourceDescription{Chunks: sd})

@@ -36,8 +36,7 @@ type Receiver interface {
 
 // WebRTCReceiver receives a video track
 type WebRTCReceiver struct {
-	sync.Mutex
-	rtcpMu    sync.RWMutex
+	rtcpMu    sync.Mutex
 	closeOnce sync.Once
 
 	peerID         string
@@ -50,6 +49,7 @@ type WebRTCReceiver struct {
 	receiver       *webrtc.RTPReceiver
 	codec          webrtc.RTPCodecParameters
 	rtcpCh         chan []rtcp.Packet
+	locks          [3]sync.Mutex
 	buffers        [3]*buffer.Buffer
 	upTracks       [3]*webrtc.TrackRemote
 	stats          [3]*stats.Stream
@@ -135,20 +135,20 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 		track.trackType = SimpleDownTrack
 	}
 
-	w.Lock()
+	w.locks[layer].Lock()
 	w.downTracks[layer] = append(w.downTracks[layer], track)
-	w.Unlock()
+	w.locks[layer].Unlock()
 }
 
 func (w *WebRTCReceiver) SubDownTrack(track *DownTrack, layer int) error {
-	w.Lock()
+	w.locks[layer].Lock()
 	if dts := w.downTracks[layer]; dts != nil {
 		w.downTracks[layer] = append(dts, track)
 	} else {
-		w.Unlock()
+		w.locks[layer].Unlock()
 		return errNoReceiverFound
 	}
-	w.Unlock()
+	w.locks[layer].Unlock()
 	return nil
 }
 
@@ -179,7 +179,7 @@ func (w *WebRTCReceiver) OnCloseHandler(fn func()) {
 
 // DeleteDownTrack removes a DownTrack from a Receiver
 func (w *WebRTCReceiver) DeleteDownTrack(layer int, id string) {
-	w.Lock()
+	w.locks[layer].Lock()
 	idx := -1
 	for i, dt := range w.downTracks[layer] {
 		if dt.peerID == id {
@@ -188,13 +188,13 @@ func (w *WebRTCReceiver) DeleteDownTrack(layer int, id string) {
 		}
 	}
 	if idx == -1 {
-		w.Unlock()
+		w.locks[layer].Unlock()
 		return
 	}
 	w.downTracks[layer][idx] = w.downTracks[layer][len(w.downTracks[layer])-1]
 	w.downTracks[layer][len(w.downTracks[layer])-1] = nil
 	w.downTracks[layer] = w.downTracks[layer][:len(w.downTracks[layer])-1]
-	w.Unlock()
+	w.locks[layer].Unlock()
 }
 
 func (w *WebRTCReceiver) SendRTCP(p []rtcp.Packet) {
@@ -262,28 +262,42 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 
 func (w *WebRTCReceiver) writeRTP(layer int) {
 	defer func() {
-		w.closeTracks(layer)
-		w.nackWorker.Stop()
-		if w.onCloseHandler != nil {
-			w.closeOnce.Do(w.onCloseHandler)
-		}
+		w.closeOnce.Do(func() {
+			go w.closeTracks()
+		})
 	}()
+	var del []int
 	for pkt := range w.buffers[layer].PacketChan() {
-		w.Lock()
-		for _, dt := range w.downTracks[layer] {
+		w.locks[layer].Lock()
+		for idx, dt := range w.downTracks[layer] {
 			if err := dt.WriteRTP(pkt); err == io.EOF {
-				go w.DeleteDownTrack(layer, dt.id)
+				del = append(del, idx)
 			}
 		}
-		w.Unlock()
+		if len(del) > 0 {
+			for _, idx := range del {
+				w.downTracks[layer][idx] = w.downTracks[layer][len(w.downTracks[layer])-1]
+				w.downTracks[layer][len(w.downTracks[layer])-1] = nil
+				w.downTracks[layer] = w.downTracks[layer][:len(w.downTracks[layer])-1]
+			}
+			del = del[:0]
+		}
+		w.locks[layer].Unlock()
 	}
 }
 
 // closeTracks close all tracks from Receiver
-func (w *WebRTCReceiver) closeTracks(layer int) {
-	w.Lock()
-	defer w.Unlock()
-	for _, dt := range w.downTracks[layer] {
-		dt.Close()
+func (w *WebRTCReceiver) closeTracks() {
+	for idx, layer := range w.downTracks {
+		w.locks[idx].Lock()
+		for _, dt := range layer {
+			dt.Close()
+		}
+		w.downTracks[idx] = w.downTracks[idx][:0]
+		w.locks[idx].Unlock()
+	}
+	w.nackWorker.Stop()
+	if w.onCloseHandler != nil {
+		w.onCloseHandler()
 	}
 }

@@ -35,6 +35,7 @@ type SessionProvider interface {
 type Peer struct {
 	sync.Mutex
 	id       string
+	closed   atomicBool
 	session  *Session
 	provider SessionProvider
 
@@ -56,11 +57,11 @@ func NewPeer(provider SessionProvider) *Peer {
 	}
 }
 
-// Join initializes this peer for a given sessionID (takes an SDPOffer)
-func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
+// Join initializes this peer for a given sessionID
+func (p *Peer) Join(sid string) error {
 	if p.publisher != nil {
 		log.Debugf("peer already exists")
-		return nil, ErrTransportExists
+		return ErrTransportExists
 	}
 
 	pid := cuid.New()
@@ -74,16 +75,16 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 
 	p.subscriber, err = NewSubscriber(pid, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("error creating transport: %v", err)
+		return fmt.Errorf("error creating transport: %v", err)
 	}
 	p.publisher, err = NewPublisher(p.session, pid, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("error creating transport: %v", err)
+		return fmt.Errorf("error creating transport: %v", err)
 	}
 
 	for _, dc := range p.session.datachannels {
 		if err := p.subscriber.AddDatachannel(p, dc); err != nil {
-			return nil, fmt.Errorf("error setting subscriber default dc datachannel")
+			return fmt.Errorf("error setting subscriber default dc datachannel")
 		}
 	}
 
@@ -104,7 +105,7 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 		}
 
 		p.remoteAnswerPending = true
-		if p.OnOffer != nil {
+		if p.OnOffer != nil && !p.closed.get() {
 			log.Infof("peer %s send offer", p.id)
 			p.OnOffer(&offer)
 		}
@@ -116,13 +117,9 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 			return
 		}
 
-		p.Lock()
-		handler := p.OnIceCandidate
-		p.Unlock()
-
-		if handler != nil {
+		if p.OnIceCandidate != nil && !p.closed.get() {
 			json := c.ToJSON()
-			handler(&json, subscriber)
+			p.OnIceCandidate(&json, subscriber)
 		}
 	})
 
@@ -132,23 +129,15 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 			return
 		}
 
-		p.Lock()
-		handler := p.OnIceCandidate
-		p.Unlock()
-
-		if handler != nil {
+		if p.OnIceCandidate != nil && !p.closed.get() {
 			json := c.ToJSON()
-			handler(&json, publisher)
+			p.OnIceCandidate(&json, publisher)
 		}
 	})
 
 	p.publisher.OnICEConnectionStateChange(func(s webrtc.ICEConnectionState) {
-		p.Lock()
-		handler := p.OnICEConnectionStateChange
-		p.Unlock()
-
-		if handler != nil {
-			handler(s)
+		if p.OnICEConnectionStateChange != nil && !p.closed.get() {
+			p.OnICEConnectionStateChange(s)
 		}
 	})
 
@@ -156,16 +145,9 @@ func (p *Peer) Join(sid string, sdp webrtc.SessionDescription) (*webrtc.SessionD
 
 	log.Infof("peer %s join session %s", p.id, sid)
 
-	answer, err := p.publisher.Answer(sdp)
-	if err != nil {
-		return nil, fmt.Errorf("error setting remote description: %v", err)
-	}
-
-	log.Infof("peer %s send answer", p.id)
-
 	p.session.Subscribe(p)
 
-	return &answer, nil
+	return nil
 }
 
 // Answer an offer from remote
@@ -207,7 +189,7 @@ func (p *Peer) SetRemoteDescription(sdp webrtc.SessionDescription) error {
 
 	if p.negotiationPending {
 		p.negotiationPending = false
-		go p.subscriber.negotiate()
+		p.subscriber.negotiate()
 	}
 
 	return nil
@@ -237,9 +219,7 @@ func (p *Peer) Close() error {
 	p.Lock()
 	defer p.Unlock()
 
-	p.OnOffer = nil
-	p.OnIceCandidate = nil
-	p.OnICEConnectionStateChange = nil
+	p.closed.set(true)
 
 	if p.session != nil {
 		p.session.RemovePeer(p.id)

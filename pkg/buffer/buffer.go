@@ -391,9 +391,9 @@ func (b *Buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
 func (b *Buffer) buildReceptionReport() rtcp.ReceptionReport {
 	extMaxSeq := b.cycles | uint32(b.maxSeqNo)
 	expected := extMaxSeq - uint32(b.baseSN) + 1
-	lost := expected - b.stats.PacketCount
-	if b.stats.PacketCount == 0 {
-		lost = 0
+	lost := uint32(0)
+	if b.stats.PacketCount < expected && b.stats.PacketCount != 0 {
+		lost = expected - b.stats.PacketCount
 	}
 	expectedInterval := expected - b.stats.LastExpected
 	b.stats.LastExpected = expected
