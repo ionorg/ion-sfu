@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/improbable-eng/grpc-web/go/grpcweb"
-	log "github.com/pion/ion-log"
 	pb "github.com/pion/ion-sfu/cmd/signal/grpc/proto"
+	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/soheilhy/cmux"
 	"golang.org/x/sync/errgroup"

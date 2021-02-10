@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/pion/ion-log"
+	log "github.com/pion/ion-sfu/pkg/logger"
 
 	"github.com/gammazero/workerpool"
 	"github.com/pion/ion-sfu/pkg/buffer"

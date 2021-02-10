@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/pion/dtls/v2"
-	log "github.com/pion/ion-log"
+	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/logging"
 	"github.com/pion/turn/v2"
 )

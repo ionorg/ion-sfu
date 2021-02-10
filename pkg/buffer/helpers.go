@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync/atomic"
 
-	log "github.com/pion/ion-log"
+	log "github.com/pion/ion-sfu/pkg/logger"
 )
 
 var (

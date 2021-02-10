@@ -3,8 +3,8 @@ package sfu
 import (
 	"sync"
 
-	log "github.com/pion/ion-log"
 	"github.com/pion/ion-sfu/pkg/buffer"
+	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/ion-sfu/pkg/stats"
 	"github.com/pion/ion-sfu/pkg/twcc"
 	"github.com/pion/rtcp"

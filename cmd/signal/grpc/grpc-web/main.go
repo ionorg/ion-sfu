@@ -8,7 +8,7 @@ import (
 
 	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
 
-	log "github.com/pion/ion-log"
+	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/spf13/viper"
 

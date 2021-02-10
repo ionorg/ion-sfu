@@ -6,8 +6,8 @@ import (
 	"io"
 	"sync"
 
-	log "github.com/pion/ion-log"
 	pb "github.com/pion/ion-sfu/cmd/signal/grpc/proto"
+	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/pion/webrtc/v3"
 	"google.golang.org/grpc/codes"

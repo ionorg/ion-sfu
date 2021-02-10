@@ -6,8 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	log "github.com/pion/ion-log"
 	"github.com/pion/ion-sfu/pkg/buffer"
+	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/rtcp"
 	"github.com/pion/transport/packetio"
 	"github.com/pion/webrtc/v3"

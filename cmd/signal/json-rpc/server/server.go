@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	log "github.com/pion/ion-log"
+	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/pion/webrtc/v3"
 	"github.com/sourcegraph/jsonrpc2"

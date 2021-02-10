@@ -4,10 +4,10 @@ import (
 	"net"
 	"net/http"
 
+	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	log "github.com/pion/ion-log"
 	pb "github.com/pion/ion-sfu/cmd/signal/grpc/proto"
 	grpcServer "github.com/pion/ion-sfu/cmd/signal/grpc/server"
 	jsonrpcServer "github.com/pion/ion-sfu/cmd/signal/json-rpc/server"

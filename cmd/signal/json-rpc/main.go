@@ -10,8 +10,8 @@ import (
 	"os"
 
 	"github.com/gorilla/websocket"
-	log "github.com/pion/ion-log"
 	"github.com/pion/ion-sfu/cmd/signal/json-rpc/server"
+	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
 	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/prometheus/client_golang/prometheus/promhttp"

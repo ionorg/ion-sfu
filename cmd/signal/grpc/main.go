@@ -11,9 +11,9 @@ import (
 	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	log "github.com/pion/ion-log"
 	pb "github.com/pion/ion-sfu/cmd/signal/grpc/proto"
 	"github.com/pion/ion-sfu/cmd/signal/grpc/server"
+	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/viper"
