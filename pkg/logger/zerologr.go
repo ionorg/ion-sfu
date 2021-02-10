@@ -38,6 +38,11 @@ var (
 	mu  sync.RWMutex
 )
 
+// this prevents from using non-initialised logger
+func init() {
+	log = New()
+}
+
 type Zerologr interface {
 	logr.Logger
 	Infof(string, ...interface{})
