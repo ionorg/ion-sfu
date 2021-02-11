@@ -202,13 +202,13 @@ func Errorf(format string, v ...interface{}) {
 // Panicf generates a panic event and stop all underlying goroutines
 func (l logger) Panicf(format string, v ...interface{}) {
 	msg := l.l.Panic()
-	msg.Msgf(format, v)
+	msg.Msgf(format, v...)
 }
 
 func Panicf(format string, v ...interface{}) {
 	mu.RLock()
 	defer mu.RUnlock()
-	log.Panicf(format, v)
+	log.Panicf(format, v...)
 }
 
 // Debugf prints debug message with given format
