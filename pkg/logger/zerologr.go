@@ -40,7 +40,9 @@ var (
 
 // this prevents from using non-initialised logger
 func init() {
-	log = New()
+	fixByFile := []string{"asm_amd64.s", "proc.go", "zerologr.go"}
+	fixByFunc := []string{"Debugf", "Infof", "Warnf"}
+	Init("debug", fixByFile, fixByFunc)
 }
 
 type Zerologr interface {
