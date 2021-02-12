@@ -367,7 +367,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 							err = p.remotePub.SetLocalDescription(offer)
 							assert.NoError(t, err)
 							<-gatherComplete
-							err = p.local.Join("test")
+							err = p.local.Join("test sid", "test uid")
 							assert.NoError(t, err)
 							answer, err := p.local.Answer(*p.remotePub.LocalDescription())
 							err = p.remotePub.SetRemoteDescription(*answer)
