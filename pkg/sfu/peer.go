@@ -247,3 +247,8 @@ func (p *Peer) Publisher() *Publisher {
 func (p *Peer) Session() *Session {
 	return p.session
 }
+
+// ID return the peer id
+func (p *Peer) ID() string {
+	return p.id
+}
