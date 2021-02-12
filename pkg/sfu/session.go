@@ -231,3 +231,8 @@ func (s *Session) audioLevelObserver(audioLevelInterval int) {
 		}
 	}
 }
+
+// ID return session id
+func (s *Session) ID() string {
+	return s.id
+}
