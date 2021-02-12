@@ -148,7 +148,7 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 				}
 			}
 
-			err = peer.Join(payload.Join.Sid)
+			err = peer.Join(payload.Join.Sid, payload.Join.Uid)
 			if err != nil {
 				switch err {
 				case sfu.ErrTransportExists:
