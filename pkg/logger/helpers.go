@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -15,20 +16,57 @@ func getZerologLevel(level string) zerolog.Level {
 	zerologlvl := zerolog.GlobalLevel()
 	switch level {
 	case "trace":
-		zerologlvl = zerolog.TraceLevel
+		zerologlvl = traceVLevel
 	case "debug":
-		zerologlvl = zerolog.DebugLevel
+		zerologlvl = debugVLevel
 	case "info":
-		zerologlvl = zerolog.InfoLevel
+		zerologlvl = defaultVLevel
 	case "warn":
-		zerologlvl = zerolog.WarnLevel
+		zerologlvl = 0
 	case "error":
-		zerologlvl = zerolog.ErrorLevel
+		zerologlvl = 0
 	}
 	return zerologlvl
 }
 
-func getOutputFormat(level string, fixByFile, fixByFunc []string) zerolog.ConsoleWriter {
+func getCallerFuncAndFile() (string, string, int) {
+	// Took this function from https://github.com/projectcalico/libcalico-go/blob/3d85c5968bd031dd6f0bfbefe753f22d1f0ef250/lib/logutils/logutils.go#L162
+	pcs := make([]uintptr, 10)
+	if numEntries := runtime.Callers(1, pcs); numEntries > 0 {
+		pcs = pcs[:numEntries]
+		frames := runtime.CallersFrames(pcs)
+		for {
+			frame, more := frames.Next()
+			if !shouldSkipFrame(frame) {
+				// We found the frame we were looking for.  Record its file/line number.
+				return path.Base(frame.File), strings.TrimPrefix(frame.Function, "."), frame.Line
+			}
+			if !more {
+				return "", "", 0
+			}
+		}
+	}
+	return "", "", 0
+}
+
+func shouldSkipFrame(frame runtime.Frame) bool {
+	if strings.HasSuffix(frame.File, "/helpers.go") ||
+		strings.HasSuffix(frame.File, "/console.go") ||
+		strings.HasSuffix(frame.File, "/zerologr.go") {
+		if strings.Contains(frame.File, "/zerolog") {
+			return true
+		}
+	}
+	if strings.HasSuffix(frame.File, "/logger/helpers.go") {
+		if strings.Contains(frame.File, "pion/ion-sfu") {
+			return true
+		}
+	}
+	return false
+}
+
+// func getOutputFormat(level string, fixByFile, fixByFunc []string) zerolog.ConsoleWriter {
+func getOutputFormat() zerolog.ConsoleWriter {
 	output := zerolog.ConsoleWriter{Out: os.Stdout, NoColor: false, TimeFormat: timeFormat}
 	output.FormatTimestamp = func(i interface{}) string {
 		return "[" + i.(string) + "]"
@@ -37,26 +75,8 @@ func getOutputFormat(level string, fixByFile, fixByFunc []string) zerolog.Consol
 		return strings.ToUpper(fmt.Sprintf("[%-3s]", i))
 	}
 	output.FormatMessage = func(i interface{}) string {
-		caller, file, line, _ := runtime.Caller(9)
-		fileName := filepath.Base(file)
-		funcName := strings.TrimPrefix(filepath.Ext((runtime.FuncForPC(caller).Name())), ".")
-		var needfix bool
-		for _, b := range fixByFile {
-			if strings.Contains(fileName, b) {
-				needfix = true
-			}
-		}
-		for _, b := range fixByFunc {
-			if strings.Contains(funcName, b) {
-				needfix = true
-			}
-		}
-		if needfix {
-			caller, file, line, _ = runtime.Caller(8)
-			fileName = filepath.Base(file)
-			funcName = strings.TrimPrefix(filepath.Ext((runtime.FuncForPC(caller).Name())), ".")
-		}
-		return fmt.Sprintf("[%d][%s][%s] => %s", line, fileName, funcName, i)
+		_, file, line, _ := runtime.Caller(8)
+		return fmt.Sprintf("[%s:%d] => %s", filepath.Base(file), line, i)
 	}
 	return output
 }

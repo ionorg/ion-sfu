@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/buffer"
-	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/rtcp"
 	"github.com/pion/transport/packetio"
 	"github.com/pion/webrtc/v3"
@@ -166,7 +165,7 @@ func (d *DownTrack) Mute(val bool) {
 // Close track
 func (d *DownTrack) Close() {
 	d.closeOnce.Do(func() {
-		log.Debugf("Closing sender %s", d.peerID)
+		logger.V(2).Info("Closing sender", "peer_id", d.peerID)
 		if d.payload != nil {
 			packetFactory.Put(d.payload)
 		}
@@ -306,7 +305,7 @@ func (d *DownTrack) writeSimpleRTP(extPkt buffer.ExtPacket) error {
 
 	_, err := d.writeStream.WriteRTP(&extPkt.Packet.Header, extPkt.Packet.Payload)
 	if err != nil {
-		log.Errorf("Write packet err %v", err)
+		logger.Error(err, "Write packet err")
 	}
 	return err
 }
@@ -418,7 +417,7 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 
 	_, err := d.writeStream.WriteRTP(&extPkt.Packet.Header, extPkt.Packet.Payload)
 	if err != nil {
-		log.Errorf("Write packet err %v", err)
+		logger.Error(err, "Write packet err")
 	}
 
 	return err
@@ -431,7 +430,7 @@ func (d *DownTrack) handleRTCP(bytes []byte) {
 
 	pkts, err := rtcp.Unmarshal(bytes)
 	if err != nil {
-		log.Errorf("Unmarshal rtcp receiver packets err: %v", err)
+		logger.Error(err, "Unmarshal rtcp receiver packets err")
 	}
 
 	var fwdPkts []rtcp.Packet

@@ -102,7 +102,7 @@ func main() {
 	}
 	fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go", "jsonrpc2"}
 	fixByFunc := []string{"Handle"}
-	log.Init(conf.Log.Level, fixByFile, fixByFunc)
+	log.Init("", fixByFile, fixByFunc)
 	log.Infof("--- Starting SFU Node ---")
 
 	node := server.New(conf.Config)

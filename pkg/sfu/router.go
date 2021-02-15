@@ -4,7 +4,6 @@ import (
 	"sync"
 
 	"github.com/pion/ion-sfu/pkg/buffer"
-	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/ion-sfu/pkg/stats"
 	"github.com/pion/ion-sfu/pkg/twcc"
 	"github.com/pion/rtcp"
@@ -117,7 +116,7 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 	rtcpReader.OnPacket(func(bytes []byte) {
 		pkts, err := rtcp.Unmarshal(bytes)
 		if err != nil {
-			log.Errorf("Unmarshal rtcp receiver packets err: %v", err)
+			logger.Error(err, "Unmarshal rtcp receiver packets err")
 			return
 		}
 		for _, pkt := range pkts {
@@ -251,7 +250,7 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 				if err == webrtc.ErrConnectionClosed {
 					return
 				}
-				log.Errorf("Error closing down track: %v", err)
+				logger.Error(err, "Error closing down track")
 			} else {
 				sub.RemoveDownTrack(recv.StreamID(), downTrack)
 				sub.negotiate()
@@ -280,7 +279,7 @@ func (r *router) sendRTCP() {
 		select {
 		case pkts := <-r.rtcpCh:
 			if err := r.peer.WriteRTCP(pkts); err != nil {
-				log.Errorf("Write rtcp to peer %s err :%v", r.id, err)
+				logger.Error(err, "Write rtcp to peer err", "peer_id", r.id)
 			}
 		case <-r.stopCh:
 			return

@@ -20,27 +20,25 @@ package logger
 
 import (
 	"fmt"
-	"os"
-	"sync"
 
 	"github.com/go-logr/logr"
 	"github.com/rs/zerolog"
 )
 
 const (
-	debugVerbosity = 2
-	traceVerbosity = 8
-	timeFormat     = "2006-01-02 15:04:05.000"
+	debugVLevel   = 2
+	traceVLevel   = 3
+	defaultVLevel = 1
+	timeFormat    = "2006-01-02 15:04:05.000"
 )
 
 var (
 	log Zerologr
-	mu  sync.RWMutex
 )
 
 // this prevents from using non-initialised logger
 func init() {
-	fixByFile := []string{"asm_amd64.s", "proc.go", "zerologr.go"}
+	fixByFile := []string{"zerologr.go"}
 	fixByFunc := []string{"Debugf", "Infof", "Warnf"}
 	Init("debug", fixByFile, fixByFunc)
 }
@@ -52,52 +50,21 @@ type Zerologr interface {
 	Panicf(string, ...interface{})
 }
 
-// Config seems like isn't somewhere used, so just leave it here to don't let old code fail
-type Config struct {
-	Level string `mapstructure:"level"`
-}
+// // Config defines parameters for the logger
+// type Level struct {
+// 	string
+// }
 
-// Start creates and starts logger that has the same output to pion/ion-log
-func Init(level string, fixByFile, fixByFunc []string) {
-
-	zerolog.TimeFieldFormat = timeFormat
-
-	logLevel := getZerologLevel(level)
-	output := getOutputFormat(level, fixByFile, fixByFunc)
-	l := zerolog.New(output).Level(logLevel).With().Timestamp().Logger()
-
-	o := Options{
-		Name:   "",
-		Logger: &l,
-	}
-	mu.Lock()
-	log = NewWithOptions(o)
-	mu.Unlock()
-}
-
-// New returns a logr.Logger which is implemented by zerolog.
-func New() Zerologr {
-	return NewWithOptions(Options{})
-}
-
-// NewWithOptions returns a logr.Logger which is implemented by zerolog.
-func NewWithOptions(opts Options) Zerologr {
-	if opts.Logger == nil {
-		l := zerolog.New(os.Stdout).With().Timestamp().Logger()
-		opts.Logger = &l
-	}
-	return logger{
-		l:         opts.Logger,
-		verbosity: int(opts.Logger.GetLevel()),
-		prefix:    opts.Name,
-		values:    nil,
-	}
-}
+// type level interface {
+// 	SetLevelString(string)
+// 	SetLevel(int)
+// }
 
 // Options that can be passed to NewWithOptions
 type Options struct {
 	// Name is an optional name of the logger
-	Name string
+	Name  string
+	Level string
 	// Logger is an instance of zerolog, if nil a default logger is used
 	Logger *zerolog.Logger
 }
@@ -110,12 +77,75 @@ type logger struct {
 	values    []interface{}
 }
 
+// Init creates and starts logger that has the same output to pion/ion-log
+func Init(level string, fixByFile, fixByFunc []string) {
+
+	zerolog.TimeFieldFormat = timeFormat
+
+	logLevel := getZerologLevel(level)
+	output := getOutputFormat()
+	l := zerolog.New(output).Level(logLevel).With().Timestamp().Logger()
+
+	o := Options{
+		Name:   "",
+		Logger: &l,
+	}
+	log = NewWithOptionsZerologr(o)
+}
+
+// New returns a logr.Logger which is implemented by zerolog.
+func NewZerologr() Zerologr {
+	return NewWithOptionsZerologr(Options{})
+}
+
+// New returns a logr.Logger which is implemented by zerolog.
+func New() logr.Logger {
+	return NewWithOptionsZerologr(Options{})
+}
+
+// NewWithOptionsZerologr returns a logr.Logger which is implemented by zerolog.
+func NewWithOptionsZerologr(opts Options) Zerologr {
+	if opts.Logger == nil {
+		zerolog.TimeFieldFormat = timeFormat
+
+		logLevel := getZerologLevel(opts.Level)
+		output := getOutputFormat()
+		l := zerolog.New(output).Level(logLevel).With().Timestamp().Logger()
+		opts.Logger = &l
+	}
+	return logger{
+		l:         opts.Logger,
+		verbosity: int(opts.Logger.GetLevel()),
+		prefix:    opts.Name,
+		values:    nil,
+	}
+}
+
+// NewWithOptions returns a logr.Logger which is implemented by zerolog.
+func NewWithOptions(opts Options) logr.Logger {
+
+	if opts.Logger == nil {
+		zerolog.TimeFieldFormat = timeFormat
+		logLevel := getZerologLevel(opts.Level)
+		output := getOutputFormat()
+		l := zerolog.New(output).Level(logLevel).With().Timestamp().Logger()
+		opts.Logger = &l
+	}
+
+	return logger{
+		l:         opts.Logger,
+		verbosity: int(opts.Logger.GetLevel()),
+		prefix:    opts.Name,
+		values:    nil,
+	}
+}
+
 func (l logger) Info(msg string, keysAndVals ...interface{}) {
 	if l.Enabled() {
 		var e *zerolog.Event
-		if l.verbosity < debugVerbosity {
+		if l.verbosity < debugVLevel {
 			e = l.l.Info()
-		} else if l.verbosity < traceVerbosity {
+		} else if l.verbosity < traceVLevel {
 			e = l.l.Debug()
 		} else {
 			e = l.l.Trace()
@@ -131,9 +161,9 @@ func (l logger) Info(msg string, keysAndVals ...interface{}) {
 
 func (l logger) Enabled() bool {
 	var lvl zerolog.Level
-	if l.verbosity < debugVerbosity {
+	if l.verbosity < debugVLevel {
 		lvl = zerolog.InfoLevel
-	} else if l.verbosity < traceVerbosity {
+	} else if l.verbosity < traceVLevel {
 		lvl = zerolog.DebugLevel
 	} else {
 		lvl = zerolog.TraceLevel
@@ -183,8 +213,6 @@ func (l logger) Infof(format string, v ...interface{}) {
 }
 
 func Infof(format string, v ...interface{}) {
-	mu.RLock()
-	defer mu.RUnlock()
 	log.Info(fmt.Sprintf(format, v...))
 }
 
@@ -194,8 +222,6 @@ func (l logger) Errorf(format string, v ...interface{}) {
 }
 
 func Errorf(format string, v ...interface{}) {
-	mu.RLock()
-	defer mu.RUnlock()
 	log.Error(nil, fmt.Sprintf(format, v...))
 }
 
@@ -206,21 +232,15 @@ func (l logger) Panicf(format string, v ...interface{}) {
 }
 
 func Panicf(format string, v ...interface{}) {
-	mu.RLock()
-	defer mu.RUnlock()
 	log.Panicf(format, v...)
 }
 
 // Debugf prints debug message with given format
 func Debugf(format string, v ...interface{}) {
-	mu.RLock()
-	defer mu.RUnlock()
 	log.Info(fmt.Sprintf(format, v...))
 }
 
 // Debugf prints warning message with given format
 func Warnf(format string, v ...interface{}) {
-	mu.RLock()
-	defer mu.RUnlock()
 	log.Info(fmt.Sprintf(format, v...))
 }

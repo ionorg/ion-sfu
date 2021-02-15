@@ -130,10 +130,11 @@ func addMedia(done <-chan struct{}, t *testing.T, pc *webrtc.PeerConnection, med
 }
 
 func TestSFU_SessionScenarios(t *testing.T) {
-	fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go", "jsonrpc2"}
-	fixByFunc := []string{"Handle"}
-	log.Init("trace", fixByFile, fixByFunc)
-	sfu := NewSFU(Config{Log: log.Config{Level: "trace"}})
+	sfu := NewSFU(
+		Config{
+			Logger: log.NewWithOptions(log.Options{Level: "trace"}),
+		},
+	)
 	sfu.NewDatachannel(APIChannelLabel)
 	tests := []struct {
 		name  string

@@ -4,8 +4,6 @@ import (
 	"encoding/binary"
 	"sync"
 	"time"
-
-	log "github.com/pion/ion-log"
 )
 
 const (
@@ -106,7 +104,7 @@ func (n *sequencer) push(sn, offSn uint16, timeStamp uint32, layer uint8, head b
 		step = n.step - int(n.headSN-offSn)
 		if step < 0 {
 			if step*-1 >= maxPacketMetaHistory {
-				log.Warnf("old packet received, can not be sequenced, head: %d received: %d", sn, offSn)
+				logger.V(0).Info("Old packet received, can not be sequenced", "head", sn, "received", offSn)
 				return packetMeta{}
 			}
 			step = maxPacketMetaHistory + step
