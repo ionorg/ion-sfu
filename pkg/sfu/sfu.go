@@ -221,3 +221,10 @@ func (s *SFU) NewDatachannel(label string) *Datachannel {
 	s.datachannels = append(s.datachannels, dc)
 	return dc
 }
+
+// GetSessions return all sessions
+func (s *SFU) GetSessions() map[string]*Session {
+	s.RLock()
+	defer s.RUnlock()
+	return s.sessions
+}

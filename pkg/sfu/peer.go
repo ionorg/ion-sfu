@@ -66,14 +66,16 @@ func (p *Peer) GetDataChannel(label string) *webrtc.DataChannel {
 }
 
 // Join initializes this peer for a given sessionID
-func (p *Peer) Join(sid string) error {
+func (p *Peer) Join(sid, uid string) error {
 	if p.publisher != nil {
 		log.Debugf("peer already exists")
 		return ErrTransportExists
 	}
 
-	pid := cuid.New()
-	p.id = pid
+	if uid == "" {
+		uid = cuid.New()
+	}
+	p.id = uid
 	var (
 		cfg WebRTCTransportConfig
 		err error
@@ -81,11 +83,11 @@ func (p *Peer) Join(sid string) error {
 
 	p.session, cfg = p.provider.GetSession(sid)
 
-	p.subscriber, err = NewSubscriber(pid, cfg)
+	p.subscriber, err = NewSubscriber(uid, cfg)
 	if err != nil {
 		return fmt.Errorf("error creating transport: %v", err)
 	}
-	p.publisher, err = NewPublisher(p.session, pid, cfg)
+	p.publisher, err = NewPublisher(p.session, uid, cfg)
 	if err != nil {
 		return fmt.Errorf("error creating transport: %v", err)
 	}
@@ -253,4 +255,9 @@ func (p *Peer) Publisher() *Publisher {
 
 func (p *Peer) Session() *Session {
 	return p.session
+}
+
+// ID return the peer id
+func (p *Peer) ID() string {
+	return p.id
 }
