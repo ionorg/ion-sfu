@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// package zerologr defines an implementation of the github.com/go-logr/logr
-// interfaces built on top of zerolog (github.com/rs/zerolog).
-
+// package logger defines a default implementation of the github.com/go-logr/logr
+// interfaces built on top of zerolog (github.com/rs/zerolog) and is the default
+// implementation for ion-sfu released binaries.
 package logger
 
 import (
