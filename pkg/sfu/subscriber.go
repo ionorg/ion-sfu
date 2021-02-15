@@ -98,6 +98,11 @@ func (s *Subscriber) AddDatachannel(peer *Peer, dc *Datachannel) error {
 	return nil
 }
 
+// DataChannel returns the channel for a label
+func (s *Subscriber) DataChannel(label string) *webrtc.DataChannel {
+	return s.channels[label]
+}
+
 func (s *Subscriber) OnNegotiationNeeded(f func()) {
 	debounced := debounce.New(250 * time.Millisecond)
 	s.negotiate = func() {
