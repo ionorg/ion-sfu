@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/go-logr/logr"
 	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
@@ -20,6 +21,8 @@ const (
 
 	reportDelta = 1e9
 )
+
+var logger logr.Logger
 
 type pendingPackets struct {
 	arrivalTime int64
@@ -101,6 +104,7 @@ type Stats struct {
 type Options struct {
 	BufferTime int
 	MaxBitRate uint64
+	Logger     logr.Logger
 }
 
 // NewBuffer constructs a new Buffer
@@ -121,6 +125,11 @@ func (b *Buffer) PacketChan() chan ExtPacket {
 func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 	b.Lock()
 	defer b.Unlock()
+	if o.Logger == nil {
+		logger = log.New().WithName("BufferLogger")
+	} else {
+		logger = o.Logger.WithName("BufferLogger")
+	}
 	codec := params.Codecs[0]
 	b.clockRate = codec.ClockRate
 	b.maxBitrate = o.MaxBitRate
@@ -148,13 +157,13 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 		for _, fb := range codec.RTCPFeedback {
 			switch fb.Type {
 			case webrtc.TypeRTCPFBGoogREMB:
-				log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBGoogREMB)
+				logger.V(2).Info("Setting feedback", "type", "webrtc.TypeRTCPFBGoogREMB")
 				b.remb = true
 			case webrtc.TypeRTCPFBTransportCC:
-				log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBTransportCC)
+				logger.V(2).Info("Setting feedback", "type", webrtc.TypeRTCPFBTransportCC)
 				b.twcc = true
 			case webrtc.TypeRTCPFBNACK:
-				log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBNACK)
+				logger.V(2).Info("Setting feedback", "type", webrtc.TypeRTCPFBNACK)
 				b.nack = true
 			}
 		}
@@ -188,7 +197,7 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 	b.pPackets = nil
 	b.bound = true
 
-	log.Debugf("NewBuffer BufferOptions=%v", o)
+	logger.V(2).Info("NewBuffer", "BufferTime", o.BufferTime, "MaxBitRate", o.MaxBitRate)
 }
 
 // Write adds a RTP Packet, out of order, new packet may be arrived later

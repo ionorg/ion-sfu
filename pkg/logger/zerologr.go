@@ -50,16 +50,6 @@ type Zerologr interface {
 	Panicf(string, ...interface{})
 }
 
-// // Config defines parameters for the logger
-// type Level struct {
-// 	string
-// }
-
-// type level interface {
-// 	SetLevelString(string)
-// 	SetLevel(int)
-// }
-
 // Options that can be passed to NewWithOptions
 type Options struct {
 	// Name is an optional name of the logger

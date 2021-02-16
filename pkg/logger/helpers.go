@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -27,42 +26,6 @@ func getZerologLevel(level string) zerolog.Level {
 		zerologlvl = 0
 	}
 	return zerologlvl
-}
-
-func getCallerFuncAndFile() (string, string, int) {
-	// Took this function from https://github.com/projectcalico/libcalico-go/blob/3d85c5968bd031dd6f0bfbefe753f22d1f0ef250/lib/logutils/logutils.go#L162
-	pcs := make([]uintptr, 10)
-	if numEntries := runtime.Callers(1, pcs); numEntries > 0 {
-		pcs = pcs[:numEntries]
-		frames := runtime.CallersFrames(pcs)
-		for {
-			frame, more := frames.Next()
-			if !shouldSkipFrame(frame) {
-				// We found the frame we were looking for.  Record its file/line number.
-				return path.Base(frame.File), strings.TrimPrefix(frame.Function, "."), frame.Line
-			}
-			if !more {
-				return "", "", 0
-			}
-		}
-	}
-	return "", "", 0
-}
-
-func shouldSkipFrame(frame runtime.Frame) bool {
-	if strings.HasSuffix(frame.File, "/helpers.go") ||
-		strings.HasSuffix(frame.File, "/console.go") ||
-		strings.HasSuffix(frame.File, "/zerologr.go") {
-		if strings.Contains(frame.File, "/zerolog") {
-			return true
-		}
-	}
-	if strings.HasSuffix(frame.File, "/logger/helpers.go") {
-		if strings.Contains(frame.File, "pion/ion-sfu") {
-			return true
-		}
-	}
-	return false
 }
 
 // func getOutputFormat(level string, fixByFile, fixByFunc []string) zerolog.ConsoleWriter {

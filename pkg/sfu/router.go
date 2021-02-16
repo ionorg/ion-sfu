@@ -177,6 +177,7 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 	buff.Bind(receiver.GetParameters(), buffer.Options{
 		BufferTime: r.config.MaxBufferTime,
 		MaxBitRate: r.config.MaxBandwidth,
+		Logger:     logger,
 	})
 
 	if r.config.WithStats {

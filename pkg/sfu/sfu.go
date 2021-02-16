@@ -163,7 +163,7 @@ func NewSFU(c Config) *SFU {
 	if c.Logger == nil {
 		logger = log.New().WithName("SFULogger")
 	} else {
-		logger = c.Logger
+		logger = c.Logger.WithName("SFULogger")
 	}
 
 	w := NewWebRTCTransportConfig(c)
