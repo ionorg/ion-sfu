@@ -11,15 +11,11 @@ import (
 	"github.com/spf13/viper"
 )
 
-const (
-	portRangeLimit = 1024
-)
-
 var (
-	file                string
-	cert                string
-	key                 string
-	gaddr, jaddr, paddr string
+	file                       string
+	cert                       string
+	key                        string
+	gaddr, jaddr, paddr, maddr string
 )
 
 // Config defines parameters for configuring the sfu instance
@@ -40,6 +36,7 @@ func showHelp() {
 	fmt.Println("      -jaddr {jsonrpc listen addr}")
 	fmt.Println("      -paddr {pprof listen addr}")
 	fmt.Println("             {grpc and jsonrpc addrs should be set at least one}")
+	fmt.Println("      -maddr {metrics listen addr}")
 	fmt.Println("      -h (show help info)")
 }
 
@@ -68,11 +65,6 @@ func load() bool {
 		return false
 	}
 
-	if len(conf.WebRTC.ICEPortRange) != 0 && conf.WebRTC.ICEPortRange[1]-conf.WebRTC.ICEPortRange[0] < portRangeLimit {
-		fmt.Printf("config file %s loaded failed. range port must be [min, max] and max - min >= %d\n", file, portRangeLimit)
-		return false
-	}
-
 	fmt.Printf("config %s load ok!\n", file)
 	return true
 }
@@ -84,6 +76,7 @@ func parse() bool {
 	flag.StringVar(&jaddr, "jaddr", "", "jsonrpc listening address")
 	flag.StringVar(&gaddr, "gaddr", "", "grpc listening address")
 	flag.StringVar(&paddr, "paddr", "", "pprof listening address")
+	flag.StringVar(&maddr, "maddr", "", "metrics listening address")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
 
@@ -124,6 +117,10 @@ func main() {
 
 	if paddr != "" {
 		go node.ServePProf(paddr)
+	}
+
+	if maddr != "" {
+		go node.ServeMetrics(maddr)
 	}
 
 	select {}

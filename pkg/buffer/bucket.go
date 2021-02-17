@@ -66,9 +66,12 @@ func (b *Bucket) getPacket(buf []byte, sn uint16) (i int, err error) {
 		return
 	}
 	i = len(p)
-	if len(buf) < i {
+	if cap(buf) < i {
 		err = errBufferTooSmall
 		return
+	}
+	if len(buf) < i {
+		buf = buf[:i]
 	}
 	copy(buf, p)
 	return

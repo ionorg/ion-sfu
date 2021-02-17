@@ -134,7 +134,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 	fixByFunc := []string{"Handle"}
 	log.Init("trace", fixByFile, fixByFunc)
 	sfu := NewSFU(Config{Log: log.Config{Level: "trace"}})
-
+	sfu.NewDatachannel(APIChannelLabel)
 	tests := []struct {
 		name  string
 		steps []step
@@ -251,7 +251,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 				{
 					actions: []*action{{
 						id:   "remote1",
-						kind: "publish",
+						kind: "unpublish",
 						media: []media{
 							{kind: "audio", id: "stream3", tid: "audio3"},
 							{kind: "video", id: "stream3", tid: "video3"},
@@ -260,21 +260,11 @@ func TestSFU_SessionScenarios(t *testing.T) {
 				},
 				{
 					actions: []*action{{
-						id:   "remote1",
+						id:   "remote2",
 						kind: "unpublish",
 						media: []media{
 							{kind: "audio", id: "stream1", tid: "audio1"},
 							{kind: "video", id: "stream1", tid: "video1"},
-						},
-					}},
-				},
-				{
-					actions: []*action{{
-						id:   "remote2",
-						kind: "publish",
-						media: []media{
-							{kind: "audio", id: "stream4", tid: "audio4"},
-							{kind: "video", id: "stream4", tid: "video4"},
 						},
 					}},
 				},
@@ -285,7 +275,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			testDone := atomicBool{}
+			testDone := atomicBool(0)
 			var mu sync.RWMutex
 			done := make(chan struct{})
 			peers := make(map[string]*peer)
@@ -377,8 +367,9 @@ func TestSFU_SessionScenarios(t *testing.T) {
 							err = p.remotePub.SetLocalDescription(offer)
 							assert.NoError(t, err)
 							<-gatherComplete
-							answer, err := p.local.Join("test", *p.remotePub.LocalDescription())
+							err = p.local.Join("test")
 							assert.NoError(t, err)
+							answer, err := p.local.Answer(*p.remotePub.LocalDescription())
 							err = p.remotePub.SetRemoteDescription(*answer)
 							assert.NoError(t, err)
 							p.mu.Unlock()

@@ -2,12 +2,11 @@ package sfu
 
 import (
 	"sync"
-	"time"
-
-	"github.com/pion/ion-sfu/pkg/stats"
 
 	log "github.com/pion/ion-log"
 	"github.com/pion/ion-sfu/pkg/buffer"
+	"github.com/pion/ion-sfu/pkg/stats"
+	"github.com/pion/ion-sfu/pkg/twcc"
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 )
@@ -22,38 +21,40 @@ type Router interface {
 
 // RouterConfig defines router configurations
 type RouterConfig struct {
-	WithStats     bool            `mapstructure:"withstats"`
-	MaxBandwidth  uint64          `mapstructure:"maxbandwidth"`
-	MaxBufferTime int             `mapstructure:"maxbuffertime"`
-	Simulcast     SimulcastConfig `mapstructure:"simulcast"`
+	WithStats           bool            `mapstructure:"withstats"`
+	MaxBandwidth        uint64          `mapstructure:"maxbandwidth"`
+	MaxBufferTime       int             `mapstructure:"maxbuffertime"`
+	AudioLevelInterval  int             `mapstructure:"audiolevelinterval"`
+	AudioLevelThreshold uint8           `mapstructure:"audiolevelthreshold"`
+	AudioLevelFilter    int             `mapstructure:"audiolevelfilter"`
+	Simulcast           SimulcastConfig `mapstructure:"simulcast"`
 }
 
 type router struct {
 	sync.RWMutex
 	id        string
-	twcc      *TransportWideCC
+	twcc      *twcc.Responder
 	peer      *webrtc.PeerConnection
-	rtcpCh    chan []rtcp.Packet
-	config    RouterConfig
-	receivers map[string]Receiver
 	stats     map[uint32]*stats.Stream
+	rtcpCh    chan []rtcp.Packet
+	stopCh    chan struct{}
+	config    RouterConfig
+	session   *Session
+	receivers map[string]Receiver
 }
 
 // newRouter for routing rtp/rtcp packets
-func newRouter(peer *webrtc.PeerConnection, id string, config RouterConfig) Router {
+func newRouter(peer *webrtc.PeerConnection, id string, session *Session, config RouterConfig) Router {
 	ch := make(chan []rtcp.Packet, 10)
 	r := &router{
 		id:        id,
 		peer:      peer,
-		twcc:      newTransportWideCC(),
 		rtcpCh:    ch,
+		stopCh:    make(chan struct{}),
 		config:    config,
+		session:   session,
 		receivers: make(map[string]Receiver),
 		stats:     make(map[uint32]*stats.Stream),
-	}
-
-	r.twcc.onFeedback = func(packet []rtcp.Packet) {
-		r.rtcpCh <- packet
 	}
 
 	if config.WithStats {
@@ -69,7 +70,7 @@ func (r *router) ID() string {
 }
 
 func (r *router) Stop() {
-	close(r.rtcpCh)
+	r.stopCh <- struct{}{}
 
 	if r.config.WithStats {
 		stats.Peers.Dec()
@@ -82,6 +83,7 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 
 	publish := false
 	trackID := track.ID()
+	rid := track.RID()
 
 	buff, rtcpReader := bufferFactory.GetBufferPair(uint32(track.SSRC()))
 
@@ -89,9 +91,24 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 		r.rtcpCh <- fb
 	})
 
-	buff.OnTransportWideCC(func(sn uint16, timeNS int64, marker bool) {
-		r.twcc.push(sn, timeNS, marker)
-	})
+	if track.Kind() == webrtc.RTPCodecTypeAudio {
+		streamID := track.StreamID()
+		buff.OnAudioLevel(func(level uint8) {
+			r.session.audioObserver.observe(streamID, level)
+		})
+		r.session.audioObserver.addStream(streamID)
+
+	} else if track.Kind() == webrtc.RTPCodecTypeVideo {
+		if r.twcc == nil {
+			r.twcc = twcc.NewTransportWideCCResponder(uint32(track.SSRC()))
+			r.twcc.OnFeedback(func(p rtcp.RawPacket) {
+				r.rtcpCh <- []rtcp.Packet{&p}
+			})
+		}
+		buff.OnTransportWideCC(func(sn uint16, timeNS int64, marker bool) {
+			r.twcc.Push(sn, timeNS, marker)
+		})
+	}
 
 	if r.config.WithStats {
 		r.stats[uint32(track.SSRC())] = stats.NewStream(buff)
@@ -141,17 +158,22 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 					stats.AudioTracks.Dec()
 				}
 			}
+			if recv.Kind() == webrtc.RTPCodecTypeAudio {
+				r.session.audioObserver.removeStream(track.StreamID())
+			}
 			r.deleteReceiver(trackID, uint32(track.SSRC()))
 		})
+		if len(rid) == 0 || r.config.Simulcast.BestQualityFirst && rid == fullResolution ||
+			!r.config.Simulcast.BestQualityFirst && rid == quarterResolution {
+			publish = true
+		}
+	} else if r.config.Simulcast.BestQualityFirst && rid == fullResolution ||
+		!r.config.Simulcast.BestQualityFirst && rid == quarterResolution ||
+		!r.config.Simulcast.BestQualityFirst && rid == halfResolution {
 		publish = true
 	}
 
 	recv.AddUpTrack(track, buff)
-
-	if r.twcc.mSSRC == 0 {
-		r.twcc.tccLastReport = time.Now().UnixNano()
-		r.twcc.mSSRC = uint32(track.SSRC())
-	}
 
 	buff.Bind(receiver.GetParameters(), buffer.Options{
 		BufferTime: r.config.MaxBufferTime,
@@ -226,6 +248,9 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 	downTrack.OnCloseHandler(func() {
 		if sub.pc.ConnectionState() != webrtc.PeerConnectionStateClosed {
 			if err := sub.pc.RemoveTrack(downTrack.transceiver.Sender()); err != nil {
+				if err == webrtc.ErrConnectionClosed {
+					return
+				}
 				log.Errorf("Error closing down track: %v", err)
 			} else {
 				sub.RemoveDownTrack(recv.StreamID(), downTrack)
@@ -251,9 +276,14 @@ func (r *router) deleteReceiver(track string, ssrc uint32) {
 }
 
 func (r *router) sendRTCP() {
-	for pkts := range r.rtcpCh {
-		if err := r.peer.WriteRTCP(pkts); err != nil {
-			log.Errorf("Write rtcp to peer %s err :%v", r.id, err)
+	for {
+		select {
+		case pkts := <-r.rtcpCh:
+			if err := r.peer.WriteRTCP(pkts); err != nil {
+				log.Errorf("Write rtcp to peer %s err :%v", r.id, err)
+			}
+		case <-r.stopCh:
+			return
 		}
 	}
 }

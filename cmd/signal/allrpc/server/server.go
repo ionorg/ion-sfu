@@ -4,12 +4,15 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
+
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	log "github.com/pion/ion-log"
 	pb "github.com/pion/ion-sfu/cmd/signal/grpc/proto"
 	grpcServer "github.com/pion/ion-sfu/cmd/signal/grpc/server"
 	jsonrpcServer "github.com/pion/ion-sfu/cmd/signal/json-rpc/server"
 	"github.com/pion/ion-sfu/pkg/sfu"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 
 	// pprof
@@ -25,9 +28,12 @@ type Server struct {
 }
 
 // New create a server which support grpc/jsonrpc
-func New(c sfu.Config) *Server {
+func New(c sfu.Config) *Server { // Register default middlewares
+	s := sfu.NewSFU(c)
+	dc := s.NewDatachannel(sfu.APIChannelLabel)
+	dc.Use(datachannel.SubscriberAPI)
 	return &Server{
-		sfu: sfu.NewSFU(c),
+		sfu: s,
 	}
 }
 
@@ -77,10 +83,10 @@ func (s *Server) ServeJSONRPC(jaddr, cert, key string) error {
 
 	var err error
 	if key != "" && cert != "" {
-		log.Infof("JsonRPC Listening at https://[%s]", jaddr)
+		log.Infof("JsonRPC Listening at https://%s", jaddr)
 		err = http.ListenAndServeTLS(jaddr, cert, key, nil)
 	} else {
-		log.Infof("JsonRPC Listening at http://[%s]", jaddr)
+		log.Infof("JsonRPC Listening at http://%s", jaddr)
 		err = http.ListenAndServe(jaddr, nil)
 	}
 	if err != nil {
@@ -91,6 +97,27 @@ func (s *Server) ServeJSONRPC(jaddr, cert, key string) error {
 
 // ServePProf
 func (s *Server) ServePProf(paddr string) {
-	log.Infof("PProf Listening at http://[%s]", paddr)
+	log.Infof("PProf Listening at http://%s", paddr)
 	http.ListenAndServe(paddr, nil)
+}
+
+// ServeMetrics
+func (s *Server) ServeMetrics(maddr string) {
+	// start metrics server
+	m := http.NewServeMux()
+	m.Handle("/metrics", promhttp.Handler())
+	srv := &http.Server{
+		Handler: m,
+	}
+
+	metricsLis, err := net.Listen("tcp", maddr)
+	if err != nil {
+		log.Panicf("cannot bind to metrics endpoint %s. err: %s", maddr, err)
+	}
+	log.Infof("Metrics Listening at http://%s", maddr)
+
+	err = srv.Serve(metricsLis)
+	if err != nil {
+		log.Errorf("debug server stopped. got err: %s", err)
+	}
 }
