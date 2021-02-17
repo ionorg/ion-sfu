@@ -47,6 +47,7 @@ type Peer struct {
 
 	remoteAnswerPending bool
 	negotiationPending  bool
+	metadata            string
 }
 
 // NewPeer creates a new Peer for signaling with the given SFU
@@ -57,7 +58,7 @@ func NewPeer(provider SessionProvider) *Peer {
 }
 
 // Join initializes this peer for a given sessionID
-func (p *Peer) Join(sid, uid string) error {
+func (p *Peer) Join(sid, uid, metadata string) error {
 	if p.publisher != nil {
 		log.Debugf("peer already exists")
 		return ErrTransportExists
@@ -67,6 +68,7 @@ func (p *Peer) Join(sid, uid string) error {
 		uid = cuid.New()
 	}
 	p.id = uid
+	p.metadata = metadata
 	var (
 		cfg WebRTCTransportConfig
 		err error
@@ -251,4 +253,16 @@ func (p *Peer) Session() *Session {
 // ID return the peer id
 func (p *Peer) ID() string {
 	return p.id
+}
+
+func (p *Peer) Metadata() string {
+	return p.metadata
+}
+
+func (p *Peer) StreamID() string {
+	publisher := p.Publisher()
+	if publisher != nil {
+		return publisher.StreamID()
+	}
+	return ""
 }

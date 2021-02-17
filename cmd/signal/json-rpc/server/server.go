@@ -13,9 +13,10 @@ import (
 
 // Join message sent when initializing a peer connection
 type Join struct {
-	Sid   string                    `json:"sid"`
-	Uid   string                    `json:"uid"`
-	Offer webrtc.SessionDescription `json:"offer"`
+	Sid      string                    `json:"sid"`
+	Uid      string                    `json:"uid"`
+	Offer    webrtc.SessionDescription `json:"offer"`
+	Metadata string                    `json:"metadata"`
 }
 
 // Negotiation message sent when renegotiating the peer connection
@@ -71,7 +72,7 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 			}
 		}
 
-		err = p.Join(join.Sid, join.Uid)
+		err = p.Join(join.Sid, join.Uid, join.Metadata)
 		if err != nil {
 			replyError(err)
 			break

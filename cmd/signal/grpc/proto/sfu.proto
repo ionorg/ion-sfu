@@ -31,7 +31,8 @@ message SignalReply {
 message JoinRequest {
     string sid = 1;
     string uid = 2;
-    bytes description = 3;
+    string metadata = 3;
+    bytes description = 4;
 }
 
 message JoinReply {
