@@ -165,7 +165,7 @@ func (d *DownTrack) Mute(val bool) {
 // Close track
 func (d *DownTrack) Close() {
 	d.closeOnce.Do(func() {
-		logger.V(2).Info("Closing sender", "peer_id", d.peerID)
+		debugLogger.Info("Closing sender", "peer_id", d.peerID)
 		if d.payload != nil {
 			packetFactory.Put(d.payload)
 		}
@@ -305,7 +305,7 @@ func (d *DownTrack) writeSimpleRTP(extPkt buffer.ExtPacket) error {
 
 	_, err := d.writeStream.WriteRTP(&extPkt.Packet.Header, extPkt.Packet.Payload)
 	if err != nil {
-		logger.Error(err, "Write packet err")
+		defaultLogger.Error(err, "Write packet err")
 	}
 	return err
 }
@@ -417,7 +417,7 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 
 	_, err := d.writeStream.WriteRTP(&extPkt.Packet.Header, extPkt.Packet.Payload)
 	if err != nil {
-		logger.Error(err, "Write packet err")
+		defaultLogger.Error(err, "Write packet err")
 	}
 
 	return err
@@ -430,7 +430,7 @@ func (d *DownTrack) handleRTCP(bytes []byte) {
 
 	pkts, err := rtcp.Unmarshal(bytes)
 	if err != nil {
-		logger.Error(err, "Unmarshal rtcp receiver packets err")
+		defaultLogger.Error(err, "Unmarshal rtcp receiver packets err")
 	}
 
 	var fwdPkts []rtcp.Packet

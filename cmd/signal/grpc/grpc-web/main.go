@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/go-logr/logr"
 	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
 
 	log "github.com/pion/ion-sfu/pkg/logger"
@@ -26,9 +27,10 @@ type Config struct {
 }
 
 var (
-	conf = Config{}
-	file string
-	addr string
+	conf                                               = Config{}
+	file                                               string
+	addr                                               string
+	defaultLogger, warnLogger, infoLogger, debugLogger logr.Logger
 )
 
 const (
@@ -97,23 +99,24 @@ func main() {
 		os.Exit(-1)
 	}
 
-	fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go"}
-	fixByFunc := []string{}
-	log.Init(conf.Log.Level, fixByFile, fixByFunc)
+	defaultLogger = log.New()
+	infoLogger = defaultLogger.V(1)
 
-	log.Infof("--- Starting SFU Node ---")
+	infoLogger.Info("--- Starting SFU Node ---")
 	options := server.DefaultWrapperedServerOptions()
 	options.EnableTLS = false
 	options.Addr = addr
 	options.AllowAllOrigins = true
 	options.UseWebSocket = true
 
+	conf.Config.Logger = defaultLogger
 	nsfu := sfu.NewSFU(conf.Config)
 	dc := nsfu.NewDatachannel(sfu.APIChannelLabel)
 	dc.Use(datachannel.SubscriberAPI)
 	s := server.NewWrapperedGRPCWebServer(options, nsfu)
 	if err := s.Serve(); err != nil {
-		log.Panicf("failed to serve: %v", err)
+		infoLogger.Error(err, "failed to serve")
+		os.Exit(1)
 	}
 	select {}
 }

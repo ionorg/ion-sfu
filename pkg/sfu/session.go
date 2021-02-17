@@ -44,7 +44,7 @@ func (s *Session) AddPeer(peer *Peer) {
 // RemovePeer removes a transport from the session
 func (s *Session) RemovePeer(pid string) {
 	s.mu.Lock()
-	logger.V(1).Info("RemovePeer from session", "peer_id", pid, "session_id", s.id)
+	infoLogger.Info("RemovePeer from session", "peer_id", pid, "session_id", s.id)
 	delete(s.peers, pid)
 	s.mu.Unlock()
 
@@ -60,11 +60,11 @@ func (s *Session) onMessage(origin, label string, msg webrtc.DataChannelMessage)
 	for _, dc := range dcs {
 		if msg.IsString {
 			if err := dc.SendText(string(msg.Data)); err != nil {
-				logger.Error(err, "Sending dc message err")
+				defaultLogger.Error(err, "Sending dc message err")
 			}
 		} else {
 			if err := dc.Send(msg.Data); err != nil {
-				logger.Error(err, "Sending dc message err")
+				defaultLogger.Error(err, "Sending dc message err")
 			}
 		}
 	}
@@ -108,7 +108,7 @@ func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 		n, err := p.subscriber.AddDataChannel(label)
 
 		if err != nil {
-			logger.Error(err, "error adding datachannel")
+			defaultLogger.Error(err, "error adding datachannel")
 			continue
 		}
 
@@ -132,10 +132,10 @@ func (s *Session) Publish(router Router, r Receiver) {
 			continue
 		}
 
-		logger.V(1).Info("Publishing track to peer", "peer_id", p.id)
+		infoLogger.Info("Publishing track to peer", "peer_id", p.id)
 
 		if err := router.AddDownTracks(p.subscriber, r); err != nil {
-			logger.Error(err, "Error subscribing transport to router")
+			defaultLogger.Error(err, "Error subscribing transport to router")
 			continue
 		}
 	}
@@ -159,7 +159,7 @@ func (s *Session) Subscribe(peer *Peer) {
 	for _, label := range fdc {
 		n, err := peer.subscriber.AddDataChannel(label)
 		if err != nil {
-			logger.Error(err, "error adding datachannel")
+			defaultLogger.Error(err, "error adding datachannel")
 			continue
 		}
 		l := label
@@ -172,7 +172,7 @@ func (s *Session) Subscribe(peer *Peer) {
 	for _, p := range peers {
 		err := p.publisher.GetRouter().AddDownTracks(peer.subscriber, nil)
 		if err != nil {
-			logger.Error(err, "Subscribing to router err")
+			defaultLogger.Error(err, "Subscribing to router err")
 			continue
 		}
 	}
@@ -198,7 +198,7 @@ func (s *Session) OnClose(f func()) {
 
 func (s *Session) audioLevelObserver(audioLevelInterval int) {
 	if audioLevelInterval <= 50 {
-		logger.V(0).Info("Values near/under 20ms may return unexpected values")
+		warnLogger.Info("Values near/under 20ms may return unexpected values")
 	}
 	if audioLevelInterval == 0 {
 		audioLevelInterval = 1000
@@ -216,7 +216,7 @@ func (s *Session) audioLevelObserver(audioLevelInterval int) {
 
 		l, err := json.Marshal(&levels)
 		if err != nil {
-			logger.Error(err, "Marshaling audio levels err")
+			defaultLogger.Error(err, "Marshaling audio levels err")
 			continue
 		}
 
@@ -225,7 +225,7 @@ func (s *Session) audioLevelObserver(audioLevelInterval int) {
 
 		for _, ch := range dcs {
 			if err = ch.SendText(sl); err != nil {
-				logger.Error(err, "Sending audio levels err")
+				defaultLogger.Error(err, "Sending audio levels err")
 			}
 		}
 	}

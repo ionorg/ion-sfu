@@ -116,7 +116,7 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 	rtcpReader.OnPacket(func(bytes []byte) {
 		pkts, err := rtcp.Unmarshal(bytes)
 		if err != nil {
-			logger.Error(err, "Unmarshal rtcp receiver packets err")
+			defaultLogger.Error(err, "Unmarshal rtcp receiver packets err")
 			return
 		}
 		for _, pkt := range pkts {
@@ -177,7 +177,7 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 	buff.Bind(receiver.GetParameters(), buffer.Options{
 		BufferTime: r.config.MaxBufferTime,
 		MaxBitRate: r.config.MaxBandwidth,
-		Logger:     logger,
+		Logger:     defaultLogger,
 	})
 
 	if r.config.WithStats {
@@ -251,7 +251,7 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 				if err == webrtc.ErrConnectionClosed {
 					return
 				}
-				logger.Error(err, "Error closing down track")
+				defaultLogger.Error(err, "Error closing down track")
 			} else {
 				sub.RemoveDownTrack(recv.StreamID(), downTrack)
 				sub.negotiate()
@@ -280,7 +280,7 @@ func (r *router) sendRTCP() {
 		select {
 		case pkts := <-r.rtcpCh:
 			if err := r.peer.WriteRTCP(pkts); err != nil {
-				logger.Error(err, "Write rtcp to peer err", "peer_id", r.id)
+				defaultLogger.Error(err, "Write rtcp to peer err", "peer_id", r.id)
 			}
 		case <-r.stopCh:
 			return

@@ -24,7 +24,7 @@ type Publisher struct {
 func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publisher, error) {
 	me, err := getPublisherMediaEngine()
 	if err != nil {
-		logger.Error(err, "NewPeer error", "peer_id", id)
+		defaultLogger.Error(err, "NewPeer error", "peer_id", id)
 		return nil, errPeerConnectionInitFailed
 	}
 
@@ -32,7 +32,7 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 	pc, err := api.NewPeerConnection(cfg.configuration)
 
 	if err != nil {
-		logger.Error(err, "NewPeer error", "peer_id", id)
+		defaultLogger.Error(err, "NewPeer error", "peer_id", id)
 		return nil, errPeerConnectionInitFailed
 	}
 
@@ -44,7 +44,7 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 	}
 
 	pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-		logger.V(2).Info("Peer got remote track id",
+		debugLogger.Info("Peer got remote track id",
 			"peer_id", p.id,
 			"track_id", track.ID(),
 			"mediaSSRC", track.SSRC(),
@@ -66,12 +66,12 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 	})
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
-		logger.V(2).Info("ice connection status", "state", connectionState)
+		debugLogger.Info("ice connection status", "state", connectionState)
 		switch connectionState {
 		case webrtc.ICEConnectionStateFailed:
 			fallthrough
 		case webrtc.ICEConnectionStateClosed:
-			logger.V(2).Info("webrtc ice closed", "peer_id", p.id)
+			debugLogger.Info("webrtc ice closed", "peer_id", p.id)
 			p.Close()
 		}
 
@@ -90,7 +90,7 @@ func (p *Publisher) Answer(offer webrtc.SessionDescription) (webrtc.SessionDescr
 
 	for _, c := range p.candidates {
 		if err := p.pc.AddICECandidate(c); err != nil {
-			logger.Error(err, "Add publisher ice candidate to peer err", "peer_id", p.id)
+			defaultLogger.Error(err, "Add publisher ice candidate to peer err", "peer_id", p.id)
 		}
 	}
 	p.candidates = nil
@@ -115,7 +115,7 @@ func (p *Publisher) Close() {
 	p.closeOnce.Do(func() {
 		p.router.Stop()
 		if err := p.pc.Close(); err != nil {
-			logger.Error(err, "webrtc transport close err")
+			defaultLogger.Error(err, "webrtc transport close err")
 		}
 	})
 }

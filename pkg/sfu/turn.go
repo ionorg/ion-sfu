@@ -120,7 +120,7 @@ func InitTurnServer(conf TurnConfig, auth func(username, realm string, srcAddr n
 				usersMap[kv[1]] = turn.GenerateAuthKey(kv[1], conf.Realm, kv[2])
 			}
 			if len(usersMap) == 0 {
-				logger.Error(fmt.Errorf("No turn auth provided"), "Got err")
+				defaultLogger.Error(fmt.Errorf("No turn auth provided"), "Got err")
 			}
 			auth = func(username string, realm string, srcAddr net.Addr) ([]byte, bool) {
 				if key, ok := usersMap[username]; ok {

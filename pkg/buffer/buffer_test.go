@@ -6,6 +6,7 @@ import (
 
 	"github.com/pion/rtcp"
 
+	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
 	"github.com/stretchr/testify/assert"
@@ -110,7 +111,7 @@ func TestNewBuffer(t *testing.T) {
 					},
 					PayloadType: 0,
 				}},
-			}, Options{})
+			}, Options{Logger: log.NewWithOptions(log.Options{Level: "trace"})})
 
 			for _, p := range TestPackets {
 				buf, _ := p.Marshal()

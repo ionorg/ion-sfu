@@ -10,13 +10,12 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pion/ice/v2"
 	"github.com/pion/ion-sfu/pkg/buffer"
-	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/ion-sfu/pkg/stats"
 	"github.com/pion/turn/v2"
 	"github.com/pion/webrtc/v3"
 )
 
-var logger logr.Logger
+var defaultLogger, warnLogger, infoLogger, debugLogger logr.Logger
 
 // ICEServerConfig defines parameters for ice servers
 type ICEServerConfig struct {
@@ -71,7 +70,7 @@ type SFU struct {
 	sessions     map[string]*Session
 	datachannels []*Datachannel
 	withStats    bool
-	logger       logr.Logger
+	Logger       logr.Logger
 }
 
 // NewWebRTCTransportConfig parses our settings and returns a usable WebRTCTransportConfig for creating PeerConnections
@@ -156,15 +155,20 @@ func init() {
 
 // NewSFU creates a new sfu instance
 func NewSFU(c Config) *SFU {
+	// Init loggers
+	if c.Logger == nil {
+		println("Please pass logr instance implementation in SFU Config. You can use https://github.com/pion/ion-sfu/blob/5e6f7a3f58f0411d65ef4b31e8b6d58b6afd16da/pkg/logger/zerologr.go")
+		os.Exit(1)
+	}
+	defaultLogger = c.Logger
+	warnLogger = c.Logger.V(0)
+	infoLogger = c.Logger.V(1)
+	debugLogger = c.Logger.V(2)
+
 	// Init random seed
 	rand.Seed(time.Now().UnixNano())
 	// Init ballast
 	ballast := make([]byte, c.SFU.Ballast*1024*1024)
-	if c.Logger == nil {
-		logger = log.New().WithName("SFULogger")
-	} else {
-		logger = c.Logger.WithName("SFULogger")
-	}
 
 	w := NewWebRTCTransportConfig(c)
 
@@ -177,7 +181,7 @@ func NewSFU(c Config) *SFU {
 	if c.Turn.Enabled {
 		ts, err := InitTurnServer(c.Turn, nil)
 		if err != nil {
-			logger.Error(err, "Could not init turn server err")
+			defaultLogger.Error(err, "Could not init turn server err")
 			os.Exit(1)
 		}
 		sfu.turn = ts

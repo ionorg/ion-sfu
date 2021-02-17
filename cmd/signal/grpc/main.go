@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/go-logr/logr"
 	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
@@ -31,10 +32,11 @@ type Config struct {
 }
 
 var (
-	conf        = Config{}
-	file        string
-	addr        string
-	metricsAddr string
+	conf                                               = Config{}
+	file                                               string
+	addr                                               string
+	metricsAddr                                        string
+	defaultLogger, warnLogger, infoLogger, debugLogger logr.Logger
 )
 
 const (
@@ -108,13 +110,14 @@ func startMetrics(addr string) {
 
 	metricsLis, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Panicf("cannot bind to metrics endpoint %s. err: %s", addr, err)
+		defaultLogger.Error(err, "cannot bind to metrics endpoint", "addr", addr)
+		os.Exit(1)
 	}
-	log.Infof("Metrics Listening at %s", addr)
+	infoLogger.Info("Metrics Listening starter", "addr", addr)
 
 	err = srv.Serve(metricsLis)
 	if err != nil {
-		log.Errorf("debug server stopped. got err: %s", err)
+		defaultLogger.Error(err, "debug server stopped. got err: %s")
 	}
 }
 
@@ -124,19 +127,28 @@ func main() {
 		os.Exit(-1)
 	}
 
-	fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go"}
-	fixByFunc := []string{}
-	log.Init(conf.Log.Level, fixByFile, fixByFunc)
+	// Creating loggers that implements logr interface, that used in sfu pkg
+	// V-levels means different verbosity levels:
+	// 0 - err, warn
+	// 1 - info
+	// 2 - debug
+	// 3 - trace
+	defaultLogger = log.New()
+	infoLogger = defaultLogger.V(1)
 
-	log.Infof("--- Starting SFU Node ---")
+	infoLogger.Info("--- Starting SFU Node ---")
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Panicf("failed to listen: %v", err)
+		defaultLogger.Error(err, "failed to listen")
+		os.Exit(1)
 	}
 
 	s := grpc.NewServer(
 		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
 	)
+
+	// SFU instance needs to be created with logr implementation
+	conf.Config.Logger = defaultLogger
 
 	nsfu := sfu.NewSFU(conf.Config)
 	dc := nsfu.NewDatachannel(sfu.APIChannelLabel)
@@ -147,8 +159,9 @@ func main() {
 
 	go startMetrics(metricsAddr)
 
-	log.Infof("SFU Listening at %s", addr)
+	defaultLogger.Info("SFU Listening", "addr", addr)
 	if err := s.Serve(lis); err != nil {
-		log.Panicf("failed to serve: %v", err)
+		defaultLogger.Error(err, "failed to serve SFU")
+		os.Exit(1)
 	}
 }

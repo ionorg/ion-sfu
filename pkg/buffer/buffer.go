@@ -3,13 +3,13 @@ package buffer
 import (
 	"encoding/binary"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/go-logr/logr"
-	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/sdp/v3"
@@ -22,7 +22,7 @@ const (
 	reportDelta = 1e9
 )
 
-var logger logr.Logger
+var defaultLogger, warnLogger, infoLogger, debugLogger logr.Logger
 
 type pendingPackets struct {
 	arrivalTime int64
@@ -125,11 +125,16 @@ func (b *Buffer) PacketChan() chan ExtPacket {
 func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 	b.Lock()
 	defer b.Unlock()
+
 	if o.Logger == nil {
-		logger = log.New().WithName("BufferLogger")
-	} else {
-		logger = o.Logger.WithName("BufferLogger")
+		println("Please pass logr instance implementation in Buffer Config. You can use https://github.com/pion/ion-sfu/blob/5e6f7a3f58f0411d65ef4b31e8b6d58b6afd16da/pkg/logger/zerologr.go")
+		os.Exit(1)
 	}
+	defaultLogger = o.Logger
+	warnLogger = o.Logger.V(0)
+	infoLogger = o.Logger.V(1)
+	debugLogger = o.Logger.V(2)
+
 	codec := params.Codecs[0]
 	b.clockRate = codec.ClockRate
 	b.maxBitrate = o.MaxBitRate
@@ -157,13 +162,13 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 		for _, fb := range codec.RTCPFeedback {
 			switch fb.Type {
 			case webrtc.TypeRTCPFBGoogREMB:
-				logger.V(2).Info("Setting feedback", "type", "webrtc.TypeRTCPFBGoogREMB")
+				debugLogger.Info("Setting feedback", "type", "webrtc.TypeRTCPFBGoogREMB")
 				b.remb = true
 			case webrtc.TypeRTCPFBTransportCC:
-				logger.V(2).Info("Setting feedback", "type", webrtc.TypeRTCPFBTransportCC)
+				debugLogger.Info("Setting feedback", "type", webrtc.TypeRTCPFBTransportCC)
 				b.twcc = true
 			case webrtc.TypeRTCPFBNACK:
-				logger.V(2).Info("Setting feedback", "type", webrtc.TypeRTCPFBNACK)
+				debugLogger.Info("Setting feedback", "type", webrtc.TypeRTCPFBNACK)
 				b.nack = true
 			}
 		}
@@ -197,7 +202,7 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 	b.pPackets = nil
 	b.bound = true
 
-	logger.V(2).Info("NewBuffer", "BufferTime", o.BufferTime, "MaxBitRate", o.MaxBitRate)
+	debugLogger.Info("NewBuffer", "BufferTime", o.BufferTime, "MaxBitRate", o.MaxBitRate)
 }
 
 // Write adds a RTP Packet, out of order, new packet may be arrived later
