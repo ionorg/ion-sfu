@@ -21,14 +21,13 @@ require (
 	github.com/pion/sdp/v3 v3.0.4
 	github.com/pion/transport v0.12.2
 	github.com/pion/turn/v2 v2.0.5
-    github.com/pion/webrtc/v3 v3.0.10
+	github.com/pion/webrtc/v3 v3.0.10
 	github.com/prometheus/client_golang v1.9.0
 	github.com/rs/cors v1.7.0 // indirect
 	github.com/soheilhy/cmux v0.1.4
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20200429184054-15c2290dcb37
 	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.7.0
-	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad // indirect
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 	golang.org/x/sys v0.0.0-20210217090653-ed5674b6da4a // indirect
 	google.golang.org/grpc v1.35.0
