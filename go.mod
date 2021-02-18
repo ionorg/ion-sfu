@@ -10,7 +10,7 @@ require (
 	github.com/google/uuid v1.2.0 // indirect
 	github.com/gorilla/websocket v1.4.2
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
-	github.com/improbable-eng/grpc-web v0.13.0
+	github.com/improbable-eng/grpc-web v0.14.0
 	github.com/lucsky/cuid v1.0.2
 	github.com/pion/dtls/v2 v2.0.6
 	github.com/pion/ice/v2 v2.0.15
@@ -34,4 +34,5 @@ require (
 	google.golang.org/grpc/examples v0.0.0-20201209011439-fd32f6a4fefe // indirect
 	google.golang.org/protobuf v1.25.0
 	gopkg.in/ini.v1 v1.51.1 // indirect
+	nhooyr.io/websocket v1.8.6 // indirect
 )
