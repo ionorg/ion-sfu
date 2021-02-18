@@ -72,6 +72,7 @@ type SFU struct {
 // NewWebRTCTransportConfig parses our settings and returns a usable WebRTCTransportConfig for creating PeerConnections
 func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 	se := webrtc.SettingEngine{}
+	se.DisableMediaEngineCopy(true)
 
 	var icePortStart, icePortEnd uint16
 
