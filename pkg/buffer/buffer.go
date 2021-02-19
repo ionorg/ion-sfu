@@ -39,6 +39,7 @@ type ExtPacket struct {
 type Buffer struct {
 	sync.Mutex
 	bucket     *Bucket
+	nacker     *nackQueue
 	codecType  webrtc.RTPCodecType
 	videoPool  *sync.Pool
 	audioPool  *sync.Pool
@@ -129,10 +130,10 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 	switch {
 	case strings.HasPrefix(b.mime, "audio/"):
 		b.codecType = webrtc.RTPCodecTypeAudio
-		b.bucket = NewBucket(b.audioPool.Get().([]byte), false)
+		b.bucket = NewBucket(b.audioPool.Get().([]byte))
 	case strings.HasPrefix(b.mime, "video/"):
 		b.codecType = webrtc.RTPCodecTypeVideo
-		b.bucket = NewBucket(b.videoPool.Get().([]byte), true)
+		b.bucket = NewBucket(b.videoPool.Get().([]byte))
 	default:
 		b.codecType = webrtc.RTPCodecType(0)
 	}
@@ -155,6 +156,7 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 				b.twcc = true
 			case webrtc.TypeRTCPFBNACK:
 				log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBNACK)
+				b.nacker = newNACKQueue()
 				b.nack = true
 			}
 		}
@@ -165,21 +167,6 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 				b.audioExt = uint8(h.ID)
 			}
 		}
-	}
-
-	b.bucket.onLost = func(nacks []rtcp.NackPair, askKeyframe bool) {
-		pkts := []rtcp.Packet{&rtcp.TransportLayerNack{
-			MediaSSRC: b.mediaSSRC,
-			Nacks:     nacks,
-		}}
-
-		if askKeyframe {
-			pkts = append(pkts, &rtcp.PictureLossIndication{
-				MediaSSRC: b.mediaSSRC,
-			})
-		}
-
-		b.feedbackCB(pkts)
 	}
 
 	for _, pp := range b.pPackets {
@@ -222,7 +209,6 @@ func (b *Buffer) Read(buff []byte) (n int, err error) {
 			err = io.EOF
 			return
 		}
-
 		b.Lock()
 		if b.pPackets != nil && len(b.pPackets) > b.lastPacketRead {
 			if len(buff) < len(b.pPackets[b.lastPacketRead].packet) {
@@ -275,7 +261,30 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 		if sn < b.maxSeqNo {
 			b.cycles += maxSN
 		}
+		if b.nack {
+			diff := sn - b.maxSeqNo
+			for i := uint16(1); i < diff; i++ {
+				var extSN uint32
+				msn := sn - i
+				if msn > b.maxSeqNo && msn&0x8000 > 0 && b.maxSeqNo&0x8000 == 0 {
+					extSN = (b.cycles - maxSN) | uint32(msn)
+				} else {
+					extSN = b.cycles | uint32(msn)
+				}
+				b.nacker.push(extSN)
+			}
+		}
 		b.maxSeqNo = sn
+	} else {
+		if b.nack {
+			var extSN uint32
+			if sn > b.maxSeqNo && sn&0x8000 > 0 && b.maxSeqNo&0x8000 == 0 {
+				extSN = (b.cycles - maxSN) | uint32(sn)
+			} else {
+				extSN = b.cycles | uint32(sn)
+			}
+			b.nacker.remove(extSN)
+		}
 	}
 
 	b.stats.TotalByte += uint64(len(pkt))
@@ -357,6 +366,11 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	}
 
 	diff := arrivalTime - b.lastReport
+
+	if r := b.buildNACKPacket(); r != nil {
+		b.feedbackCB(r)
+	}
+
 	if diff >= reportDelta {
 		br := (8 * b.bitrateHelper * uint64(reportDelta)) / uint64(diff)
 		atomic.StoreUint64(&b.bitrate, br)
@@ -364,6 +378,23 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 		b.lastReport = arrivalTime
 		b.bitrateHelper = 0
 	}
+}
+
+func (b *Buffer) buildNACKPacket() []rtcp.Packet {
+	if nacks, askKeyframe := b.nacker.pairs(b.cycles | uint32(b.maxSeqNo)); nacks != nil && len(nacks) > 0 {
+		pkts := []rtcp.Packet{&rtcp.TransportLayerNack{
+			MediaSSRC: b.mediaSSRC,
+			Nacks:     nacks,
+		}}
+
+		if askKeyframe {
+			pkts = append(pkts, &rtcp.PictureLossIndication{
+				MediaSSRC: b.mediaSSRC,
+			})
+		}
+		return pkts
+	}
+	return nil
 }
 
 func (b *Buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
