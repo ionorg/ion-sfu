@@ -275,16 +275,14 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 			}
 		}
 		b.maxSeqNo = sn
-	} else {
-		if b.nack {
-			var extSN uint32
-			if sn > b.maxSeqNo && sn&0x8000 > 0 && b.maxSeqNo&0x8000 == 0 {
-				extSN = (b.cycles - maxSN) | uint32(sn)
-			} else {
-				extSN = b.cycles | uint32(sn)
-			}
-			b.nacker.remove(extSN)
+	} else if b.nack && (sn-b.maxSeqNo)&0x8000 > 0 {
+		var extSN uint32
+		if sn > b.maxSeqNo && sn&0x8000 > 0 && b.maxSeqNo&0x8000 == 0 {
+			extSN = (b.cycles - maxSN) | uint32(sn)
+		} else {
+			extSN = b.cycles | uint32(sn)
 		}
+		b.nacker.remove(extSN)
 	}
 
 	b.stats.TotalByte += uint64(len(pkt))
@@ -367,8 +365,10 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 
 	diff := arrivalTime - b.lastReport
 
-	if r := b.buildNACKPacket(); r != nil {
-		b.feedbackCB(r)
+	if b.nacker != nil {
+		if r := b.buildNACKPacket(); r != nil {
+			b.feedbackCB(r)
+		}
 	}
 
 	if diff >= reportDelta {
