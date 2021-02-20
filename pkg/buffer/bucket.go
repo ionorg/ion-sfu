@@ -3,57 +3,35 @@ package buffer
 import (
 	"encoding/binary"
 	"math"
-
-	"github.com/pion/rtcp"
 )
 
 const maxPktSize = 1460
 
 type Bucket struct {
-	buf    []byte
-	nacker *nackQueue
+	buf []byte
 
 	headSN   uint16
 	step     int
 	maxSteps int
-
-	onLost func(nack []rtcp.NackPair, askKeyframe bool)
 }
 
-func NewBucket(buf []byte, nack bool) *Bucket {
-	b := &Bucket{
+func NewBucket(buf []byte) *Bucket {
+	return &Bucket{
 		buf:      buf,
 		maxSteps: int(math.Floor(float64(len(buf))/float64(maxPktSize))) - 1,
 	}
-	if nack {
-		b.nacker = newNACKQueue()
-	}
-	return b
 }
 
 func (b *Bucket) addPacket(pkt []byte, sn uint16, latest bool) []byte {
 	if !latest {
-		if b.nacker != nil {
-			b.nacker.remove(sn)
-		}
 		return b.set(sn, pkt)
 	}
 	diff := sn - b.headSN
 	b.headSN = sn
 	for i := uint16(1); i < diff; i++ {
 		b.step++
-		if b.nacker != nil {
-			b.nacker.push(sn - i)
-		}
 		if b.step >= b.maxSteps {
 			b.step = 0
-		}
-	}
-
-	if b.nacker != nil {
-		np, akf := b.nacker.pairs()
-		if len(np) > 0 {
-			b.onLost(np, akf)
 		}
 	}
 	return b.push(pkt)

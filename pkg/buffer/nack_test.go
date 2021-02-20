@@ -12,22 +12,20 @@ import (
 
 func Test_nackQueue_pairs(t *testing.T) {
 	type fields struct {
-		nacks  []nack
-		cycles uint32
+		nacks []nack
 	}
 	tests := []struct {
 		name   string
 		fields fields
-		args   []uint16
+		args   []uint32
 		want   []rtcp.NackPair
 	}{
 		{
 			name: "Must return correct single pairs pair",
 			fields: fields{
-				nacks:  nil,
-				cycles: 0,
+				nacks: nil,
 			},
-			args: []uint16{1, 2, 4, 5},
+			args: []uint32{1, 2, 4, 5},
 			want: []rtcp.NackPair{{
 				PacketID:    1,
 				LostPackets: 13,
@@ -36,10 +34,9 @@ func Test_nackQueue_pairs(t *testing.T) {
 		{
 			name: "Must return 2 pairs pair",
 			fields: fields{
-				nacks:  nil,
-				cycles: 0,
+				nacks: nil,
 			},
-			args: []uint16{1, 2, 4, 5, 20, 22, 24, 27},
+			args: []uint32{1, 2, 4, 5, 20, 22, 24, 27},
 			want: []rtcp.NackPair{
 				{
 					PacketID:    1,
@@ -56,13 +53,12 @@ func Test_nackQueue_pairs(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			n := &nackQueue{
-				nacks:  tt.fields.nacks,
-				cycles: tt.fields.cycles,
+				nacks: tt.fields.nacks,
 			}
 			for _, sn := range tt.args {
 				n.push(sn)
 			}
-			got, _ := n.pairs()
+			got, _ := n.pairs(30)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("pairs() = %v, want %v", got, tt.want)
 			}
@@ -72,11 +68,10 @@ func Test_nackQueue_pairs(t *testing.T) {
 
 func Test_nackQueue_push(t *testing.T) {
 	type fields struct {
-		nacks  []nack
-		cycles uint32
+		nacks []nack
 	}
 	type args struct {
-		sn []uint16
+		sn []uint32
 	}
 	tests := []struct {
 		name   string
@@ -87,11 +82,10 @@ func Test_nackQueue_push(t *testing.T) {
 		{
 			name: "Must keep packet order",
 			fields: fields{
-				nacks:  make([]nack, 0, 10),
-				cycles: 0,
+				nacks: make([]nack, 0, 10),
 			},
 			args: args{
-				sn: []uint16{3, 4, 1, 5, 8, 7, 5},
+				sn: []uint32{3, 4, 1, 5, 8, 7, 5},
 			},
 			want: []uint32{1, 3, 4, 5, 7, 8},
 		},
@@ -100,8 +94,7 @@ func Test_nackQueue_push(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			n := &nackQueue{
-				nacks:  tt.fields.nacks,
-				cycles: tt.fields.cycles,
+				nacks: tt.fields.nacks,
 			}
 			for _, sn := range tt.args.sn {
 				n.push(sn)
@@ -117,8 +110,7 @@ func Test_nackQueue_push(t *testing.T) {
 
 func Test_nackQueue(t *testing.T) {
 	type fields struct {
-		nacks  []nack
-		cycles uint32
+		nacks []nack
 	}
 	type args struct {
 		sn []uint32
@@ -131,8 +123,7 @@ func Test_nackQueue(t *testing.T) {
 		{
 			name: "Must keep packet order",
 			fields: fields{
-				nacks:  make([]nack, 0, 10),
-				cycles: 0,
+				nacks: make([]nack, 0, 10),
 			},
 			args: args{
 				sn: []uint32{3, 4, 1, 5, 8, 7, 5},
@@ -146,14 +137,10 @@ func Test_nackQueue(t *testing.T) {
 			r := rand.New(rand.NewSource(time.Now().UnixNano()))
 			for i := 0; i < 100; i++ {
 				assert.NotPanics(t, func() {
-					n.push(uint16(r.Intn(60000)))
-					n.remove(uint16(r.Intn(60000)))
-					n.pairs()
+					n.push(uint32(r.Intn(60000)))
+					n.remove(uint32(r.Intn(60000)))
+					n.pairs(60001)
 				})
-			}
-
-			for _, sn := range n.nacks {
-				print(sn.sn, ",")
 			}
 		})
 	}
@@ -161,7 +148,7 @@ func Test_nackQueue(t *testing.T) {
 
 func Test_nackQueue_remove(t *testing.T) {
 	type args struct {
-		sn []uint16
+		sn []uint32
 	}
 	tests := []struct {
 		name string
@@ -171,7 +158,7 @@ func Test_nackQueue_remove(t *testing.T) {
 		{
 			name: "Must keep packet order",
 			args: args{
-				sn: []uint16{3, 4, 1, 5, 8, 7, 5},
+				sn: []uint32{3, 4, 1, 5, 8, 7, 5},
 			},
 			want: []uint32{1, 3, 4, 7, 8},
 		},
