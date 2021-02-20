@@ -338,8 +338,9 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 		if currentLayer != targetLayer {
 			go d.receiver.DeleteDownTrack(int(currentLayer), d.peerID)
 		}
-
 		atomic.StoreInt32(&d.spatialLayer, int32(targetLayer)<<16|int32(targetLayer))
+		d.lastSSRC = extPkt.Packet.SSRC
+
 		if d.simulcast.temporalSupported {
 			if d.mime == "video/vp8" {
 				if vp8, ok := extPkt.Payload.(buffer.VP8); ok {
@@ -392,8 +393,8 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 
 	if d.sequencer != nil {
 		layer := atomic.LoadInt32(&d.spatialLayer)
-		meta := d.sequencer.push(extPkt.Packet.SequenceNumber, newSN, newTS, uint8(layer), extPkt.Head)
-		if d.simulcast.temporalSupported && d.mime == "video/vp8" {
+		if meta := d.sequencer.push(extPkt.Packet.SequenceNumber, newSN, newTS, uint8(layer), extPkt.Head); len(meta) > 0 &&
+			d.simulcast.temporalSupported && d.mime == "video/vp8" {
 			meta.setVP8PayloadMeta(tlz0Idx, picID)
 		}
 	}
@@ -409,7 +410,6 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 	}
 	// Update base
 	d.simulcast.lTSCalc = extPkt.Arrival
-	d.lastSSRC = extPkt.Packet.SSRC
 	// Update extPkt headers
 	extPkt.Packet.SequenceNumber = newSN
 	extPkt.Packet.Timestamp = newTS

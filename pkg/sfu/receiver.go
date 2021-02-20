@@ -267,7 +267,13 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 		})
 	}()
 	var del []int
-	for pkt := range w.buffers[layer].PacketChan() {
+
+	for {
+		pkt, err := w.buffers[layer].ReadExtended()
+		if err == io.EOF {
+			return
+		}
+
 		w.locks[layer].Lock()
 		for idx, dt := range w.downTracks[layer] {
 			if err := dt.WriteRTP(pkt); err == io.EOF {
@@ -284,6 +290,7 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 		}
 		w.locks[layer].Unlock()
 	}
+
 }
 
 // closeTracks close all tracks from Receiver
