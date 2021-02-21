@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lucsky/cuid"
+
 	log "github.com/pion/ion-log"
 	"github.com/pion/webrtc/v3"
 	med "github.com/pion/webrtc/v3/pkg/media"
@@ -367,7 +369,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 							err = p.remotePub.SetLocalDescription(offer)
 							assert.NoError(t, err)
 							<-gatherComplete
-							err = p.local.Join("test sid", "test uid")
+							err = p.local.Join("test sid", cuid.New())
 							assert.NoError(t, err)
 							answer, err := p.local.Answer(*p.remotePub.LocalDescription())
 							err = p.remotePub.SetRemoteDescription(*answer)
