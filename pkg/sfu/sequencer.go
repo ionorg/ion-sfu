@@ -8,7 +8,6 @@ import (
 )
 
 const (
-	packetMetaSize       = 16
 	maxPacketMetaHistory = 500
 
 	ignoreRetransmission = 100 // Ignore packet retransmission after ignoreRetransmission milliseconds

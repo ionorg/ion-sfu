@@ -109,7 +109,7 @@ type Options struct {
 func NewBuffer(ssrc uint32, pp *sync.Pool) *Buffer {
 	b := &Buffer{
 		mediaSSRC:   ssrc,
-		packetQueue: NewPacketQueue(pp),
+		packetQueue: NewPacketQueue(pp, 500),
 	}
 	b.extPackets.SetMinCapacity(7)
 	return b
@@ -244,6 +244,7 @@ func (b *Buffer) Close() error {
 	b.closeOnce.Do(func() {
 		b.closed.set(true)
 		b.onClose()
+		b.packetQueue.Close()
 	})
 	return nil
 }

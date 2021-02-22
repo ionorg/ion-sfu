@@ -314,11 +314,12 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 	// Check if packet SSRC is different from before
 	// if true, the video source changed
 	reSync := d.reSync.get()
-	if d.lastSSRC != extPkt.Packet.SSRC || reSync {
+	lastSSRC := atomic.LoadUint32(&d.lastSSRC)
+	if lastSSRC != extPkt.Packet.SSRC || reSync {
 		layer := atomic.LoadInt32(&d.spatialLayer)
 		currentLayer := uint16(layer)
 		targetLayer := uint16(layer >> 16)
-		if currentLayer == targetLayer && d.lastSSRC != 0 && !reSync {
+		if currentLayer == targetLayer && lastSSRC != 0 && !reSync {
 			return nil
 		}
 		if reSync && d.simulcast.lTSCalc != 0 {
@@ -338,7 +339,6 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 			go d.receiver.DeleteDownTrack(int(currentLayer), d.peerID)
 		}
 		atomic.StoreInt32(&d.spatialLayer, int32(targetLayer)<<16|int32(targetLayer))
-		atomic.StoreUint32(&d.lastSSRC, extPkt.Packet.SSRC)
 
 		if d.simulcast.temporalSupported {
 			if d.mime == "video/vp8" {
@@ -354,7 +354,8 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 	}
 	// Compute how much time passed between the old RTP extPkt
 	// and the current packet, and fix timestamp on source change
-	if d.simulcast.lTSCalc != 0 && d.lastSSRC != extPkt.Packet.SSRC {
+	if d.simulcast.lTSCalc != 0 && lastSSRC != extPkt.Packet.SSRC {
+		atomic.StoreUint32(&d.lastSSRC, extPkt.Packet.SSRC)
 		tDiff := (extPkt.Arrival - d.simulcast.lTSCalc) / 1e6
 		td := uint32((tDiff * 90) / 1000)
 		if td == 0 {
