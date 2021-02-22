@@ -281,14 +281,13 @@ func (d *DownTrack) writeSimpleRTP(extPkt buffer.ExtPacket) error {
 		}
 		d.snOffset = extPkt.Packet.SequenceNumber - d.lastSN - 1
 		d.tsOffset = extPkt.Packet.Timestamp - d.lastTS - 1
-		d.lastSSRC = extPkt.Packet.SSRC
+		atomic.StoreUint32(&d.lastSSRC, extPkt.Packet.SSRC)
 		d.reSync.set(false)
 	}
 
 	atomic.AddUint32(&d.octetCount, uint32(len(extPkt.Packet.Payload)))
 	atomic.AddUint32(&d.packetCount, 1)
 
-	d.lastSSRC = extPkt.Packet.SSRC
 	newSN := extPkt.Packet.SequenceNumber - d.snOffset
 	newTS := extPkt.Packet.Timestamp - d.tsOffset
 	if d.sequencer != nil {
@@ -339,7 +338,7 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 			go d.receiver.DeleteDownTrack(int(currentLayer), d.peerID)
 		}
 		atomic.StoreInt32(&d.spatialLayer, int32(targetLayer)<<16|int32(targetLayer))
-		d.lastSSRC = extPkt.Packet.SSRC
+		atomic.StoreUint32(&d.lastSSRC, extPkt.Packet.SSRC)
 
 		if d.simulcast.temporalSupported {
 			if d.mime == "video/vp8" {
@@ -393,7 +392,7 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 
 	if d.sequencer != nil {
 		layer := atomic.LoadInt32(&d.spatialLayer)
-		if meta := d.sequencer.push(extPkt.Packet.SequenceNumber, newSN, newTS, uint8(layer), extPkt.Head); len(meta) > 0 &&
+		if meta := d.sequencer.push(extPkt.Packet.SequenceNumber, newSN, newTS, uint8(layer), extPkt.Head); meta != nil &&
 			d.simulcast.temporalSupported && d.mime == "video/vp8" {
 			meta.setVP8PayloadMeta(tlz0Idx, picID)
 		}
@@ -443,18 +442,22 @@ func (d *DownTrack) handleRTCP(bytes []byte) {
 		expectedMinBitrate uint64
 	)
 
+	ssrc := atomic.LoadUint32(&d.lastSSRC)
+	if ssrc == 0 {
+		return
+	}
 	for _, pkt := range pkts {
 		switch p := pkt.(type) {
 		case *rtcp.PictureLossIndication:
 			if pliOnce {
-				p.MediaSSRC = d.lastSSRC
-				p.SenderSSRC = d.lastSSRC
+				p.MediaSSRC = ssrc
+				p.SenderSSRC = d.ssrc
 				fwdPkts = append(fwdPkts, p)
 				pliOnce = false
 			}
 		case *rtcp.FullIntraRequest:
 			if firOnce {
-				p.MediaSSRC = d.lastSSRC
+				p.MediaSSRC = ssrc
 				p.SenderSSRC = d.ssrc
 				fwdPkts = append(fwdPkts, p)
 				firOnce = false
@@ -479,7 +482,7 @@ func (d *DownTrack) handleRTCP(bytes []byte) {
 			}
 		}
 	}
-	if d.trackType == SimulcastDownTrack && maxRatePacketLoss != 0 || expectedMinBitrate != 0 {
+	if d.trackType == SimulcastDownTrack && (maxRatePacketLoss != 0 || expectedMinBitrate != 0) {
 		d.handleLayerChange(maxRatePacketLoss, expectedMinBitrate)
 	}
 

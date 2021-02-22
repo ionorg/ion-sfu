@@ -40,11 +40,9 @@ type ExtPacket struct {
 // Buffer contains all packets
 type Buffer struct {
 	sync.Mutex
-	bucket      *Bucket
 	nacker      *nackQueue
+	packetQueue *PacketQueue
 	codecType   webrtc.RTPCodecType
-	videoPool   *sync.Pool
-	audioPool   *sync.Pool
 	extPackets  deque.Deque
 	extPktMutex sync.Mutex
 	pPackets    []pendingPackets
@@ -108,11 +106,10 @@ type Options struct {
 }
 
 // NewBuffer constructs a new Buffer
-func NewBuffer(ssrc uint32, vp, ap *sync.Pool) *Buffer {
+func NewBuffer(ssrc uint32, pp *sync.Pool) *Buffer {
 	b := &Buffer{
-		mediaSSRC: ssrc,
-		videoPool: vp,
-		audioPool: ap,
+		mediaSSRC:   ssrc,
+		packetQueue: NewPacketQueue(pp),
 	}
 	b.extPackets.SetMinCapacity(7)
 	return b
@@ -129,10 +126,8 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 	switch {
 	case strings.HasPrefix(b.mime, "audio/"):
 		b.codecType = webrtc.RTPCodecTypeAudio
-		b.bucket = NewBucket(b.audioPool.Get().([]byte))
 	case strings.HasPrefix(b.mime, "video/"):
 		b.codecType = webrtc.RTPCodecTypeVideo
-		b.bucket = NewBucket(b.videoPool.Get().([]byte))
 	default:
 		b.codecType = webrtc.RTPCodecType(0)
 	}
@@ -248,12 +243,6 @@ func (b *Buffer) Close() error {
 
 	b.closeOnce.Do(func() {
 		b.closed.set(true)
-		if b.bucket != nil && b.codecType == webrtc.RTPCodecTypeVideo {
-			b.videoPool.Put(b.bucket.buf)
-		}
-		if b.bucket != nil && b.codecType == webrtc.RTPCodecTypeAudio {
-			b.audioPool.Put(b.bucket.buf)
-		}
 		b.onClose()
 	})
 	return nil
@@ -269,7 +258,7 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	if b.stats.PacketCount == 0 {
 		b.baseSN = sn
 		b.maxSeqNo = sn
-		b.bucket.headSN = sn - 1
+		b.packetQueue.headSN = sn - 1
 		b.lastReport = arrivalTime
 	} else if (sn-b.maxSeqNo)&0x8000 == 0 {
 		if sn < b.maxSeqNo {
@@ -304,7 +293,7 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	b.stats.PacketCount++
 
 	var p rtp.Packet
-	if err := p.Unmarshal(b.bucket.addPacket(pkt, sn, sn == b.maxSeqNo)); err != nil {
+	if err := p.Unmarshal(b.packetQueue.AddPacket(pkt, sn, sn == b.maxSeqNo)); err != nil {
 		return
 	}
 
@@ -501,7 +490,7 @@ func (b *Buffer) GetPacket(buff []byte, sn uint16) (int, error) {
 	if b.closed.get() {
 		return 0, io.EOF
 	}
-	return b.bucket.getPacket(buff, sn)
+	return b.packetQueue.GetPacket(buff, sn)
 }
 
 // Bitrate returns the current publisher stream bitrate.

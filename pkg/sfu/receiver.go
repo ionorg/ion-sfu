@@ -221,11 +221,11 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 	w.nackWorker.Submit(func() {
 		for _, meta := range packets {
 			pktBuff := packetFactory.Get().([]byte)
-			buff := w.buffers[meta.getLayer()]
+			buff := w.buffers[meta.layer]
 			if buff == nil {
 				break
 			}
-			i, err := buff.GetPacket(pktBuff, meta.getSourceSeqNo())
+			i, err := buff.GetPacket(pktBuff, meta.sourceSeqNo)
 			if err != nil {
 				if err == io.EOF {
 					break
@@ -236,8 +236,8 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 			if err = pkt.Unmarshal(pktBuff[:i]); err != nil {
 				continue
 			}
-			pkt.Header.SequenceNumber = meta.getTargetSeqNo()
-			pkt.Header.Timestamp = meta.getTimestamp()
+			pkt.Header.SequenceNumber = meta.targetSeqNo
+			pkt.Header.Timestamp = meta.timestamp
 			if track.simulcast.temporalSupported {
 				switch track.mime {
 				case "video/vp8":

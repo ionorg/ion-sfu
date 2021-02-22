@@ -21,9 +21,9 @@ func Test_sequencer(t *testing.T) {
 	res := seq.getSeqNoPairs(req)
 	assert.Equal(t, len(req), len(res))
 	for i, val := range res {
-		assert.Equal(t, val.getTargetSeqNo(), req[i])
-		assert.Equal(t, val.getSourceSeqNo(), req[i]-off)
-		assert.Equal(t, val.getLayer(), uint8(2))
+		assert.Equal(t, val.targetSeqNo, req[i])
+		assert.Equal(t, val.sourceSeqNo, req[i]-off)
+		assert.Equal(t, val.layer, uint8(2))
 	}
 	res = seq.getSeqNoPairs(req)
 	assert.Equal(t, 0, len(res))
@@ -31,9 +31,9 @@ func Test_sequencer(t *testing.T) {
 	res = seq.getSeqNoPairs(req)
 	assert.Equal(t, len(req), len(res))
 	for i, val := range res {
-		assert.Equal(t, val.getTargetSeqNo(), req[i])
-		assert.Equal(t, val.getSourceSeqNo(), req[i]-off)
-		assert.Equal(t, val.getLayer(), uint8(2))
+		assert.Equal(t, val.targetSeqNo, req[i])
+		assert.Equal(t, val.sourceSeqNo, req[i]-off)
+		assert.Equal(t, val.layer, uint8(2))
 	}
 }
 
@@ -76,7 +76,7 @@ func Test_sequencer_getNACKSeqNo(t *testing.T) {
 			g := n.getSeqNoPairs(tt.args.seqNo)
 			var got []uint16
 			for _, sn := range g {
-				got = append(got, sn.getSourceSeqNo())
+				got = append(got, sn.sourceSeqNo)
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("getSeqNoPairs() = %v, want %v", got, tt.want)

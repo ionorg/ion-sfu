@@ -1,6 +1,7 @@
 package buffer
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -42,21 +43,23 @@ var TestPackets = []*rtp.Packet{
 }
 
 func Test_queue(t *testing.T) {
-	q := NewBucket(make([]byte, 25000))
+	q := NewPacketQueue(&sync.Pool{New: func() interface{} {
+		return make([]byte, 1500)
+	}})
 
 	for _, p := range TestPackets {
 		p := p
 		buf, err := p.Marshal()
 		assert.NoError(t, err)
 		assert.NotPanics(t, func() {
-			q.addPacket(buf, p.SequenceNumber, true)
+			q.AddPacket(buf, p.SequenceNumber, true)
 		})
 	}
 	var expectedSN uint16
 	expectedSN = 6
 	np := rtp.Packet{}
-	buff := make([]byte, maxPktSize)
-	i, err := q.getPacket(buff, 6)
+	buff := make([]byte, 1500)
+	i, err := q.GetPacket(buff, 6)
 	assert.NoError(t, err)
 	err = np.Unmarshal(buff[:i])
 	assert.NoError(t, err)
@@ -70,8 +73,8 @@ func Test_queue(t *testing.T) {
 	buf, err := np2.Marshal()
 	assert.NoError(t, err)
 	expectedSN = 8
-	q.addPacket(buf, 8, false)
-	i, err = q.getPacket(buff, expectedSN)
+	q.AddPacket(buf, 8, false)
+	i, err = q.GetPacket(buff, expectedSN)
 	assert.NoError(t, err)
 	err = np.Unmarshal(buff[:i])
 	assert.NoError(t, err)
@@ -96,7 +99,9 @@ func Test_queue_edges(t *testing.T) {
 			},
 		},
 	}
-	q := NewBucket(make([]byte, 25000))
+	q := NewPacketQueue(&sync.Pool{New: func() interface{} {
+		return make([]byte, 1500)
+	}})
 	q.headSN = 65532
 	for _, p := range TestPackets {
 		p := p
@@ -106,15 +111,15 @@ func Test_queue_edges(t *testing.T) {
 			buf, err := p.Marshal()
 			assert.NoError(t, err)
 			assert.NotPanics(t, func() {
-				q.addPacket(buf, p.SequenceNumber, true)
+				q.AddPacket(buf, p.SequenceNumber, true)
 			})
 		})
 	}
 	var expectedSN uint16
 	expectedSN = 65534
 	np := rtp.Packet{}
-	buff := make([]byte, maxPktSize)
-	i, err := q.getPacket(buff, expectedSN)
+	buff := make([]byte, 1500)
+	i, err := q.GetPacket(buff, expectedSN)
 	assert.NoError(t, err)
 	err = np.Unmarshal(buff[:i])
 	assert.NoError(t, err)
@@ -127,8 +132,8 @@ func Test_queue_edges(t *testing.T) {
 	}
 	buf, err := np2.Marshal()
 	assert.NoError(t, err)
-	q.addPacket(buf, np2.SequenceNumber, false)
-	i, err = q.getPacket(buff, expectedSN+1)
+	q.AddPacket(buf, np2.SequenceNumber, false)
+	i, err = q.GetPacket(buff, expectedSN+1)
 	assert.NoError(t, err)
 	err = np.Unmarshal(buff[:i])
 	assert.NoError(t, err)
