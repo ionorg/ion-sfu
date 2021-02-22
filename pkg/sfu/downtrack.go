@@ -25,6 +25,7 @@ const (
 // to SFU Subscriber, the track handle the packets for simple, simulcast
 // and SVC Publisher.
 type DownTrack struct {
+	sync.Mutex
 	id          string
 	peerID      string
 	bound       atomicBool
@@ -313,6 +314,7 @@ func (d *DownTrack) writeSimpleRTP(extPkt buffer.ExtPacket) error {
 func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 	// Check if packet SSRC is different from before
 	// if true, the video source changed
+	d.Lock()
 	reSync := d.reSync.get()
 	lastSSRC := atomic.LoadUint32(&d.lastSSRC)
 	if lastSSRC != extPkt.Packet.SSRC || reSync {
@@ -320,6 +322,7 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 		currentLayer := uint16(layer)
 		targetLayer := uint16(layer >> 16)
 		if currentLayer == targetLayer && lastSSRC != 0 && !reSync {
+			d.Unlock()
 			return nil
 		}
 		if reSync && d.simulcast.lTSCalc != 0 {
@@ -331,6 +334,7 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 			d.receiver.SendRTCP([]rtcp.Packet{
 				&rtcp.PictureLossIndication{SenderSSRC: d.ssrc, MediaSSRC: extPkt.Packet.SSRC},
 			})
+			d.Unlock()
 			return nil
 		}
 		// Switch is done remove sender from previous layer
@@ -372,9 +376,9 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 			}
 		}
 	}
-
 	newSN := extPkt.Packet.SequenceNumber - d.snOffset
 	newTS := extPkt.Packet.Timestamp - d.tsOffset
+	d.Unlock()
 
 	var (
 		picID   uint16
