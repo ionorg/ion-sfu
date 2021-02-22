@@ -6,6 +6,8 @@ import (
 	log "github.com/pion/ion-log"
 )
 
+const maxDisorder = 30
+
 type PacketQueue struct {
 	pkts     [][]byte
 	pool     *sync.Pool
@@ -77,6 +79,12 @@ func (p *PacketQueue) push(pkt []byte) {
 	p.size++
 }
 
+func (p *PacketQueue) prepend(pkt []byte) {
+	p.pkts[p.tail] = pkt
+	p.tail = (p.tail + 1) & (len(p.pkts) - 1)
+	p.size++
+}
+
 func (p *PacketQueue) shift() {
 	if p.size <= 0 {
 		return
@@ -101,10 +109,19 @@ func (p *PacketQueue) get(i int) []byte {
 }
 
 func (p *PacketQueue) set(i int, pkt []byte) {
-	if i < 0 || i >= p.size {
-		log.Warnf("packet too old")
+	if i < 0 || i > maxDisorder {
+		log.Warnf("packet discarded (disorder), packet sn: %d, head sn: %d", p.headSN-uint16(i), p.headSN)
 		return
 	}
+
+	if i >= p.size && i < maxDisorder {
+		for j := 1; j < i; j++ {
+			p.prepend(nil)
+		}
+		p.prepend(pkt)
+		return
+	}
+
 	p.pkts[(p.head+i)&(len(p.pkts)-1)] = pkt
 }
 

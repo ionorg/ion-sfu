@@ -82,6 +82,24 @@ func Test_queue(t *testing.T) {
 	assert.NotPanics(t, q.Close)
 }
 
+func Test_queue_disorder(t *testing.T) {
+	d := []byte("dummy data")
+	q := NewPacketQueue(&sync.Pool{New: func() interface{} {
+		return make([]byte, 1500)
+	}}, 500)
+
+	q.headSN = 25745
+	q.AddPacket(d, 25746, true)
+	dd := q.AddPacket(d, 25743, false)
+	assert.NotNil(t, dd)
+	assert.Equal(t, dd, d)
+	assert.Equal(t, 4, q.size)
+	dd = q.AddPacket(d, 25745, false)
+	assert.NotNil(t, dd)
+	assert.Equal(t, dd, d)
+	assert.Equal(t, 4, q.size)
+}
+
 func Test_queue_edges(t *testing.T) {
 	var TestPackets = []*rtp.Packet{
 		{
