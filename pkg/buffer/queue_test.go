@@ -45,7 +45,7 @@ var TestPackets = []*rtp.Packet{
 func Test_queue(t *testing.T) {
 	q := NewPacketQueue(&sync.Pool{New: func() interface{} {
 		return make([]byte, 1500)
-	}})
+	}}, 500)
 
 	for _, p := range TestPackets {
 		p := p
@@ -79,6 +79,7 @@ func Test_queue(t *testing.T) {
 	err = np.Unmarshal(buff[:i])
 	assert.NoError(t, err)
 	assert.Equal(t, expectedSN, np.SequenceNumber)
+	assert.NotPanics(t, q.Close)
 }
 
 func Test_queue_edges(t *testing.T) {
@@ -101,7 +102,7 @@ func Test_queue_edges(t *testing.T) {
 	}
 	q := NewPacketQueue(&sync.Pool{New: func() interface{} {
 		return make([]byte, 1500)
-	}})
+	}}, 500)
 	q.headSN = 65532
 	for _, p := range TestPackets {
 		p := p
@@ -138,4 +139,5 @@ func Test_queue_edges(t *testing.T) {
 	err = np.Unmarshal(buff[:i])
 	assert.NoError(t, err)
 	assert.Equal(t, expectedSN+1, np.SequenceNumber)
+	assert.NotPanics(t, q.Close)
 }

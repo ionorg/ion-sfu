@@ -12,13 +12,15 @@ type PacketQueue struct {
 	head     int
 	tail     int
 	size     int
+	maxSize  int
 	headSN   uint16
 	duration uint32
 }
 
-func NewPacketQueue(pool *sync.Pool) *PacketQueue {
+func NewPacketQueue(pool *sync.Pool, size int) *PacketQueue {
 	return &PacketQueue{
-		pool: pool,
+		pool:    pool,
+		maxSize: size,
 	}
 }
 
@@ -37,7 +39,10 @@ func (p *PacketQueue) AddPacket(packet []byte, sn uint16, latest bool) []byte {
 		p.push(nil)
 	}
 	p.push(pkt)
-	p.clean()
+
+	if p.size > p.maxSize {
+		p.shift()
+	}
 	return pkt
 }
 
@@ -57,6 +62,12 @@ func (p *PacketQueue) GetPacket(buf []byte, sn uint16) (i int, err error) {
 	}
 	copy(buf, pkt)
 	return
+}
+
+func (p *PacketQueue) Close() {
+	for p.size > 0 {
+		p.shift()
+	}
 }
 
 func (p *PacketQueue) push(pkt []byte) {
@@ -113,11 +124,5 @@ func (p *PacketQueue) resize() {
 		p.head = 0
 		p.tail = p.size
 		p.pkts = newBuf
-	}
-}
-
-func (p *PacketQueue) clean() {
-	for p.size > 100 {
-		p.shift()
 	}
 }
