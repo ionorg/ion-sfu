@@ -197,7 +197,7 @@ func (d *DownTrack) SwitchSpatialLayer(targetLayer int64, setAsMax bool) {
 			atomic.StoreInt32(&d.spatialLayer, int32(targetLayer<<16)|int32(currentLayer))
 			atomic.StoreInt64(&d.skipFB, 4)
 			if setAsMax {
-				d.maxSpatialLayer = targetLayer
+				atomic.StoreInt64(&d.maxSpatialLayer, targetLayer)
 			}
 		}
 	}
@@ -216,7 +216,7 @@ func (d *DownTrack) SwitchTemporalLayer(targetLayer int64, setAsMax bool) {
 		atomic.StoreInt32(&d.temporalLayer, int32(targetLayer<<16)|int32(currentLayer))
 		atomic.StoreInt64(&d.skipFB, 4)
 		if setAsMax {
-			d.maxTemporalLayer = targetLayer
+			atomic.StoreInt64(&d.maxTemporalLayer, targetLayer)
 		}
 	}
 }
@@ -514,11 +514,11 @@ func (d *DownTrack) handleLayerChange(maxRatePacketLoss uint8, expectedMinBitrat
 			mctl := mtl[currentSpatialLayer]
 
 			if maxRatePacketLoss <= 5 {
-				if currentTemporalLayer < mctl && currentTemporalLayer+1 <= d.maxTemporalLayer &&
+				if currentTemporalLayer < mctl && currentTemporalLayer+1 <= atomic.LoadInt64(&d.maxTemporalLayer) &&
 					expectedMinBitrate >= 3*cbr/4 {
 					d.SwitchTemporalLayer(currentTemporalLayer+1, false)
 				}
-				if currentTemporalLayer >= mctl && expectedMinBitrate >= 3*cbr/2 && currentSpatialLayer+1 <= d.maxSpatialLayer &&
+				if currentTemporalLayer >= mctl && expectedMinBitrate >= 3*cbr/2 && currentSpatialLayer+1 <= atomic.LoadInt64(&d.maxSpatialLayer) &&
 					currentSpatialLayer+1 <= 2 {
 					d.SwitchSpatialLayer(currentSpatialLayer+1, false)
 					d.SwitchTemporalLayer(0, false)
