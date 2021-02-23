@@ -40,11 +40,11 @@ type ExtPacket struct {
 // Buffer contains all packets
 type Buffer struct {
 	sync.Mutex
+	pool        *sync.Pool
 	nacker      *nackQueue
 	packetQueue *PacketQueue
 	codecType   webrtc.RTPCodecType
 	extPackets  deque.Deque
-	extPktMutex sync.Mutex
 	pPackets    []pendingPackets
 	closeOnce   sync.Once
 	mediaSSRC   uint32
@@ -108,8 +108,8 @@ type Options struct {
 // NewBuffer constructs a new Buffer
 func NewBuffer(ssrc uint32, pp *sync.Pool) *Buffer {
 	b := &Buffer{
-		mediaSSRC:   ssrc,
-		packetQueue: NewPacketQueue(pp, 500),
+		mediaSSRC: ssrc,
+		pool:      pp,
 	}
 	b.extPackets.SetMinCapacity(7)
 	return b
@@ -140,6 +140,7 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 	}
 
 	if b.codecType == webrtc.RTPCodecTypeVideo {
+		b.packetQueue = NewPacketQueue(b.pool, 500)
 		for _, fb := range codec.RTCPFeedback {
 			switch fb.Type {
 			case webrtc.TypeRTCPFBGoogREMB:
@@ -155,6 +156,7 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 			}
 		}
 	} else if b.codecType == webrtc.RTPCodecTypeAudio {
+		b.packetQueue = NewPacketQueue(b.pool, 50)
 		for _, h := range params.HeaderExtensions {
 			if h.URI == sdp.AudioLevelURI {
 				b.audioLevel = true
