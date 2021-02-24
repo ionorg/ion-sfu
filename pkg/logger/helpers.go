@@ -21,14 +21,13 @@ func getZerologLevel(level string) zerolog.Level {
 	case "info":
 		zerologlvl = defaultVLevel
 	case "warn":
-		zerologlvl = 0
+		zerologlvl = zeroVLevel
 	case "error":
-		zerologlvl = 0
+		zerologlvl = zeroVLevel
 	}
 	return zerologlvl
 }
 
-// func getOutputFormat(level string, fixByFile, fixByFunc []string) zerolog.ConsoleWriter {
 func getOutputFormat() zerolog.ConsoleWriter {
 	output := zerolog.ConsoleWriter{Out: os.Stdout, NoColor: false, TimeFormat: timeFormat}
 	output.FormatTimestamp = func(i interface{}) string {

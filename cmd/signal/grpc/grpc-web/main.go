@@ -27,10 +27,10 @@ type Config struct {
 }
 
 var (
-	conf                                               = Config{}
-	file                                               string
-	addr                                               string
-	defaultLogger, warnLogger, infoLogger, debugLogger logr.Logger
+	conf                      = Config{}
+	file                      string
+	addr                      string
+	defaultLogger, infoLogger logr.Logger
 )
 
 const (
@@ -115,7 +115,7 @@ func main() {
 	dc.Use(datachannel.SubscriberAPI)
 	s := server.NewWrapperedGRPCWebServer(options, nsfu)
 	if err := s.Serve(); err != nil {
-		infoLogger.Error(err, "failed to serve")
+		defaultLogger.Error(err, "failed to serve")
 		os.Exit(1)
 	}
 	select {}

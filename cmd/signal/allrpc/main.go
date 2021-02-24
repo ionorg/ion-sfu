@@ -100,11 +100,8 @@ func main() {
 		showHelp()
 		os.Exit(-1)
 	}
-	fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go", "jsonrpc2"}
-	fixByFunc := []string{"Handle"}
-	log.Init("", fixByFile, fixByFunc)
-	log.Infof("--- Starting SFU Node ---")
 
+	conf.Config.Logger = log.New()
 	node := server.New(conf.Config)
 
 	if gaddr != "" {

@@ -4,7 +4,7 @@ import (
 	"net"
 	"net/http"
 
-	log "github.com/pion/ion-sfu/pkg/logger"
+	"github.com/go-logr/logr"
 	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
@@ -24,7 +24,8 @@ import (
 )
 
 type Server struct {
-	sfu *sfu.SFU
+	sfu    *sfu.SFU
+	logger logr.Logger
 }
 
 // New create a server which support grpc/jsonrpc
@@ -33,7 +34,8 @@ func New(c sfu.Config) *Server { // Register default middlewares
 	dc := s.NewDatachannel(sfu.APIChannelLabel)
 	dc.Use(datachannel.SubscriberAPI)
 	return &Server{
-		sfu: s,
+		sfu:    s,
+		logger: c.Logger,
 	}
 }
 
@@ -48,10 +50,10 @@ func (s *Server) ServeGRPC(gaddr string) error {
 		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
 	)
 	pb.RegisterSFUServer(gs, grpcServer.NewServer(s.sfu))
-	log.Infof("GRPC Listening at %s", gaddr)
+	s.logger.Info("GRPC Listening", "addr", gaddr)
 
 	if err := gs.Serve(l); err != nil {
-		log.Errorf("err=%v", err)
+		s.logger.Error(err, "grpc server error")
 		return err
 	}
 	return nil
@@ -74,7 +76,7 @@ func (s *Server) ServeJSONRPC(jaddr, cert, key string) error {
 		}
 		defer c.Close()
 
-		p := jsonrpcServer.NewJSONSignal(sfu.NewPeer(s.sfu))
+		p := jsonrpcServer.NewJSONSignal(sfu.NewPeer(s.sfu), s.logger)
 		defer p.Close()
 
 		jc := jsonrpc2.NewConn(r.Context(), websocketjsonrpc2.NewObjectStream(c), p)
@@ -83,21 +85,21 @@ func (s *Server) ServeJSONRPC(jaddr, cert, key string) error {
 
 	var err error
 	if key != "" && cert != "" {
-		log.Infof("JsonRPC Listening at https://%s", jaddr)
+		s.logger.Info("JsonRPC Listening", "addr", "https://"+jaddr)
 		err = http.ListenAndServeTLS(jaddr, cert, key, nil)
 	} else {
-		log.Infof("JsonRPC Listening at http://%s", jaddr)
+		s.logger.Info("JsonRPC Listening", "addr", "http://"+jaddr)
 		err = http.ListenAndServe(jaddr, nil)
 	}
 	if err != nil {
-		log.Errorf("err=%v", err)
+		s.logger.Error(err, "JsonRPC starting error")
 	}
 	return err
 }
 
 // ServePProf
 func (s *Server) ServePProf(paddr string) {
-	log.Infof("PProf Listening at http://%s", paddr)
+	s.logger.Info("PProf Listening", "addr", paddr)
 	http.ListenAndServe(paddr, nil)
 }
 
@@ -112,12 +114,12 @@ func (s *Server) ServeMetrics(maddr string) {
 
 	metricsLis, err := net.Listen("tcp", maddr)
 	if err != nil {
-		log.Panicf("cannot bind to metrics endpoint %s. err: %s", maddr, err)
+		s.logger.Error(err, "Cannot bind to metrics endpoint", "addr", maddr)
 	}
-	log.Infof("Metrics Listening at http://%s", maddr)
+	s.logger.Info("Metrics Listening", "addr", "http://"+maddr)
 
 	err = srv.Serve(metricsLis)
 	if err != nil {
-		log.Errorf("debug server stopped. got err: %s", err)
+		s.logger.Error(err, "Metrics server stopped with error")
 	}
 }

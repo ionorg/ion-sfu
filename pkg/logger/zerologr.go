@@ -13,42 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// package logger defines a default implementation of the github.com/go-logr/logr
+// Package logger defines a default implementation of the github.com/go-logr/logr
 // interfaces built on top of zerolog (github.com/rs/zerolog) and is the default
 // implementation for ion-sfu released binaries.
 package logger
 
 import (
-	"fmt"
-
 	"github.com/go-logr/logr"
 	"github.com/rs/zerolog"
 )
 
 const (
-	debugVLevel   = 2
-	traceVLevel   = 3
-	defaultVLevel = 1
+	zeroVLevel    = iota // error and warn
+	defaultVLevel        // info
+	debugVLevel          // debug
+	traceVLevel          // trace
 	timeFormat    = "2006-01-02 15:04:05.000"
 )
-
-var (
-	log Zerologr
-)
-
-// this prevents from using non-initialised logger
-func init() {
-	fixByFile := []string{"zerologr.go"}
-	fixByFunc := []string{"Debugf", "Infof", "Warnf"}
-	Init("debug", fixByFile, fixByFunc)
-}
-
-type Zerologr interface {
-	logr.Logger
-	Infof(string, ...interface{})
-	Errorf(string, ...interface{})
-	Panicf(string, ...interface{})
-}
 
 // Options that can be passed to NewWithOptions
 type Options struct {
@@ -67,53 +48,18 @@ type logger struct {
 	values    []interface{}
 }
 
-// Init creates and starts logger that has the same output to pion/ion-log
-func Init(level string, fixByFile, fixByFunc []string) {
-
-	zerolog.TimeFieldFormat = timeFormat
-
-	logLevel := getZerologLevel(level)
-	output := getOutputFormat()
-	l := zerolog.New(output).Level(logLevel).With().Timestamp().Logger()
-
-	o := Options{
-		Name:   "",
-		Logger: &l,
-	}
-	log = NewWithOptionsZerologr(o)
-}
-
-// New returns a logr.Logger which is implemented by zerolog.
-func NewZerologr() Zerologr {
-	return NewWithOptionsZerologr(Options{})
-}
-
 // New returns a logr.Logger which is implemented by zerolog.
 func New() logr.Logger {
-	return NewWithOptionsZerologr(Options{})
-}
-
-// NewWithOptionsZerologr returns a logr.Logger which is implemented by zerolog.
-func NewWithOptionsZerologr(opts Options) Zerologr {
-	if opts.Logger == nil {
-		zerolog.TimeFieldFormat = timeFormat
-
-		logLevel := getZerologLevel(opts.Level)
-		output := getOutputFormat()
-		l := zerolog.New(output).Level(logLevel).With().Timestamp().Logger()
-		opts.Logger = &l
-	}
-	return logger{
-		l:         opts.Logger,
-		verbosity: int(opts.Logger.GetLevel()),
-		prefix:    opts.Name,
-		values:    nil,
-	}
+	return NewWithOptions(Options{})
 }
 
 // NewWithOptions returns a logr.Logger which is implemented by zerolog.
 func NewWithOptions(opts Options) logr.Logger {
 
+	// var logLevel
+	// if opts.Level == "" {
+	// 	logLevel = getZerologLevel(opts.Level)
+	// }
 	if opts.Logger == nil {
 		zerolog.TimeFieldFormat = timeFormat
 		logLevel := getZerologLevel(opts.Level)
@@ -124,7 +70,7 @@ func NewWithOptions(opts Options) logr.Logger {
 
 	return logger{
 		l:         opts.Logger,
-		verbosity: int(opts.Logger.GetLevel()),
+		verbosity: defaultVLevel,
 		prefix:    opts.Name,
 		values:    nil,
 	}
@@ -149,14 +95,19 @@ func (l logger) Info(msg string, keysAndVals ...interface{}) {
 	}
 }
 
+// Enabled Check
 func (l logger) Enabled() bool {
 	var lvl zerolog.Level
-	if l.verbosity < debugVLevel {
+	if l.verbosity == zeroVLevel {
+		lvl = zerolog.WarnLevel
+	} else if l.verbosity <= defaultVLevel {
 		lvl = zerolog.InfoLevel
-	} else if l.verbosity < traceVLevel {
+	} else if l.verbosity <= debugVLevel {
 		lvl = zerolog.DebugLevel
-	} else {
+	} else if l.verbosity <= traceVLevel {
 		lvl = zerolog.TraceLevel
+	} else {
+		lvl = zerolog.DebugLevel
 	}
 	if lvl < zerolog.GlobalLevel() {
 		return false
@@ -164,6 +115,7 @@ func (l logger) Enabled() bool {
 	return true
 }
 
+// Error always prints error, not metter which log level was set
 func (l logger) Error(err error, msg string, keysAndVals ...interface{}) {
 	e := l.l.Error().Err(err)
 	if l.prefix != "" {
@@ -174,7 +126,8 @@ func (l logger) Error(err error, msg string, keysAndVals ...interface{}) {
 	e.Msg(msg)
 }
 
-func (l logger) V(verbosity int) logr.InfoLogger {
+// V returns new logger with less or more log level
+func (l logger) V(verbosity int) logr.Logger {
 	new := l.clone()
 	new.verbosity = verbosity
 	return new
@@ -195,42 +148,4 @@ func (l logger) WithValues(kvList ...interface{}) logr.Logger {
 	new := l.clone()
 	new.values = append(new.values, kvList...)
 	return new
-}
-
-// Infof logs a formatted info level log to the console
-func (l logger) Infof(format string, v ...interface{}) {
-	l.Info(fmt.Sprintf(format, v...))
-}
-
-func Infof(format string, v ...interface{}) {
-	log.Info(fmt.Sprintf(format, v...))
-}
-
-// Errorf logs a formatted error level log to the console
-func (l logger) Errorf(format string, v ...interface{}) {
-	l.Error(nil, fmt.Sprintf(format, v...))
-}
-
-func Errorf(format string, v ...interface{}) {
-	log.Error(nil, fmt.Sprintf(format, v...))
-}
-
-// Panicf generates a panic event and stop all underlying goroutines
-func (l logger) Panicf(format string, v ...interface{}) {
-	msg := l.l.Panic()
-	msg.Msgf(format, v...)
-}
-
-func Panicf(format string, v ...interface{}) {
-	log.Panicf(format, v...)
-}
-
-// Debugf prints debug message with given format
-func Debugf(format string, v ...interface{}) {
-	log.Info(fmt.Sprintf(format, v...))
-}
-
-// Debugf prints warning message with given format
-func Warnf(format string, v ...interface{}) {
-	log.Info(fmt.Sprintf(format, v...))
 }

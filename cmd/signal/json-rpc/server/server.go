@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	log "github.com/pion/ion-sfu/pkg/logger"
+	"github.com/go-logr/logr"
 	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/pion/webrtc/v3"
 	"github.com/sourcegraph/jsonrpc2"
@@ -30,10 +30,11 @@ type Trickle struct {
 
 type JSONSignal struct {
 	*sfu.Peer
+	logr.Logger
 }
 
-func NewJSONSignal(p *sfu.Peer) *JSONSignal {
-	return &JSONSignal{p}
+func NewJSONSignal(p *sfu.Peer, l logr.Logger) *JSONSignal {
+	return &JSONSignal{p, l}
 }
 
 // Handle incoming RPC call events like join, answer, offer and trickle
@@ -50,14 +51,14 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 		var join Join
 		err := json.Unmarshal(*req.Params, &join)
 		if err != nil {
-			log.Errorf("connect: error parsing offer: %v", err)
+			p.Logger.Error(err, "connect: error parsing offer")
 			replyError(err)
 			break
 		}
 
 		p.OnOffer = func(offer *webrtc.SessionDescription) {
 			if err := conn.Notify(ctx, "offer", offer); err != nil {
-				log.Errorf("error sending offer %s", err)
+				p.Error(err, "error sending offer")
 			}
 
 		}
@@ -66,7 +67,7 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 				Candidate: *candidate,
 				Target:    target,
 			}); err != nil {
-				log.Errorf("error sending ice candidate %s", err)
+				p.Error(err, "error sending ice candidate")
 			}
 		}
 
@@ -88,7 +89,7 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 		var negotiation Negotiation
 		err := json.Unmarshal(*req.Params, &negotiation)
 		if err != nil {
-			log.Errorf("connect: error parsing offer: %v", err)
+			p.Error(err, "connect: error parsing offer")
 			replyError(err)
 			break
 		}
@@ -104,7 +105,7 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 		var negotiation Negotiation
 		err := json.Unmarshal(*req.Params, &negotiation)
 		if err != nil {
-			log.Errorf("connect: error parsing offer: %v", err)
+			p.Error(err, "connect: error parsing offer")
 			replyError(err)
 			break
 		}
@@ -118,7 +119,7 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 		var trickle Trickle
 		err := json.Unmarshal(*req.Params, &trickle)
 		if err != nil {
-			log.Errorf("connect: error parsing candidate: %v", err)
+			p.Error(err, "connect: error parsing candidate")
 			replyError(err)
 			break
 		}

@@ -9,6 +9,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	"github.com/go-logr/logr"
 	"github.com/gorilla/websocket"
 	"github.com/pion/ion-sfu/cmd/signal/json-rpc/server"
 	log "github.com/pion/ion-sfu/pkg/logger"
@@ -21,12 +22,13 @@ import (
 )
 
 var (
-	conf        = sfu.Config{}
-	file        string
-	cert        string
-	key         string
-	addr        string
-	metricsAddr string
+	conf                      = sfu.Config{}
+	file                      string
+	cert                      string
+	key                       string
+	addr                      string
+	metricsAddr               string
+	defaultLogger, infoLogger logr.Logger
 )
 
 const (
@@ -104,28 +106,30 @@ func startMetrics(addr string) {
 
 	metricsLis, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Panicf("cannot bind to metrics endpoint %s. err: %s", addr, err)
+		defaultLogger.Error(err, "cannot bind to metrics endpoint", "addr", addr)
+		os.Exit(1)
 	}
-	log.Infof("Metrics Listening at %s", addr)
+	infoLogger.Info("Metrics Listening", "addr", addr)
 
 	err = srv.Serve(metricsLis)
 	if err != nil {
-		log.Errorf("debug server stopped. got err: %s", err)
+		defaultLogger.Error(err, "Metrics server stopped")
 	}
 }
 
 func main() {
+
 	if !parse() {
 		showHelp()
 		os.Exit(-1)
 	}
 
-	fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go", "jsonrpc2"}
-	fixByFunc := []string{"Handle"}
-	log.Init("", fixByFile, fixByFunc)
+	defaultLogger = log.New()
+	infoLogger = defaultLogger.V(1)
 
-	log.Infof("--- Starting SFU Node ---")
-
+	infoLogger.Info("--- Starting SFU Node ---")
+	// Pass logr instance
+	conf.Logger = defaultLogger
 	s := sfu.NewSFU(conf)
 	dc := s.NewDatachannel(sfu.APIChannelLabel)
 	dc.Use(datachannel.SubscriberAPI)
@@ -145,7 +149,7 @@ func main() {
 		}
 		defer c.Close()
 
-		p := server.NewJSONSignal(sfu.NewPeer(s))
+		p := server.NewJSONSignal(sfu.NewPeer(s), defaultLogger)
 		defer p.Close()
 
 		jc := jsonrpc2.NewConn(r.Context(), websocketjsonrpc2.NewObjectStream(c), p)
@@ -156,10 +160,10 @@ func main() {
 
 	var err error
 	if key != "" && cert != "" {
-		log.Infof("Listening at https://[%s]", addr)
+		infoLogger.Info("Started listening", "addr", "https://"+addr)
 		err = http.ListenAndServeTLS(addr, cert, key, nil)
 	} else {
-		log.Infof("Listening at http://[%s]", addr)
+		infoLogger.Info("Started listening", "addr", "http://"+addr)
 		err = http.ListenAndServe(addr, nil)
 	}
 	if err != nil {

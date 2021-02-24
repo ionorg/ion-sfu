@@ -134,7 +134,9 @@ func main() {
 	// 2 - debug
 	// 3 - trace
 	defaultLogger = log.New()
+	warnLogger = defaultLogger.V(0)
 	infoLogger = defaultLogger.V(1)
+	debugLogger = defaultLogger.V(2)
 
 	infoLogger.Info("--- Starting SFU Node ---")
 	lis, err := net.Listen("tcp", addr)
