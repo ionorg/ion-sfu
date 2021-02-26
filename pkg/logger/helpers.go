@@ -15,15 +15,37 @@ func getZerologLevel(level string) zerolog.Level {
 	zerologlvl := zerolog.GlobalLevel()
 	switch level {
 	case "trace":
+		zerologlvl = zerolog.Level(traceVLevel)
+	case "debug":
+		zerologlvl = zerolog.Level(debugVLevel)
+	case "info":
+		zerologlvl = zerolog.Level(infoVLevel)
+	}
+	return zerologlvl
+}
+
+func getZerologLevelByVLevel(level VLevel) zerolog.Level {
+	zerologlvl := zerolog.GlobalLevel()
+	switch level {
+	case 0:
+		zerologlvl = zerolog.InfoLevel
+	case 1:
+		zerologlvl = zerolog.DebugLevel
+	case 2:
+		zerologlvl = zerolog.TraceLevel
+	}
+	return zerologlvl
+}
+
+func getVLevelByString(level string) VLevel {
+	var zerologlvl VLevel
+	switch level {
+	case "trace":
 		zerologlvl = traceVLevel
 	case "debug":
 		zerologlvl = debugVLevel
 	case "info":
-		zerologlvl = defaultVLevel
-	case "warn":
-		zerologlvl = zeroVLevel
-	case "error":
-		zerologlvl = zeroVLevel
+		zerologlvl = infoVLevel
 	}
 	return zerologlvl
 }

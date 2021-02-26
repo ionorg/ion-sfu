@@ -23,29 +23,65 @@ import (
 	"github.com/rs/zerolog"
 )
 
+type VLevel int
+
 const (
-	zeroVLevel    = iota // error and warn
-	defaultVLevel        // info
-	debugVLevel          // debug
-	traceVLevel          // trace
-	timeFormat    = "2006-01-02 15:04:05.000"
+	infoVLevel  VLevel = iota // info
+	debugVLevel               // debug
+	traceVLevel               // trace
+	timeFormat  = "2006-01-02 15:04:05.000"
 )
+
+func SetLogLevelString(level string) {
+	l := zerolog.GlobalLevel()
+	switch level {
+	case "trace":
+		l = zerolog.TraceLevel
+	case "debug":
+		l = zerolog.DebugLevel
+	case "info":
+		l = zerolog.InfoLevel
+	case "error":
+		l = zerolog.ErrorLevel
+	}
+	zerolog.SetGlobalLevel(l)
+
+}
+
+func SetLogLevel(level int) {
+	l := zerolog.GlobalLevel()
+	switch level {
+	case 0:
+		l = zerolog.InfoLevel
+	case 1:
+		l = zerolog.DebugLevel
+	case 3:
+		l = zerolog.TraceLevel
+	default:
+		l = zerolog.InfoLevel
+	}
+	zerolog.SetGlobalLevel(l)
+}
 
 // Options that can be passed to NewWithOptions
 type Options struct {
 	// Name is an optional name of the logger
-	Name  string
-	Level string
+	Name       string
+	Level      string
+	Vlevel     VLevel
+	TimeFormat string
+
 	// Logger is an instance of zerolog, if nil a default logger is used
 	Logger *zerolog.Logger
 }
 
 // logger is a logr.Logger that uses zerolog to log.
 type logger struct {
-	l         *zerolog.Logger
-	verbosity int
-	prefix    string
-	values    []interface{}
+	l            *zerolog.Logger
+	vlevel       VLevel
+	parentVLevel VLevel
+	prefix       string
+	values       []interface{}
 }
 
 // New returns a logr.Logger which is implemented by zerolog.
@@ -56,32 +92,41 @@ func New() logr.Logger {
 // NewWithOptions returns a logr.Logger which is implemented by zerolog.
 func NewWithOptions(opts Options) logr.Logger {
 
-	// var logLevel
-	// if opts.Level == "" {
-	// 	logLevel = getZerologLevel(opts.Level)
-	// }
+	var level VLevel
+	if opts.TimeFormat == "" {
+		opts.TimeFormat = timeFormat
+	}
+
+	if opts.Level != "" {
+		level = getVLevelByString(opts.Level)
+	} else {
+		level = opts.Vlevel
+	}
+
 	if opts.Logger == nil {
 		zerolog.TimeFieldFormat = timeFormat
-		logLevel := getZerologLevel(opts.Level)
+		logLevel := getZerologLevelByVLevel(level)
 		output := getOutputFormat()
 		l := zerolog.New(output).Level(logLevel).With().Timestamp().Logger()
+		// l := zerolog.New(output).With().Timestamp().Logger()
 		opts.Logger = &l
 	}
 
 	return logger{
-		l:         opts.Logger,
-		verbosity: defaultVLevel,
-		prefix:    opts.Name,
-		values:    nil,
+		l:            opts.Logger,
+		vlevel:       level,
+		parentVLevel: level,
+		prefix:       opts.Name,
+		values:       nil,
 	}
 }
 
 func (l logger) Info(msg string, keysAndVals ...interface{}) {
 	if l.Enabled() {
 		var e *zerolog.Event
-		if l.verbosity < debugVLevel {
+		if l.vlevel < debugVLevel {
 			e = l.l.Info()
-		} else if l.verbosity < traceVLevel {
+		} else if l.vlevel < traceVLevel {
 			e = l.l.Debug()
 		} else {
 			e = l.l.Trace()
@@ -95,24 +140,9 @@ func (l logger) Info(msg string, keysAndVals ...interface{}) {
 	}
 }
 
-// Enabled Check
+// Enabled Check that V-level for this Logger is bigger than parrent logger
 func (l logger) Enabled() bool {
-	var lvl zerolog.Level
-	if l.verbosity == zeroVLevel {
-		lvl = zerolog.WarnLevel
-	} else if l.verbosity <= defaultVLevel {
-		lvl = zerolog.InfoLevel
-	} else if l.verbosity <= debugVLevel {
-		lvl = zerolog.DebugLevel
-	} else if l.verbosity <= traceVLevel {
-		lvl = zerolog.TraceLevel
-	} else {
-		lvl = zerolog.DebugLevel
-	}
-	if lvl < zerolog.GlobalLevel() {
-		return false
-	}
-	return true
+	return l.vlevel <= l.parentVLevel
 }
 
 // Error always prints error, not metter which log level was set
@@ -127,9 +157,9 @@ func (l logger) Error(err error, msg string, keysAndVals ...interface{}) {
 }
 
 // V returns new logger with less or more log level
-func (l logger) V(verbosity int) logr.Logger {
+func (l logger) V(vlevel int) logr.Logger {
 	new := l.clone()
-	new.verbosity = verbosity
+	new.vlevel = VLevel(vlevel)
 	return new
 }
 
@@ -149,3 +179,8 @@ func (l logger) WithValues(kvList ...interface{}) logr.Logger {
 	new.values = append(new.values, kvList...)
 	return new
 }
+
+// Verify that logger implements logr.Logger.
+var _ logr.Logger = logger{}
+
+// var _ logr.CallDepthLogger = logger{}
