@@ -42,6 +42,7 @@ type DownTrack struct {
 
 	enabled  atomicBool
 	reSync   atomicBool
+	reBaseTs atomicBool
 	snOffset uint16
 	tsOffset uint32
 	lastSSRC uint32
@@ -88,6 +89,7 @@ func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters,
 		d.payloadType = uint8(codec.PayloadType)
 		d.writeStream = t.WriteStream()
 		d.mime = strings.ToLower(codec.MimeType)
+		d.reBaseTs.set(true)
 		d.reSync.set(true)
 		d.enabled.set(true)
 		if rr := bufferFactory.GetOrNew(packetio.RTCPBufferPacket, uint32(t.SSRC())).(*buffer.RTCPReader); rr != nil {
@@ -279,8 +281,11 @@ func (d *DownTrack) writeSimpleRTP(extPkt buffer.ExtPacket) error {
 				return nil
 			}
 		}
-		d.snOffset = extPkt.Packet.SequenceNumber - d.lastSN - 1
-		d.tsOffset = extPkt.Packet.Timestamp - d.lastTS - 1
+		if d.reBaseTs.get() {
+			d.snOffset = extPkt.Packet.SequenceNumber - d.lastSN - 1
+			d.tsOffset = extPkt.Packet.Timestamp - d.lastTS - 1
+			d.reBaseTs.set(false)
+		}
 		d.lastSSRC = extPkt.Packet.SSRC
 		d.reSync.set(false)
 	}
