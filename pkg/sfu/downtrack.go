@@ -42,6 +42,7 @@ type DownTrack struct {
 
 	enabled  atomicBool
 	reSync   atomicBool
+	reBaseTs atomicBool
 	snOffset uint16
 	tsOffset uint32
 	lastSSRC uint32
@@ -89,6 +90,7 @@ func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters,
 		d.writeStream = t.WriteStream()
 		d.mime = strings.ToLower(codec.MimeType)
 		d.reSync.set(true)
+		d.reBaseTs.set(true)
 		d.enabled.set(true)
 		if rr := bufferFactory.GetOrNew(packetio.RTCPBufferPacket, uint32(t.SSRC())).(*buffer.RTCPReader); rr != nil {
 			rr.OnPacket(func(pkt []byte) {
@@ -153,6 +155,7 @@ func (d *DownTrack) WriteRTP(p buffer.ExtPacket) error {
 	return nil
 }
 
+// Mute enables or disables media forwarding
 func (d *DownTrack) Mute(val bool) {
 	if d.enabled.get() != val {
 		return
@@ -279,8 +282,11 @@ func (d *DownTrack) writeSimpleRTP(extPkt buffer.ExtPacket) error {
 				return nil
 			}
 		}
-		d.snOffset = extPkt.Packet.SequenceNumber - d.lastSN - 1
-		d.tsOffset = extPkt.Packet.Timestamp - d.lastTS - 1
+		if d.reBaseTs.get() {
+			d.snOffset = extPkt.Packet.SequenceNumber - d.lastSN - 1
+			d.tsOffset = extPkt.Packet.Timestamp - d.lastTS - 1
+			d.reBaseTs.set(false)
+		}
 		d.lastSSRC = extPkt.Packet.SSRC
 		d.reSync.set(false)
 	}
