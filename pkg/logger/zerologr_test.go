@@ -2,70 +2,145 @@ package logger
 
 import (
 	"bytes"
-	"fmt"
-	"log"
-	"os"
+	"sync/atomic"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func captureOutput(f func()) string {
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
-	f()
-	log.SetOutput(os.Stderr)
-	return buf.String()
+func TestDefaultVerbosityLevel(t *testing.T) {
+
+	log := New()
+	log.Info("info")
+
+	t.Run("info", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		log := NewWithOptions(Options{TimeFormat: "NOTIME", Output: out})
+		log.Info("info")
+		assert.Equal(t, `{"level":"info","v":0,"time":"NOTIME","message":"info"}`+"\n", out.String())
+	})
+
+	t.Run("info-add-fields", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		log := NewWithOptions(Options{TimeFormat: "NOTIME", Output: out})
+		log.Info("", "test_field", 123)
+		assert.Equal(t, `{"level":"info","test_field":123,"v":0,"time":"NOTIME"}`+"\n", out.String())
+	})
+
+	t.Run("empty", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		log := NewWithOptions(Options{TimeFormat: "NOTIME", Output: out})
+		log.Info("")
+		assert.Equal(t, `{"level":"info","v":0,"time":"NOTIME"}`+"\n", out.String())
+	})
+
+	t.Run("disabled", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		log := NewWithOptions(Options{TimeFormat: "NOTIME", Output: out})
+		log.V(1).Info("")
+		assert.Equal(t, ``, out.String())
+	})
 }
 
-func TestLogLevelDefault(t *testing.T) {
+func TestVerbosityLevel2(t *testing.T) {
 
-	// logger := New() // logger.verbose - 1
-	logger := NewWithOptions(Options{Level: "info"})
-	logger.Info("info log1")
-	logger.V(0).Info("info log11")
-	logger.V(1).Info("debug log1")
-	logger.V(2).Info("trace log1")
-	logger.Error(nil, "err1")
-	logger.V(1).Error(nil, "err1")
+	t.Run("info", func(t *testing.T) {
+		SetVLevelGlobal(2)
+		out := &bytes.Buffer{}
+		log := NewWithOptions(Options{TimeFormat: "NOTIME", Output: out})
+		log.Info("info")
+		assert.Equal(t, `{"level":"info","v":0,"time":"NOTIME","message":"info"}`+"\n", out.String())
+	})
 
-	fmt.Println()
-	logger = NewWithOptions(Options{Level: "debug"})
-	logger.Info("info log2")
-	logger.V(0).Info("info log22")
-	logger.V(1).Info("debug log2")
-	logger.V(2).Info("trace log2")
-	logger.Error(nil, "err2")
-	logger.V(1).Error(nil, "err22")
+	t.Run("info-add-fields", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		log := NewWithOptions(Options{TimeFormat: "NOTIME", Output: out})
+		log.Info("", "test_field", 123)
+		assert.Equal(t, `{"level":"info","test_field":123,"v":0,"time":"NOTIME"}`+"\n", out.String())
+	})
 
-	fmt.Println()
-	logger = NewWithOptions(Options{Level: "trace"})
-	logger.Info("info log3")
-	logger.V(0).Info("info log33")
-	logger.V(1).Info("debug log3")
-	logger.V(2).Info("trace log3")
-	logger.Error(nil, "err3")
-	logger.V(1).Error(nil, "err33")
-	// output := captureOutput(func() {
-	// 	logger.Info("This is info log") // Writing log with V - 1
-	// })
-	// assert.Equal(t, "This is info log", output)
+	t.Run("empty", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		log := NewWithOptions(Options{TimeFormat: "NOTIME", Output: out})
+		log.Info("")
+		assert.Equal(t, `{"level":"info","v":0,"time":"NOTIME"}`+"\n", out.String())
+	})
 
-	// output = captureOutput(func() {
-	// 	logger.V(2).Info("This is debug log")
-	// })
-	// assert.Equal(t, "", output) // Must be empty
+	t.Run("disabled", func(t *testing.T) {
+		out := &bytes.Buffer{}
+		log := NewWithOptions(Options{TimeFormat: "NOTIME", Output: out})
+		log.V(1).Info("")
+		assert.Equal(t, `{"level":"debug","v":1,"time":"NOTIME"}`+"\n", out.String())
+	})
 }
 
-// func TestLogLevelDebug(t *testing.T) {
+type blackholeStream struct {
+	writeCount uint64
+}
 
-// log := NewWithOptions(Options{Level: "debug"}) // or zerologr.NewWithOptions(logr.Options{VLevel: 2})
+func (s *blackholeStream) WriteCount() uint64 {
+	return atomic.LoadUint64(&s.writeCount)
+}
 
-// output := captureOutput(func() {
-// 	log.Info("This is info log")
-// })
-// assert.Equal(t, "This is info log", output)
+func (s *blackholeStream) Write(p []byte) (int, error) {
+	atomic.AddUint64(&s.writeCount, 1)
+	return len(p), nil
+}
 
-// output = captureOutput(func() {
-// 	log.V(2).Info("This is debug log")
-// })
-// assert.Equal(t, "This is info log", output)
-// }
+func BenchmarkLoggerLogs(b *testing.B) {
+	stream := &blackholeStream{}
+	log := NewWithOptions(Options{TimeFormat: "NOTIME", Output: stream})
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			log.Info("The quick brown fox jumps over the lazy dog")
+		}
+	})
+
+	if stream.WriteCount() != uint64(b.N) {
+		b.Fatalf("Log write count")
+	}
+}
+
+func BenchmarLoggerLog(b *testing.B) {
+	stream := &blackholeStream{}
+	log := NewWithOptions(Options{TimeFormat: "NOTIME", Output: stream})
+	b.ResetTimer()
+	SetVLevelGlobal(1)
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			log.V(1).Info("The quick brown fox jumps over the lazy dog")
+		}
+	})
+
+	if stream.WriteCount() != uint64(b.N) {
+		b.Fatalf("Log write count")
+	}
+}
+
+func BenchmarkLoggerLogWith10Fields(b *testing.B) {
+	stream := &blackholeStream{}
+	log := NewWithOptions(Options{TimeFormat: "NOTIME", Output: stream})
+	b.ResetTimer()
+	SetVLevelGlobal(1)
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			log.V(1).Info("The quick brown fox jumps over the lazy dog",
+				"test1", 1,
+				"test2", 2,
+				"test3", 3,
+				"test4", 4,
+				"test5", 5,
+				"test6", 6,
+				"test7", 7,
+				"test8", 8,
+				"test9", 9,
+				"test10", 10)
+		}
+	})
+
+	if stream.WriteCount() != uint64(b.N) {
+		b.Fatalf("Log write count")
+	}
+}

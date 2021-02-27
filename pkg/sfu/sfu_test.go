@@ -130,9 +130,10 @@ func addMedia(done <-chan struct{}, t *testing.T, pc *webrtc.PeerConnection, med
 }
 
 func TestSFU_SessionScenarios(t *testing.T) {
+	log.SetVLevelGlobal(0)
 	sfu := NewSFU(
 		Config{
-			Logger: log.NewWithOptions(log.Options{Level: "trace"}),
+			Logger: log.New(),
 		},
 	)
 	sfu.NewDatachannel(APIChannelLabel)

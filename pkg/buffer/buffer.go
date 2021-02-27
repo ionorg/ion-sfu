@@ -22,7 +22,7 @@ const (
 	reportDelta = 1e9
 )
 
-var defaultLogger, warnLogger, infoLogger, debugLogger logr.Logger
+var defaultLogger, debugLogger logr.Logger
 
 type pendingPackets struct {
 	arrivalTime int64
@@ -131,9 +131,7 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 		os.Exit(1)
 	}
 	defaultLogger = o.Logger
-	warnLogger = o.Logger.V(0)
-	infoLogger = o.Logger.V(1)
-	debugLogger = o.Logger.V(2)
+	debugLogger = o.Logger.V(1)
 
 	codec := params.Codecs[0]
 	b.clockRate = codec.ClockRate

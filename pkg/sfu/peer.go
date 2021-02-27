@@ -105,7 +105,7 @@ func (p *Peer) Join(sid string) error {
 
 		p.remoteAnswerPending = true
 		if p.OnOffer != nil && !p.closed.get() {
-			infoLogger.Info("Send offer", "peer_id", p.id)
+			defaultLogger.Info("Send offer", "peer_id", p.id)
 			p.OnOffer(&offer)
 		}
 	})
@@ -142,7 +142,7 @@ func (p *Peer) Join(sid string) error {
 
 	p.session.AddPeer(p)
 
-	infoLogger.Info("Peer join session", "peer_id", p.id, "session_id", sid)
+	defaultLogger.Info("Peer join session", "peer_id", p.id, "session_id", sid)
 
 	p.session.Subscribe(p)
 
@@ -155,7 +155,7 @@ func (p *Peer) Answer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription
 		return nil, ErrNoTransportEstablished
 	}
 
-	infoLogger.Info("Peer got offer", "peer_id", p.id)
+	defaultLogger.Info("Peer got offer", "peer_id", p.id)
 
 	if p.publisher.SignalingState() != webrtc.SignalingStateStable {
 		return nil, ErrOfferIgnored
@@ -166,7 +166,7 @@ func (p *Peer) Answer(sdp webrtc.SessionDescription) (*webrtc.SessionDescription
 		return nil, fmt.Errorf("error creating answer: %v", err)
 	}
 
-	infoLogger.Info("Peer send answer", "peer_id", p.id)
+	defaultLogger.Info("Peer send answer", "peer_id", p.id)
 
 	return &answer, nil
 }
@@ -179,7 +179,7 @@ func (p *Peer) SetRemoteDescription(sdp webrtc.SessionDescription) error {
 	p.Lock()
 	defer p.Unlock()
 
-	infoLogger.Info("Peer got answer", "peer_id", p.id)
+	defaultLogger.Info("Peer got answer", "peer_id", p.id)
 	if err := p.subscriber.SetRemoteDescription(sdp); err != nil {
 		return fmt.Errorf("error setting remote description: %v", err)
 	}
@@ -199,7 +199,7 @@ func (p *Peer) Trickle(candidate webrtc.ICECandidateInit, target int) error {
 	if p.subscriber == nil || p.publisher == nil {
 		return ErrNoTransportEstablished
 	}
-	infoLogger.Info("Peer trickle", "peer_od", p.id)
+	defaultLogger.Info("Peer trickle", "peer_od", p.id)
 	switch target {
 	case publisher:
 		if err := p.publisher.AddICECandidate(candidate); err != nil {

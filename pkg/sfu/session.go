@@ -44,7 +44,7 @@ func (s *Session) AddPeer(peer *Peer) {
 // RemovePeer removes a transport from the session
 func (s *Session) RemovePeer(pid string) {
 	s.mu.Lock()
-	infoLogger.Info("RemovePeer from session", "peer_id", pid, "session_id", s.id)
+	defaultLogger.Info("RemovePeer from session", "peer_id", pid, "session_id", s.id)
 	delete(s.peers, pid)
 	s.mu.Unlock()
 
@@ -132,7 +132,7 @@ func (s *Session) Publish(router Router, r Receiver) {
 			continue
 		}
 
-		infoLogger.Info("Publishing track to peer", "peer_id", p.id)
+		defaultLogger.Info("Publishing track to peer", "peer_id", p.id)
 
 		if err := router.AddDownTracks(p.subscriber, r); err != nil {
 			defaultLogger.Error(err, "Error subscribing transport to router")
@@ -198,7 +198,7 @@ func (s *Session) OnClose(f func()) {
 
 func (s *Session) audioLevelObserver(audioLevelInterval int) {
 	if audioLevelInterval <= 50 {
-		warnLogger.Info("Values near/under 20ms may return unexpected values")
+		defaultLogger.Info("Values near/under 20ms may return unexpected values")
 	}
 	if audioLevelInterval == 0 {
 		audioLevelInterval = 1000

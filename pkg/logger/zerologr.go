@@ -2,7 +2,7 @@
 // Modified 2021 Serhii Mikhno
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
+// you may not use this file except in compliance  the License.
 // You may obtain a copy of the License at
 //
 //     http://www.apache.org/licenses/LICENSE-2.0
@@ -16,9 +16,23 @@
 // Package logger defines a default implementation of the github.com/go-logr/logr
 // interfaces built on top of zerolog (github.com/rs/zerolog) and is the default
 // implementation for ion-sfu released binaries.
+
+// This package separates log level into two different concepts:
+// - V-Level - verbosity level, number, that every logger has.
+//   A higher value that means more logs will be written.
+// - Log-level - usual log level (TRACE|DEBUG|INFO).
+// Every log row combines those two values.
+// You can set log level to TRACE and see all general traces.
+// To see more logs just add -v
+
 package logger
 
 import (
+	"io"
+	"path/filepath"
+	"runtime"
+	"sync/atomic"
+
 	"github.com/go-logr/logr"
 	"github.com/rs/zerolog"
 )
@@ -32,56 +46,62 @@ const (
 	timeFormat  = "2006-01-02 15:04:05.000"
 )
 
-func SetLogLevelString(level string) {
-	l := zerolog.GlobalLevel()
-	switch level {
-	case "trace":
-		l = zerolog.TraceLevel
-	case "debug":
-		l = zerolog.DebugLevel
-	case "info":
-		l = zerolog.InfoLevel
-	case "error":
-		l = zerolog.ErrorLevel
-	}
-	zerolog.SetGlobalLevel(l)
+var (
+	globalVLevel = new(int32)
+)
 
+// SetVLevelGlobal sets the global level against which all info logs will be
+// compared.  If this is greater than or equal to the "V" of the logger, the
+// message will be logged. Concurrent-safe.
+func SetVLevelGlobal(level VLevel) {
+	atomic.StoreInt32(globalVLevel, int32(level))
 }
 
-func SetLogLevel(level int) {
-	l := zerolog.GlobalLevel()
+// SetVLevelByStringGlobal does the same as SetVLevelGlobal but
+// trying to expose verbosity level as more familiar "word-based" log levels
+func SetVLevelByStringGlobal(level string) {
 	switch level {
-	case 0:
-		l = zerolog.InfoLevel
-	case 1:
-		l = zerolog.DebugLevel
-	case 3:
-		l = zerolog.TraceLevel
+	case "trace":
+		SetVLevelGlobal(traceVLevel)
+	case "debug":
+		SetVLevelGlobal(debugVLevel)
+	case "info":
+		SetVLevelGlobal(infoVLevel)
 	default:
-		l = zerolog.InfoLevel
+		SetVLevelGlobal(infoVLevel)
 	}
-	zerolog.SetGlobalLevel(l)
+
 }
 
 // Options that can be passed to NewWithOptions
 type Options struct {
 	// Name is an optional name of the logger
 	Name       string
-	Level      string
-	Vlevel     VLevel
 	TimeFormat string
-
+	Output     io.Writer
 	// Logger is an instance of zerolog, if nil a default logger is used
 	Logger *zerolog.Logger
 }
 
-// logger is a logr.Logger that uses zerolog to log.
 type logger struct {
-	l            *zerolog.Logger
-	vlevel       VLevel
-	parentVLevel VLevel
-	prefix       string
-	values       []interface{}
+	l      *zerolog.Logger
+	vlevel VLevel
+	prefix string
+	depth  int
+	values []interface{}
+}
+
+type callerID struct {
+	File string `json:"file"`
+	Line int    `json:"line"`
+}
+
+func (l logger) caller() callerID {
+	_, file, line, ok := runtime.Caller(framesToCaller() + l.depth + 1) // +1 for this frame
+	if !ok {
+		return callerID{"<unknown>", 0}
+	}
+	return callerID{filepath.Base(file), line}
 }
 
 // New returns a logr.Logger which is implemented by zerolog.
@@ -92,57 +112,55 @@ func New() logr.Logger {
 // NewWithOptions returns a logr.Logger which is implemented by zerolog.
 func NewWithOptions(opts Options) logr.Logger {
 
-	var level VLevel
-	if opts.TimeFormat == "" {
-		opts.TimeFormat = timeFormat
+	zerolog.TimeFieldFormat = timeFormat
+	if opts.TimeFormat != "" {
+		zerolog.TimeFieldFormat = opts.TimeFormat
 	}
 
-	if opts.Level != "" {
-		level = getVLevelByString(opts.Level)
-	} else {
-		level = opts.Vlevel
+	var out io.Writer
+	out = getOutputFormat()
+	if opts.Output != nil {
+		out = opts.Output
 	}
 
 	if opts.Logger == nil {
-		zerolog.TimeFieldFormat = timeFormat
-		logLevel := getZerologLevelByVLevel(level)
-		output := getOutputFormat()
-		l := zerolog.New(output).Level(logLevel).With().Timestamp().Logger()
-		// l := zerolog.New(output).With().Timestamp().Logger()
+		l := zerolog.New(out).With().Timestamp().Logger()
 		opts.Logger = &l
 	}
 
 	return logger{
-		l:            opts.Logger,
-		vlevel:       level,
-		parentVLevel: level,
-		prefix:       opts.Name,
-		values:       nil,
+		l:      opts.Logger,
+		vlevel: 0,
+		prefix: opts.Name,
+		values: nil,
 	}
 }
 
 func (l logger) Info(msg string, keysAndVals ...interface{}) {
+	// Checking that logger vlevel isn't greater than global verbosity level
+	// and
 	if l.Enabled() {
 		var e *zerolog.Event
-		if l.vlevel < debugVLevel {
+		if l.vlevel == infoVLevel {
 			e = l.l.Info()
-		} else if l.vlevel < traceVLevel {
+		} else if l.vlevel == debugVLevel {
 			e = l.l.Debug()
-		} else {
+		} else if l.vlevel >= traceVLevel {
 			e = l.l.Trace()
 		}
 		if l.prefix != "" {
 			e.Str("name", l.prefix)
 		}
+		keysAndVals = append(keysAndVals, "v", l.vlevel)
 		add(e, l.values)
 		add(e, keysAndVals)
 		e.Msg(msg)
 	}
 }
 
-// Enabled Check that V-level for this Logger is bigger than parrent logger
+// Enabled checks that the global V-Level is not less than logger V-Level
 func (l logger) Enabled() bool {
-	return l.vlevel <= l.parentVLevel
+	return l.vlevel <= VLevel(atomic.LoadInt32(globalVLevel))
 }
 
 // Error always prints error, not metter which log level was set
@@ -159,7 +177,7 @@ func (l logger) Error(err error, msg string, keysAndVals ...interface{}) {
 // V returns new logger with less or more log level
 func (l logger) V(vlevel int) logr.Logger {
 	new := l.clone()
-	new.vlevel = VLevel(vlevel)
+	new.vlevel += VLevel(vlevel)
 	return new
 }
 
@@ -180,7 +198,12 @@ func (l logger) WithValues(kvList ...interface{}) logr.Logger {
 	return new
 }
 
+func (l logger) WithCallDepth(depth int) logr.Logger {
+	new := l.clone()
+	new.depth += depth
+	return new
+}
+
 // Verify that logger implements logr.Logger.
 var _ logr.Logger = logger{}
-
-// var _ logr.CallDepthLogger = logger{}
+var _ logr.CallDepthLogger = logger{}

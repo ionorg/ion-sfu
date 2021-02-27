@@ -15,7 +15,7 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-var defaultLogger, warnLogger, infoLogger, debugLogger logr.Logger
+var defaultLogger, debugLogger logr.Logger
 
 // ICEServerConfig defines parameters for ice servers
 type ICEServerConfig struct {
@@ -161,9 +161,7 @@ func NewSFU(c Config) *SFU {
 		os.Exit(1)
 	}
 	defaultLogger = c.Logger
-	warnLogger = c.Logger.V(0)
-	infoLogger = c.Logger.V(1)
-	debugLogger = c.Logger.V(2)
+	debugLogger = c.Logger.V(1)
 
 	// Init random seed
 	rand.Seed(time.Now().UnixNano())
