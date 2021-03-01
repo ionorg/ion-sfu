@@ -100,7 +100,7 @@ func TestNewBuffer(t *testing.T) {
 			assert.NotNil(t, TestPackets)
 			buff.OnFeedback(func(_ []rtcp.Packet) {
 			})
-			log.SetVLevelGlobal(0)
+			log.SetGlobalOptions(log.GlobalConfig{V: 2}) // 2 - TRACE
 			buff.Bind(webrtc.RTPParameters{
 				HeaderExtensions: nil,
 				Codecs: []webrtc.RTPCodecParameters{{

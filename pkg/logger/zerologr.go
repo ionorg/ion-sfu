@@ -37,38 +37,41 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type VLevel int
-
 const (
-	infoVLevel  VLevel = iota // info
-	debugVLevel               // debug
-	traceVLevel               // trace
+	infoVLevel  = iota // info
+	debugVLevel        // debug
+	traceVLevel        // trace
 	timeFormat  = "2006-01-02 15:04:05.000"
 )
+
+//GlobalConfig config contains global options
+type GlobalConfig struct {
+	V int `mapstructure:"v"`
+}
 
 var (
 	globalVLevel = new(int32)
 )
 
-// SetVLevelGlobal sets the global level against which all info logs will be
+// SetGlobalOptions sets the global options, like level against which all info logs will be
 // compared.  If this is greater than or equal to the "V" of the logger, the
 // message will be logged. Concurrent-safe.
-func SetVLevelGlobal(level VLevel) {
-	atomic.StoreInt32(globalVLevel, int32(level))
+func SetGlobalOptions(config GlobalConfig) {
+	atomic.StoreInt32(globalVLevel, int32(config.V))
 }
 
-// SetVLevelByStringGlobal does the same as SetVLevelGlobal but
+// SetVLevelByStringGlobal does the same as SetGlobalOptions but
 // trying to expose verbosity level as more familiar "word-based" log levels
 func SetVLevelByStringGlobal(level string) {
 	switch level {
 	case "trace":
-		SetVLevelGlobal(traceVLevel)
+		SetGlobalOptions(GlobalConfig{V: traceVLevel})
 	case "debug":
-		SetVLevelGlobal(debugVLevel)
+		SetGlobalOptions(GlobalConfig{V: debugVLevel})
 	case "info":
-		SetVLevelGlobal(infoVLevel)
+		SetGlobalOptions(GlobalConfig{V: infoVLevel})
 	default:
-		SetVLevelGlobal(infoVLevel)
+		SetGlobalOptions(GlobalConfig{V: infoVLevel})
 	}
 
 }
@@ -85,7 +88,7 @@ type Options struct {
 
 type logger struct {
 	l      *zerolog.Logger
-	vlevel VLevel
+	vlevel int
 	prefix string
 	depth  int
 	values []interface{}
@@ -160,7 +163,7 @@ func (l logger) Info(msg string, keysAndVals ...interface{}) {
 
 // Enabled checks that the global V-Level is not less than logger V-Level
 func (l logger) Enabled() bool {
-	return l.vlevel <= VLevel(atomic.LoadInt32(globalVLevel))
+	return l.vlevel <= int(atomic.LoadInt32(globalVLevel))
 }
 
 // Error always prints error, not metter which log level was set
@@ -177,7 +180,7 @@ func (l logger) Error(err error, msg string, keysAndVals ...interface{}) {
 // V returns new logger with less or more log level
 func (l logger) V(vlevel int) logr.Logger {
 	new := l.clone()
-	new.vlevel += VLevel(vlevel)
+	new.vlevel += vlevel
 	return new
 }
 

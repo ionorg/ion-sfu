@@ -28,15 +28,17 @@ type grpcConfig struct {
 // Config defines parameters for configuring the sfu instance
 type Config struct {
 	sfu.Config `mapstructure:",squash"`
-	GRPC       grpcConfig `mapstructure:"grpc"`
+	GRPC       grpcConfig       `mapstructure:"grpc"`
+	LogConfig  log.GlobalConfig `mapstructure:"log"`
 }
 
 var (
-	conf                                               = Config{}
-	file                                               string
-	addr                                               string
-	metricsAddr                                        string
-	defaultLogger, warnLogger, infoLogger, debugLogger logr.Logger
+	conf           = Config{}
+	file           string
+	addr           string
+	metricsAddr    string
+	verbosityLevel int
+	defaultLogger  logr.Logger
 )
 
 const (
@@ -48,6 +50,8 @@ func showHelp() {
 	fmt.Println("      -c {config file}")
 	fmt.Println("      -a {listen addr}")
 	fmt.Println("      -h (show help info)")
+	fmt.Println("      -v (verbosity level, default 0)")
+
 }
 
 func load() bool {
@@ -80,6 +84,11 @@ func load() bool {
 		return false
 	}
 
+	if conf.LogConfig.V < 0 {
+		fmt.Printf("Logger V-Level cannot be less than 0\n")
+		return false
+	}
+
 	fmt.Printf("config %s load ok!\n", file)
 	return true
 }
@@ -88,6 +97,7 @@ func parse() bool {
 	flag.StringVar(&file, "c", "config.toml", "config file")
 	flag.StringVar(&addr, "a", ":50051", "address to use")
 	flag.StringVar(&metricsAddr, "m", ":8100", "merics to use")
+	flag.IntVar(&verbosityLevel, "v", -1, "verbosity level, higher value - more logs")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
 	if !load() {
@@ -113,7 +123,7 @@ func startMetrics(addr string) {
 		defaultLogger.Error(err, "cannot bind to metrics endpoint", "addr", addr)
 		os.Exit(1)
 	}
-	infoLogger.Info("Metrics Listening starter", "addr", addr)
+	defaultLogger.Info("Metrics Listening starter", "addr", addr)
 
 	err = srv.Serve(metricsLis)
 	if err != nil {
@@ -127,18 +137,15 @@ func main() {
 		os.Exit(-1)
 	}
 
-	// Creating loggers that implements logr interface, that used in sfu pkg
-	// V-levels means different verbosity levels:
-	// 0 - err, warn
-	// 1 - info
-	// 2 - debug
-	// 3 - trace
-	defaultLogger = log.New()
-	warnLogger = defaultLogger.V(0)
-	infoLogger = defaultLogger.V(1)
-	debugLogger = defaultLogger.V(2)
+	// Check that the -v is not set (default -1)
+	if verbosityLevel < 0 {
+		verbosityLevel = conf.LogConfig.V
+	}
 
-	infoLogger.Info("--- Starting SFU Node ---")
+	log.SetGlobalOptions(log.GlobalConfig{V: verbosityLevel})
+	defaultLogger = log.New()
+
+	defaultLogger.Info("--- Starting SFU Node ---")
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		defaultLogger.Error(err, "failed to listen")

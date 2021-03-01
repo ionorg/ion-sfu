@@ -21,14 +21,21 @@ import (
 	"github.com/spf13/viper"
 )
 
+// logC need to get logger options from config
+type logC struct {
+	Config log.GlobalConfig `mapstructure:"log"`
+}
+
 var (
-	conf                      = sfu.Config{}
-	file                      string
-	cert                      string
-	key                       string
-	addr                      string
-	metricsAddr               string
-	defaultLogger, infoLogger logr.Logger
+	conf           = sfu.Config{}
+	file           string
+	cert           string
+	key            string
+	addr           string
+	metricsAddr    string
+	verbosityLevel int
+	logger         logr.Logger
+	logConfig      logC
 )
 
 const (
@@ -42,6 +49,7 @@ func showHelp() {
 	fmt.Println("      -key {key file}")
 	fmt.Println("      -a {listen addr}")
 	fmt.Println("      -h (show help info)")
+	fmt.Println("      -v (verbosity level, default 0)")
 }
 
 func load() bool {
@@ -74,6 +82,17 @@ func load() bool {
 		return false
 	}
 
+	err = viper.GetViper().Unmarshal(&logConfig)
+	if err != nil {
+		fmt.Printf("log config file %s loaded failed. %v\n", file, err)
+		return false
+	}
+
+	if logConfig.Config.V < 0 {
+		fmt.Printf("Logger V-Level cannot be less than 0\n")
+		return false
+	}
+
 	fmt.Printf("config %s load ok!\n", file)
 	return true
 }
@@ -84,6 +103,7 @@ func parse() bool {
 	flag.StringVar(&key, "key", "", "key file")
 	flag.StringVar(&addr, "a", ":7000", "address to use")
 	flag.StringVar(&metricsAddr, "m", ":8100", "merics to use")
+	flag.IntVar(&verbosityLevel, "v", -1, "verbosity level, higher value - more logs")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
 	if !load() {
@@ -106,14 +126,14 @@ func startMetrics(addr string) {
 
 	metricsLis, err := net.Listen("tcp", addr)
 	if err != nil {
-		defaultLogger.Error(err, "cannot bind to metrics endpoint", "addr", addr)
+		logger.Error(err, "cannot bind to metrics endpoint", "addr", addr)
 		os.Exit(1)
 	}
-	infoLogger.Info("Metrics Listening", "addr", addr)
+	logger.Info("Metrics Listening", "addr", addr)
 
 	err = srv.Serve(metricsLis)
 	if err != nil {
-		defaultLogger.Error(err, "Metrics server stopped")
+		logger.Error(err, "Metrics server stopped")
 	}
 }
 
@@ -124,12 +144,17 @@ func main() {
 		os.Exit(-1)
 	}
 
-	defaultLogger = log.New()
-	infoLogger = defaultLogger.V(1)
+	// Check that the -v is not set (default -1)
+	if verbosityLevel < 0 {
+		verbosityLevel = logConfig.Config.V
+	}
 
-	infoLogger.Info("--- Starting SFU Node ---")
+	log.SetGlobalOptions(log.GlobalConfig{V: verbosityLevel})
+	logger = log.New()
+	logger.Info("--- Starting SFU Node ---")
+
 	// Pass logr instance
-	conf.Logger = defaultLogger
+	conf.Logger = logger
 	s := sfu.NewSFU(conf)
 	dc := s.NewDatachannel(sfu.APIChannelLabel)
 	dc.Use(datachannel.SubscriberAPI)
@@ -149,7 +174,7 @@ func main() {
 		}
 		defer c.Close()
 
-		p := server.NewJSONSignal(sfu.NewPeer(s), defaultLogger)
+		p := server.NewJSONSignal(sfu.NewPeer(s), logger)
 		defer p.Close()
 
 		jc := jsonrpc2.NewConn(r.Context(), websocketjsonrpc2.NewObjectStream(c), p)
@@ -160,10 +185,10 @@ func main() {
 
 	var err error
 	if key != "" && cert != "" {
-		infoLogger.Info("Started listening", "addr", "https://"+addr)
+		logger.Info("Started listening", "addr", "https://"+addr)
 		err = http.ListenAndServeTLS(addr, cert, key, nil)
 	} else {
-		infoLogger.Info("Started listening", "addr", "http://"+addr)
+		logger.Info("Started listening", "addr", "http://"+addr)
 		err = http.ListenAndServe(addr, nil)
 	}
 	if err != nil {

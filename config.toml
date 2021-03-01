@@ -84,4 +84,5 @@ address = "0.0.0.0:3478"
 credentials = "pion=ion,pion2=ion2"
 
 [log]
-level = "trace"
+# 0 - INFO 1 - DEBUG 2 - TRACE
+v = 1

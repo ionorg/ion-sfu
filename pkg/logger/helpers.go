@@ -11,8 +11,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func getVLevelByString(level string) VLevel {
-	var zerologlvl VLevel
+func getVLevelByString(level string) int {
+	var zerologlvl int
 	switch level {
 	case "trace":
 		zerologlvl = traceVLevel

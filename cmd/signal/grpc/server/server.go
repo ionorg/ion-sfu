@@ -64,7 +64,7 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 
 		switch payload := in.Payload.(type) {
 		case *pb.SignalRequest_Join:
-			s.SFU.Logger.V(2).Info("signal->join", "called", string(payload.Join.Description))
+			s.SFU.Logger.V(1).Info("signal->join", "called", string(payload.Join.Description))
 
 			var offer webrtc.SessionDescription
 			err := json.Unmarshal(payload.Join.Description, &offer)

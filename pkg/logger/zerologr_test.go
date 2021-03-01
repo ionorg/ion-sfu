@@ -10,9 +10,6 @@ import (
 
 func TestDefaultVerbosityLevel(t *testing.T) {
 
-	log := New()
-	log.Info("info")
-
 	t.Run("info", func(t *testing.T) {
 		out := &bytes.Buffer{}
 		log := NewWithOptions(Options{TimeFormat: "NOTIME", Output: out})
@@ -45,7 +42,7 @@ func TestDefaultVerbosityLevel(t *testing.T) {
 func TestVerbosityLevel2(t *testing.T) {
 
 	t.Run("info", func(t *testing.T) {
-		SetVLevelGlobal(2)
+		SetGlobalOptions(GlobalConfig{V: 2})
 		out := &bytes.Buffer{}
 		log := NewWithOptions(Options{TimeFormat: "NOTIME", Output: out})
 		log.Info("info")
@@ -107,7 +104,7 @@ func BenchmarLoggerLog(b *testing.B) {
 	stream := &blackholeStream{}
 	log := NewWithOptions(Options{TimeFormat: "NOTIME", Output: stream})
 	b.ResetTimer()
-	SetVLevelGlobal(1)
+	SetGlobalOptions(GlobalConfig{V: 1})
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			log.V(1).Info("The quick brown fox jumps over the lazy dog")
@@ -123,7 +120,7 @@ func BenchmarkLoggerLogWith10Fields(b *testing.B) {
 	stream := &blackholeStream{}
 	log := NewWithOptions(Options{TimeFormat: "NOTIME", Output: stream})
 	b.ResetTimer()
-	SetVLevelGlobal(1)
+	SetGlobalOptions(GlobalConfig{V: 1})
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			log.V(1).Info("The quick brown fox jumps over the lazy dog",

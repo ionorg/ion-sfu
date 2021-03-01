@@ -23,14 +23,16 @@ type grpcConfig struct {
 // Config defines parameters for configuring the sfu instance
 type Config struct {
 	sfu.Config `mapstructure:",squash"`
-	GRPC       grpcConfig `mapstructure:"grpc"`
+	GRPC       grpcConfig       `mapstructure:"grpc"`
+	LogConfig  log.GlobalConfig `mapstructure:"log"`
 }
 
 var (
-	conf                      = Config{}
-	file                      string
-	addr                      string
-	defaultLogger, infoLogger logr.Logger
+	conf           = Config{}
+	file           string
+	addr           string
+	verbosityLevel int
+	defaultLogger  logr.Logger
 )
 
 const (
@@ -42,6 +44,7 @@ func showHelp() {
 	fmt.Println("      -c {config file}")
 	fmt.Println("      -a {listen addr}")
 	fmt.Println("      -h (show help info)")
+	fmt.Println("      -v (verbosity level, default 0)")
 }
 
 func load() bool {
@@ -73,6 +76,10 @@ func load() bool {
 		fmt.Printf("config file %s loaded failed. range port must be [min, max] and max - min >= %d\n", file, portRangeLimit)
 		return false
 	}
+	if conf.LogConfig.V < 0 {
+		fmt.Printf("Logger V-Level cannot be less than 0\n")
+		return false
+	}
 
 	fmt.Printf("config %s load ok!\n", file)
 	return true
@@ -81,6 +88,7 @@ func load() bool {
 func parse() bool {
 	flag.StringVar(&file, "c", "config.toml", "config file")
 	flag.StringVar(&addr, "a", ":9090", "address to use")
+	flag.IntVar(&verbosityLevel, "v", -1, "verbosity level, higher value - more logs")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
 	if !load() {
@@ -99,10 +107,15 @@ func main() {
 		os.Exit(-1)
 	}
 
-	defaultLogger = log.New()
-	infoLogger = defaultLogger.V(1)
+	// Check that the -v is not set (default -1)
+	if verbosityLevel < 0 {
+		verbosityLevel = conf.LogConfig.V
+	}
 
-	infoLogger.Info("--- Starting SFU Node ---")
+	log.SetGlobalOptions(log.GlobalConfig{V: verbosityLevel})
+	defaultLogger = log.New()
+
+	defaultLogger.Info("--- Starting SFU Node ---")
 	options := server.DefaultWrapperedServerOptions()
 	options.EnableTLS = false
 	options.Addr = addr

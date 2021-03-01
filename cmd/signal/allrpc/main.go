@@ -16,11 +16,13 @@ var (
 	cert                       string
 	key                        string
 	gaddr, jaddr, paddr, maddr string
+	verbosityLevel             int
 )
 
 // Config defines parameters for configuring the sfu instance
 type Config struct {
 	sfu.Config `mapstructure:",squash"`
+	LogConfig  log.GlobalConfig `mapstructure:"log"`
 }
 
 var (
@@ -38,6 +40,7 @@ func showHelp() {
 	fmt.Println("             {grpc and jsonrpc addrs should be set at least one}")
 	fmt.Println("      -maddr {metrics listen addr}")
 	fmt.Println("      -h (show help info)")
+	fmt.Println("      -v (verbosity level, default 0)")
 }
 
 func load() bool {
@@ -65,6 +68,11 @@ func load() bool {
 		return false
 	}
 
+	if conf.LogConfig.V < 0 {
+		fmt.Printf("Logger V-Level cannot be less than 0\n")
+		return false
+	}
+
 	fmt.Printf("config %s load ok!\n", file)
 	return true
 }
@@ -77,6 +85,7 @@ func parse() bool {
 	flag.StringVar(&gaddr, "gaddr", "", "grpc listening address")
 	flag.StringVar(&paddr, "paddr", "", "pprof listening address")
 	flag.StringVar(&maddr, "maddr", "", "metrics listening address")
+	flag.IntVar(&verbosityLevel, "v", -1, "verbosity level, higher value - more logs")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
 
@@ -100,6 +109,12 @@ func main() {
 		showHelp()
 		os.Exit(-1)
 	}
+	// Check that the -v is not set (default -1)
+	if verbosityLevel < 0 {
+		verbosityLevel = conf.LogConfig.V
+	}
+
+	log.SetGlobalOptions(log.GlobalConfig{V: verbosityLevel})
 
 	conf.Config.Logger = log.New()
 	node := server.New(conf.Config)
