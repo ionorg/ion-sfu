@@ -80,6 +80,22 @@ func parse() bool {
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
 
+	if gaddr == "" {
+		gaddr = getEnv("gaddr")
+	}
+
+	if jaddr == "" {
+		jaddr = getEnv("jaddr")
+	}
+
+	if paddr == "" {
+		paddr = getEnv("paddr")
+	}
+
+	if maddr == "" {
+		maddr = getEnv("maddr")
+	}
+
 	// at least set one
 	if gaddr == "" && jaddr == "" {
 		return false
@@ -93,6 +109,14 @@ func parse() bool {
 		return false
 	}
 	return true
+}
+
+func getEnv(key string) string {
+    if value, exists := os.LookupEnv(key); exists {
+		return value
+    }
+
+    return ""
 }
 
 func main() {
