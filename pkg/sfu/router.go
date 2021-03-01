@@ -23,7 +23,7 @@ type Router interface {
 type RouterConfig struct {
 	WithStats           bool            `mapstructure:"withstats"`
 	MaxBandwidth        uint64          `mapstructure:"maxbandwidth"`
-	MaxBufferTime       int             `mapstructure:"maxbuffertime"`
+	MaxPacketTrack      int             `mapstructure:"maxpackettrack"`
 	AudioLevelInterval  int             `mapstructure:"audiolevelinterval"`
 	AudioLevelThreshold uint8           `mapstructure:"audiolevelthreshold"`
 	AudioLevelFilter    int             `mapstructure:"audiolevelfilter"`
@@ -178,7 +178,6 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 	recv.AddUpTrack(track, buff)
 
 	buff.Bind(receiver.GetParameters(), buffer.Options{
-		BufferTime: r.config.MaxBufferTime,
 		MaxBitRate: r.config.MaxBandwidth,
 	})
 
@@ -235,7 +234,7 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 		Channels:     codec.Channels,
 		SDPFmtpLine:  codec.SDPFmtpLine,
 		RTCPFeedback: []webrtc.RTCPFeedback{{"goog-remb", ""}, {"nack", ""}, {"nack", "pli"}},
-	}, recv, r.bufferFactory, sub.id)
+	}, recv, r.bufferFactory, sub.id, r.config.MaxPacketTrack)
 	if err != nil {
 		return err
 	}

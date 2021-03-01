@@ -8,8 +8,6 @@ import (
 )
 
 const (
-	maxPacketMetaHistory = 500
-
 	ignoreRetransmission = 100 // Ignore packet retransmission after ignoreRetransmission milliseconds
 )
 
@@ -50,15 +48,18 @@ func (p packetMeta) getVP8PayloadMeta() (uint8, uint16) {
 type sequencer struct {
 	sync.Mutex
 	init      bool
-	seq       [500]packetMeta
+	max       int
+	seq       []packetMeta
 	step      int
 	headSN    uint16
 	startTime int64
 }
 
-func newSequencer() *sequencer {
+func newSequencer(maxTrack int) *sequencer {
 	return &sequencer{
 		startTime: time.Now().UnixNano() / 1e6,
+		max:       maxTrack,
+		seq:       make([]packetMeta, maxTrack),
 	}
 }
 
@@ -75,7 +76,7 @@ func (n *sequencer) push(sn, offSn uint16, timeStamp uint32, layer uint8, head b
 		inc := offSn - n.headSN
 		for i := uint16(1); i < inc; i++ {
 			n.step++
-			if n.step >= maxPacketMetaHistory {
+			if n.step >= n.max {
 				n.step = 0
 			}
 		}
@@ -84,11 +85,11 @@ func (n *sequencer) push(sn, offSn uint16, timeStamp uint32, layer uint8, head b
 	} else {
 		step = n.step - int(n.headSN-offSn)
 		if step < 0 {
-			if step*-1 >= maxPacketMetaHistory {
+			if step*-1 >= n.max {
 				log.Warnf("old packet received, can not be sequenced, head: %d received: %d", sn, offSn)
 				return nil
 			}
-			step = maxPacketMetaHistory + step
+			step = n.max + step
 		}
 	}
 	n.seq[n.step] = packetMeta{
@@ -98,7 +99,7 @@ func (n *sequencer) push(sn, offSn uint16, timeStamp uint32, layer uint8, head b
 		layer:       layer,
 	}
 	n.step++
-	if n.step >= maxPacketMetaHistory {
+	if n.step >= n.max {
 		n.step = 0
 	}
 	return &n.seq[n.step]
@@ -111,10 +112,10 @@ func (n *sequencer) getSeqNoPairs(seqNo []uint16) []packetMeta {
 	for _, sn := range seqNo {
 		step := n.step - int(n.headSN-sn) - 1
 		if step < 0 {
-			if step*-1 >= maxPacketMetaHistory {
+			if step*-1 >= n.max {
 				continue
 			}
-			step = maxPacketMetaHistory + step
+			step = n.max + step
 		}
 		seq := &n.seq[step]
 		if seq.targetSeqNo == sn {

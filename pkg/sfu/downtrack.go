@@ -32,6 +32,7 @@ type DownTrack struct {
 	mime          string
 	ssrc          uint32
 	streamID      string
+	maxTrack      int
 	payloadType   uint8
 	sequencer     *sequencer
 	trackType     DownTrackType
@@ -70,10 +71,11 @@ type DownTrack struct {
 }
 
 // NewDownTrack returns a DownTrack.
-func NewDownTrack(c webrtc.RTPCodecCapability, r Receiver, bf *buffer.Factory, peerID string) (*DownTrack, error) {
+func NewDownTrack(c webrtc.RTPCodecCapability, r Receiver, bf *buffer.Factory, peerID string, mt int) (*DownTrack, error) {
 	return &DownTrack{
 		id:            r.TrackID(),
 		peerID:        peerID,
+		maxTrack:      mt,
 		streamID:      r.StreamID(),
 		bufferFactory: bf,
 		receiver:      r,
@@ -99,7 +101,7 @@ func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters,
 			})
 		}
 		if strings.HasPrefix(d.codec.MimeType, "video/") {
-			d.sequencer = newSequencer()
+			d.sequencer = newSequencer(d.maxTrack)
 		}
 		d.onBind()
 		d.bound.set(true)

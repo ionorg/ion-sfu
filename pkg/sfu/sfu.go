@@ -157,7 +157,7 @@ func NewSFU(c Config) *SFU {
 	ballast := make([]byte, c.SFU.Ballast*1024*1024)
 
 	if c.BufferFactory == nil {
-		c.BufferFactory = buffer.NewBufferFactory(500)
+		c.BufferFactory = buffer.NewBufferFactory(c.Router.MaxPacketTrack)
 	}
 
 	w := NewWebRTCTransportConfig(c)

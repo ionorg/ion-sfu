@@ -101,7 +101,6 @@ type Stats struct {
 
 // BufferOptions provides configuration options for the buffer
 type Options struct {
-	BufferTime int
 	MaxBitRate uint64
 }
 

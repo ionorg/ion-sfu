@@ -9,7 +9,7 @@ import (
 )
 
 func Test_sequencer(t *testing.T) {
-	seq := newSequencer()
+	seq := newSequencer(500)
 	off := uint16(15)
 
 	for i := uint16(1); i < 520; i++ {
@@ -67,7 +67,7 @@ func Test_sequencer_getNACKSeqNo(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			n := newSequencer()
+			n := newSequencer(500)
 
 			for _, i := range tt.fields.input {
 				n.push(i, i+tt.fields.offset, 123, 3, true)
