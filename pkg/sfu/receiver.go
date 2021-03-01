@@ -254,6 +254,8 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 
 			if _, err = track.writeStream.WriteRTP(&pkt.Header, pkt.Payload); err != nil {
 				log.Errorf("Writing rtx packet err: %v", err)
+			} else {
+				track.UpdateStats(uint32(i))
 			}
 
 			packetFactory.Put(pktBuff)

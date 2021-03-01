@@ -274,6 +274,11 @@ func (d *DownTrack) CreateSenderReport() *rtcp.SenderReport {
 	}
 }
 
+func (d *DownTrack) UpdateStats(packetLen uint32) {
+	atomic.AddUint32(&d.octetCount, packetLen)
+	atomic.AddUint32(&d.packetCount, 1)
+}
+
 func (d *DownTrack) writeSimpleRTP(extPkt buffer.ExtPacket) error {
 	if d.reSync.get() {
 		if d.Kind() == webrtc.RTPCodecTypeVideo {
@@ -290,8 +295,7 @@ func (d *DownTrack) writeSimpleRTP(extPkt buffer.ExtPacket) error {
 		d.reSync.set(false)
 	}
 
-	atomic.AddUint32(&d.octetCount, uint32(len(extPkt.Packet.Payload)))
-	atomic.AddUint32(&d.packetCount, 1)
+	d.UpdateStats(uint32(len(extPkt.Packet.Payload)))
 
 	newSN := extPkt.Packet.SequenceNumber - d.snOffset
 	newTS := extPkt.Packet.Timestamp - d.tsOffset
