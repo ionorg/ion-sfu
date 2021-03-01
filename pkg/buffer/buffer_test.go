@@ -57,7 +57,6 @@ func TestNewBuffer(t *testing.T) {
 			name: "Must not be nil and add packets in sequence",
 			args: args{
 				options: Options{
-					BufferTime: 1000,
 					MaxBitRate: 1e6,
 				},
 			},
@@ -93,7 +92,7 @@ func TestNewBuffer(t *testing.T) {
 					return make([]byte, 1500)
 				},
 			}
-			buff := NewBuffer(123, pool)
+			buff := NewBuffer(123, pool, pool)
 			buff.codecType = webrtc.RTPCodecTypeVideo
 			assert.NotNil(t, buff)
 			assert.NotNil(t, TestPackets)

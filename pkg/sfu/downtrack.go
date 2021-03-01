@@ -26,17 +26,19 @@ const (
 // and SVC Publisher.
 type DownTrack struct {
 	sync.Mutex
-	id          string
-	peerID      string
-	bound       atomicBool
-	mime        string
-	ssrc        uint32
-	streamID    string
-	payloadType uint8
-	sequencer   *sequencer
-	trackType   DownTrackType
-	skipFB      int64
-	payload     []byte
+	id            string
+	peerID        string
+	bound         atomicBool
+	mime          string
+	ssrc          uint32
+	streamID      string
+	maxTrack      int
+	payloadType   uint8
+	sequencer     *sequencer
+	trackType     DownTrackType
+	bufferFactory *buffer.Factory
+	skipFB        int64
+	payload       []byte
 
 	spatialLayer  int32
 	temporalLayer int32
@@ -69,13 +71,15 @@ type DownTrack struct {
 }
 
 // NewDownTrack returns a DownTrack.
-func NewDownTrack(c webrtc.RTPCodecCapability, r Receiver, peerID string) (*DownTrack, error) {
+func NewDownTrack(c webrtc.RTPCodecCapability, r Receiver, bf *buffer.Factory, peerID string, mt int) (*DownTrack, error) {
 	return &DownTrack{
-		id:       r.TrackID(),
-		peerID:   peerID,
-		streamID: r.StreamID(),
-		receiver: r,
-		codec:    c,
+		id:            r.TrackID(),
+		peerID:        peerID,
+		maxTrack:      mt,
+		streamID:      r.StreamID(),
+		bufferFactory: bf,
+		receiver:      r,
+		codec:         c,
 	}, nil
 }
 
@@ -91,13 +95,13 @@ func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters,
 		d.mime = strings.ToLower(codec.MimeType)
 		d.reSync.set(true)
 		d.enabled.set(true)
-		if rr := bufferFactory.GetOrNew(packetio.RTCPBufferPacket, uint32(t.SSRC())).(*buffer.RTCPReader); rr != nil {
+		if rr := d.bufferFactory.GetOrNew(packetio.RTCPBufferPacket, uint32(t.SSRC())).(*buffer.RTCPReader); rr != nil {
 			rr.OnPacket(func(pkt []byte) {
 				d.handleRTCP(pkt)
 			})
 		}
 		if strings.HasPrefix(d.codec.MimeType, "video/") {
-			d.sequencer = newSequencer()
+			d.sequencer = newSequencer(d.maxTrack)
 		}
 		d.onBind()
 		d.bound.set(true)
@@ -270,6 +274,11 @@ func (d *DownTrack) CreateSenderReport() *rtcp.SenderReport {
 	}
 }
 
+func (d *DownTrack) UpdateStats(packetLen uint32) {
+	atomic.AddUint32(&d.octetCount, packetLen)
+	atomic.AddUint32(&d.packetCount, 1)
+}
+
 func (d *DownTrack) writeSimpleRTP(extPkt buffer.ExtPacket) error {
 	if d.reSync.get() {
 		if d.Kind() == webrtc.RTPCodecTypeVideo {
@@ -286,8 +295,7 @@ func (d *DownTrack) writeSimpleRTP(extPkt buffer.ExtPacket) error {
 		d.reSync.set(false)
 	}
 
-	atomic.AddUint32(&d.octetCount, uint32(len(extPkt.Packet.Payload)))
-	atomic.AddUint32(&d.packetCount, 1)
+	d.UpdateStats(uint32(len(extPkt.Packet.Payload)))
 
 	newSN := extPkt.Packet.SequenceNumber - d.snOffset
 	newTS := extPkt.Packet.Timestamp - d.tsOffset

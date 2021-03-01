@@ -238,6 +238,8 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 			}
 			pkt.Header.SequenceNumber = meta.targetSeqNo
 			pkt.Header.Timestamp = meta.timestamp
+			pkt.Header.SSRC = track.ssrc
+			pkt.Header.PayloadType = track.payloadType
 			if track.simulcast.temporalSupported {
 				switch track.mime {
 				case "video/vp8":
@@ -252,6 +254,8 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 
 			if _, err = track.writeStream.WriteRTP(&pkt.Header, pkt.Payload); err != nil {
 				log.Errorf("Writing rtx packet err: %v", err)
+			} else {
+				track.UpdateStats(uint32(i))
 			}
 
 			packetFactory.Put(pktBuff)

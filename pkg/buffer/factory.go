@@ -9,16 +9,22 @@ import (
 
 type Factory struct {
 	sync.RWMutex
-	packetPool  *sync.Pool
+	videoPool   *sync.Pool
+	audioPool   *sync.Pool
 	rtpBuffers  map[uint32]*Buffer
 	rtcpReaders map[uint32]*RTCPReader
 }
 
-func NewBufferFactory() *Factory {
+func NewBufferFactory(trackingPackets int) *Factory {
 	return &Factory{
-		packetPool: &sync.Pool{
+		videoPool: &sync.Pool{
 			New: func() interface{} {
-				return make([]byte, 1500)
+				return make([]byte, trackingPackets*maxPktSize)
+			},
+		},
+		audioPool: &sync.Pool{
+			New: func() interface{} {
+				return make([]byte, maxPktSize*25)
 			},
 		},
 		rtpBuffers:  make(map[uint32]*Buffer),
@@ -46,7 +52,7 @@ func (f *Factory) GetOrNew(packetType packetio.BufferPacketType, ssrc uint32) io
 		if reader, ok := f.rtpBuffers[ssrc]; ok {
 			return reader
 		}
-		buffer := NewBuffer(ssrc, f.packetPool)
+		buffer := NewBuffer(ssrc, f.videoPool, f.audioPool)
 		f.rtpBuffers[ssrc] = buffer
 		buffer.OnClose(func() {
 			f.Lock()

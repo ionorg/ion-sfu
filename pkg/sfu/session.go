@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pion/ion-sfu/pkg/buffer"
+
 	log "github.com/pion/ion-log"
 	"github.com/pion/webrtc/v3"
 )
@@ -19,15 +21,17 @@ type Session struct {
 	fanOutDCs      []string
 	datachannels   []*Datachannel
 	audioObserver  *audioLevel
+	bufferFactory  *buffer.Factory
 	onCloseHandler func()
 }
 
 // NewSession creates a new session
-func NewSession(id string, dcs []*Datachannel, cfg WebRTCTransportConfig) *Session {
+func NewSession(id string, bf *buffer.Factory, dcs []*Datachannel, cfg WebRTCTransportConfig) *Session {
 	s := &Session{
 		id:            id,
 		peers:         make(map[string]*Peer),
 		datachannels:  dcs,
+		bufferFactory: bf,
 		audioObserver: newAudioLevel(cfg.router.AudioLevelThreshold, cfg.router.AudioLevelInterval, cfg.router.AudioLevelFilter),
 	}
 	go s.audioLevelObserver(cfg.router.AudioLevelInterval)
@@ -179,6 +183,11 @@ func (s *Session) Subscribe(peer *Peer) {
 	}
 
 	peer.subscriber.negotiate()
+}
+
+// BufferFactory returns current session buffer factory
+func (s *Session) BufferFactory() *buffer.Factory {
+	return s.bufferFactory
 }
 
 // Transports returns peers in this session
