@@ -58,7 +58,6 @@ func TestNewBuffer(t *testing.T) {
 			name: "Must not be nil and add packets in sequence",
 			args: args{
 				options: Options{
-					BufferTime: 1000,
 					MaxBitRate: 1e6,
 				},
 			},
@@ -91,7 +90,7 @@ func TestNewBuffer(t *testing.T) {
 			}
 			pool := &sync.Pool{
 				New: func() interface{} {
-					return make([]byte, 30000)
+					return make([]byte, 1500)
 				},
 			}
 			buff := NewBuffer(123, pool, pool)
@@ -117,7 +116,7 @@ func TestNewBuffer(t *testing.T) {
 				buf, _ := p.Marshal()
 				buff.Write(buf)
 			}
-			// assert.Equal(t, 6, buff.bucket.size)
+			// assert.Equal(t, 6, buff.PacketQueue.size)
 			assert.Equal(t, uint32(1<<16), buff.cycles)
 			assert.Equal(t, uint16(2), buff.maxSeqNo)
 		})

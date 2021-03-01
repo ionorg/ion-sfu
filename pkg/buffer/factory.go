@@ -15,17 +15,15 @@ type Factory struct {
 	rtcpReaders map[uint32]*RTCPReader
 }
 
-func NewBufferFactory() *Factory {
+func NewBufferFactory(trackingPackets int) *Factory {
 	return &Factory{
 		videoPool: &sync.Pool{
 			New: func() interface{} {
-				// Make a 2MB buffer for video
-				return make([]byte, 2*1000*1000)
+				return make([]byte, trackingPackets*maxPktSize)
 			},
 		},
 		audioPool: &sync.Pool{
 			New: func() interface{} {
-				// Make a max 25 packets buffer for audio
 				return make([]byte, maxPktSize*25)
 			},
 		},

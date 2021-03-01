@@ -10,8 +10,8 @@ withstats = false
 # Limit the remb bandwidth in kbps
 # zero means no limits
 maxbandwidth = 1500
-# max buffer time by ms for video tracks
-maxbuffertime = 1000
+# max number of video tracks packets the SFU will keep track
+maxpackettrack = 500
 # Sets the audio level volume threshold.
 # Values from [0-127] where 0 is the loudest.
 # Audio levels are read from rtp extension header according to:

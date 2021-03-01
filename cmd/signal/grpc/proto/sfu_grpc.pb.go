@@ -11,6 +11,7 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
+// Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
 // SFUClient is the client API for SFU service.
@@ -29,7 +30,7 @@ func NewSFUClient(cc grpc.ClientConnInterface) SFUClient {
 }
 
 func (c *sFUClient) Signal(ctx context.Context, opts ...grpc.CallOption) (SFU_SignalClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_SFU_serviceDesc.Streams[0], "/sfu.SFU/Signal", opts...)
+	stream, err := c.cc.NewStream(ctx, &SFU_ServiceDesc.Streams[0], "/sfu.SFU/Signal", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +85,7 @@ type UnsafeSFUServer interface {
 }
 
 func RegisterSFUServer(s grpc.ServiceRegistrar, srv SFUServer) {
-	s.RegisterService(&_SFU_serviceDesc, srv)
+	s.RegisterService(&SFU_ServiceDesc, srv)
 }
 
 func _SFU_Signal_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -113,7 +114,10 @@ func (x *sFUSignalServer) Recv() (*SignalRequest, error) {
 	return m, nil
 }
 
-var _SFU_serviceDesc = grpc.ServiceDesc{
+// SFU_ServiceDesc is the grpc.ServiceDesc for SFU service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var SFU_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "sfu.SFU",
 	HandlerType: (*SFUServer)(nil),
 	Methods:     []grpc.MethodDesc{},

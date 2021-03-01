@@ -51,31 +51,33 @@ type Config struct {
 		Ballast   int64 `mapstructure:"ballast"`
 		WithStats bool  `mapstructure:"withstats"`
 	} `mapstructure:"sfu"`
-	WebRTC WebRTCConfig `mapstructure:"webrtc"`
-	Logger logr.Logger
-	Router RouterConfig `mapstructure:"router"`
-	Turn   TurnConfig   `mapstructure:"turn"`
+	WebRTC        WebRTCConfig `mapstructure:"webrtc"`
+	Logger        logr.Logger
+	Router        RouterConfig `mapstructure:"router"`
+	Turn          TurnConfig   `mapstructure:"turn"`
+	BufferFactory *buffer.Factory
 }
 
 var (
-	bufferFactory *buffer.Factory
 	packetFactory *sync.Pool
 )
 
 // SFU represents an sfu instance
 type SFU struct {
 	sync.RWMutex
-	webrtc       WebRTCTransportConfig
-	turn         *turn.Server
-	sessions     map[string]*Session
-	datachannels []*Datachannel
-	withStats    bool
-	Logger       logr.Logger
+	webrtc        WebRTCTransportConfig
+	turn          *turn.Server
+	sessions      map[string]*Session
+	datachannels  []*Datachannel
+	bufferFactory *buffer.Factory
+	withStats     bool
+	Logger        logr.Logger
 }
 
 // NewWebRTCTransportConfig parses our settings and returns a usable WebRTCTransportConfig for creating PeerConnections
 func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 	se := webrtc.SettingEngine{}
+	se.DisableMediaEngineCopy(true)
 
 	var icePortStart, icePortEnd uint16
 
@@ -107,7 +109,7 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 		}
 	}
 
-	se.BufferFactory = bufferFactory.GetOrNew
+	se.BufferFactory = c.BufferFactory.GetOrNew
 
 	sdpSemantics := webrtc.SDPSemanticsUnifiedPlan
 	switch c.WebRTC.SDPSemantics {
@@ -143,8 +145,6 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 }
 
 func init() {
-	// Init buffer factory
-	bufferFactory = buffer.NewBufferFactory()
 	// Init packet factory
 	packetFactory = &sync.Pool{
 		New: func() interface{} {
@@ -168,12 +168,17 @@ func NewSFU(c Config) *SFU {
 	// Init ballast
 	ballast := make([]byte, c.SFU.Ballast*1024*1024)
 
+	if c.BufferFactory == nil {
+		c.BufferFactory = buffer.NewBufferFactory(c.Router.MaxPacketTrack)
+	}
+
 	w := NewWebRTCTransportConfig(c)
 
 	sfu := &SFU{
-		webrtc:    w,
-		sessions:  make(map[string]*Session),
-		withStats: c.Router.WithStats,
+		webrtc:        w,
+		sessions:      make(map[string]*Session),
+		withStats:     c.Router.WithStats,
+		bufferFactory: c.BufferFactory,
 	}
 
 	if c.Turn.Enabled {
@@ -191,7 +196,7 @@ func NewSFU(c Config) *SFU {
 
 // NewSession creates a new session instance
 func (s *SFU) newSession(id string) *Session {
-	session := NewSession(id, s.datachannels, s.webrtc)
+	session := NewSession(id, s.bufferFactory, s.datachannels, s.webrtc)
 
 	session.OnClose(func() {
 		s.Lock()
@@ -233,4 +238,11 @@ func (s *SFU) NewDatachannel(label string) *Datachannel {
 	dc := &Datachannel{Label: label}
 	s.datachannels = append(s.datachannels, dc)
 	return dc
+}
+
+// GetSessions return all sessions
+func (s *SFU) GetSessions() map[string]*Session {
+	s.RLock()
+	defer s.RUnlock()
+	return s.sessions
 }

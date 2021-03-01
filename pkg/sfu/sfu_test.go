@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lucsky/cuid"
+
 	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/webrtc/v3"
 	med "github.com/pion/webrtc/v3/pkg/media"
@@ -134,6 +136,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 	sfu := NewSFU(
 		Config{
 			Logger: log.New(),
+			Router: RouterConfig{MaxPacketTrack: 200},
 		},
 	)
 	sfu.NewDatachannel(APIChannelLabel)
@@ -369,7 +372,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 							err = p.remotePub.SetLocalDescription(offer)
 							assert.NoError(t, err)
 							<-gatherComplete
-							err = p.local.Join("test")
+							err = p.local.Join("test sid", cuid.New())
 							assert.NoError(t, err)
 							answer, err := p.local.Answer(*p.remotePub.LocalDescription())
 							err = p.remotePub.SetRemoteDescription(*answer)
