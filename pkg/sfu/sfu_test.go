@@ -135,7 +135,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 	fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go", "jsonrpc2"}
 	fixByFunc := []string{"Handle"}
 	log.Init("trace", fixByFile, fixByFunc)
-	sfu := NewSFU(Config{Log: log.Config{Level: "trace"}})
+	sfu := NewSFU(Config{Log: log.Config{Level: "trace"}, Router: RouterConfig{MaxPacketTrack: 200}})
 	sfu.NewDatachannel(APIChannelLabel)
 	tests := []struct {
 		name  string

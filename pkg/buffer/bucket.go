@@ -5,7 +5,7 @@ import (
 	"math"
 )
 
-const maxPktSize = 1460
+const maxPktSize = 1350
 
 type Bucket struct {
 	buf []byte
@@ -22,7 +22,7 @@ func NewBucket(buf []byte) *Bucket {
 	}
 }
 
-func (b *Bucket) addPacket(pkt []byte, sn uint16, latest bool) []byte {
+func (b *Bucket) AddPacket(pkt []byte, sn uint16, latest bool) ([]byte, error) {
 	if !latest {
 		return b.set(sn, pkt)
 	}
@@ -34,10 +34,10 @@ func (b *Bucket) addPacket(pkt []byte, sn uint16, latest bool) []byte {
 			b.step = 0
 		}
 	}
-	return b.push(pkt)
+	return b.push(pkt), nil
 }
 
-func (b *Bucket) getPacket(buf []byte, sn uint16) (i int, err error) {
+func (b *Bucket) GetPacket(buf []byte, sn uint16) (i int, err error) {
 	p := b.get(sn)
 	if p == nil {
 		err = errPacketNotFound
@@ -60,7 +60,7 @@ func (b *Bucket) push(pkt []byte) []byte {
 	off := b.step*maxPktSize + 2
 	copy(b.buf[off:], pkt)
 	b.step++
-	if b.step >= b.maxSteps {
+	if b.step > b.maxSteps {
 		b.step = 0
 	}
 	return b.buf[off : off+len(pkt)]
@@ -69,7 +69,7 @@ func (b *Bucket) push(pkt []byte) []byte {
 func (b *Bucket) get(sn uint16) []byte {
 	pos := b.step - int(b.headSN-sn+1)
 	if pos < 0 {
-		if pos*-1 > b.maxSteps {
+		if pos*-1 > b.maxSteps+1 {
 			return nil
 		}
 		pos = b.maxSteps + pos + 1
@@ -85,16 +85,23 @@ func (b *Bucket) get(sn uint16) []byte {
 	return b.buf[off+2 : off+2+sz]
 }
 
-func (b *Bucket) set(sn uint16, pkt []byte) []byte {
+func (b *Bucket) set(sn uint16, pkt []byte) ([]byte, error) {
+	if b.headSN-sn >= uint16(b.maxSteps+1) {
+		return nil, errPacketTooOld
+	}
 	pos := b.step - int(b.headSN-sn+1)
 	if pos < 0 {
 		pos = b.maxSteps + pos + 1
 	}
 	off := pos * maxPktSize
 	if off > len(b.buf) || off < 0 {
-		return nil
+		return nil, errPacketTooOld
+	}
+	// Do not overwrite if packet exist
+	if binary.BigEndian.Uint16(b.buf[off+4:off+6]) == sn {
+		return b.buf[off+2 : off+2+len(pkt)], nil
 	}
 	binary.BigEndian.PutUint16(b.buf[off:], uint16(len(pkt)))
 	copy(b.buf[off+2:], pkt)
-	return b.buf[off+2 : off+2+len(pkt)]
+	return b.buf[off+2 : off+2+len(pkt)], nil
 }
