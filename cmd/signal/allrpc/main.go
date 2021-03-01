@@ -112,11 +112,11 @@ func parse() bool {
 }
 
 func getEnv(key string) string {
-    if value, exists := os.LookupEnv(key); exists {
+	if value, exists := os.LookupEnv(key); exists {
 		return value
-    }
+	}
 
-    return ""
+	return ""
 }
 
 func main() {
