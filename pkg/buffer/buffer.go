@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/gammazero/deque"
+
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
@@ -38,23 +40,22 @@ type ExtPacket struct {
 // Buffer contains all packets
 type Buffer struct {
 	sync.Mutex
-	bucket     *Bucket
-	nacker     *nackQueue
-	codecType  webrtc.RTPCodecType
-	videoPool  *sync.Pool
-	audioPool  *sync.Pool
-	packetChan chan ExtPacket
-	pPackets   []pendingPackets
-	closeOnce  sync.Once
-	mediaSSRC  uint32
-	clockRate  uint32
-	maxBitrate uint64
-	lastReport int64
-	twccExt    uint8
-	audioExt   uint8
-	bound      bool
-	closed     atomicBool
-	mime       string
+	pool        *sync.Pool
+	nacker      *nackQueue
+	packetQueue *PacketQueue
+	codecType   webrtc.RTPCodecType
+	extPackets  deque.Deque
+	pPackets    []pendingPackets
+	closeOnce   sync.Once
+	mediaSSRC   uint32
+	clockRate   uint32
+	maxBitrate  uint64
+	lastReport  int64
+	twccExt     uint8
+	audioExt    uint8
+	bound       bool
+	closed      atomicBool
+	mime        string
 
 	// supported feedbacks
 	remb       bool
@@ -105,18 +106,13 @@ type Options struct {
 }
 
 // NewBuffer constructs a new Buffer
-func NewBuffer(ssrc uint32, vp, ap *sync.Pool) *Buffer {
+func NewBuffer(ssrc uint32, pp *sync.Pool) *Buffer {
 	b := &Buffer{
-		mediaSSRC:  ssrc,
-		videoPool:  vp,
-		audioPool:  ap,
-		packetChan: make(chan ExtPacket, 100),
+		mediaSSRC: ssrc,
+		pool:      pp,
 	}
+	b.extPackets.SetMinCapacity(7)
 	return b
-}
-
-func (b *Buffer) PacketChan() chan ExtPacket {
-	return b.packetChan
 }
 
 func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
@@ -130,10 +126,8 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 	switch {
 	case strings.HasPrefix(b.mime, "audio/"):
 		b.codecType = webrtc.RTPCodecTypeAudio
-		b.bucket = NewBucket(b.audioPool.Get().([]byte))
 	case strings.HasPrefix(b.mime, "video/"):
 		b.codecType = webrtc.RTPCodecTypeVideo
-		b.bucket = NewBucket(b.videoPool.Get().([]byte))
 	default:
 		b.codecType = webrtc.RTPCodecType(0)
 	}
@@ -146,6 +140,7 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 	}
 
 	if b.codecType == webrtc.RTPCodecTypeVideo {
+		b.packetQueue = NewPacketQueue(b.pool, 500)
 		for _, fb := range codec.RTCPFeedback {
 			switch fb.Type {
 			case webrtc.TypeRTCPFBGoogREMB:
@@ -161,6 +156,7 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 			}
 		}
 	} else if b.codecType == webrtc.RTPCodecTypeAudio {
+		b.packetQueue = NewPacketQueue(b.pool, 50)
 		for _, h := range params.HeaderExtensions {
 			if h.URI == sdp.AudioLevelURI {
 				b.audioLevel = true
@@ -227,20 +223,30 @@ func (b *Buffer) Read(buff []byte) (n int, err error) {
 	}
 }
 
+func (b *Buffer) ReadExtended() (ExtPacket, error) {
+	for {
+		if b.closed.get() {
+			return ExtPacket{}, io.EOF
+		}
+		b.Lock()
+		if b.extPackets.Len() > 0 {
+			extPkt := b.extPackets.PopFront().(ExtPacket)
+			b.Unlock()
+			return extPkt, nil
+		}
+		b.Unlock()
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func (b *Buffer) Close() error {
 	b.Lock()
 	defer b.Unlock()
 
 	b.closeOnce.Do(func() {
 		b.closed.set(true)
-		if b.bucket != nil && b.codecType == webrtc.RTPCodecTypeVideo {
-			b.videoPool.Put(b.bucket.buf)
-		}
-		if b.bucket != nil && b.codecType == webrtc.RTPCodecTypeAudio {
-			b.audioPool.Put(b.bucket.buf)
-		}
 		b.onClose()
-		close(b.packetChan)
+		b.packetQueue.Close()
 	})
 	return nil
 }
@@ -255,7 +261,7 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	if b.stats.PacketCount == 0 {
 		b.baseSN = sn
 		b.maxSeqNo = sn
-		b.bucket.headSN = sn - 1
+		b.packetQueue.headSN = sn - 1
 		b.lastReport = arrivalTime
 	} else if (sn-b.maxSeqNo)&0x8000 == 0 {
 		if sn < b.maxSeqNo {
@@ -290,7 +296,7 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	b.stats.PacketCount++
 
 	var p rtp.Packet
-	if err := p.Unmarshal(b.bucket.addPacket(pkt, sn, sn == b.maxSeqNo)); err != nil {
+	if err := p.Unmarshal(b.packetQueue.AddPacket(pkt, sn, sn == b.maxSeqNo)); err != nil {
 		return
 	}
 
@@ -329,7 +335,7 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 		b.minPacketProbe++
 	}
 
-	b.packetChan <- ep
+	b.extPackets.PushBack(ep)
 
 	// if first time update or the timestamp is later (factoring timestamp wrap around)
 	if (b.latestTimestampTime == 0) || IsLaterTimestamp(p.Timestamp, b.latestTimestamp) {
@@ -487,7 +493,7 @@ func (b *Buffer) GetPacket(buff []byte, sn uint16) (int, error) {
 	if b.closed.get() {
 		return 0, io.EOF
 	}
-	return b.bucket.getPacket(buff, sn)
+	return b.packetQueue.GetPacket(buff, sn)
 }
 
 // Bitrate returns the current publisher stream bitrate.

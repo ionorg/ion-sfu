@@ -221,11 +221,11 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 	w.nackWorker.Submit(func() {
 		for _, meta := range packets {
 			pktBuff := packetFactory.Get().([]byte)
-			buff := w.buffers[meta.getLayer()]
+			buff := w.buffers[meta.layer]
 			if buff == nil {
 				break
 			}
-			i, err := buff.GetPacket(pktBuff, meta.getSourceSeqNo())
+			i, err := buff.GetPacket(pktBuff, meta.sourceSeqNo)
 			if err != nil {
 				if err == io.EOF {
 					break
@@ -236,8 +236,8 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 			if err = pkt.Unmarshal(pktBuff[:i]); err != nil {
 				continue
 			}
-			pkt.Header.SequenceNumber = meta.getTargetSeqNo()
-			pkt.Header.Timestamp = meta.getTimestamp()
+			pkt.Header.SequenceNumber = meta.targetSeqNo
+			pkt.Header.Timestamp = meta.timestamp
 			if track.simulcast.temporalSupported {
 				switch track.mime {
 				case "video/vp8":
@@ -267,7 +267,13 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 		})
 	}()
 	var del []int
-	for pkt := range w.buffers[layer].PacketChan() {
+
+	for {
+		pkt, err := w.buffers[layer].ReadExtended()
+		if err == io.EOF {
+			return
+		}
+
 		w.locks[layer].Lock()
 		for idx, dt := range w.downTracks[layer] {
 			if err := dt.WriteRTP(pkt); err == io.EOF {
@@ -284,6 +290,7 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 		}
 		w.locks[layer].Unlock()
 	}
+
 }
 
 // closeTracks close all tracks from Receiver

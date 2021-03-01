@@ -1,6 +1,7 @@
 package buffer
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -42,21 +43,23 @@ var TestPackets = []*rtp.Packet{
 }
 
 func Test_queue(t *testing.T) {
-	q := NewBucket(make([]byte, 25000))
+	q := NewPacketQueue(&sync.Pool{New: func() interface{} {
+		return make([]byte, 1500)
+	}}, 500)
 
 	for _, p := range TestPackets {
 		p := p
 		buf, err := p.Marshal()
 		assert.NoError(t, err)
 		assert.NotPanics(t, func() {
-			q.addPacket(buf, p.SequenceNumber, true)
+			q.AddPacket(buf, p.SequenceNumber, true)
 		})
 	}
 	var expectedSN uint16
 	expectedSN = 6
 	np := rtp.Packet{}
-	buff := make([]byte, maxPktSize)
-	i, err := q.getPacket(buff, 6)
+	buff := make([]byte, 1500)
+	i, err := q.GetPacket(buff, 6)
 	assert.NoError(t, err)
 	err = np.Unmarshal(buff[:i])
 	assert.NoError(t, err)
@@ -70,12 +73,31 @@ func Test_queue(t *testing.T) {
 	buf, err := np2.Marshal()
 	assert.NoError(t, err)
 	expectedSN = 8
-	q.addPacket(buf, 8, false)
-	i, err = q.getPacket(buff, expectedSN)
+	q.AddPacket(buf, 8, false)
+	i, err = q.GetPacket(buff, expectedSN)
 	assert.NoError(t, err)
 	err = np.Unmarshal(buff[:i])
 	assert.NoError(t, err)
 	assert.Equal(t, expectedSN, np.SequenceNumber)
+	assert.NotPanics(t, q.Close)
+}
+
+func Test_queue_disorder(t *testing.T) {
+	d := []byte("dummy data")
+	q := NewPacketQueue(&sync.Pool{New: func() interface{} {
+		return make([]byte, 1500)
+	}}, 500)
+
+	q.headSN = 25745
+	q.AddPacket(d, 25746, true)
+	dd := q.AddPacket(d, 25743, false)
+	assert.NotNil(t, dd)
+	assert.Equal(t, dd, d)
+	assert.Equal(t, 4, q.size)
+	dd = q.AddPacket(d, 25745, false)
+	assert.NotNil(t, dd)
+	assert.Equal(t, dd, d)
+	assert.Equal(t, 4, q.size)
 }
 
 func Test_queue_edges(t *testing.T) {
@@ -96,7 +118,9 @@ func Test_queue_edges(t *testing.T) {
 			},
 		},
 	}
-	q := NewBucket(make([]byte, 25000))
+	q := NewPacketQueue(&sync.Pool{New: func() interface{} {
+		return make([]byte, 1500)
+	}}, 500)
 	q.headSN = 65532
 	for _, p := range TestPackets {
 		p := p
@@ -106,15 +130,15 @@ func Test_queue_edges(t *testing.T) {
 			buf, err := p.Marshal()
 			assert.NoError(t, err)
 			assert.NotPanics(t, func() {
-				q.addPacket(buf, p.SequenceNumber, true)
+				q.AddPacket(buf, p.SequenceNumber, true)
 			})
 		})
 	}
 	var expectedSN uint16
 	expectedSN = 65534
 	np := rtp.Packet{}
-	buff := make([]byte, maxPktSize)
-	i, err := q.getPacket(buff, expectedSN)
+	buff := make([]byte, 1500)
+	i, err := q.GetPacket(buff, expectedSN)
 	assert.NoError(t, err)
 	err = np.Unmarshal(buff[:i])
 	assert.NoError(t, err)
@@ -127,10 +151,11 @@ func Test_queue_edges(t *testing.T) {
 	}
 	buf, err := np2.Marshal()
 	assert.NoError(t, err)
-	q.addPacket(buf, np2.SequenceNumber, false)
-	i, err = q.getPacket(buff, expectedSN+1)
+	q.AddPacket(buf, np2.SequenceNumber, false)
+	i, err = q.GetPacket(buff, expectedSN+1)
 	assert.NoError(t, err)
 	err = np.Unmarshal(buff[:i])
 	assert.NoError(t, err)
 	assert.Equal(t, expectedSN+1, np.SequenceNumber)
+	assert.NotPanics(t, q.Close)
 }

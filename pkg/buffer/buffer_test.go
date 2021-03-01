@@ -90,10 +90,10 @@ func TestNewBuffer(t *testing.T) {
 			}
 			pool := &sync.Pool{
 				New: func() interface{} {
-					return make([]byte, 30000)
+					return make([]byte, 1500)
 				},
 			}
-			buff := NewBuffer(123, pool, pool)
+			buff := NewBuffer(123, pool)
 			buff.codecType = webrtc.RTPCodecTypeVideo
 			assert.NotNil(t, buff)
 			assert.NotNil(t, TestPackets)
@@ -116,7 +116,7 @@ func TestNewBuffer(t *testing.T) {
 				buf, _ := p.Marshal()
 				buff.Write(buf)
 			}
-			// assert.Equal(t, 6, buff.bucket.size)
+			// assert.Equal(t, 6, buff.PacketQueue.size)
 			assert.Equal(t, uint32(1<<16), buff.cycles)
 			assert.Equal(t, uint16(2), buff.maxSeqNo)
 		})
