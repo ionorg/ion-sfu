@@ -32,29 +32,31 @@ type RouterConfig struct {
 
 type router struct {
 	sync.RWMutex
-	id        string
-	twcc      *twcc.Responder
-	peer      *webrtc.PeerConnection
-	stats     map[uint32]*stats.Stream
-	rtcpCh    chan []rtcp.Packet
-	stopCh    chan struct{}
-	config    RouterConfig
-	session   *Session
-	receivers map[string]Receiver
+	id            string
+	twcc          *twcc.Responder
+	peer          *webrtc.PeerConnection
+	stats         map[uint32]*stats.Stream
+	rtcpCh        chan []rtcp.Packet
+	stopCh        chan struct{}
+	config        RouterConfig
+	session       *Session
+	receivers     map[string]Receiver
+	bufferFactory *buffer.Factory
 }
 
 // newRouter for routing rtp/rtcp packets
-func newRouter(peer *webrtc.PeerConnection, id string, session *Session, config RouterConfig) Router {
+func newRouter(id string, peer *webrtc.PeerConnection, session *Session, config RouterConfig) Router {
 	ch := make(chan []rtcp.Packet, 10)
 	r := &router{
-		id:        id,
-		peer:      peer,
-		rtcpCh:    ch,
-		stopCh:    make(chan struct{}),
-		config:    config,
-		session:   session,
-		receivers: make(map[string]Receiver),
-		stats:     make(map[uint32]*stats.Stream),
+		id:            id,
+		peer:          peer,
+		rtcpCh:        ch,
+		stopCh:        make(chan struct{}),
+		config:        config,
+		session:       session,
+		receivers:     make(map[string]Receiver),
+		stats:         make(map[uint32]*stats.Stream),
+		bufferFactory: session.BufferFactory(),
 	}
 
 	if config.WithStats {
@@ -85,7 +87,7 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 	trackID := track.ID()
 	rid := track.RID()
 
-	buff, rtcpReader := bufferFactory.GetBufferPair(uint32(track.SSRC()))
+	buff, rtcpReader := r.bufferFactory.GetBufferPair(uint32(track.SSRC()))
 
 	buff.OnFeedback(func(fb []rtcp.Packet) {
 		r.rtcpCh <- fb
@@ -233,7 +235,7 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 		Channels:     codec.Channels,
 		SDPFmtpLine:  codec.SDPFmtpLine,
 		RTCPFeedback: []webrtc.RTCPFeedback{{"goog-remb", ""}, {"nack", ""}, {"nack", "pli"}},
-	}, recv, sub.id)
+	}, recv, r.bufferFactory, sub.id)
 	if err != nil {
 		return err
 	}

@@ -93,7 +93,7 @@ func TestNewBuffer(t *testing.T) {
 					return make([]byte, 1500)
 				},
 			}
-			buff := NewBuffer(123, pool)
+			buff := NewBuffer(123, pool, pool)
 			buff.codecType = webrtc.RTPCodecTypeVideo
 			assert.NotNil(t, buff)
 			assert.NotNil(t, TestPackets)

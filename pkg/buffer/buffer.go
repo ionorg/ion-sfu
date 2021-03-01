@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/gammazero/deque"
-
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
@@ -40,22 +39,23 @@ type ExtPacket struct {
 // Buffer contains all packets
 type Buffer struct {
 	sync.Mutex
-	pool        *sync.Pool
-	nacker      *nackQueue
-	packetQueue *PacketQueue
-	codecType   webrtc.RTPCodecType
-	extPackets  deque.Deque
-	pPackets    []pendingPackets
-	closeOnce   sync.Once
-	mediaSSRC   uint32
-	clockRate   uint32
-	maxBitrate  uint64
-	lastReport  int64
-	twccExt     uint8
-	audioExt    uint8
-	bound       bool
-	closed      atomicBool
-	mime        string
+	bucket     *Bucket
+	nacker     *nackQueue
+	videoPool  *sync.Pool
+	audioPool  *sync.Pool
+	codecType  webrtc.RTPCodecType
+	extPackets deque.Deque
+	pPackets   []pendingPackets
+	closeOnce  sync.Once
+	mediaSSRC  uint32
+	clockRate  uint32
+	maxBitrate uint64
+	lastReport int64
+	twccExt    uint8
+	audioExt   uint8
+	bound      bool
+	closed     atomicBool
+	mime       string
 
 	// supported feedbacks
 	remb       bool
@@ -106,10 +106,11 @@ type Options struct {
 }
 
 // NewBuffer constructs a new Buffer
-func NewBuffer(ssrc uint32, pp *sync.Pool) *Buffer {
+func NewBuffer(ssrc uint32, vp, ap *sync.Pool) *Buffer {
 	b := &Buffer{
 		mediaSSRC: ssrc,
-		pool:      pp,
+		videoPool: vp,
+		audioPool: ap,
 	}
 	b.extPackets.SetMinCapacity(7)
 	return b
@@ -126,8 +127,10 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 	switch {
 	case strings.HasPrefix(b.mime, "audio/"):
 		b.codecType = webrtc.RTPCodecTypeAudio
+		b.bucket = NewBucket(b.audioPool.Get().([]byte))
 	case strings.HasPrefix(b.mime, "video/"):
 		b.codecType = webrtc.RTPCodecTypeVideo
+		b.bucket = NewBucket(b.videoPool.Get().([]byte))
 	default:
 		b.codecType = webrtc.RTPCodecType(0)
 	}
@@ -140,7 +143,6 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 	}
 
 	if b.codecType == webrtc.RTPCodecTypeVideo {
-		b.packetQueue = NewPacketQueue(b.pool, 500)
 		for _, fb := range codec.RTCPFeedback {
 			switch fb.Type {
 			case webrtc.TypeRTCPFBGoogREMB:
@@ -156,7 +158,6 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 			}
 		}
 	} else if b.codecType == webrtc.RTPCodecTypeAudio {
-		b.packetQueue = NewPacketQueue(b.pool, 50)
 		for _, h := range params.HeaderExtensions {
 			if h.URI == sdp.AudioLevelURI {
 				b.audioLevel = true
@@ -244,9 +245,14 @@ func (b *Buffer) Close() error {
 	defer b.Unlock()
 
 	b.closeOnce.Do(func() {
+		if b.bucket != nil && b.codecType == webrtc.RTPCodecTypeVideo {
+			b.videoPool.Put(b.bucket.buf)
+		}
+		if b.bucket != nil && b.codecType == webrtc.RTPCodecTypeAudio {
+			b.audioPool.Put(b.bucket.buf)
+		}
 		b.closed.set(true)
 		b.onClose()
-		b.packetQueue.Close()
 	})
 	return nil
 }
@@ -261,7 +267,7 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	if b.stats.PacketCount == 0 {
 		b.baseSN = sn
 		b.maxSeqNo = sn
-		b.packetQueue.headSN = sn - 1
+		b.bucket.headSN = sn - 1
 		b.lastReport = arrivalTime
 	} else if (sn-b.maxSeqNo)&0x8000 == 0 {
 		if sn < b.maxSeqNo {
@@ -296,7 +302,12 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	b.stats.PacketCount++
 
 	var p rtp.Packet
-	if err := p.Unmarshal(b.packetQueue.AddPacket(pkt, sn, sn == b.maxSeqNo)); err != nil {
+	pb, err := b.bucket.AddPacket(pkt, sn, sn == b.maxSeqNo)
+	if err != nil {
+		log.Errorf("buffer write err: %v", err)
+		return
+	}
+	if err = p.Unmarshal(pb); err != nil {
 		return
 	}
 
@@ -493,7 +504,7 @@ func (b *Buffer) GetPacket(buff []byte, sn uint16) (int, error) {
 	if b.closed.get() {
 		return 0, io.EOF
 	}
-	return b.packetQueue.GetPacket(buff, sn)
+	return b.bucket.GetPacket(buff, sn)
 }
 
 // Bitrate returns the current publisher stream bitrate.

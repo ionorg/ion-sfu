@@ -238,6 +238,8 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 			}
 			pkt.Header.SequenceNumber = meta.targetSeqNo
 			pkt.Header.Timestamp = meta.timestamp
+			pkt.Header.SSRC = track.ssrc
+			pkt.Header.PayloadType = track.payloadType
 			if track.simulcast.temporalSupported {
 				switch track.mime {
 				case "video/vp8":
