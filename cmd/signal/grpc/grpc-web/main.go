@@ -63,12 +63,17 @@ func load() bool {
 	}
 
 	if len(conf.WebRTC.ICEPortRange) > 2 {
-		fmt.Printf("config file %s loaded failed. range port must be [min,max]\n", file)
+		fmt.Printf("config file %s loaded failed. webrtc range port must be [min,max]\n", file)
 		return false
 	}
 
 	if len(conf.WebRTC.ICEPortRange) != 0 && conf.WebRTC.ICEPortRange[1]-conf.WebRTC.ICEPortRange[0] < portRangeLimit {
-		fmt.Printf("config file %s loaded failed. range port must be [min, max] and max - min >= %d\n", file, portRangeLimit)
+		fmt.Printf("config file %s loaded failed. webrtc range port must be [min, max] and max - min >= %d\n", file, portRangeLimit)
+		return false
+	}
+
+	if len(conf.Turn.PortRange) > 2 {
+		fmt.Printf("config file %s loaded failed. turn range port must be [min,max]\n", file)
 		return false
 	}
 
