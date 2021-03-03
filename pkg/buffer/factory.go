@@ -4,7 +4,6 @@ import (
 	"io"
 	"sync"
 
-	"github.com/go-logr/logr"
 	"github.com/pion/transport/packetio"
 )
 
@@ -14,7 +13,6 @@ type Factory struct {
 	audioPool   *sync.Pool
 	rtpBuffers  map[uint32]*Buffer
 	rtcpReaders map[uint32]*RTCPReader
-	logger      logr.Logger
 }
 
 func NewBufferFactory(trackingPackets int) *Factory {

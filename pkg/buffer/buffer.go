@@ -92,9 +92,6 @@ type Buffer struct {
 	onAudioLevel func(level uint8)
 	feedbackCB   func([]rtcp.Packet)
 	feedbackTWCC func(sn uint16, timeNS int64, marker bool)
-
-	// Logger
-	logger logr.Logger
 }
 
 type Stats struct {

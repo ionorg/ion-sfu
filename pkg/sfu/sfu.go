@@ -15,6 +15,7 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
+// Logger is an implementation of logr.Logger. If is not provided - will be turned off.
 var Logger logr.Logger = new(logr.DiscardLogger)
 
 // ICEServerConfig defines parameters for ice servers
