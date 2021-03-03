@@ -59,7 +59,7 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 
 		p.OnOffer = func(offer *webrtc.SessionDescription) {
 			if err := conn.Notify(ctx, "offer", offer); err != nil {
-				p.Error(err, "error sending offer")
+				p.Logger.Error(err, "error sending offer")
 			}
 
 		}
@@ -68,7 +68,7 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 				Candidate: *candidate,
 				Target:    target,
 			}); err != nil {
-				p.Error(err, "error sending ice candidate")
+				p.Logger.Error(err, "error sending ice candidate")
 			}
 		}
 
@@ -90,7 +90,7 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 		var negotiation Negotiation
 		err := json.Unmarshal(*req.Params, &negotiation)
 		if err != nil {
-			p.Error(err, "connect: error parsing offer")
+			p.Logger.Error(err, "connect: error parsing offer")
 			replyError(err)
 			break
 		}
@@ -106,7 +106,7 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 		var negotiation Negotiation
 		err := json.Unmarshal(*req.Params, &negotiation)
 		if err != nil {
-			p.Error(err, "connect: error parsing offer")
+			p.Logger.Error(err, "connect: error parsing offer")
 			replyError(err)
 			break
 		}
@@ -120,7 +120,7 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 		var trickle Trickle
 		err := json.Unmarshal(*req.Params, &trickle)
 		if err != nil {
-			p.Error(err, "connect: error parsing candidate")
+			p.Logger.Error(err, "connect: error parsing candidate")
 			replyError(err)
 			break
 		}

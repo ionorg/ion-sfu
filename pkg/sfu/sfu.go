@@ -15,7 +15,7 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-var defaultLogger, debugLogger logr.Logger
+var Logger logr.Logger = new(logr.DiscardLogger)
 
 // ICEServerConfig defines parameters for ice servers
 type ICEServerConfig struct {
@@ -52,7 +52,6 @@ type Config struct {
 		WithStats bool  `mapstructure:"withstats"`
 	} `mapstructure:"sfu"`
 	WebRTC        WebRTCConfig `mapstructure:"webrtc"`
-	Logger        logr.Logger
 	Router        RouterConfig `mapstructure:"router"`
 	Turn          TurnConfig   `mapstructure:"turn"`
 	BufferFactory *buffer.Factory
@@ -71,7 +70,6 @@ type SFU struct {
 	datachannels  []*Datachannel
 	bufferFactory *buffer.Factory
 	withStats     bool
-	Logger        logr.Logger
 }
 
 // NewWebRTCTransportConfig parses our settings and returns a usable WebRTCTransportConfig for creating PeerConnections
@@ -156,12 +154,10 @@ func init() {
 // NewSFU creates a new sfu instance
 func NewSFU(c Config) *SFU {
 	// Init loggers
-	if c.Logger == nil {
-		println("Please pass logr instance implementation in SFU Config. You can use https://github.com/pion/ion-sfu/blob/5e6f7a3f58f0411d65ef4b31e8b6d58b6afd16da/pkg/logger/zerologr.go")
+	if Logger == nil {
+		println("sfu.Logger is not set. Logging is turned off. Create own logger instance or create one using New() from here pkg/logger/zerologr.go")
 		os.Exit(1)
 	}
-	defaultLogger = c.Logger
-	debugLogger = c.Logger.V(1)
 
 	// Init random seed
 	rand.Seed(time.Now().UnixNano())
@@ -184,7 +180,7 @@ func NewSFU(c Config) *SFU {
 	if c.Turn.Enabled {
 		ts, err := InitTurnServer(c.Turn, nil)
 		if err != nil {
-			defaultLogger.Error(err, "Could not init turn server err")
+			Logger.Error(err, "Could not init turn server err")
 			os.Exit(1)
 		}
 		sfu.turn = ts

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/go-logr/logr"
 	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
 
 	log "github.com/pion/ion-sfu/pkg/logger"
@@ -32,7 +31,7 @@ var (
 	file           string
 	addr           string
 	verbosityLevel int
-	defaultLogger  logr.Logger
+	logger         = log.New()
 )
 
 const (
@@ -44,7 +43,7 @@ func showHelp() {
 	fmt.Println("      -c {config file}")
 	fmt.Println("      -a {listen addr}")
 	fmt.Println("      -h (show help info)")
-	fmt.Println("      -v (verbosity level, default 0)")
+	fmt.Println("      -v {0-10} (verbosity level, default 0)")
 }
 
 func load() bool {
@@ -58,31 +57,33 @@ func load() bool {
 
 	err = viper.ReadInConfig()
 	if err != nil {
-		fmt.Printf("config file %s read failed. %v\n", file, err)
+		logger.Error(err, "config file read failed", "file", file)
 		return false
 	}
 	err = viper.GetViper().Unmarshal(&conf)
 	if err != nil {
-		fmt.Printf("sfu config file %s loaded failed. %v\n", file, err)
+		logger.Error(err, "sfu config file loaded failed", "file", file)
 		return false
 	}
 
 	if len(conf.WebRTC.ICEPortRange) > 2 {
-		fmt.Printf("config file %s loaded failed. range port must be [min,max]\n", file)
+		logger.Error(nil, "config file loaded failed. range port must be [min,max]", "file", file)
 		return false
 	}
 
 	if len(conf.WebRTC.ICEPortRange) != 0 && conf.WebRTC.ICEPortRange[1]-conf.WebRTC.ICEPortRange[0] < portRangeLimit {
-		fmt.Printf("config file %s loaded failed. range port must be [min, max] and max - min >= %d\n", file, portRangeLimit)
-		return false
-	}
-	if conf.LogConfig.V < 0 {
-		fmt.Printf("Logger V-Level cannot be less than 0\n")
+		logger.Error(nil, "config file loaded failed. range port must be [min, max] and max - min >= portRangeLimit", "file", file, "portRangeLimit", portRangeLimit)
 		return false
 	}
 
-	fmt.Printf("config %s load ok!\n", file)
+	if conf.LogConfig.V < 0 {
+		logger.Error(nil, "Logger V-Level cannot be less than 0")
+		return false
+	}
+
+	logger.Info("Config file loaded", "file", file)
 	return true
+
 }
 
 func parse() bool {
@@ -113,22 +114,22 @@ func main() {
 	}
 
 	log.SetGlobalOptions(log.GlobalConfig{V: verbosityLevel})
-	defaultLogger = log.New()
+	logger := log.New()
 
-	defaultLogger.Info("--- Starting SFU Node ---")
+	logger.Info("--- Starting SFU Node ---")
 	options := server.DefaultWrapperedServerOptions()
 	options.EnableTLS = false
 	options.Addr = addr
 	options.AllowAllOrigins = true
 	options.UseWebSocket = true
 
-	conf.Config.Logger = defaultLogger
+	sfu.Logger = logger
 	nsfu := sfu.NewSFU(conf.Config)
 	dc := nsfu.NewDatachannel(sfu.APIChannelLabel)
 	dc.Use(datachannel.SubscriberAPI)
 	s := server.NewWrapperedGRPCWebServer(options, nsfu)
 	if err := s.Serve(); err != nil {
-		defaultLogger.Error(err, "failed to serve")
+		logger.Error(err, "failed to serve")
 		os.Exit(1)
 	}
 	select {}

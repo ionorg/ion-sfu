@@ -163,7 +163,7 @@ func isH264Keyframe(payload []byte) bool {
 				return true
 			} else if n >= 24 {
 				// is this legal?
-				defaultLogger.Info("Non-simple NALU within a STAP")
+				Logger.V(0).Info("Non-simple NALU within a STAP")
 			}
 			i += int(length)
 		}

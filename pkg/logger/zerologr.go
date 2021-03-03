@@ -206,7 +206,3 @@ func (l logger) WithCallDepth(depth int) logr.Logger {
 	new.depth += depth
 	return new
 }
-
-// Verify that logger implements logr.Logger.
-var _ logr.Logger = logger{}
-var _ logr.CallDepthLogger = logger{}

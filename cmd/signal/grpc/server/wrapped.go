@@ -92,7 +92,7 @@ func (s *WrapperedGRPCWebServer) makeWebsocketOriginFunc(allowedOrigins *allowed
 	return func(req *http.Request) bool {
 		origin, err := grpcweb.WebsocketRequestOrigin(req)
 		if err != nil {
-			s.sfu.Logger.Error(err, "Request error")
+			sfu.Logger.Error(err, "Request error")
 			return false
 		}
 		return allowedOrigins.IsAllowed(origin)
@@ -105,7 +105,7 @@ func (s *WrapperedGRPCWebServer) Serve() error {
 		addr = s.options.TLSAddr
 	}
 	if s.options.AllowAllOrigins && s.options.AllowedOrigins != nil && len(*s.options.AllowedOrigins) != 0 {
-		s.sfu.Logger.Error(fmt.Errorf("Configuration error"), "Ambiguous --allow_all_origins and --allow_origins configuration. Either set --allow_all_origins=true OR specify one or more origins to whitelist with --allow_origins, not both.")
+		sfu.Logger.Error(fmt.Errorf("Configuration error"), "Ambiguous --allow_all_origins and --allow_origins configuration. Either set --allow_all_origins=true OR specify one or more origins to whitelist with --allow_origins, not both.")
 	}
 	grpcServer := grpc.NewServer()
 	pb.RegisterSFUServer(grpcServer, &SFUServer{SFU: s.sfu})
@@ -118,7 +118,7 @@ func (s *WrapperedGRPCWebServer) Serve() error {
 	}
 
 	if s.options.UseWebSocket {
-		s.sfu.Logger.Info("Using websockets")
+		sfu.Logger.V(0).Info("Using websockets")
 		options = append(
 			options,
 			grpcweb.WithWebsockets(true),
@@ -126,7 +126,7 @@ func (s *WrapperedGRPCWebServer) Serve() error {
 		)
 
 		if s.options.WebsocketPingInterval >= time.Second {
-			s.sfu.Logger.Info("websocket keepalive pinging enabled", "timeout_interval", s.options.WebsocketPingInterval.String())
+			sfu.Logger.V(0).Info("websocket keepalive pinging enabled", "timeout_interval", s.options.WebsocketPingInterval.String())
 		}
 		options = append(
 			options,
@@ -156,26 +156,26 @@ func (s *WrapperedGRPCWebServer) Serve() error {
 	if s.options.EnableTLS {
 		cer, err := tls.LoadX509KeyPair(s.options.Cert, s.options.Key)
 		if err != nil {
-			s.sfu.Logger.Error(err, "failed to load x509 key pair")
+			sfu.Logger.Error(err, "failed to load x509 key pair")
 			return err
 		}
 		config := &tls.Config{Certificates: []tls.Certificate{cer}}
 		tls, err := tls.Listen("tcp", addr, config)
 		if err != nil {
-			s.sfu.Logger.Error(err, "failed to listen: tls")
+			sfu.Logger.Error(err, "failed to listen: tls")
 			return err
 		}
 		listener = tls
 	} else {
 		tcp, err := net.Listen("tcp", addr)
 		if err != nil {
-			s.sfu.Logger.Error(err, "failed to listen: tcp")
+			sfu.Logger.Error(err, "failed to listen: tcp")
 			return err
 		}
 		listener = tcp
 	}
 
-	s.sfu.Logger.Info("Starting grpc/grpc-web server", "addr", addr, "tls_enabled", s.options.EnableTLS)
+	sfu.Logger.V(0).Info("Starting grpc/grpc-web server", "addr", addr, "tls_enabled", s.options.EnableTLS)
 
 	m := cmux.New(listener)
 	grpcListener := m.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
@@ -184,6 +184,6 @@ func (s *WrapperedGRPCWebServer) Serve() error {
 	g.Go(func() error { return grpcServer.Serve(grpcListener) })
 	g.Go(func() error { return httpServer.Serve(httpListener) })
 	g.Go(m.Serve)
-	s.sfu.Logger.Error(g.Wait(), "Run server")
+	sfu.Logger.Error(g.Wait(), "Run server")
 	return nil
 }

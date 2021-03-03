@@ -84,7 +84,7 @@ func (n *sequencer) push(sn, offSn uint16, timeStamp uint32, layer uint8, head b
 		step = n.step - int(n.headSN-offSn)
 		if step < 0 {
 			if step*-1 >= n.max {
-				defaultLogger.Info("Old packet received, can not be sequenced", "head", sn, "received", offSn)
+				Logger.V(0).Info("Old packet received, can not be sequenced", "head", sn, "received", offSn)
 				return nil
 			}
 			step = n.max + step

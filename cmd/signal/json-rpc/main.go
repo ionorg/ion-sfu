@@ -9,7 +9,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 
-	"github.com/go-logr/logr"
 	"github.com/gorilla/websocket"
 	"github.com/pion/ion-sfu/cmd/signal/json-rpc/server"
 	log "github.com/pion/ion-sfu/pkg/logger"
@@ -34,8 +33,8 @@ var (
 	addr           string
 	metricsAddr    string
 	verbosityLevel int
-	logger         logr.Logger
 	logConfig      logC
+	logger         = log.New()
 )
 
 const (
@@ -49,7 +48,7 @@ func showHelp() {
 	fmt.Println("      -key {key file}")
 	fmt.Println("      -a {listen addr}")
 	fmt.Println("      -h (show help info)")
-	fmt.Println("      -v (verbosity level, default 0)")
+	fmt.Println("      -v {0-10} (verbosity level, default 0)")
 }
 
 func load() bool {
@@ -63,37 +62,37 @@ func load() bool {
 
 	err = viper.ReadInConfig()
 	if err != nil {
-		fmt.Printf("config file %s read failed. %v\n", file, err)
+		logger.Error(err, "config file read failed", "file", file)
 		return false
 	}
 	err = viper.GetViper().Unmarshal(&conf)
 	if err != nil {
-		fmt.Printf("sfu config file %s loaded failed. %v\n", file, err)
+		logger.Error(err, "sfu config file loaded failed", "file", file)
 		return false
 	}
 
 	if len(conf.WebRTC.ICEPortRange) > 2 {
-		fmt.Printf("config file %s loaded failed. range port must be [min,max]\n", file)
+		logger.Error(nil, "config file loaded failed. range port must be [min,max]", "file", file)
 		return false
 	}
 
 	if len(conf.WebRTC.ICEPortRange) != 0 && conf.WebRTC.ICEPortRange[1]-conf.WebRTC.ICEPortRange[0] < portRangeLimit {
-		fmt.Printf("config file %s loaded failed. range port must be [min, max] and max - min >= %d\n", file, portRangeLimit)
+		logger.Error(nil, "config file loaded failed. range port must be [min, max] and max - min >= portRangeLimit", "file", file, "portRangeLimit", portRangeLimit)
 		return false
 	}
 
 	err = viper.GetViper().Unmarshal(&logConfig)
 	if err != nil {
-		fmt.Printf("log config file %s loaded failed. %v\n", file, err)
+		logger.Error(err, "log config file loaded failed", "file", file)
 		return false
 	}
 
 	if logConfig.Config.V < 0 {
-		fmt.Printf("Logger V-Level cannot be less than 0\n")
+		logger.Error(nil, "Logger V-Level cannot be less than 0")
 		return false
 	}
 
-	fmt.Printf("config %s load ok!\n", file)
+	logger.V(0).Info("Config file loaded", "file", file)
 	return true
 }
 
@@ -150,11 +149,10 @@ func main() {
 	}
 
 	log.SetGlobalOptions(log.GlobalConfig{V: verbosityLevel})
-	logger = log.New()
 	logger.Info("--- Starting SFU Node ---")
 
 	// Pass logr instance
-	conf.Logger = logger
+	sfu.Logger = logger
 	s := sfu.NewSFU(conf)
 	dc := s.NewDatachannel(sfu.APIChannelLabel)
 	dc.Use(datachannel.SubscriberAPI)

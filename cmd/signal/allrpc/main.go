@@ -17,6 +17,7 @@ var (
 	key                        string
 	gaddr, jaddr, paddr, maddr string
 	verbosityLevel             int
+	logger                     = log.New()
 )
 
 // Config defines parameters for configuring the sfu instance
@@ -40,7 +41,7 @@ func showHelp() {
 	fmt.Println("             {grpc and jsonrpc addrs should be set at least one}")
 	fmt.Println("      -maddr {metrics listen addr}")
 	fmt.Println("      -h (show help info)")
-	fmt.Println("      -v (verbosity level, default 0)")
+	fmt.Println("      -v {0-10} (verbosity level, default 0)")
 }
 
 func load() bool {
@@ -54,26 +55,26 @@ func load() bool {
 
 	err = viper.ReadInConfig()
 	if err != nil {
-		fmt.Printf("config file %s read failed. %v\n", file, err)
+		logger.Error(err, "config file read failed", "file", file)
 		return false
 	}
 	err = viper.GetViper().Unmarshal(&conf)
 	if err != nil {
-		fmt.Printf("sfu config file %s loaded failed. %v\n", file, err)
+		logger.Error(err, "sfu config file loaded failed", "file", file)
 		return false
 	}
 
 	if len(conf.WebRTC.ICEPortRange) > 2 {
-		fmt.Printf("config file %s loaded failed. range port must be [min,max]\n", file)
+		logger.Error(nil, "config file loaded failed. range port must be [min,max]", "file", file)
 		return false
 	}
 
 	if conf.LogConfig.V < 0 {
-		fmt.Printf("Logger V-Level cannot be less than 0\n")
+		logger.Error(nil, "Logger V-Level cannot be less than 0")
 		return false
 	}
 
-	fmt.Printf("config %s load ok!\n", file)
+	logger.Info("Config file loaded", "file", file)
 	return true
 }
 
@@ -140,8 +141,7 @@ func main() {
 
 	log.SetGlobalOptions(log.GlobalConfig{V: verbosityLevel})
 
-	conf.Config.Logger = log.New()
-	node := server.New(conf.Config)
+	node := server.New(conf.Config, logger)
 
 	if gaddr != "" {
 		go node.ServeGRPC(gaddr)

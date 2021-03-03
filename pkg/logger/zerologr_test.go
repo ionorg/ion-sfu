@@ -34,7 +34,7 @@ func TestDefaultVerbosityLevel(t *testing.T) {
 	t.Run("disabled", func(t *testing.T) {
 		out := &bytes.Buffer{}
 		log := NewWithOptions(Options{TimeFormat: "NOTIME", Output: out})
-		log.V(1).Info("")
+		log.V(1).Info("You should not see this")
 		assert.Equal(t, ``, out.String())
 	})
 }

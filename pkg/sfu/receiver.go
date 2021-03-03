@@ -251,7 +251,7 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 			}
 
 			if _, err = track.writeStream.WriteRTP(&pkt.Header, pkt.Payload); err != nil {
-				defaultLogger.Error(err, "Writing rtx packet err")
+				Logger.Error(err, "Writing rtx packet err")
 			} else {
 				track.UpdateStats(uint32(i))
 			}

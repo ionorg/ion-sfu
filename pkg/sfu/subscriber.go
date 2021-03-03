@@ -33,14 +33,14 @@ type Subscriber struct {
 func NewSubscriber(id string, cfg WebRTCTransportConfig) (*Subscriber, error) {
 	me, err := getSubscriberMediaEngine()
 	if err != nil {
-		defaultLogger.Error(err, "NewPeer error")
+		Logger.Error(err, "NewPeer error")
 		return nil, errPeerConnectionInitFailed
 	}
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me), webrtc.WithSettingEngine(cfg.setting))
 	pc, err := api.NewPeerConnection(cfg.configuration)
 
 	if err != nil {
-		defaultLogger.Error(err, "NewPeer error")
+		Logger.Error(err, "NewPeer error")
 		return nil, errPeerConnectionInitFailed
 	}
 
@@ -53,15 +53,15 @@ func NewSubscriber(id string, cfg WebRTCTransportConfig) (*Subscriber, error) {
 	}
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
-		debugLogger.Info("ice connection status", "state", connectionState)
+		Logger.V(1).Info("ice connection status", "state", connectionState)
 		switch connectionState {
 		case webrtc.ICEConnectionStateFailed:
 			fallthrough
 		case webrtc.ICEConnectionStateClosed:
 			s.closeOnce.Do(func() {
-				debugLogger.Info("webrtc ice closed", "peer_id", s.id)
+				Logger.V(1).Info("webrtc ice closed", "peer_id", s.id)
 				if err := s.Close(); err != nil {
-					defaultLogger.Error(err, "webrtc transport close err")
+					Logger.Error(err, "webrtc transport close err")
 				}
 			})
 		}
@@ -177,7 +177,7 @@ func (s *Subscriber) AddDataChannel(label string) (*webrtc.DataChannel, error) {
 
 	dc, err := s.pc.CreateDataChannel(label, &webrtc.DataChannelInit{})
 	if err != nil {
-		defaultLogger.Error(err, "dc creation error")
+		Logger.Error(err, "dc creation error")
 		return nil, errCreatingDataChannel
 	}
 
@@ -189,13 +189,13 @@ func (s *Subscriber) AddDataChannel(label string) (*webrtc.DataChannel, error) {
 // SetRemoteDescription sets the SessionDescription of the remote peer
 func (s *Subscriber) SetRemoteDescription(desc webrtc.SessionDescription) error {
 	if err := s.pc.SetRemoteDescription(desc); err != nil {
-		defaultLogger.Error(err, "SetRemoteDescription error")
+		Logger.Error(err, "SetRemoteDescription error")
 		return err
 	}
 
 	for _, c := range s.candidates {
 		if err := s.pc.AddICECandidate(c); err != nil {
-			defaultLogger.Error(err, "Add subscriber ice candidate to peer err", "peer_id", s.id)
+			Logger.Error(err, "Add subscriber ice candidate to peer err", "peer_id", s.id)
 		}
 	}
 	s.candidates = nil
@@ -249,7 +249,7 @@ func (s *Subscriber) downTracksReports() {
 				if err == io.EOF || err == io.ErrClosedPipe {
 					return
 				}
-				defaultLogger.Error(err, "Sending downtrack reports err")
+				Logger.Error(err, "Sending downtrack reports err")
 			}
 			r = r[:0]
 		}
@@ -275,7 +275,7 @@ func (s *Subscriber) sendStreamDownTracksReports(streamID string) {
 		i := 0
 		for {
 			if err := s.pc.WriteRTCP(r); err != nil {
-				defaultLogger.Error(err, "Sending track binding reports err")
+				Logger.Error(err, "Sending track binding reports err")
 			}
 			if i > 5 {
 				return

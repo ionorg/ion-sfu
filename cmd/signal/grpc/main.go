@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/go-logr/logr"
 	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
@@ -38,7 +37,7 @@ var (
 	addr           string
 	metricsAddr    string
 	verbosityLevel int
-	defaultLogger  logr.Logger
+	logger         = log.New()
 )
 
 const (
@@ -50,7 +49,7 @@ func showHelp() {
 	fmt.Println("      -c {config file}")
 	fmt.Println("      -a {listen addr}")
 	fmt.Println("      -h (show help info)")
-	fmt.Println("      -v (verbosity level, default 0)")
+	fmt.Println("      -v {0-10} (verbosity level, default 0)")
 
 }
 
@@ -65,31 +64,31 @@ func load() bool {
 
 	err = viper.ReadInConfig()
 	if err != nil {
-		fmt.Printf("config file %s read failed. %v\n", file, err)
+		logger.Error(err, "config file read failed", "file", file)
 		return false
 	}
 	err = viper.GetViper().Unmarshal(&conf)
 	if err != nil {
-		fmt.Printf("sfu config file %s loaded failed. %v\n", file, err)
+		logger.Error(err, "sfu config file loaded failed", "file", file)
 		return false
 	}
 
 	if len(conf.WebRTC.ICEPortRange) > 2 {
-		fmt.Printf("config file %s loaded failed. range port must be [min,max]\n", file)
+		logger.Error(nil, "config file loaded failed. range port must be [min,max]", "file", file)
 		return false
 	}
 
 	if len(conf.WebRTC.ICEPortRange) != 0 && conf.WebRTC.ICEPortRange[1]-conf.WebRTC.ICEPortRange[0] < portRangeLimit {
-		fmt.Printf("config file %s loaded failed. range port must be [min, max] and max - min >= %d\n", file, portRangeLimit)
+		logger.Error(nil, "config file loaded failed. range port must be [min, max] and max - min >= portRangeLimit", "file", file, "portRangeLimit", portRangeLimit)
 		return false
 	}
 
 	if conf.LogConfig.V < 0 {
-		fmt.Printf("Logger V-Level cannot be less than 0\n")
+		logger.Error(nil, "Logger V-Level cannot be less than 0")
 		return false
 	}
 
-	fmt.Printf("config %s load ok!\n", file)
+	logger.V(0).Info("Config file loaded", "file", file)
 	return true
 }
 
@@ -120,14 +119,14 @@ func startMetrics(addr string) {
 
 	metricsLis, err := net.Listen("tcp", addr)
 	if err != nil {
-		defaultLogger.Error(err, "cannot bind to metrics endpoint", "addr", addr)
+		logger.Error(err, "cannot bind to metrics endpoint", "addr", addr)
 		os.Exit(1)
 	}
-	defaultLogger.Info("Metrics Listening starter", "addr", addr)
+	logger.Info("Metrics Listening starter", "addr", addr)
 
 	err = srv.Serve(metricsLis)
 	if err != nil {
-		defaultLogger.Error(err, "debug server stopped. got err: %s")
+		logger.Error(err, "debug server stopped. got err: %s")
 	}
 }
 
@@ -143,12 +142,12 @@ func main() {
 	}
 
 	log.SetGlobalOptions(log.GlobalConfig{V: verbosityLevel})
-	defaultLogger = log.New()
+	logger := log.New()
 
-	defaultLogger.Info("--- Starting SFU Node ---")
+	logger.Info("--- Starting SFU Node ---")
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		defaultLogger.Error(err, "failed to listen")
+		logger.Error(err, "failed to listen")
 		os.Exit(1)
 	}
 
@@ -157,7 +156,7 @@ func main() {
 	)
 
 	// SFU instance needs to be created with logr implementation
-	conf.Config.Logger = defaultLogger
+	sfu.Logger = logger
 
 	nsfu := sfu.NewSFU(conf.Config)
 	dc := nsfu.NewDatachannel(sfu.APIChannelLabel)
@@ -168,9 +167,9 @@ func main() {
 
 	go startMetrics(metricsAddr)
 
-	defaultLogger.Info("SFU Listening", "addr", addr)
+	logger.Info("SFU Listening", "addr", addr)
 	if err := s.Serve(lis); err != nil {
-		defaultLogger.Error(err, "failed to serve SFU")
+		logger.Error(err, "failed to serve SFU")
 		os.Exit(1)
 	}
 }
