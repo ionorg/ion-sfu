@@ -31,4 +31,6 @@ jobs:
 
       - name: push
         if: github.event_name == 'release'
-        run: docker push pionwebrtc/ion-sfu
+        run: docker push pionwebrtc/ion-sfu:latest-jsonrpc && docker push pionwebrtc/ion-sfu:"$TAG"-jsonrpc
+        env:
+          TAG: ${{ github.event.release.tag_name }}

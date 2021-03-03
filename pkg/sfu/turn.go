@@ -31,12 +31,13 @@ type TurnAuth struct {
 
 // WebRTCConfig defines parameters for ice
 type TurnConfig struct {
-	Enabled bool     `mapstructure:"enabled"`
-	Realm   string   `mapstructure:"realm"`
-	Address string   `mapstructure:"address"`
-	Cert    string   `mapstructure:"cert"`
-	Key     string   `mapstructure:"key"`
-	Auth    TurnAuth `mapstructure:"auth"`
+	Enabled   bool     `mapstructure:"enabled"`
+	Realm     string   `mapstructure:"realm"`
+	Address   string   `mapstructure:"address"`
+	Cert      string   `mapstructure:"cert"`
+	Key       string   `mapstructure:"key"`
+	Auth      TurnAuth `mapstructure:"auth"`
+	PortRange []uint16 `mapstructure:"portrange"`
 }
 
 func InitTurnServer(conf TurnConfig, auth func(username, realm string, srcAddr net.Addr) ([]byte, bool)) (*turn.Server, error) {
@@ -59,6 +60,14 @@ func InitTurnServer(conf TurnConfig, auth func(username, realm string, srcAddr n
 
 	addr := strings.Split(conf.Address, ":")
 
+	var minPort uint16 = turnMinPort
+	var maxPort uint16 = turnMaxPort
+
+	if len(conf.PortRange) == 2 {
+		minPort = conf.PortRange[0]
+		maxPort = conf.PortRange[1]
+	}
+
 	if len(conf.Cert) > 0 && len(conf.Key) > 0 {
 		// Create a TLS listener to pass into pion/turn
 		cert, err := tls.LoadX509KeyPair(conf.Cert, conf.Key)
@@ -76,8 +85,8 @@ func InitTurnServer(conf TurnConfig, auth func(username, realm string, srcAddr n
 			RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{
 				RelayAddress: net.ParseIP(addr[0]),
 				Address:      "0.0.0.0",
-				MinPort:      turnMinPort,
-				MaxPort:      turnMaxPort,
+				MinPort:      minPort,
+				MaxPort:      maxPort,
 			},
 		})
 		// Create a DTLS listener to pass into pion/turn
@@ -104,8 +113,8 @@ func InitTurnServer(conf TurnConfig, auth func(username, realm string, srcAddr n
 			RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{
 				RelayAddress: net.ParseIP(addr[0]),
 				Address:      "0.0.0.0",
-				MinPort:      turnMinPort,
-				MaxPort:      turnMaxPort,
+				MinPort:      minPort,
+				MaxPort:      maxPort,
 			},
 		})
 	}
@@ -143,8 +152,8 @@ func InitTurnServer(conf TurnConfig, auth func(username, realm string, srcAddr n
 			RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{
 				RelayAddress: net.ParseIP(addr[0]),
 				Address:      "0.0.0.0",
-				MinPort:      turnMinPort,
-				MaxPort:      turnMaxPort,
+				MinPort:      minPort,
+				MaxPort:      maxPort,
 			},
 		},
 		),
@@ -155,8 +164,8 @@ func InitTurnServer(conf TurnConfig, auth func(username, realm string, srcAddr n
 				RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{
 					RelayAddress: net.ParseIP(addr[0]),
 					Address:      "0.0.0.0",
-					MinPort:      turnMinPort,
-					MaxPort:      turnMaxPort,
+					MinPort:      minPort,
+					MaxPort:      maxPort,
 				},
 			},
 		},
