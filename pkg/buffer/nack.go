@@ -55,21 +55,21 @@ func (n *nackQueue) pairs(headSN uint32) ([]rtcp.NackPair, bool) {
 	if len(n.nacks) == 0 {
 		return nil, false
 	}
-
 	i := 0
 	askKF := false
 	var np rtcp.NackPair
 	var nps []rtcp.NackPair
 	for _, nck := range n.nacks {
-		if nck.sn >= headSN-2 {
-			continue
-		}
-
 		if nck.nacked >= maxNackTimes {
 			if nck.sn > n.kfSN {
 				n.kfSN = nck.sn
 				askKF = true
 			}
+			continue
+		}
+		if nck.sn >= headSN-2 {
+			n.nacks[i] = nck
+			i++
 			continue
 		}
 		n.nacks[i] = nack{

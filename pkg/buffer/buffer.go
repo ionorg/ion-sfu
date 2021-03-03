@@ -397,11 +397,14 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 }
 
 func (b *Buffer) buildNACKPacket() []rtcp.Packet {
-	if nacks, askKeyframe := b.nacker.pairs(b.cycles | uint32(b.maxSeqNo)); nacks != nil && len(nacks) > 0 {
-		pkts := []rtcp.Packet{&rtcp.TransportLayerNack{
-			MediaSSRC: b.mediaSSRC,
-			Nacks:     nacks,
-		}}
+	if nacks, askKeyframe := b.nacker.pairs(b.cycles | uint32(b.maxSeqNo)); (nacks != nil && len(nacks) > 0) || askKeyframe {
+		var pkts []rtcp.Packet
+		if len(nacks) > 0 {
+			pkts = []rtcp.Packet{&rtcp.TransportLayerNack{
+				MediaSSRC: b.mediaSSRC,
+				Nacks:     nacks,
+			}}
+		}
 
 		if askKeyframe {
 			pkts = append(pkts, &rtcp.PictureLossIndication{
