@@ -4,6 +4,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/go-logr/logr"
 	"github.com/pion/transport/packetio"
 )
 
@@ -13,9 +14,19 @@ type Factory struct {
 	audioPool   *sync.Pool
 	rtpBuffers  map[uint32]*Buffer
 	rtcpReaders map[uint32]*RTCPReader
+	logger      logr.Logger
 }
 
-func NewBufferFactory(trackingPackets int) *Factory {
+func NewBufferFactory(trackingPackets int, logger logr.Logger) *Factory {
+	// Enable package wide logging for non-method functions.
+	// If logger is nil - buffer logs will be disabled.
+	// Logger is a public variable in buffer package.
+	if logger != nil {
+		Logger = logger
+	} else {
+		logger = Logger
+	}
+
 	return &Factory{
 		videoPool: &sync.Pool{
 			New: func() interface{} {
@@ -29,6 +40,7 @@ func NewBufferFactory(trackingPackets int) *Factory {
 		},
 		rtpBuffers:  make(map[uint32]*Buffer),
 		rtcpReaders: make(map[uint32]*RTCPReader),
+		logger:      logger,
 	}
 }
 
@@ -52,7 +64,7 @@ func (f *Factory) GetOrNew(packetType packetio.BufferPacketType, ssrc uint32) io
 		if reader, ok := f.rtpBuffers[ssrc]; ok {
 			return reader
 		}
-		buffer := NewBuffer(ssrc, f.videoPool, f.audioPool)
+		buffer := NewBuffer(ssrc, f.videoPool, f.audioPool, f.logger)
 		f.rtpBuffers[ssrc] = buffer
 		buffer.OnClose(func() {
 			f.Lock()
