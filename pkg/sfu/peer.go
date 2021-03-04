@@ -47,12 +47,21 @@ type Peer struct {
 
 	remoteAnswerPending bool
 	negotiationPending  bool
+	metadata            interface{}
 }
 
 // NewPeer creates a new Peer for signaling with the given SFU
 func NewPeer(provider SessionProvider) *Peer {
 	return &Peer{
 		provider: provider,
+	}
+}
+
+// NewPeer creates a new Peer for signaling with the given SFU and metadata
+func NewPeerWithMetadata(provider SessionProvider, metadata interface{}) *Peer {
+	return &Peer{
+		provider: provider,
+		metadata: metadata,
 	}
 }
 
@@ -251,4 +260,8 @@ func (p *Peer) Session() *Session {
 // ID return the peer id
 func (p *Peer) ID() string {
 	return p.id
+}
+
+func (p *Peer) Metadata() interface{} {
+	return p.metadata
 }
