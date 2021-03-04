@@ -5,8 +5,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/pion/ion-log"
-
 	"github.com/gammazero/workerpool"
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/ion-sfu/pkg/stats"
@@ -253,7 +251,7 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 			}
 
 			if _, err = track.writeStream.WriteRTP(&pkt.Header, pkt.Payload); err != nil {
-				log.Errorf("Writing rtx packet err: %v", err)
+				Logger.Error(err, "Writing rtx packet err")
 			} else {
 				track.UpdateStats(uint32(i))
 			}

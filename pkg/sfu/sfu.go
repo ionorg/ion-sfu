@@ -2,17 +2,21 @@ package sfu
 
 import (
 	"math/rand"
+	"os"
 	"runtime"
 	"sync"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/pion/ice/v2"
-	log "github.com/pion/ion-log"
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/ion-sfu/pkg/stats"
 	"github.com/pion/turn/v2"
 	"github.com/pion/webrtc/v3"
 )
+
+// Logger is an implementation of logr.Logger. If is not provided - will be turned off.
+var Logger logr.Logger = new(logr.DiscardLogger)
 
 // ICEServerConfig defines parameters for ice servers
 type ICEServerConfig struct {
@@ -49,7 +53,6 @@ type Config struct {
 		WithStats bool  `mapstructure:"withstats"`
 	} `mapstructure:"sfu"`
 	WebRTC        WebRTCConfig `mapstructure:"webrtc"`
-	Log           log.Config   `mapstructure:"log"`
 	Router        RouterConfig `mapstructure:"router"`
 	Turn          TurnConfig   `mapstructure:"turn"`
 	BufferFactory *buffer.Factory
@@ -151,13 +154,14 @@ func init() {
 
 // NewSFU creates a new sfu instance
 func NewSFU(c Config) *SFU {
+
 	// Init random seed
 	rand.Seed(time.Now().UnixNano())
 	// Init ballast
 	ballast := make([]byte, c.SFU.Ballast*1024*1024)
 
 	if c.BufferFactory == nil {
-		c.BufferFactory = buffer.NewBufferFactory(c.Router.MaxPacketTrack)
+		c.BufferFactory = buffer.NewBufferFactory(c.Router.MaxPacketTrack, Logger)
 	}
 
 	w := NewWebRTCTransportConfig(c)
@@ -172,7 +176,8 @@ func NewSFU(c Config) *SFU {
 	if c.Turn.Enabled {
 		ts, err := InitTurnServer(c.Turn, nil)
 		if err != nil {
-			log.Panicf("Could not init turn server err: %v", err)
+			Logger.Error(err, "Could not init turn server err")
+			os.Exit(1)
 		}
 		sfu.turn = ts
 	}

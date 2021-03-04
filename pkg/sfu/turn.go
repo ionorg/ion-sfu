@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"os"
 	"regexp"
@@ -12,7 +13,6 @@ import (
 	"time"
 
 	"github.com/pion/dtls/v2"
-	log "github.com/pion/ion-log"
 	"github.com/pion/logging"
 	"github.com/pion/turn/v2"
 )
@@ -129,7 +129,7 @@ func InitTurnServer(conf TurnConfig, auth func(username, realm string, srcAddr n
 				usersMap[kv[1]] = turn.GenerateAuthKey(kv[1], conf.Realm, kv[2])
 			}
 			if len(usersMap) == 0 {
-				log.Panicf("No turn auth provided")
+				Logger.Error(fmt.Errorf("No turn auth provided"), "Got err")
 			}
 			auth = func(username string, realm string, srcAddr net.Addr) ([]byte, bool) {
 				if key, ok := usersMap[username]; ok {
