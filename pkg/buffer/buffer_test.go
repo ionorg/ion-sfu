@@ -4,9 +4,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/rtcp"
 
-	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
 	"github.com/stretchr/testify/assert"
@@ -51,8 +51,8 @@ func TestNack(t *testing.T) {
 			return make([]byte, 1500)
 		},
 	}
-	log.SetGlobalOptions(log.GlobalConfig{V: 1}) // 2 - TRACE
-	logger := log.New()
+	logger.SetGlobalOptions(logger.GlobalConfig{V: 1}) // 2 - TRACE
+	logger := logger.New()
 	buff := NewBuffer(123, pool, pool, logger)
 	buff.codecType = webrtc.RTPCodecTypeVideo
 	assert.NotNil(t, buff)
@@ -152,8 +152,8 @@ func TestNewBuffer(t *testing.T) {
 					return make([]byte, 1500)
 				},
 			}
-			log.SetGlobalOptions(log.GlobalConfig{V: 2}) // 2 - TRACE
-			logger := log.New()
+			logger.SetGlobalOptions(logger.GlobalConfig{V: 2}) // 2 - TRACE
+			logger := logger.New()
 			buff := NewBuffer(123, pool, pool, logger)
 			buff.codecType = webrtc.RTPCodecTypeVideo
 			assert.NotNil(t, buff)
