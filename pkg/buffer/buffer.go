@@ -92,6 +92,9 @@ type Buffer struct {
 	onAudioLevel func(level uint8)
 	feedbackCB   func([]rtcp.Packet)
 	feedbackTWCC func(sn uint16, timeNS int64, marker bool)
+
+	// logger
+	logger logr.Logger
 }
 
 type Stats struct {
@@ -109,11 +112,12 @@ type Options struct {
 }
 
 // NewBuffer constructs a new Buffer
-func NewBuffer(ssrc uint32, vp, ap *sync.Pool) *Buffer {
+func NewBuffer(ssrc uint32, vp, ap *sync.Pool, logger logr.Logger) *Buffer {
 	b := &Buffer{
 		mediaSSRC: ssrc,
 		videoPool: vp,
 		audioPool: ap,
+		logger:    logger,
 	}
 	b.extPackets.SetMinCapacity(7)
 	return b
@@ -150,13 +154,13 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 		for _, fb := range codec.RTCPFeedback {
 			switch fb.Type {
 			case webrtc.TypeRTCPFBGoogREMB:
-				Logger.V(1).Info("Setting feedback", "type", "webrtc.TypeRTCPFBGoogREMB")
+				b.logger.V(1).Info("Setting feedback", "type", "webrtc.TypeRTCPFBGoogREMB")
 				b.remb = true
 			case webrtc.TypeRTCPFBTransportCC:
-				Logger.V(1).Info("Setting feedback", "type", webrtc.TypeRTCPFBTransportCC)
+				b.logger.V(1).Info("Setting feedback", "type", webrtc.TypeRTCPFBTransportCC)
 				b.twcc = true
 			case webrtc.TypeRTCPFBNACK:
-				Logger.V(1).Info("Setting feedback", "type", webrtc.TypeRTCPFBNACK)
+				b.logger.V(1).Info("Setting feedback", "type", webrtc.TypeRTCPFBNACK)
 				b.nacker = newNACKQueue()
 				b.nack = true
 			}
@@ -176,7 +180,7 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 	b.pPackets = nil
 	b.bound = true
 
-	Logger.V(1).Info("NewBuffer", "MaxBitRate", o.MaxBitRate)
+	b.logger.V(1).Info("NewBuffer", "MaxBitRate", o.MaxBitRate)
 }
 
 // Write adds a RTP Packet, out of order, new packet may be arrived later

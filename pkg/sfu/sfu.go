@@ -154,11 +154,6 @@ func init() {
 
 // NewSFU creates a new sfu instance
 func NewSFU(c Config) *SFU {
-	// Init loggers
-	if Logger == nil {
-		println("sfu.Logger is not set. Logging is turned off. Create own logger instance or create one using New() from here pkg/logger/zerologr.go")
-		os.Exit(1)
-	}
 
 	// Init random seed
 	rand.Seed(time.Now().UnixNano())
@@ -166,7 +161,7 @@ func NewSFU(c Config) *SFU {
 	ballast := make([]byte, c.SFU.Ballast*1024*1024)
 
 	if c.BufferFactory == nil {
-		c.BufferFactory = buffer.NewBufferFactory(c.Router.MaxPacketTrack)
+		c.BufferFactory = buffer.NewBufferFactory(c.Router.MaxPacketTrack, Logger)
 	}
 
 	w := NewWebRTCTransportConfig(c)

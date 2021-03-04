@@ -51,7 +51,9 @@ func TestNack(t *testing.T) {
 			return make([]byte, 1500)
 		},
 	}
-	buff := NewBuffer(123, pool, pool)
+	log.SetGlobalOptions(log.GlobalConfig{V: 1}) // 2 - TRACE
+	logger := log.New()
+	buff := NewBuffer(123, pool, pool, logger)
 	buff.codecType = webrtc.RTPCodecTypeVideo
 	assert.NotNil(t, buff)
 	var wg sync.WaitGroup
@@ -150,14 +152,14 @@ func TestNewBuffer(t *testing.T) {
 					return make([]byte, 1500)
 				},
 			}
-			buff := NewBuffer(123, pool, pool)
+			log.SetGlobalOptions(log.GlobalConfig{V: 2}) // 2 - TRACE
+			logger := log.New()
+			buff := NewBuffer(123, pool, pool, logger)
 			buff.codecType = webrtc.RTPCodecTypeVideo
 			assert.NotNil(t, buff)
 			assert.NotNil(t, TestPackets)
 			buff.OnFeedback(func(_ []rtcp.Packet) {
 			})
-			log.SetGlobalOptions(log.GlobalConfig{V: 2}) // 2 - TRACE
-			Logger = log.New()
 			buff.Bind(webrtc.RTPParameters{
 				HeaderExtensions: nil,
 				Codecs: []webrtc.RTPCodecParameters{{
