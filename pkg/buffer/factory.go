@@ -18,10 +18,15 @@ type Factory struct {
 }
 
 func NewBufferFactory(trackingPackets int, logger logr.Logger) *Factory {
-	// if logger is nil, logging will be turned off
-	if logger == nil {
+	// Enable package wide logging for non-method functions.
+	// If logger is nil - buffer logs will be disabled.
+	// Logger is a public variable in buffer package.
+	if logger != nil {
+		Logger = logger
+	} else {
 		logger = Logger
 	}
+
 	return &Factory{
 		videoPool: &sync.Pool{
 			New: func() interface{} {
