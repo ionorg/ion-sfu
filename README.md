@@ -20,6 +20,7 @@ A [selective forwarding unit](https://webrtcglossary.com/sfu/) is a video routin
 * Congestion Control (TWCC, REMB, RR/SR)
 * Unified plan semantics
 * Pub/Sub Peer Connection (`O(n)` port usage)
+* Audio level indication (RFC6464). "X is speaking"
 
 ## Quickstart
 
@@ -66,6 +67,10 @@ go build ./cmd/signal/grpc/main.go && ./main -c config.toml
 docker run -p 50051:50051 -p 5000-5200:5000-5200/udp pionwebrtc/ion-sfu:latest-grpc
 ```
 
+## Documentation
+
+Answers to some [Frequenty Asked Questions](FAQ.md).
+
 ## Examples
 
 To see some other ways of interacting with the ion-sfu instance, check out our [examples](examples).
@@ -84,7 +89,7 @@ MIT License - see [LICENSE](LICENSE) for full text
 
 Generate the protocol buffers and grpc code:
  1. Best choice (uses docker): `make protos`.
- 2. Manually: 
+ 2. Manually:
      - Install protocol buffers and the protcol buffers compiler. On Fedora `dnf install protobuf protobuf-compiler`.
      - `go get google.golang.org/grpc/cmd/protoc-gen-go-grpc`
      - `go get google.golang.org/protobuf/cmd/protoc-gen-go`
