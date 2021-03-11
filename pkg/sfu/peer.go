@@ -48,6 +48,11 @@ type SessionProvider interface {
 	GetSession(sid string) (Session, WebRTCTransportConfig)
 }
 
+type ChannelAPIMessage struct {
+	Method string      `json:"method"`
+	Params interface{} `json:"params,omitempty"`
+}
+
 // PeerLocal represents a pair peer connection
 type PeerLocal struct {
 	sync.Mutex
@@ -237,6 +242,22 @@ func (p *PeerLocal) Trickle(candidate webrtc.ICECandidateInit, target int) error
 		if err := p.subscriber.AddICECandidate(candidate); err != nil {
 			return fmt.Errorf("setting ice candidate: %w", err)
 		}
+	}
+	return nil
+}
+
+func (p *Peer) SendAPIChannelMessage(msg *[]byte) error {
+	if p.subscriber == nil {
+		return fmt.Errorf("No subscriber for this peer")
+	}
+	dc := p.subscriber.DataChannel(APIChannelLabel)
+
+	if dc == nil {
+		return fmt.Errorf("Data channel %s doesn't exist", APIChannelLabel)
+	}
+
+	if err := dc.SendText(string(*msg)); err != nil {
+		return fmt.Errorf("Failed to send message: %v", err)
 	}
 	return nil
 }

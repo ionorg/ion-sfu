@@ -1,6 +1,7 @@
 package sfu
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -209,6 +210,40 @@ func (d *DownTrack) SwitchSpatialLayer(targetLayer int64, setAsMax bool) {
 			}
 		}
 	}
+}
+
+func (d *DownTrack) UptrackLayersChange(availableLayers []uint16) (int64, error) {
+	if d.trackType == SimulcastDownTrack {
+		currentLayer := uint16(atomic.LoadInt32(&d.spatialLayer))
+		maxLayer := uint16(atomic.LoadInt64(&d.maxSpatialLayer))
+
+		var maxFound uint16 = 0
+		layerFound := false
+		var minFound uint16 = 0
+		for _, target := range availableLayers {
+			if target <= maxLayer {
+				if target > maxFound {
+					maxFound = target
+					layerFound = true
+				}
+			} else {
+				if minFound > target {
+					minFound = target
+				}
+			}
+		}
+		var targetLayer uint16
+		if layerFound {
+			targetLayer = maxFound
+		} else {
+			targetLayer = minFound
+		}
+		if currentLayer != targetLayer {
+			d.SwitchSpatialLayer(int64(targetLayer), false)
+		}
+		return int64(targetLayer), nil
+	}
+	return -1, fmt.Errorf("Downtrack %s does not support simulcast", d.id)
 }
 
 func (d *DownTrack) SwitchTemporalLayer(targetLayer int64, setAsMax bool) {
