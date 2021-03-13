@@ -270,18 +270,20 @@ func (s *Subscriber) sendStreamDownTracksReports(streamID string) {
 	}
 	s.RUnlock()
 	r = append(r, &rtcp.SourceDescription{Chunks: sd})
-	go func() {
-		r := r
-		i := 0
-		for {
-			if err := s.pc.WriteRTCP(r); err != nil {
-				Logger.Error(err, "Sending track binding reports err")
+	if len(r) > 0 {
+		go func() {
+			r := r
+			i := 0
+			for {
+				if err := s.pc.WriteRTCP(r); err != nil {
+					Logger.Error(err, "Sending track binding reports err")
+				}
+				if i > 5 {
+					return
+				}
+				i++
+				time.Sleep(20 * time.Millisecond)
 			}
-			if i > 5 {
-				return
-			}
-			i++
-			time.Sleep(20 * time.Millisecond)
-		}
-	}()
+		}()
+	}
 }
