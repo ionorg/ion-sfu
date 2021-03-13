@@ -305,19 +305,22 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 		b.nacker.remove(extSN)
 	}
 
-	b.stats.TotalByte += uint64(len(pkt))
-	b.bitrateHelper += uint64(len(pkt))
-	b.stats.PacketCount++
-
 	var p rtp.Packet
 	pb, err := b.bucket.AddPacket(pkt, sn, sn == b.maxSeqNo)
 	if err != nil {
+		if err == errRTXPacket {
+			return
+		}
 		log.Errorf("buffer write err: %v", err)
 		return
 	}
 	if err = p.Unmarshal(pb); err != nil {
 		return
 	}
+
+	b.stats.TotalByte += uint64(len(pkt))
+	b.bitrateHelper += uint64(len(pkt))
+	b.stats.PacketCount++
 
 	ep := ExtPacket{
 		Head:    sn == b.maxSeqNo,

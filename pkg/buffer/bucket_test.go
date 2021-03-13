@@ -41,7 +41,7 @@ var TestPackets = []*rtp.Packet{
 }
 
 func Test_queue(t *testing.T) {
-	q := NewBucket(make([]byte, maxPktSize*50))
+	q := NewBucket(make([]byte, 25000))
 
 	for _, p := range TestPackets {
 		p := p
@@ -70,12 +70,14 @@ func Test_queue(t *testing.T) {
 	assert.NoError(t, err)
 	expectedSN = 8
 	q.AddPacket(buf, 8, false)
-	q.AddPacket(buf, 8, false)
 	i, err = q.GetPacket(buff, expectedSN)
 	assert.NoError(t, err)
 	err = np.Unmarshal(buff[:i])
 	assert.NoError(t, err)
 	assert.Equal(t, expectedSN, np.SequenceNumber)
+
+	_, err = q.AddPacket(buf, 8, false)
+	assert.ErrorIs(t, err, errRTXPacket)
 }
 
 func Test_queue_edges(t *testing.T) {
