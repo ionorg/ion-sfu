@@ -201,7 +201,7 @@ func (p *Peer) Trickle(candidate webrtc.ICECandidateInit, target int) error {
 	if p.subscriber == nil || p.publisher == nil {
 		return ErrNoTransportEstablished
 	}
-	Logger.V(0).Info("Peer trickle", "peer_od", p.id)
+	Logger.V(0).Info("Peer trickle", "peer_id", p.id)
 	switch target {
 	case publisher:
 		if err := p.publisher.AddICECandidate(candidate); err != nil {
