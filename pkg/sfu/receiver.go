@@ -20,7 +20,7 @@ type Receiver interface {
 	Codec() webrtc.RTPCodecParameters
 	Kind() webrtc.RTPCodecType
 	SSRC(layer int) uint32
-	AddUpTrack(track *webrtc.TrackRemote, buffer *buffer.Buffer)
+	AddUpTrack(track *webrtc.TrackRemote, buffer *buffer.Buffer, bestQualityFirst bool)
 	AddDownTrack(track *DownTrack, bestQualityFirst bool)
 	SubDownTrack(track *DownTrack, layer int) error
 	GetBitrate() [3]uint64
@@ -94,7 +94,7 @@ func (w *WebRTCReceiver) Kind() webrtc.RTPCodecType {
 	return w.kind
 }
 
-func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, buff *buffer.Buffer) {
+func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, buff *buffer.Buffer, bestQualityFirst bool) {
 	var layer int
 
 	switch track.RID() {
@@ -106,9 +106,31 @@ func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, buff *buffer.Buff
 		layer = 0
 	}
 
+	if w.isSimulcast {
+		if bestQualityFirst {
+			for l := 0; l < layer; l++ {
+				w.locks[l].Lock()
+				for _, dt := range w.downTracks[l] {
+					dt.SwitchSpatialLayer(int64(layer), false)
+				}
+				w.locks[l].Unlock()
+			}
+		} else {
+			for l := 2; l != layer; l-- {
+				w.locks[l].Lock()
+				for _, dt := range w.downTracks[l] {
+					dt.SwitchSpatialLayer(int64(layer), false)
+				}
+				w.locks[l].Unlock()
+			}
+		}
+	}
+
+	w.locks[layer].Lock()
 	w.upTracks[layer] = track
 	w.buffers[layer] = buff
 	w.downTracks[layer] = make([]*DownTrack, 0, 10)
+	w.locks[layer].Unlock()
 	go w.writeRTP(layer)
 }
 
@@ -123,31 +145,39 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 				}
 			}
 		}
+		w.locks[layer].Lock()
+		if downTrackSubscribed(w.downTracks[layer], track) {
+			w.locks[layer].Unlock()
+			return
+		}
 		track.SetInitialLayers(int64(layer), 2)
 		track.maxSpatialLayer = 2
 		track.maxTemporalLayer = 2
 		track.trackType = SimulcastDownTrack
 		track.payload = packetFactory.Get().([]byte)
 	} else {
+		w.locks[layer].Lock()
+		if downTrackSubscribed(w.downTracks[layer], track) {
+			w.locks[layer].Unlock()
+			return
+		}
 		track.SetInitialLayers(0, 0)
 		track.trackType = SimpleDownTrack
 	}
 
-	w.locks[layer].Lock()
 	w.downTracks[layer] = append(w.downTracks[layer], track)
 	w.locks[layer].Unlock()
 }
 
 func (w *WebRTCReceiver) SubDownTrack(track *DownTrack, layer int) error {
 	w.locks[layer].Lock()
-	if dts := w.downTracks[layer]; dts != nil {
-		w.downTracks[layer] = append(dts, track)
-	} else {
+	if buf := w.buffers[layer]; buf != nil {
+		w.downTracks[layer] = append(w.downTracks[layer], track)
 		w.locks[layer].Unlock()
-		return errNoReceiverFound
+		return nil
 	}
 	w.locks[layer].Unlock()
-	return nil
+	return errNoReceiverFound
 }
 
 func (w *WebRTCReceiver) GetBitrate() [3]uint64 {
@@ -309,4 +339,13 @@ func (w *WebRTCReceiver) closeTracks() {
 	if w.onCloseHandler != nil {
 		w.onCloseHandler()
 	}
+}
+
+func downTrackSubscribed(dts []*DownTrack, dt *DownTrack) bool {
+	for _, cdt := range dts {
+		if cdt == dt {
+			return true
+		}
+	}
+	return false
 }
