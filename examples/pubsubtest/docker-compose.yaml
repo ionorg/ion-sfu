@@ -9,7 +9,13 @@ services:
 
   sfu:
     image: pionwebrtc/ion-sfu:latest-allrpc
-    command: -c /configs/sfu.toml -jaddr :7000 -gaddr :50051
+    restart: always
+    environment:
+      - gaddr=0.0.0.0:50051
+      - jaddr=0.0.0.0:7000
+    volumes:
+      - "../../config.toml:/configs/sfu.toml"
     ports:
-      - "5000-5200:5000-5200/udp"
       - 7000:7000
+      - 50051:50051
+      - 5000-5200:5000-5200/udp
