@@ -8,7 +8,8 @@ services:
       - 8000:80
 
   sfu:
-    image: pionwebrtc/ion-sfu:latest-jsonrpc
+    image: pionwebrtc/ion-sfu:latest-allrpc
+    command: -c /configs/sfu.toml -jaddr :7000 -gaddr :50051
     ports:
       - "5000-5200:5000-5200/udp"
       - 7000:7000

@@ -269,6 +269,9 @@ func (s *Subscriber) sendStreamDownTracksReports(streamID string) {
 		sd = append(sd, dt.CreateSourceDescriptionChunks()...)
 	}
 	s.RUnlock()
+	if len(sd) == 0 {
+		return
+	}
 	r = append(r, &rtcp.SourceDescription{Chunks: sd})
 	go func() {
 		r := r

@@ -99,7 +99,7 @@ func (b *Bucket) set(sn uint16, pkt []byte) ([]byte, error) {
 	}
 	// Do not overwrite if packet exist
 	if binary.BigEndian.Uint16(b.buf[off+4:off+6]) == sn {
-		return b.buf[off+2 : off+2+len(pkt)], nil
+		return nil, errRTXPacket
 	}
 	binary.BigEndian.PutUint16(b.buf[off:], uint16(len(pkt)))
 	copy(b.buf[off+2:], pkt)

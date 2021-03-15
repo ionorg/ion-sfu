@@ -39,8 +39,8 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 	p := &Publisher{
 		id:      id,
 		pc:      pc,
-		session: session,
 		router:  newRouter(id, pc, session, cfg.router),
+		session: session,
 	}
 
 	pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
@@ -49,7 +49,7 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 			"track_id", track.ID(),
 			"mediaSSRC", track.SSRC(),
 			"rid", track.RID(),
-			"stram_id", track.StreamID(),
+			"stream_id", track.StreamID(),
 		)
 
 		if r, pub := p.router.AddReceiver(receiver, track); pub {
