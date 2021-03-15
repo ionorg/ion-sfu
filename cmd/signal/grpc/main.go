@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 
 	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
@@ -37,7 +38,9 @@ var (
 	addr           string
 	metricsAddr    string
 	verbosityLevel int
-	logger         = log.New()
+	paddr          string
+
+	logger = log.New()
 )
 
 const (
@@ -50,6 +53,7 @@ func showHelp() {
 	fmt.Println("      -a {listen addr}")
 	fmt.Println("      -h (show help info)")
 	fmt.Println("      -v {0-10} (verbosity level, default 0)")
+	fmt.Println("      -paddr {pprof listen addr}")
 
 }
 
@@ -97,8 +101,14 @@ func parse() bool {
 	flag.StringVar(&addr, "a", ":50051", "address to use")
 	flag.StringVar(&metricsAddr, "m", ":8100", "merics to use")
 	flag.IntVar(&verbosityLevel, "v", -1, "verbosity level, higher value - more logs")
+	flag.StringVar(&paddr, "paddr", "", "pprof listening address")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
+
+	if paddr == "" {
+		paddr = getEnv("paddr")
+	}
+
 	if !load() {
 		return false
 	}
@@ -107,6 +117,14 @@ func parse() bool {
 		return false
 	}
 	return true
+}
+
+func getEnv(key string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+
+	return ""
 }
 
 func startMetrics(addr string) {
@@ -149,6 +167,13 @@ func main() {
 	if err != nil {
 		logger.Error(err, "failed to listen")
 		os.Exit(1)
+	}
+
+	if paddr != "" {
+		go func() {
+			logger.Info("PProf Listening", "addr", paddr)
+			_ = http.ListenAndServe(paddr, http.DefaultServeMux)
+		}()
 	}
 
 	s := grpc.NewServer(
