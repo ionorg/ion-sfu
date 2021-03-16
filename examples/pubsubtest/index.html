@@ -37,18 +37,6 @@
           </button>
         </div>
       </div>
-      <div class="row" id="enable-audio">
-        <div class="col-12">
-          <button
-            type="button"
-            class="btn btn-primary"
-            id="enable-audio-button"
-            onclick="enableAudio(false)"
-          >
-            Enable Audio
-          </button>
-        </div>
-      </div>
 
       <div class="row">
         <div class="col-6 pt-2">
@@ -121,11 +109,20 @@
           </div>
         </div>
         <div id="remotes" class="col-6 pt-2">
-          <span
-            style="position: absolute; margin-left: 5px; margin-top: 5px"
-            class="badge badge-primary"
-            >Remotes</span
-          >
+          <span class="badge badge-primary">Remotes</span>
+
+          <div class="row" id="enable-audio">
+            <div class="col-12">
+              <button
+                type="button"
+                class="btn btn-primary"
+                id="enable-audio-button"
+                onclick="enableAudio(false)"
+              >
+                Enable Audio
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
