@@ -106,32 +106,59 @@ func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, buff *buffer.Buff
 		layer = 0
 	}
 
-	if w.isSimulcast {
-		if bestQualityFirst {
-			for l := 0; l < layer; l++ {
-				w.locks[l].Lock()
-				for _, dt := range w.downTracks[l] {
-					dt.SwitchSpatialLayer(int64(layer), false)
-				}
-				w.locks[l].Unlock()
-			}
-		} else {
-			for l := 2; l != layer; l-- {
-				w.locks[l].Lock()
-				for _, dt := range w.downTracks[l] {
-					dt.SwitchSpatialLayer(int64(layer), false)
-				}
-				w.locks[l].Unlock()
-			}
-		}
-	}
-
 	w.locks[layer].Lock()
 	w.upTracks[layer] = track
 	w.buffers[layer] = buff
 	w.downTracks[layer] = make([]*DownTrack, 0, 10)
 	w.locks[layer].Unlock()
+
+	subBestQuality := func(targetLayer int) {
+		for l := 0; l < targetLayer; l++ {
+			w.locks[l].Lock()
+			for _, dt := range w.downTracks[l] {
+				dt.SwitchSpatialLayer(int64(targetLayer), false)
+			}
+			w.locks[l].Unlock()
+		}
+	}
+
+	subLowestQuality := func(targetLayer int) {
+		for l := 2; l != targetLayer; l-- {
+			w.locks[l].Lock()
+			for _, dt := range w.downTracks[l] {
+				dt.SwitchSpatialLayer(int64(targetLayer), false)
+			}
+			w.locks[l].Unlock()
+		}
+	}
+
+	if w.isSimulcast {
+		if bestQualityFirst {
+			if layer < 2 {
+				w.locks[layer+1].Lock()
+				t := w.downTracks[layer+1]
+				w.locks[layer+1].Unlock()
+				if t == nil {
+					subBestQuality(layer)
+				}
+			} else {
+				subBestQuality(layer)
+			}
+		} else {
+			if layer > 0 {
+				w.locks[layer-1].Lock()
+				t := w.downTracks[layer-1]
+				w.locks[layer-1].Unlock()
+				if t == nil {
+					subLowestQuality(layer)
+				}
+			} else {
+				subLowestQuality(layer)
+			}
+		}
+	}
 	go w.writeRTP(layer)
+
 }
 
 func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
@@ -150,6 +177,7 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 			w.locks[layer].Unlock()
 			return
 		}
+		println("subscribed to layer: ", layer)
 		track.SetInitialLayers(int64(layer), 2)
 		track.maxSpatialLayer = 2
 		track.maxTemporalLayer = 2
