@@ -177,7 +177,6 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 			w.locks[layer].Unlock()
 			return
 		}
-		println("subscribed to layer: ", layer)
 		track.SetInitialLayers(int64(layer), 2)
 		track.maxSpatialLayer = 2
 		track.maxTemporalLayer = 2
