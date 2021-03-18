@@ -102,7 +102,7 @@ func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 	s.peers[owner].subscriber.channels[label] = dc
 	peers := make([]*Peer, 0, len(s.peers))
 	for _, p := range s.peers {
-		if p.id == owner {
+		if p.id == owner || p.subscriber == nil {
 			continue
 		}
 		peers = append(peers, p)
@@ -137,7 +137,7 @@ func (s *Session) Publish(router Router, r Receiver) {
 
 	for _, p := range peers {
 		// Don't sub to self
-		if router.ID() == p.id {
+		if router.ID() == p.id || p.subscriber == nil {
 			continue
 		}
 
@@ -157,7 +157,7 @@ func (s *Session) Subscribe(peer *Peer) {
 	copy(fdc, s.fanOutDCs)
 	peers := make([]*Peer, 0, len(s.peers))
 	for _, p := range s.peers {
-		if p == peer {
+		if p == peer || p.publisher == nil {
 			continue
 		}
 		peers = append(peers, p)
