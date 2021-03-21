@@ -33,7 +33,7 @@
       <div class="row" id="start-btns">
         <div class="col-12">
           <button type="button" class="btn btn-primary" onclick="start(false)">
-            start
+            Publish
           </button>
         </div>
       </div>
@@ -109,11 +109,20 @@
           </div>
         </div>
         <div id="remotes" class="col-6 pt-2">
-          <span
-            style="position: absolute; margin-left: 5px; margin-top: 5px"
-            class="badge badge-primary"
-            >Remotes</span
-          >
+          <span class="badge badge-primary">Remotes</span>
+
+          <div class="row" id="enable-audio">
+            <div class="col-12">
+              <button
+                type="button"
+                class="btn btn-primary"
+                id="enable-audio-button"
+                onclick="enableAudio(false)"
+              >
+                Enable Audio
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -136,82 +145,6 @@
     ></script>
     <script src="https://unpkg.com/ion-sdk-js@1.5.5/dist/ion-sdk.min.js"></script>
     <script src="https://unpkg.com/ion-sdk-js@1.5.5/dist/json-rpc.min.js"></script>
-    <script>
-      const localVideo = document.getElementById("local-video");
-      const remotesDiv = document.getElementById("remotes");
-
-      /* eslint-env browser */
-      const joinBtns = document.getElementById("start-btns");
-
-      const config = {
-        iceServers: [
-          {
-            urls: "stun:stun.l.google.com:19302",
-          },
-        ],
-      };
-
-      const signalLocal = new Signal.IonSFUJSONRPCSignal(
-        "ws://localhost:7000/ws"
-      );
-
-      const clientLocal = new IonSDK.Client(signalLocal, config);
-      signalLocal.onopen = () => clientLocal.join("test session");
-
-      const streams = {};
-      let localStream;
-      const start = () => {
-        IonSDK.LocalStream.getUserMedia({
-          resolution: "vga",
-          audio: true,
-        })
-          .then((media) => {
-            localStream = media;
-            localVideo.srcObject = media;
-            localVideo.autoplay = true;
-            localVideo.controls = true;
-            localVideo.muted = true;
-            joinBtns.style.display = "none";
-            clientLocal.publish(media);
-          })
-          .catch(console.error);
-      };
-
-      clientLocal.ontrack = (track, stream) => {
-        console.log("got track", track.id, "for stream", stream.id);
-        if (track.kind === "video") {
-          track.onunmute = () => {
-            if (!streams[stream.id]) {
-              remoteVideo = document.createElement("video");
-              remoteVideo.srcObject = stream;
-              remoteVideo.autoplay = true;
-              remoteVideo.muted = true;
-
-              remotesDiv.appendChild(remoteVideo);
-              stream.onremovetrack = () => {
-                remotesDiv.removeChild(remoteVideo);
-                streams[stream.id] = null;
-              };
-            }
-          };
-        }
-      };
-
-      const controlLocalVideo = (radio) => {
-        if (radio.value === "false") {
-          localStream.mute("video");
-        } else {
-          localStream.unmute("video");
-        }
-      };
-
-      const controlLocalAudio = (radio) => {
-        if (radio.value === "false") {
-          localStream.mute("audio");
-        } else {
-          localStream.unmute("audio");
-        }
-      };
-    </script>
+    <script src="./main.js"></script>
   </body>
 </html>
