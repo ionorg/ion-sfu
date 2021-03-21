@@ -98,6 +98,10 @@ func (p *VP8) Unmarshal(payload []byte) error {
 		if L {
 			idx++
 			p.TlzIdx = idx
+
+			if int(idx) >= payloadLen {
+				return errShortPacket
+			}
 			p.TL0PICIDX = payload[idx]
 		}
 		if p.TemporalSupported || K {
