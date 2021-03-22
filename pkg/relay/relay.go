@@ -39,15 +39,17 @@ type SignalMeta struct {
 }
 
 type relayPeer struct {
-	me       *webrtc.MediaEngine
-	pid      string
-	sid      string
-	api      *webrtc.API
-	ice      *webrtc.ICETransport
-	sctp     *webrtc.SCTPTransport
-	dtls     *webrtc.DTLSTransport
-	provider *Provider
-	gatherer *webrtc.ICEGatherer
+	me           *webrtc.MediaEngine
+	id           string
+	pid          string
+	sid          string
+	api          *webrtc.API
+	ice          *webrtc.ICETransport
+	sctp         *webrtc.SCTPTransport
+	dtls         *webrtc.DTLSTransport
+	provider     *Provider
+	gatherer     *webrtc.ICEGatherer
+	datachannels []string
 }
 
 func New(iceServers []webrtc.ICEServer, logger logr.Logger) *Provider {
@@ -75,6 +77,26 @@ func (p *Provider) OnDatachannel(fn func(meta SignalMeta, dc *webrtc.DataChannel
 	p.onDatachannel = fn
 }
 
+func (p *Provider) AddDataChannels(sessionID, peerID string, labels []string) error {
+	var r *relayPeer
+	var err error
+	p.mu.RLock()
+	r = p.peers[peerID]
+	p.mu.RUnlock()
+	if r == nil {
+		r, err = p.newRelay(sessionID, peerID)
+		if err != nil {
+			return err
+		}
+	}
+	if r.ice.State() != webrtc.ICETransportStateNew {
+		r.datachannels = labels
+		return r.startDatachannels()
+	}
+	r.datachannels = labels
+	return nil
+}
+
 func (p *Provider) Send(sessionID, peerID string, receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) error {
 	p.mu.RLock()
 	if r, ok := p.peers[peerID]; ok {
@@ -83,7 +105,7 @@ func (p *Provider) Send(sessionID, peerID string, receiver *webrtc.RTPReceiver, 
 	}
 	p.mu.RUnlock()
 
-	r, err := p.newRelay(sessionID, localTrack.StreamID(), peerID)
+	r, err := p.newRelay(sessionID, peerID)
 	if err != nil {
 		return err
 	}
@@ -104,7 +126,7 @@ func (p *Provider) Receive(remoteSignal []byte) ([]byte, error) {
 	}
 	p.mu.RUnlock()
 
-	r, err := p.newRelay(s.Metadata.SessionID, s.Metadata.StreamID, s.Metadata.PeerID)
+	r, err := p.newRelay(s.Metadata.SessionID, s.Metadata.PeerID)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +134,7 @@ func (p *Provider) Receive(remoteSignal []byte) ([]byte, error) {
 	return r.receive(s)
 }
 
-func (p *Provider) newRelay(sessionID, streamID, peerID string) (*relayPeer, error) {
+func (p *Provider) newRelay(sessionID, peerID string) (*relayPeer, error) {
 	// Prepare ICE gathering options
 	iceOptions := webrtc.ICEGatherOptions{
 		ICEServers: p.iceServers,
@@ -155,7 +177,7 @@ func (p *Provider) newRelay(sessionID, streamID, peerID string) (*relayPeer, err
 			func(channel *webrtc.DataChannel) {
 				p.onDatachannel(SignalMeta{
 					PeerID:    peerID,
-					StreamID:  streamID,
+					StreamID:  r.id,
 					SessionID: sessionID,
 				}, channel)
 			})
@@ -166,17 +188,49 @@ func (p *Provider) newRelay(sessionID, streamID, peerID string) (*relayPeer, err
 			p.mu.Lock()
 			delete(p.peers, peerID)
 			p.mu.Unlock()
-			r.gatherer.Close()
-			r.ice.Stop()
-			r.dtls.Stop()
+			if err := r.gatherer.Close(); err != nil {
+				p.log.Error(err, "Error closing ice gatherer", "peer_id", r.pid)
+			}
+			if err := r.ice.Stop(); err != nil {
+				p.log.Error(err, "Error stopping ice transport", "peer_id", r.pid)
+			}
+			if err := r.dtls.Stop(); err != nil {
+				p.log.Error(err, "Error stopping dtls transport", "peer_id", r.pid)
+			}
 		}
 	})
 
 	return r, nil
 }
 
+func (r *relayPeer) startDatachannels() error {
+	if len(r.datachannels) == 0 {
+		return nil
+	}
+	for idx, label := range r.datachannels {
+		id := uint16(idx)
+		dcParams := &webrtc.DataChannelParameters{
+			Label: label,
+			ID:    &id,
+		}
+		channel, err := r.api.NewDataChannel(r.sctp, dcParams)
+		if err != nil {
+			return err
+		}
+		if r.provider.onDatachannel != nil {
+			r.provider.onDatachannel(SignalMeta{
+				PeerID:    r.pid,
+				StreamID:  r.id,
+				SessionID: r.sid,
+			}, channel)
+		}
+	}
+	return nil
+}
+
 func (r *relayPeer) receive(s Signal) ([]byte, error) {
 	if r.gatherer.State() == webrtc.ICEGathererStateNew {
+		r.id = s.Metadata.StreamID
 		gatherFinished := make(chan struct{})
 		r.gatherer.OnLocalCandidate(func(i *webrtc.ICECandidate) {
 			if i == nil {
@@ -324,6 +378,7 @@ func (r *relayPeer) send(receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLo
 	t := receiver.Track()
 	codec := receiver.Track().Codec()
 	sdr, err := r.api.NewRTPSender(localTrack, r.dtls)
+	r.id = t.StreamID()
 	if err != nil {
 		return err
 	}
@@ -366,7 +421,7 @@ func (r *relayPeer) send(receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLo
 
 	remote, err := r.provider.signal(SignalMeta{
 		PeerID:    r.pid,
-		StreamID:  t.StreamID(),
+		StreamID:  r.id,
 		SessionID: r.sid,
 	}, local)
 	if err != nil {
@@ -411,6 +466,10 @@ func (r *relayPeer) send(receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLo
 			},
 		},
 	}); err != nil {
+		return err
+	}
+
+	if err = r.startDatachannels(); err != nil {
 		return err
 	}
 	return nil
