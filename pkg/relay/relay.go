@@ -5,27 +5,31 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/pion/ice/v2"
+
 	"github.com/go-logr/logr"
 	"github.com/pion/webrtc/v3"
 )
 
 type Provider struct {
 	mu            sync.RWMutex
+	se            webrtc.SettingEngine
 	log           logr.Logger
-	signal        func(meta SignalMeta, signal []byte) ([]byte, error)
 	peers         map[string]*relayPeer
+	signal        func(meta SignalMeta, signal []byte) ([]byte, error)
 	onRemote      func(meta SignalMeta, receiver *webrtc.RTPReceiver)
+	iceServers    []webrtc.ICEServer
 	onDatachannel func(meta SignalMeta, dc *webrtc.DataChannel)
 }
 
 type Signal struct {
 	Metadata         SignalMeta                  `json:"metadata"`
+	Encodings        *webrtc.RTPCodingParameters `json:"encodings,omitempty"`
 	ICECandidates    []webrtc.ICECandidate       `json:"iceCandidates,omitempty"`
 	ICEParameters    webrtc.ICEParameters        `json:"iceParameters,omitempty"`
 	DTLSParameters   webrtc.DTLSParameters       `json:"dtlsParameters,omitempty"`
-	SCTPCapabilities *webrtc.SCTPCapabilities    `json:"sctpCapabilities,omitempty"`
 	CodecParameters  *webrtc.RTPCodecParameters  `json:"codecParameters,omitempty"`
-	Encodings        *webrtc.RTPCodingParameters `json:"encodings,omitempty"`
+	SCTPCapabilities *webrtc.SCTPCapabilities    `json:"sctpCapabilities,omitempty"`
 }
 
 type SignalMeta struct {
@@ -46,11 +50,17 @@ type relayPeer struct {
 	gatherer *webrtc.ICEGatherer
 }
 
-func New(logger logr.Logger) *Provider {
+func New(iceServers []webrtc.ICEServer, logger logr.Logger) *Provider {
 	return &Provider{
-		log:   logger,
-		peers: make(map[string]*relayPeer),
+		log:        logger,
+		peers:      make(map[string]*relayPeer),
+		iceServers: iceServers,
 	}
+}
+
+func (p *Provider) SetSettingEngine(se webrtc.SettingEngine) {
+	se.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
+	p.se = se
 }
 
 func (p *Provider) SetSignaler(signaler func(meta SignalMeta, signal []byte) ([]byte, error)) {
@@ -105,13 +115,11 @@ func (p *Provider) Receive(remoteSignal []byte) ([]byte, error) {
 func (p *Provider) newRelay(sessionID, streamID, peerID string) (*relayPeer, error) {
 	// Prepare ICE gathering options
 	iceOptions := webrtc.ICEGatherOptions{
-		ICEServers: []webrtc.ICEServer{
-			{URLs: []string{"stun:stun.l.google.com:19302"}},
-		},
+		ICEServers: p.iceServers,
 	}
 	me := webrtc.MediaEngine{}
 	// Create an API object
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(&me))
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(&me), webrtc.WithSettingEngine(p.se))
 	// Create the ICE gatherer
 	gatherer, err := api.NewICEGatherer(iceOptions)
 	if err != nil {
