@@ -30,6 +30,9 @@ var (
 	conf           = Config{}
 	file           string
 	addr           string
+	enableTLS      bool
+	cert           string
+	key            string
 	verbosityLevel int
 	logger         = log.New()
 )
@@ -42,6 +45,9 @@ func showHelp() {
 	fmt.Printf("Usage:%s {params}\n", os.Args[0])
 	fmt.Println("      -c {config file}")
 	fmt.Println("      -a {listen addr}")
+	fmt.Println("      -tls (enable tls)")
+	fmt.Println("      -cert {cert file}")
+	fmt.Println("      -key {key file}")
 	fmt.Println("      -h (show help info)")
 	fmt.Println("      -v {0-10} (verbosity level, default 0)")
 }
@@ -94,6 +100,9 @@ func load() bool {
 func parse() bool {
 	flag.StringVar(&file, "c", "config.toml", "config file")
 	flag.StringVar(&addr, "a", ":9090", "address to use")
+	flag.BoolVar(&enableTLS, "tls", false, "enable tls")
+	flag.StringVar(&cert, "cert", "", "cert file")
+	flag.StringVar(&key, "key", "", "key file")
 	flag.IntVar(&verbosityLevel, "v", -1, "verbosity level, higher value - more logs")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
@@ -123,8 +132,10 @@ func main() {
 
 	logger.Info("--- Starting SFU Node ---")
 	options := server.DefaultWrapperedServerOptions()
-	options.EnableTLS = false
+	options.EnableTLS = enableTLS
 	options.Addr = addr
+	options.Cert = cert
+	options.Key = key
 	options.AllowAllOrigins = true
 	options.UseWebSocket = true
 
