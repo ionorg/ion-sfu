@@ -126,9 +126,9 @@ func (p *Provider) newRelay(sessionID, streamID, peerID string) (*relayPeer, err
 		return nil, err
 	}
 	// Construct the ICE transport
-	ice := api.NewICETransport(gatherer)
+	i := api.NewICETransport(gatherer)
 	// Construct the DTLS transport
-	dtls, err := api.NewDTLSTransport(ice, nil)
+	dtls, err := api.NewDTLSTransport(i, nil)
 	// Construct the SCTP transport
 	sctp := api.NewSCTPTransport(dtls)
 	if err != nil {
@@ -139,7 +139,7 @@ func (p *Provider) newRelay(sessionID, streamID, peerID string) (*relayPeer, err
 		pid:      peerID,
 		sid:      sessionID,
 		api:      api,
-		ice:      ice,
+		ice:      i,
 		sctp:     sctp,
 		dtls:     dtls,
 		provider: p,
@@ -161,7 +161,7 @@ func (p *Provider) newRelay(sessionID, streamID, peerID string) (*relayPeer, err
 			})
 	}
 
-	ice.OnConnectionStateChange(func(state webrtc.ICETransportState) {
+	i.OnConnectionStateChange(func(state webrtc.ICETransportState) {
 		if state == webrtc.ICETransportStateFailed || state == webrtc.ICETransportStateDisconnected {
 			p.mu.Lock()
 			delete(p.peers, peerID)
