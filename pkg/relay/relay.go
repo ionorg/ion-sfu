@@ -3,12 +3,22 @@ package relay
 import (
 	"encoding/json"
 	"strings"
+	"sync"
 
+	"github.com/go-logr/logr"
 	"github.com/pion/webrtc/v3"
 )
 
+type Provider struct {
+	mu       sync.RWMutex
+	log      logr.Logger
+	signal   func(meta SignalMeta, signal []byte) ([]byte, error)
+	peers    map[string]*relayPeer
+	onRemote func(meta SignalMeta, receiver *webrtc.RTPReceiver)
+}
+
 type Signal struct {
-	StreamID         string                      `json:"streamId"`
+	Metadata         SignalMeta                  `json:"metadata"`
 	ICECandidates    []webrtc.ICECandidate       `json:"iceCandidates,omitempty"`
 	ICEParameters    webrtc.ICEParameters        `json:"iceParameters,omitempty"`
 	DTLSParameters   webrtc.DTLSParameters       `json:"dtlsParameters,omitempty"`
@@ -17,11 +27,20 @@ type Signal struct {
 	Encodings        *webrtc.RTPCodingParameters `json:"encodings,omitempty"`
 }
 
-type Relay struct {
+type SignalMeta struct {
+	PeerID    string `json:"peerId"`
+	StreamID  string `json:"streamId"`
+	SessionID string `json:"sessionId"`
+}
+
+type relayPeer struct {
+	me       *webrtc.MediaEngine
+	pid      string
+	sid      string
 	api      *webrtc.API
 	ice      *webrtc.ICETransport
 	dtls     *webrtc.DTLSTransport
-	peers    map[string]*RelayedStreams
+	provider *Provider
 	gatherer *webrtc.ICEGatherer
 }
 
@@ -31,15 +50,68 @@ type RelayedStreams struct {
 	receiver *webrtc.RTPReceiver
 }
 
-func New() (*Relay, error) {
+func New(logger logr.Logger) *Provider {
+	return &Provider{
+		log:   logger,
+		peers: make(map[string]*relayPeer),
+	}
+}
+
+func (p *Provider) SetSignaler(signaler func(meta SignalMeta, signal []byte) ([]byte, error)) {
+	p.signal = signaler
+}
+
+func (p *Provider) OnRemoteStream(fn func(meta SignalMeta, receiver *webrtc.RTPReceiver)) {
+	p.onRemote = fn
+}
+
+func (p *Provider) Send(sessionID, peerID string, receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) error {
+	p.mu.RLock()
+	if r, ok := p.peers[peerID]; ok {
+		p.mu.RUnlock()
+		return r.send(receiver, localTrack)
+	}
+	p.mu.RUnlock()
+
+	r, err := p.newRelay(sessionID, peerID)
+	if err != nil {
+		return err
+	}
+
+	return r.send(receiver, localTrack)
+}
+
+func (p *Provider) Receive(remoteSignal []byte) ([]byte, error) {
+	s := Signal{}
+	if err := json.Unmarshal(remoteSignal, &s); err != nil {
+		return nil, err
+	}
+
+	p.mu.RLock()
+	if r, ok := p.peers[s.Metadata.PeerID]; ok {
+		p.mu.RUnlock()
+		return r.receive(s)
+	}
+	p.mu.RUnlock()
+
+	r, err := p.newRelay(s.Metadata.SessionID, s.Metadata.PeerID)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.receive(s)
+}
+
+func (p *Provider) newRelay(sessionID, peerID string) (*relayPeer, error) {
 	// Prepare ICE gathering options
 	iceOptions := webrtc.ICEGatherOptions{
 		ICEServers: []webrtc.ICEServer{
 			{URLs: []string{"stun:stun.l.google.com:19302"}},
 		},
 	}
+	me := webrtc.MediaEngine{}
 	// Create an API object
-	api := webrtc.NewAPI()
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(&me))
 	// Create the ICE gatherer
 	gatherer, err := api.NewICEGatherer(iceOptions)
 	if err != nil {
@@ -52,20 +124,50 @@ func New() (*Relay, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Relay{
+	r := &relayPeer{
+		me:       &me,
+		pid:      peerID,
+		sid:      sessionID,
 		api:      api,
 		ice:      ice,
 		dtls:     dtls,
-		peers:    make(map[string]*RelayedStreams, 4),
+		provider: p,
 		gatherer: gatherer,
-	}, nil
+	}
+
+	p.mu.Lock()
+	p.peers[peerID] = r
+	p.mu.Unlock()
+
+	ice.OnConnectionStateChange(func(state webrtc.ICETransportState) {
+		if state == webrtc.ICETransportStateFailed || state == webrtc.ICETransportStateDisconnected {
+			p.mu.Lock()
+			delete(p.peers, peerID)
+			p.mu.Unlock()
+			r.gatherer.Close()
+			r.ice.Stop()
+			r.dtls.Stop()
+		}
+	})
+
+	return r, nil
 }
 
-func (r *Relay) Receive(signal []byte) (ReceiveStream, error) {
-	var s Signal
-	if err := json.Unmarshal(signal, &s); err != nil {
-		return nil, err
+func (r *relayPeer) receive(s Signal) ([]byte, error) {
+	if r.gatherer.State() == webrtc.ICEGathererStateNew {
+		gatherFinished := make(chan struct{})
+		r.gatherer.OnLocalCandidate(func(i *webrtc.ICECandidate) {
+			if i == nil {
+				close(gatherFinished)
+			}
+		})
+		// Gather candidates
+		if err := r.gatherer.Gather(); err != nil {
+			return nil, err
+		}
+		<-gatherFinished
 	}
+
 	var k webrtc.RTPCodecType
 	switch {
 	case strings.HasPrefix(s.CodecParameters.MimeType, "audio/"):
@@ -75,112 +177,200 @@ func (r *Relay) Receive(signal []byte) (ReceiveStream, error) {
 	default:
 		k = webrtc.RTPCodecType(0)
 	}
+	if err := r.me.RegisterCodec(*s.CodecParameters, k); err != nil {
+		return nil, err
+	}
+
+	iceCandidates, err := r.gatherer.GetLocalCandidates()
+	if err != nil {
+		return nil, err
+	}
+
+	iceParams, err := r.gatherer.GetLocalParameters()
+	if err != nil {
+		return nil, err
+	}
+
+	dtlsParams, err := r.dtls.GetLocalParameters()
+	if err != nil {
+		return nil, err
+	}
+
+	localSignal := Signal{
+		ICECandidates:  iceCandidates,
+		ICEParameters:  iceParams,
+		DTLSParameters: dtlsParams,
+	}
+
+	if err = r.ice.SetRemoteCandidates(s.ICECandidates); err != nil {
+		return nil, err
+	}
+
 	recv, err := r.api.NewRTPReceiver(k, r.dtls)
 	if err != nil {
 		return nil, err
 	}
 
-	gatherFinished := make(chan struct{})
-	r.gatherer.OnLocalCandidate(func(i *webrtc.ICECandidate) {
-		if i == nil {
-			close(gatherFinished)
+	if r.ice.State() == webrtc.ICETransportStateNew {
+		go func() {
+			iceRole := webrtc.ICERoleControlled
+			if err = r.ice.Start(nil, s.ICEParameters, &iceRole); err != nil {
+				r.provider.log.Error(err, "Start ICE error")
+				return
+			}
+
+			if err = r.dtls.Start(s.DTLSParameters); err != nil {
+				r.provider.log.Error(err, "Start DTLS error")
+				return
+			}
+
+			if err = recv.Receive(webrtc.RTPReceiveParameters{Encodings: []webrtc.RTPDecodingParameters{
+				{
+					webrtc.RTPCodingParameters{
+						RID:         s.Encodings.RID,
+						SSRC:        s.Encodings.SSRC,
+						PayloadType: s.Encodings.PayloadType,
+					},
+				},
+			}}); err != nil {
+				r.provider.log.Error(err, "Start receiver error")
+				return
+			}
+
+			if r.provider.onRemote != nil {
+				r.provider.onRemote(SignalMeta{
+					PeerID:    s.Metadata.PeerID,
+					StreamID:  s.Metadata.StreamID,
+					SessionID: s.Metadata.SessionID,
+				}, recv)
+			}
+		}()
+	} else {
+		if err = recv.Receive(webrtc.RTPReceiveParameters{Encodings: []webrtc.RTPDecodingParameters{
+			{
+				webrtc.RTPCodingParameters{
+					RID:         s.Encodings.RID,
+					SSRC:        s.Encodings.SSRC,
+					PayloadType: s.Encodings.PayloadType,
+				},
+			},
+		}}); err != nil {
+			return nil, err
 		}
-	})
-	// Gather candidates
-	err = r.gatherer.Gather()
+
+		if r.provider.onRemote != nil {
+			r.provider.onRemote(SignalMeta{
+				PeerID:    s.Metadata.PeerID,
+				StreamID:  s.Metadata.StreamID,
+				SessionID: s.Metadata.SessionID,
+			}, recv)
+		}
+	}
+
+	b, err := json.Marshal(localSignal)
 	if err != nil {
 		return nil, err
 	}
 
-	<-gatherFinished
-
-	iceCandidates, err := r.gatherer.GetLocalCandidates()
-	if err != nil {
-		return nil, err
-	}
-
-	iceParams, err := r.gatherer.GetLocalParameters()
-	if err != nil {
-		return nil, err
-	}
-
-	dtlsParams, err := r.dtls.GetLocalParameters()
-	if err != nil {
-		return nil, err
-	}
-
-	return &receiveStream{
-		relay:        r,
-		remoteSignal: s,
-		localSignal: Signal{
-			StreamID:       s.StreamID,
-			ICECandidates:  iceCandidates,
-			ICEParameters:  iceParams,
-			DTLSParameters: dtlsParams,
-		},
-		receiver: recv,
-	}, nil
+	return b, nil
 }
 
-func (r *Relay) Send(receiver *webrtc.RTPReceiver) (SendStream, error) {
+func (r *relayPeer) send(receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) error {
+	if r.gatherer.State() == webrtc.ICEGathererStateNew {
+		gatherFinished := make(chan struct{})
+		r.gatherer.OnLocalCandidate(func(i *webrtc.ICECandidate) {
+			if i == nil {
+				close(gatherFinished)
+			}
+		})
+		// Gather candidates
+		if err := r.gatherer.Gather(); err != nil {
+			return err
+		}
+		<-gatherFinished
+	}
 	t := receiver.Track()
 	codec := receiver.Track().Codec()
-	track, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{
-		MimeType:     codec.MimeType,
-		ClockRate:    codec.ClockRate,
-		Channels:     codec.Channels,
-		SDPFmtpLine:  codec.SDPFmtpLine,
-		RTCPFeedback: codec.RTCPFeedback,
-	}, t.ID(), t.StreamID())
+	sdr, err := r.api.NewRTPSender(localTrack, r.dtls)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	sdr, err := r.api.NewRTPSender(track, r.dtls)
-	if err != nil {
-		return nil, err
+	if err = r.me.RegisterCodec(codec, t.Kind()); err != nil {
+		return err
 	}
-	gatherFinished := make(chan struct{})
-	r.gatherer.OnLocalCandidate(func(i *webrtc.ICECandidate) {
-		if i == nil {
-			close(gatherFinished)
-		}
-	})
-	// Gather candidates
-	err = r.gatherer.Gather()
-	if err != nil {
-		return nil, err
-	}
-
-	<-gatherFinished
 
 	iceCandidates, err := r.gatherer.GetLocalCandidates()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	iceParams, err := r.gatherer.GetLocalParameters()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	dtlsParams, err := r.dtls.GetLocalParameters()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return &sendStream{
-		relay: r,
-		signal: Signal{
-			StreamID:        t.StreamID(),
-			ICECandidates:   iceCandidates,
-			ICEParameters:   iceParams,
-			DTLSParameters:  dtlsParams,
-			CodecParameters: &codec,
-			Encodings: &webrtc.RTPCodingParameters{
-				SSRC:        t.SSRC(),
-				PayloadType: t.PayloadType(),
+	signal := &Signal{
+		ICECandidates:   iceCandidates,
+		ICEParameters:   iceParams,
+		DTLSParameters:  dtlsParams,
+		CodecParameters: &codec,
+		Encodings: &webrtc.RTPCodingParameters{
+			SSRC:        t.SSRC(),
+			PayloadType: t.PayloadType(),
+		},
+	}
+	local, err := json.Marshal(signal)
+	if err != nil {
+		return err
+	}
+
+	remote, err := r.provider.signal(SignalMeta{
+		PeerID:    r.pid,
+		StreamID:  t.StreamID(),
+		SessionID: r.sid,
+	}, local)
+	if err != nil {
+		return err
+	}
+	var remoteSignal Signal
+	if err = json.Unmarshal(remote, &remoteSignal); err != nil {
+		return err
+	}
+
+	if err = r.ice.SetRemoteCandidates(remoteSignal.ICECandidates); err != nil {
+		return err
+	}
+
+	if r.ice.State() == webrtc.ICETransportStateNew {
+		iceRole := webrtc.ICERoleControlling
+		if err = r.ice.Start(nil, remoteSignal.ICEParameters, &iceRole); err != nil {
+			return err
+		}
+
+		if err = r.dtls.Start(remoteSignal.DTLSParameters); err != nil {
+			return err
+		}
+	}
+	params := receiver.GetParameters()
+
+	if err = sdr.Send(webrtc.RTPSendParameters{
+		RTPParameters: params,
+		Encodings: []webrtc.RTPEncodingParameters{
+			{
+				webrtc.RTPCodingParameters{
+					SSRC:        t.SSRC(),
+					PayloadType: t.PayloadType(),
+					RID:         t.RID(),
+				},
 			},
 		},
-		sender: sdr,
-	}, nil
+	}); err != nil {
+		return err
+	}
+	return nil
 }
