@@ -21,7 +21,7 @@ type Publisher struct {
 }
 
 // NewPublisher creates a new Publisher
-func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publisher, error) {
+func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig, routerOptions routerOptions) (*Publisher, error) {
 	me, err := getPublisherMediaEngine()
 	if err != nil {
 		Logger.Error(err, "NewPeer error", "peer_id", id)
@@ -39,7 +39,7 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 	p := &Publisher{
 		id:      id,
 		pc:      pc,
-		router:  newRouter(id, pc, session, cfg.router),
+		router:  newRouter(id, pc, session, cfg.router, routerOptions),
 		session: session,
 	}
 

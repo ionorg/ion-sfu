@@ -29,6 +29,10 @@ type RouterConfig struct {
 	Simulcast           SimulcastConfig `mapstructure:"simulcast"`
 }
 
+type routerOptions struct {
+	startTracksMuted bool
+}
+
 type router struct {
 	sync.RWMutex
 	id            string
@@ -41,10 +45,11 @@ type router struct {
 	session       *Session
 	receivers     map[string]Receiver
 	bufferFactory *buffer.Factory
+	options       routerOptions
 }
 
 // newRouter for routing rtp/rtcp packets
-func newRouter(id string, peer *webrtc.PeerConnection, session *Session, config RouterConfig) Router {
+func newRouter(id string, peer *webrtc.PeerConnection, session *Session, config RouterConfig, options routerOptions) Router {
 	ch := make(chan []rtcp.Packet, 10)
 	r := &router{
 		id:            id,
@@ -56,6 +61,7 @@ func newRouter(id string, peer *webrtc.PeerConnection, session *Session, config 
 		receivers:     make(map[string]Receiver),
 		stats:         make(map[uint32]*stats.Stream),
 		bufferFactory: session.BufferFactory(),
+		options:       options,
 	}
 
 	if config.WithStats {
@@ -225,7 +231,7 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 		Channels:     codec.Channels,
 		SDPFmtpLine:  codec.SDPFmtpLine,
 		RTCPFeedback: []webrtc.RTCPFeedback{{"goog-remb", ""}, {"nack", ""}, {"nack", "pli"}},
-	}, recv, r.bufferFactory, sub.id, r.config.MaxPacketTrack)
+	}, recv, r.bufferFactory, sub.id, r.config.MaxPacketTrack, r.options.startTracksMuted)
 	if err != nil {
 		return err
 	}
