@@ -15,6 +15,14 @@ const (
 
 type atomicBool int32
 
+func newAtomicBool(value bool) atomicBool {
+	var i int32
+	if value {
+		i = 1
+	}
+	return atomicBool(i)
+}
+
 func (a *atomicBool) set(value bool) {
 	var i int32
 	if value {

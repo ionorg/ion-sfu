@@ -42,14 +42,13 @@ type DownTrack struct {
 	spatialLayer  int32
 	temporalLayer int32
 
-	startMuted bool
-	enabled    atomicBool
-	reSync     atomicBool
-	snOffset   uint16
-	tsOffset   uint32
-	lastSSRC   uint32
-	lastSN     uint16
-	lastTS     uint32
+	enabled  atomicBool
+	reSync   atomicBool
+	snOffset uint16
+	tsOffset uint32
+	lastSSRC uint32
+	lastSN   uint16
+	lastTS   uint32
 
 	simulcast        simulcastTrackHelpers
 	maxSpatialLayer  int64
@@ -71,7 +70,7 @@ type DownTrack struct {
 }
 
 // NewDownTrack returns a DownTrack.
-func NewDownTrack(c webrtc.RTPCodecCapability, r Receiver, bf *buffer.Factory, peerID string, mt int, startMuted bool) (*DownTrack, error) {
+func NewDownTrack(c webrtc.RTPCodecCapability, r Receiver, bf *buffer.Factory, peerID string, mt int, enabled bool) (*DownTrack, error) {
 	return &DownTrack{
 		id:            r.TrackID(),
 		peerID:        peerID,
@@ -80,7 +79,7 @@ func NewDownTrack(c webrtc.RTPCodecCapability, r Receiver, bf *buffer.Factory, p
 		bufferFactory: bf,
 		receiver:      r,
 		codec:         c,
-		startMuted:    startMuted,
+		enabled:       newAtomicBool(enabled),
 	}, nil
 }
 
@@ -95,9 +94,6 @@ func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters,
 		d.writeStream = t.WriteStream()
 		d.mime = strings.ToLower(codec.MimeType)
 		d.reSync.set(true)
-		if !d.enabled.get() {
-			d.enabled.set(!d.startMuted)
-		}
 		if rr := d.bufferFactory.GetOrNew(packetio.RTCPBufferPacket, uint32(t.SSRC())).(*buffer.RTCPReader); rr != nil {
 			rr.OnPacket(func(pkt []byte) {
 				d.handleRTCP(pkt)

@@ -231,7 +231,7 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 		Channels:     codec.Channels,
 		SDPFmtpLine:  codec.SDPFmtpLine,
 		RTCPFeedback: []webrtc.RTCPFeedback{{"goog-remb", ""}, {"nack", ""}, {"nack", "pli"}},
-	}, recv, r.bufferFactory, sub.id, r.config.MaxPacketTrack, r.options.startTracksMuted)
+	}, recv, r.bufferFactory, sub.id, r.config.MaxPacketTrack, !r.options.startTracksMuted)
 	if err != nil {
 		return err
 	}
