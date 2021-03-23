@@ -183,6 +183,7 @@ func (s *Session) OnClose(f func()) {
 func (s *Session) setRelayedDatachannel(peerID string, datachannel *webrtc.DataChannel) {
 	label := datachannel.Label()
 	for _, dc := range s.datachannels {
+		dc := dc
 		if dc.Label == label {
 			mws := newDCChain(dc.middlewares)
 			p := mws.Process(ProcessFunc(func(ctx context.Context, args ProcessArgs) {

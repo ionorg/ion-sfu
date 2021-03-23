@@ -21,7 +21,7 @@ type Publisher struct {
 }
 
 // NewPublisher creates a new Publisher
-func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publisher, error) {
+func NewPublisher(session *Session, id string, relay bool, cfg WebRTCTransportConfig) (*Publisher, error) {
 	me, err := getPublisherMediaEngine()
 	if err != nil {
 		Logger.Error(err, "NewPeer error", "peer_id", id)
@@ -57,7 +57,7 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 			p.session.Publish(p.router, r)
 		}
 
-		if cfg.relay != nil && pub {
+		if relay && cfg.relay != nil && pub {
 			codec := track.Codec()
 			downTrack, err := NewDownTrack(webrtc.RTPCodecCapability{
 				MimeType:     codec.MimeType,
@@ -102,7 +102,7 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 		}
 	})
 
-	if cfg.relay != nil {
+	if relay && cfg.relay != nil {
 		if err = cfg.relay.AddDataChannels(session.id, id, session.getDataChannelLabels()); err != nil {
 			Logger.Error(err, "Add relaying data channels error")
 		}
