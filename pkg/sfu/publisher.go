@@ -52,9 +52,31 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 			"stream_id", track.StreamID(),
 		)
 
-		if r, pub := p.router.AddReceiver(receiver, track); pub {
+		r, pub := p.router.AddReceiver(receiver, track)
+		if pub {
 			p.session.Publish(p.router, r)
 		}
+
+		if cfg.relay != nil && pub {
+			codec := track.Codec()
+			downTrack, err := NewDownTrack(webrtc.RTPCodecCapability{
+				MimeType:     codec.MimeType,
+				ClockRate:    codec.ClockRate,
+				Channels:     codec.Channels,
+				SDPFmtpLine:  codec.SDPFmtpLine,
+				RTCPFeedback: []webrtc.RTCPFeedback{{"goog-remb", ""}, {"nack", ""}, {"nack", "pli"}},
+			}, r, session.bufferFactory, id, cfg.router.MaxPacketTrack)
+			if err != nil {
+				Logger.V(1).Error(err, "Create relay downtrack err", "peer_id", id)
+				return
+			}
+			if err := cfg.relay.Send(session.id, id, receiver, downTrack); err != nil {
+				Logger.V(1).Error(err, "Relay err", "peer_id", id)
+				return
+			}
+			r.AddDownTrack(downTrack, true)
+		}
+
 	})
 
 	pc.OnDataChannel(func(dc *webrtc.DataChannel) {
@@ -80,6 +102,11 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 		}
 	})
 
+	if cfg.relay != nil {
+		if err = cfg.relay.AddDataChannels(session.id, id, session.getDataChannelLabels()); err != nil {
+			Logger.Error(err, "Add relaying data channels error")
+		}
+	}
 	return p, nil
 }
 

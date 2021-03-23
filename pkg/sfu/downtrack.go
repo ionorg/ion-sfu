@@ -102,7 +102,9 @@ func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters,
 		if strings.HasPrefix(d.codec.MimeType, "video/") {
 			d.sequencer = newSequencer(d.maxTrack)
 		}
-		d.onBind()
+		if d.onBind != nil {
+			d.onBind()
+		}
 		d.bound.set(true)
 		return codec, nil
 	}
