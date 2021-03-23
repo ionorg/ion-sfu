@@ -29,9 +29,14 @@ message SignalReply {
 }
 
 message JoinRequest {
+    message JoinConfig {
+        bool NoPublish = 1;
+        bool NoSubscribe = 2;
+    }
     string sid = 1;
     string uid = 2;
     bytes description = 3;
+    JoinConfig config = 4;
 }
 
 message JoinReply {
