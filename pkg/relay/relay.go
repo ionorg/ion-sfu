@@ -404,6 +404,11 @@ func (r *relayPeer) send(receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLo
 	sctpCapabilities := r.sctp.GetCapabilities()
 
 	signal := &Signal{
+		Metadata: SignalMeta{
+			PeerID:    r.pid,
+			StreamID:  r.id,
+			SessionID: r.sid,
+		},
 		ICECandidates:    iceCandidates,
 		ICEParameters:    iceParams,
 		DTLSParameters:   dtlsParams,
