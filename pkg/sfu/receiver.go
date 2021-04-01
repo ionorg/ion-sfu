@@ -335,7 +335,7 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 
 		w.locks[layer].Lock()
 		for idx, dt := range w.downTracks[layer] {
-			if err := dt.WriteRTP(pkt); err == io.EOF {
+			if err := dt.WriteRTP(pkt); err == io.EOF || err == io.ErrClosedPipe {
 				del = append(del, idx)
 			}
 		}

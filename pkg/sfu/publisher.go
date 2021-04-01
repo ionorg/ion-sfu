@@ -1,8 +1,14 @@
 package sfu
 
 import (
+	"io"
 	"sync"
 	"sync/atomic"
+	"time"
+
+	"github.com/pion/rtcp"
+
+	"github.com/pion/ion-sfu/pkg/relay"
 
 	"github.com/pion/webrtc/v3"
 )
@@ -13,6 +19,7 @@ type Publisher struct {
 
 	router     Router
 	session    *Session
+	relayPeer  *relay.RelayPeer
 	candidates []webrtc.ICECandidateInit
 
 	onICEConnectionStateChangeHandler atomic.Value // func(webrtc.ICEConnectionState)
@@ -43,6 +50,7 @@ func NewPublisher(session *Session, id string, relay bool, cfg WebRTCTransportCo
 		session: session,
 	}
 
+	var relayReports sync.Once
 	pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 		Logger.V(1).Info("Peer got remote track id",
 			"peer_id", p.id,
@@ -70,10 +78,25 @@ func NewPublisher(session *Session, id string, relay bool, cfg WebRTCTransportCo
 				Logger.V(1).Error(err, "Create relay downtrack err", "peer_id", id)
 				return
 			}
-			if err := cfg.relay.Send(session.id, id, receiver, downTrack); err != nil {
+			rr, sdr, err := cfg.relay.Send(session.id, id, receiver, downTrack)
+			if err != nil {
 				Logger.V(1).Error(err, "Relay err", "peer_id", id)
 				return
 			}
+
+			if p.relayPeer == nil {
+				relayReports.Do(func() {
+					p.relayPeer = rr
+					go p.relayReports()
+				})
+			}
+
+			downTrack.OnCloseHandler(func() {
+				if err := sdr.Stop(); err != nil {
+					Logger.V(1).Error(err, "Relay sender close err", "peer_id", id)
+				}
+			})
+
 			r.AddDownTrack(downTrack, true)
 		}
 
@@ -167,4 +190,40 @@ func (p *Publisher) AddICECandidate(candidate webrtc.ICECandidateInit) error {
 	}
 	p.candidates = append(p.candidates, candidate)
 	return nil
+}
+
+func (p *Publisher) relayReports() {
+	for {
+		time.Sleep(5 * time.Second)
+
+		var r []rtcp.Packet
+		var sd []rtcp.SourceDescriptionChunk
+		for _, t := range p.relayPeer.LocalTracks() {
+			if dt, ok := t.(*DownTrack); ok {
+				if !dt.bound.get() {
+					continue
+				}
+				r = append(r, dt.CreateSenderReport())
+				// sd = append(sd, dt.CreateSourceDescriptionChunks()...)
+			}
+		}
+		i := 0
+		j := 0
+		for i < len(sd) {
+			i = (j + 1) * 15
+			if i >= len(sd) {
+				i = len(sd)
+			}
+			nsd := sd[j*15 : i]
+			r = append(r, &rtcp.SourceDescription{Chunks: nsd})
+			j++
+			if err := p.relayPeer.WriteRTCP(r); err != nil {
+				if err == io.EOF || err == io.ErrClosedPipe {
+					return
+				}
+				Logger.Error(err, "Sending downtrack reports err")
+			}
+			r = r[:0]
+		}
+	}
 }
