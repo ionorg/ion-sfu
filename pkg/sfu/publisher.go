@@ -19,7 +19,7 @@ type Publisher struct {
 
 	router     Router
 	session    *Session
-	relayPeer  *relay.RelayPeer
+	relayPeer  *relay.Peer
 	candidates []webrtc.ICECandidateInit
 
 	onICEConnectionStateChangeHandler atomic.Value // func(webrtc.ICEConnectionState)
