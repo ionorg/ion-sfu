@@ -10,8 +10,9 @@ const maxPktSize = 1350
 type Bucket struct {
 	buf []byte
 
-	headSN   uint16
+	init     bool
 	step     int
+	headSN   uint16
 	maxSteps int
 }
 
@@ -23,6 +24,10 @@ func NewBucket(buf []byte) *Bucket {
 }
 
 func (b *Bucket) AddPacket(pkt []byte, sn uint16, latest bool) ([]byte, error) {
+	if !b.init {
+		b.headSN = sn - 1
+		b.init = true
+	}
 	if !latest {
 		return b.set(sn, pkt)
 	}

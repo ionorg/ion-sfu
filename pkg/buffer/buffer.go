@@ -275,7 +275,6 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	if b.stats.PacketCount == 0 {
 		b.baseSN = sn
 		b.maxSeqNo = sn
-		b.bucket.headSN = sn - 1
 		b.lastReport = arrivalTime
 	} else if (sn-b.maxSeqNo)&0x8000 == 0 {
 		if sn < b.maxSeqNo {

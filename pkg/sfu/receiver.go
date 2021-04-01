@@ -340,8 +340,8 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 			}
 		}
 		if len(del) > 0 {
-			for _, idx := range del {
-				w.downTracks[layer][idx] = w.downTracks[layer][len(w.downTracks[layer])-1]
+			for i := len(del) - 1; i >= 0; i-- {
+				w.downTracks[layer][del[i]] = w.downTracks[layer][len(w.downTracks[layer])-1]
 				w.downTracks[layer][len(w.downTracks[layer])-1] = nil
 				w.downTracks[layer] = w.downTracks[layer][:len(w.downTracks[layer])-1]
 			}
