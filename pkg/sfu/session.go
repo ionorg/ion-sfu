@@ -243,3 +243,7 @@ func (s *Session) audioLevelObserver(audioLevelInterval int) {
 func (s *Session) ID() string {
 	return s.id
 }
+
+func (s *Session) IsClosed() bool {
+	return s.closed.get()
+}
