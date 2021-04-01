@@ -197,33 +197,24 @@ func (p *Publisher) relayReports() {
 		time.Sleep(5 * time.Second)
 
 		var r []rtcp.Packet
-		var sd []rtcp.SourceDescriptionChunk
 		for _, t := range p.relayPeer.LocalTracks() {
 			if dt, ok := t.(*DownTrack); ok {
 				if !dt.bound.get() {
 					continue
 				}
 				r = append(r, dt.CreateSenderReport())
-				// sd = append(sd, dt.CreateSourceDescriptionChunks()...)
 			}
 		}
-		i := 0
-		j := 0
-		for i < len(sd) {
-			i = (j + 1) * 15
-			if i >= len(sd) {
-				i = len(sd)
+
+		if len(r) == 0 {
+			continue
+		}
+
+		if err := p.relayPeer.WriteRTCP(r); err != nil {
+			if err == io.EOF || err == io.ErrClosedPipe {
+				return
 			}
-			nsd := sd[j*15 : i]
-			r = append(r, &rtcp.SourceDescription{Chunks: nsd})
-			j++
-			if err := p.relayPeer.WriteRTCP(r); err != nil {
-				if err == io.EOF || err == io.ErrClosedPipe {
-					return
-				}
-				Logger.Error(err, "Sending downtrack reports err")
-			}
-			r = r[:0]
+			Logger.Error(err, "Sending downtrack reports err")
 		}
 	}
 }
