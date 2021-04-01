@@ -17,7 +17,7 @@ type Provider struct {
 	mu            sync.RWMutex
 	se            webrtc.SettingEngine
 	log           logr.Logger
-	peers         map[string]*RelayPeer
+	peers         map[string]*Peer
 	signal        func(meta SignalMeta, signal []byte) ([]byte, error)
 	onRemote      func(meta SignalMeta, receiver *webrtc.RTPReceiver)
 	iceServers    []webrtc.ICEServer
@@ -40,7 +40,7 @@ type SignalMeta struct {
 	SessionID string `json:"sessionId"`
 }
 
-type RelayPeer struct {
+type Peer struct {
 	me           *webrtc.MediaEngine
 	id           string
 	pid          string
@@ -58,7 +58,7 @@ type RelayPeer struct {
 func New(iceServers []webrtc.ICEServer, logger logr.Logger) *Provider {
 	return &Provider{
 		log:        logger,
-		peers:      make(map[string]*RelayPeer),
+		peers:      make(map[string]*Peer),
 		iceServers: iceServers,
 	}
 }
@@ -81,7 +81,7 @@ func (p *Provider) OnDatachannel(fn func(meta SignalMeta, dc *webrtc.DataChannel
 }
 
 func (p *Provider) AddDataChannels(sessionID, peerID string, labels []string) error {
-	var r *RelayPeer
+	var r *Peer
 	var err error
 	p.mu.RLock()
 	r = p.peers[peerID]
@@ -100,7 +100,7 @@ func (p *Provider) AddDataChannels(sessionID, peerID string, labels []string) er
 	return nil
 }
 
-func (p *Provider) Send(sessionID, peerID string, receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) (*RelayPeer, *webrtc.RTPSender, error) {
+func (p *Provider) Send(sessionID, peerID string, receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) (*Peer, *webrtc.RTPSender, error) {
 	p.mu.RLock()
 	if r, ok := p.peers[peerID]; ok {
 		p.mu.RUnlock()
@@ -139,7 +139,7 @@ func (p *Provider) Receive(remoteSignal []byte) ([]byte, error) {
 	return r.receive(s)
 }
 
-func (p *Provider) newRelay(sessionID, peerID string) (*RelayPeer, error) {
+func (p *Provider) newRelay(sessionID, peerID string) (*Peer, error) {
 	// Prepare ICE gathering options
 	iceOptions := webrtc.ICEGatherOptions{
 		ICEServers: p.iceServers,
@@ -161,7 +161,7 @@ func (p *Provider) newRelay(sessionID, peerID string) (*RelayPeer, error) {
 	if err != nil {
 		return nil, err
 	}
-	r := &RelayPeer{
+	r := &Peer{
 		me:       &me,
 		pid:      peerID,
 		sid:      sessionID,
@@ -208,16 +208,16 @@ func (p *Provider) newRelay(sessionID, peerID string) (*RelayPeer, error) {
 	return r, nil
 }
 
-func (r *RelayPeer) WriteRTCP(pkts []rtcp.Packet) error {
+func (r *Peer) WriteRTCP(pkts []rtcp.Packet) error {
 	_, err := r.dtls.WriteRTCP(pkts)
 	return err
 }
 
-func (r *RelayPeer) LocalTracks() []webrtc.TrackLocal {
+func (r *Peer) LocalTracks() []webrtc.TrackLocal {
 	return r.localTracks
 }
 
-func (r *RelayPeer) startDataChannels() error {
+func (r *Peer) startDataChannels() error {
 	if len(r.datachannels) == 0 {
 		return nil
 	}
@@ -242,7 +242,7 @@ func (r *RelayPeer) startDataChannels() error {
 	return nil
 }
 
-func (r *RelayPeer) receive(s Signal) ([]byte, error) {
+func (r *Peer) receive(s Signal) ([]byte, error) {
 	if r.gatherer.State() == webrtc.ICEGathererStateNew {
 		r.id = s.Metadata.StreamID
 		gatherFinished := make(chan struct{})
@@ -375,7 +375,7 @@ func (r *RelayPeer) receive(s Signal) ([]byte, error) {
 	return b, nil
 }
 
-func (r *RelayPeer) send(receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) (*webrtc.RTPSender, error) {
+func (r *Peer) send(receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) (*webrtc.RTPSender, error) {
 	if r.gatherer.State() == webrtc.ICEGathererStateNew {
 		gatherFinished := make(chan struct{})
 		r.gatherer.OnLocalCandidate(func(i *webrtc.ICECandidate) {
