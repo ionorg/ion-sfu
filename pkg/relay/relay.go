@@ -19,7 +19,7 @@ type Provider struct {
 	log           logr.Logger
 	peers         map[string]*Peer
 	signal        func(meta SignalMeta, signal []byte) ([]byte, error)
-	onRemote      func(meta SignalMeta, receiver *webrtc.RTPReceiver)
+	onRemote      func(meta SignalMeta, receiver *webrtc.RTPReceiver, codec *webrtc.RTPCodecParameters)
 	iceServers    []webrtc.ICEServer
 	onDatachannel func(meta SignalMeta, dc *webrtc.DataChannel)
 }
@@ -72,7 +72,7 @@ func (p *Provider) SetSignaler(signaler func(meta SignalMeta, signal []byte) ([]
 	p.signal = signaler
 }
 
-func (p *Provider) OnRemoteStream(fn func(meta SignalMeta, receiver *webrtc.RTPReceiver)) {
+func (p *Provider) OnRemoteStream(fn func(meta SignalMeta, receiver *webrtc.RTPReceiver, codec *webrtc.RTPCodecParameters)) {
 	p.onRemote = fn
 }
 
@@ -342,7 +342,7 @@ func (r *Peer) receive(s Signal) ([]byte, error) {
 					PeerID:    s.Metadata.PeerID,
 					StreamID:  s.Metadata.StreamID,
 					SessionID: s.Metadata.SessionID,
-				}, recv)
+				}, recv, s.CodecParameters)
 			}
 		}()
 	} else {
@@ -363,7 +363,7 @@ func (r *Peer) receive(s Signal) ([]byte, error) {
 				PeerID:    s.Metadata.PeerID,
 				StreamID:  s.Metadata.StreamID,
 				SessionID: s.Metadata.SessionID,
-			}, recv)
+			}, recv, s.CodecParameters)
 		}
 	}
 
