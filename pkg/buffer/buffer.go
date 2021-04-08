@@ -232,14 +232,14 @@ func (b *Buffer) Read(buff []byte) (n int, err error) {
 	}
 }
 
-func (b *Buffer) ReadExtended() (ExtPacket, error) {
+func (b *Buffer) ReadExtended() (*ExtPacket, error) {
 	for {
 		if b.closed.get() {
-			return ExtPacket{}, io.EOF
+			return nil, io.EOF
 		}
 		b.Lock()
 		if b.extPackets.Len() > 0 {
-			extPkt := b.extPackets.PopFront().(ExtPacket)
+			extPkt := b.extPackets.PopFront().(*ExtPacket)
 			b.Unlock()
 			return extPkt, nil
 		}
@@ -356,7 +356,7 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 		b.minPacketProbe++
 	}
 
-	b.extPackets.PushBack(ep)
+	b.extPackets.PushBack(&ep)
 
 	// if first time update or the timestamp is later (factoring timestamp wrap around)
 	if (b.latestTimestampTime == 0) || IsLaterTimestamp(p.Timestamp, b.latestTimestamp) {
