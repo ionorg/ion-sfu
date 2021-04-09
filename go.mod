@@ -7,6 +7,7 @@ require (
 	github.com/desertbit/timer v0.0.0-20180107155436-c41aec40b27f // indirect
 	github.com/gammazero/deque v0.0.0-20201010052221-3932da5530cc
 	github.com/gammazero/workerpool v1.1.1
+	github.com/go-logr/logr v0.4.0
 	github.com/google/uuid v1.2.0 // indirect
 	github.com/gorilla/websocket v1.4.2
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
@@ -25,6 +26,7 @@ require (
 	github.com/pion/webrtc/v3 v3.0.12-0.20210217183307-8dced5b577e4 // go get -u github.com/pion/webrtc/v3@robin-20210119-seqnum
 	github.com/prometheus/client_golang v1.9.0
 	github.com/rs/cors v1.7.0 // indirect
+	github.com/rs/zerolog v1.20.0
 	github.com/soheilhy/cmux v0.1.4
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20200429184054-15c2290dcb37
 	github.com/spf13/viper v1.7.1

@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/gammazero/deque"
 	"github.com/pion/rtcp"
@@ -54,10 +53,9 @@ type Responder struct {
 
 func NewTransportWideCCResponder(ssrc uint32) *Responder {
 	return &Responder{
-		extInfo:    make([]rtpExtInfo, 0, 101),
-		sSSRC:      rand.Uint32(),
-		mSSRC:      ssrc,
-		lastReport: time.Now().Add(100 * time.Millisecond).UnixNano(),
+		extInfo: make([]rtpExtInfo, 0, 101),
+		sSSRC:   rand.Uint32(),
+		mSSRC:   ssrc,
 	}
 }
 
@@ -73,6 +71,9 @@ func (t *Responder) Push(sn uint16, timeNS int64, marker bool) {
 		ExtTSN:    t.cycles | uint32(sn),
 		Timestamp: timeNS / 1e3,
 	})
+	if t.lastReport == 0 {
+		t.lastReport = timeNS
+	}
 	t.lastSn = sn
 	delta := timeNS - t.lastReport
 	if len(t.extInfo) > 20 && t.mSSRC != 0 &&

@@ -15,29 +15,17 @@ type nack struct {
 }
 
 type nackQueue struct {
-	nacks   []nack
-	counter uint8
-	maxSN   uint16
-	kfSN    uint32
-	cycles  uint32
+	nacks []nack
+	kfSN  uint32
 }
 
 func newNACKQueue() *nackQueue {
 	return &nackQueue{
-		nacks:  make([]nack, 0, maxNackCache+1),
-		maxSN:  0,
-		cycles: 0,
+		nacks: make([]nack, 0, maxNackCache+1),
 	}
 }
 
-func (n *nackQueue) remove(sn uint16) {
-	var extSN uint32
-	if sn > n.maxSN && sn&0x8000 == 1 && n.maxSN&0x8000 == 0 {
-		extSN = (n.cycles - maxSN) | uint32(sn)
-	} else {
-		extSN = n.cycles | uint32(sn)
-	}
-
+func (n *nackQueue) remove(extSN uint32) {
 	i := sort.Search(len(n.nacks), func(i int) bool { return n.nacks[i].sn >= extSN })
 	if i >= len(n.nacks) || n.nacks[i].sn != extSN {
 		return
@@ -46,23 +34,7 @@ func (n *nackQueue) remove(sn uint16) {
 	n.nacks = n.nacks[:len(n.nacks)-1]
 }
 
-func (n *nackQueue) push(sn uint16) {
-	var extSN uint32
-	if n.maxSN == 0 {
-		n.maxSN = sn
-	} else if (sn-n.maxSN)&0x8000 == 0 {
-		if sn < n.maxSN {
-			n.cycles += maxSN
-		}
-		n.maxSN = sn
-	}
-
-	if sn > n.maxSN && sn&0x8000 == 1 && n.maxSN&0x8000 == 0 {
-		extSN = (n.cycles - maxSN) | uint32(sn)
-	} else {
-		extSN = n.cycles | uint32(sn)
-	}
-
+func (n *nackQueue) push(extSN uint32) {
 	i := sort.Search(len(n.nacks), func(i int) bool { return n.nacks[i].sn >= extSN })
 	if i < len(n.nacks) && n.nacks[i].sn == extSN {
 		return
@@ -77,15 +49,12 @@ func (n *nackQueue) push(sn uint16) {
 	if len(n.nacks) > maxNackCache {
 		n.nacks = n.nacks[1:]
 	}
-	n.counter++
 }
 
-func (n *nackQueue) pairs() ([]rtcp.NackPair, bool) {
-	if n.counter < 2 {
-		n.counter++
+func (n *nackQueue) pairs(headSN uint32) ([]rtcp.NackPair, bool) {
+	if len(n.nacks) == 0 {
 		return nil, false
 	}
-	n.counter = 0
 	i := 0
 	askKF := false
 	var np rtcp.NackPair
@@ -96,6 +65,11 @@ func (n *nackQueue) pairs() ([]rtcp.NackPair, bool) {
 				n.kfSN = nck.sn
 				askKF = true
 			}
+			continue
+		}
+		if nck.sn >= headSN-2 {
+			n.nacks[i] = nck
+			i++
 			continue
 		}
 		n.nacks[i] = nack{

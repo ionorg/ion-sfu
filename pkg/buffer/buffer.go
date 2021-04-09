@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/gammazero/deque"
+	"github.com/go-logr/logr"
 	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
@@ -20,6 +22,9 @@ const (
 
 	reportDelta = 1e9
 )
+
+// Logger is an implementation of logr.Logger. If is not provided - will be turned off.
+var Logger logr.Logger = new(logr.DiscardLogger)
 
 type pendingPackets struct {
 	arrivalTime int64
@@ -39,10 +44,11 @@ type ExtPacket struct {
 type Buffer struct {
 	sync.Mutex
 	bucket     *Bucket
-	codecType  webrtc.RTPCodecType
+	nacker     *nackQueue
 	videoPool  *sync.Pool
 	audioPool  *sync.Pool
-	packetChan chan ExtPacket
+	codecType  webrtc.RTPCodecType
+	extPackets deque.Deque
 	pPackets   []pendingPackets
 	closeOnce  sync.Once
 	mediaSSRC  uint32
@@ -86,6 +92,9 @@ type Buffer struct {
 	onAudioLevel func(level uint8)
 	feedbackCB   func([]rtcp.Packet)
 	feedbackTWCC func(sn uint16, timeNS int64, marker bool)
+
+	// logger
+	logger logr.Logger
 }
 
 type Stats struct {
@@ -99,28 +108,25 @@ type Stats struct {
 
 // BufferOptions provides configuration options for the buffer
 type Options struct {
-	BufferTime int
 	MaxBitRate uint64
 }
 
 // NewBuffer constructs a new Buffer
-func NewBuffer(ssrc uint32, vp, ap *sync.Pool) *Buffer {
+func NewBuffer(ssrc uint32, vp, ap *sync.Pool, logger logr.Logger) *Buffer {
 	b := &Buffer{
-		mediaSSRC:  ssrc,
-		videoPool:  vp,
-		audioPool:  ap,
-		packetChan: make(chan ExtPacket, 100),
+		mediaSSRC: ssrc,
+		videoPool: vp,
+		audioPool: ap,
+		logger:    logger,
 	}
+	b.extPackets.SetMinCapacity(7)
 	return b
-}
-
-func (b *Buffer) PacketChan() chan ExtPacket {
-	return b.packetChan
 }
 
 func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 	b.Lock()
 	defer b.Unlock()
+
 	codec := params.Codecs[0]
 	b.clockRate = codec.ClockRate
 	b.maxBitrate = o.MaxBitRate
@@ -129,10 +135,10 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 	switch {
 	case strings.HasPrefix(b.mime, "audio/"):
 		b.codecType = webrtc.RTPCodecTypeAudio
-		b.bucket = NewBucket(b.audioPool.Get().([]byte), false)
+		b.bucket = NewBucket(b.audioPool.Get().([]byte))
 	case strings.HasPrefix(b.mime, "video/"):
 		b.codecType = webrtc.RTPCodecTypeVideo
-		b.bucket = NewBucket(b.videoPool.Get().([]byte), true)
+		b.bucket = NewBucket(b.videoPool.Get().([]byte))
 	default:
 		b.codecType = webrtc.RTPCodecType(0)
 	}
@@ -148,13 +154,14 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 		for _, fb := range codec.RTCPFeedback {
 			switch fb.Type {
 			case webrtc.TypeRTCPFBGoogREMB:
-				log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBGoogREMB)
+				b.logger.V(1).Info("Setting feedback", "type", "webrtc.TypeRTCPFBGoogREMB")
 				b.remb = true
 			case webrtc.TypeRTCPFBTransportCC:
-				log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBTransportCC)
+				b.logger.V(1).Info("Setting feedback", "type", webrtc.TypeRTCPFBTransportCC)
 				b.twcc = true
 			case webrtc.TypeRTCPFBNACK:
-				log.Debugf("Setting feedback %s", webrtc.TypeRTCPFBNACK)
+				b.logger.V(1).Info("Setting feedback", "type", webrtc.TypeRTCPFBNACK)
+				b.nacker = newNACKQueue()
 				b.nack = true
 			}
 		}
@@ -167,28 +174,13 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 		}
 	}
 
-	b.bucket.onLost = func(nacks []rtcp.NackPair, askKeyframe bool) {
-		pkts := []rtcp.Packet{&rtcp.TransportLayerNack{
-			MediaSSRC: b.mediaSSRC,
-			Nacks:     nacks,
-		}}
-
-		if askKeyframe {
-			pkts = append(pkts, &rtcp.PictureLossIndication{
-				MediaSSRC: b.mediaSSRC,
-			})
-		}
-
-		b.feedbackCB(pkts)
-	}
-
 	for _, pp := range b.pPackets {
 		b.calc(pp.packet, pp.arrivalTime)
 	}
 	b.pPackets = nil
 	b.bound = true
 
-	log.Debugf("NewBuffer BufferOptions=%v", o)
+	b.logger.V(1).Info("NewBuffer", "MaxBitRate", o.MaxBitRate)
 }
 
 // Write adds a RTP Packet, out of order, new packet may be arrived later
@@ -222,7 +214,6 @@ func (b *Buffer) Read(buff []byte) (n int, err error) {
 			err = io.EOF
 			return
 		}
-
 		b.Lock()
 		if b.pPackets != nil && len(b.pPackets) > b.lastPacketRead {
 			if len(buff) < len(b.pPackets[b.lastPacketRead].packet) {
@@ -241,20 +232,35 @@ func (b *Buffer) Read(buff []byte) (n int, err error) {
 	}
 }
 
+func (b *Buffer) ReadExtended() (ExtPacket, error) {
+	for {
+		if b.closed.get() {
+			return ExtPacket{}, io.EOF
+		}
+		b.Lock()
+		if b.extPackets.Len() > 0 {
+			extPkt := b.extPackets.PopFront().(ExtPacket)
+			b.Unlock()
+			return extPkt, nil
+		}
+		b.Unlock()
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func (b *Buffer) Close() error {
 	b.Lock()
 	defer b.Unlock()
 
 	b.closeOnce.Do(func() {
-		b.closed.set(true)
 		if b.bucket != nil && b.codecType == webrtc.RTPCodecTypeVideo {
 			b.videoPool.Put(b.bucket.buf)
 		}
 		if b.bucket != nil && b.codecType == webrtc.RTPCodecTypeAudio {
 			b.audioPool.Put(b.bucket.buf)
 		}
+		b.closed.set(true)
 		b.onClose()
-		close(b.packetChan)
 	})
 	return nil
 }
@@ -275,17 +281,46 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 		if sn < b.maxSeqNo {
 			b.cycles += maxSN
 		}
+		if b.nack {
+			diff := sn - b.maxSeqNo
+			for i := uint16(1); i < diff; i++ {
+				var extSN uint32
+				msn := sn - i
+				if msn > b.maxSeqNo && msn&0x8000 > 0 && b.maxSeqNo&0x8000 == 0 {
+					extSN = (b.cycles - maxSN) | uint32(msn)
+				} else {
+					extSN = b.cycles | uint32(msn)
+				}
+				b.nacker.push(extSN)
+			}
+		}
 		b.maxSeqNo = sn
+	} else if b.nack && (sn-b.maxSeqNo)&0x8000 > 0 {
+		var extSN uint32
+		if sn > b.maxSeqNo && sn&0x8000 > 0 && b.maxSeqNo&0x8000 == 0 {
+			extSN = (b.cycles - maxSN) | uint32(sn)
+		} else {
+			extSN = b.cycles | uint32(sn)
+		}
+		b.nacker.remove(extSN)
+	}
+
+	var p rtp.Packet
+	pb, err := b.bucket.AddPacket(pkt, sn, sn == b.maxSeqNo)
+	if err != nil {
+		if err == errRTXPacket {
+			return
+		}
+		log.Errorf("buffer write err: %v", err)
+		return
+	}
+	if err = p.Unmarshal(pb); err != nil {
+		return
 	}
 
 	b.stats.TotalByte += uint64(len(pkt))
 	b.bitrateHelper += uint64(len(pkt))
 	b.stats.PacketCount++
-
-	var p rtp.Packet
-	if err := p.Unmarshal(b.bucket.addPacket(pkt, sn, sn == b.maxSeqNo)); err != nil {
-		return
-	}
 
 	ep := ExtPacket{
 		Head:    sn == b.maxSeqNo,
@@ -322,7 +357,7 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 		b.minPacketProbe++
 	}
 
-	b.packetChan <- ep
+	b.extPackets.PushBack(ep)
 
 	// if first time update or the timestamp is later (factoring timestamp wrap around)
 	if (b.latestTimestampTime == 0) || IsLaterTimestamp(p.Timestamp, b.latestTimestamp) {
@@ -357,6 +392,13 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	}
 
 	diff := arrivalTime - b.lastReport
+
+	if b.nacker != nil {
+		if r := b.buildNACKPacket(); r != nil {
+			b.feedbackCB(r)
+		}
+	}
+
 	if diff >= reportDelta {
 		br := (8 * b.bitrateHelper * uint64(reportDelta)) / uint64(diff)
 		atomic.StoreUint64(&b.bitrate, br)
@@ -364,6 +406,26 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 		b.lastReport = arrivalTime
 		b.bitrateHelper = 0
 	}
+}
+
+func (b *Buffer) buildNACKPacket() []rtcp.Packet {
+	if nacks, askKeyframe := b.nacker.pairs(b.cycles | uint32(b.maxSeqNo)); (nacks != nil && len(nacks) > 0) || askKeyframe {
+		var pkts []rtcp.Packet
+		if len(nacks) > 0 {
+			pkts = []rtcp.Packet{&rtcp.TransportLayerNack{
+				MediaSSRC: b.mediaSSRC,
+				Nacks:     nacks,
+			}}
+		}
+
+		if askKeyframe {
+			pkts = append(pkts, &rtcp.PictureLossIndication{
+				MediaSSRC: b.mediaSSRC,
+			})
+		}
+		return pkts
+	}
+	return nil
 }
 
 func (b *Buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
@@ -456,7 +518,7 @@ func (b *Buffer) GetPacket(buff []byte, sn uint16) (int, error) {
 	if b.closed.get() {
 		return 0, io.EOF
 	}
-	return b.bucket.getPacket(buff, sn)
+	return b.bucket.GetPacket(buff, sn)
 }
 
 // Bitrate returns the current publisher stream bitrate.

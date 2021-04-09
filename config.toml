@@ -10,8 +10,8 @@ withstats = false
 # Limit the remb bandwidth in kbps
 # zero means no limits
 maxbandwidth = 1500
-# max buffer time by ms for video tracks
-maxbuffertime = 1000
+# max number of video tracks packets the SFU will keep track
+maxpackettrack = 500
 # Sets the audio level volume threshold.
 # Values from [0-127] where 0 is the loudest.
 # Audio levels are read from rtp extension header according to:
@@ -76,6 +76,10 @@ address = "0.0.0.0:3478"
 # Certs path to config tls/dtls
 # cert="path/to/cert.pem"
 # key="path/to/key.pem"
+# Port range that turn relays to SFU
+# WARNING: It shouldn't overlap webrtc.portrange
+# Format: [min, max]
+# portrange = [5201, 5400]
 [turn.auth]
 # Use an auth secret to generate long-term credentials defined in RFC5389-10.2
 # NOTE: This takes precedence over `credentials` if defined.
@@ -84,4 +88,5 @@ address = "0.0.0.0:3478"
 credentials = "pion=ion,pion2=ion2"
 
 [log]
-level = "trace"
+# 0 - INFO 1 - DEBUG 2 - TRACE
+v = 1

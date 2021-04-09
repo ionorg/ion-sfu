@@ -2,17 +2,21 @@ package sfu
 
 import (
 	"math/rand"
+	"os"
 	"runtime"
 	"sync"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/pion/ice/v2"
-	log "github.com/pion/ion-log"
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/ion-sfu/pkg/stats"
 	"github.com/pion/turn/v2"
 	"github.com/pion/webrtc/v3"
 )
+
+// Logger is an implementation of logr.Logger. If is not provided - will be turned off.
+var Logger logr.Logger = new(logr.DiscardLogger)
 
 // ICEServerConfig defines parameters for ice servers
 type ICEServerConfig struct {
@@ -48,34 +52,35 @@ type Config struct {
 		Ballast   int64 `mapstructure:"ballast"`
 		WithStats bool  `mapstructure:"withstats"`
 	} `mapstructure:"sfu"`
-	WebRTC WebRTCConfig `mapstructure:"webrtc"`
-	Log    log.Config   `mapstructure:"log"`
-	Router RouterConfig `mapstructure:"router"`
-	Turn   TurnConfig   `mapstructure:"turn"`
+	WebRTC        WebRTCConfig `mapstructure:"webrtc"`
+	Router        RouterConfig `mapstructure:"router"`
+	Turn          TurnConfig   `mapstructure:"turn"`
+	BufferFactory *buffer.Factory
 }
 
 var (
-	bufferFactory *buffer.Factory
 	packetFactory *sync.Pool
 )
 
 // SFU represents an sfu instance
 type SFU struct {
 	sync.RWMutex
-	webrtc       WebRTCTransportConfig
-	turn         *turn.Server
-	sessions     map[string]*Session
-	datachannels []*Datachannel
-	withStats    bool
+	webrtc        WebRTCTransportConfig
+	turn          *turn.Server
+	sessions      map[string]*Session
+	datachannels  []*Datachannel
+	bufferFactory *buffer.Factory
+	withStats     bool
 }
 
 // NewWebRTCTransportConfig parses our settings and returns a usable WebRTCTransportConfig for creating PeerConnections
 func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 	se := webrtc.SettingEngine{}
+	se.DisableMediaEngineCopy(true)
 
 	var icePortStart, icePortEnd uint16
 
-	if c.Turn.Enabled {
+	if c.Turn.Enabled && len(c.Turn.PortRange) == 0 {
 		icePortStart = sfuMinPort
 		icePortEnd = sfuMaxPort
 	} else if len(c.WebRTC.ICEPortRange) == 2 {
@@ -103,7 +108,7 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 		}
 	}
 
-	se.BufferFactory = bufferFactory.GetOrNew
+	se.BufferFactory = c.BufferFactory.GetOrNew
 
 	sdpSemantics := webrtc.SDPSemanticsUnifiedPlan
 	switch c.WebRTC.SDPSemantics {
@@ -139,8 +144,6 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 }
 
 func init() {
-	// Init buffer factory
-	bufferFactory = buffer.NewBufferFactory()
 	// Init packet factory
 	packetFactory = &sync.Pool{
 		New: func() interface{} {
@@ -151,23 +154,30 @@ func init() {
 
 // NewSFU creates a new sfu instance
 func NewSFU(c Config) *SFU {
+
 	// Init random seed
 	rand.Seed(time.Now().UnixNano())
 	// Init ballast
 	ballast := make([]byte, c.SFU.Ballast*1024*1024)
 
+	if c.BufferFactory == nil {
+		c.BufferFactory = buffer.NewBufferFactory(c.Router.MaxPacketTrack, Logger)
+	}
+
 	w := NewWebRTCTransportConfig(c)
 
 	sfu := &SFU{
-		webrtc:    w,
-		sessions:  make(map[string]*Session),
-		withStats: c.Router.WithStats,
+		webrtc:        w,
+		sessions:      make(map[string]*Session),
+		withStats:     c.Router.WithStats,
+		bufferFactory: c.BufferFactory,
 	}
 
 	if c.Turn.Enabled {
 		ts, err := InitTurnServer(c.Turn, nil)
 		if err != nil {
-			log.Panicf("Could not init turn server err: %v", err)
+			Logger.Error(err, "Could not init turn server err")
+			os.Exit(1)
 		}
 		sfu.turn = ts
 	}
@@ -178,7 +188,7 @@ func NewSFU(c Config) *SFU {
 
 // NewSession creates a new session instance
 func (s *SFU) newSession(id string) *Session {
-	session := NewSession(id, s.datachannels, s.webrtc)
+	session := NewSession(id, s.bufferFactory, s.datachannels, s.webrtc)
 
 	session.OnClose(func() {
 		s.Lock()
@@ -220,4 +230,11 @@ func (s *SFU) NewDatachannel(label string) *Datachannel {
 	dc := &Datachannel{Label: label}
 	s.datachannels = append(s.datachannels, dc)
 	return dc
+}
+
+// GetSessions return all sessions
+func (s *SFU) GetSessions() map[string]*Session {
+	s.RLock()
+	defer s.RUnlock()
+	return s.sessions
 }

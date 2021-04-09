@@ -4,7 +4,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	log "github.com/pion/ion-log"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -25,7 +24,7 @@ type Publisher struct {
 func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publisher, error) {
 	me, err := getPublisherMediaEngine()
 	if err != nil {
-		log.Errorf("NewPeer error: %v", err)
+		Logger.Error(err, "NewPeer error", "peer_id", id)
 		return nil, errPeerConnectionInitFailed
 	}
 
@@ -33,19 +32,26 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 	pc, err := api.NewPeerConnection(cfg.configuration)
 
 	if err != nil {
-		log.Errorf("NewPeer error: %v", err)
+		Logger.Error(err, "NewPeer error", "peer_id", id)
 		return nil, errPeerConnectionInitFailed
 	}
 
 	p := &Publisher{
 		id:      id,
 		pc:      pc,
+		router:  newRouter(id, pc, session, cfg.router),
 		session: session,
-		router:  newRouter(pc, id, session, cfg.router),
 	}
 
 	pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-		log.Debugf("Peer %s got remote track id: %s mediaSSRC: %d rid :%s streamID: %s", p.id, track.ID(), track.SSRC(), track.RID(), track.StreamID())
+		Logger.V(1).Info("Peer got remote track id",
+			"peer_id", p.id,
+			"track_id", track.ID(),
+			"mediaSSRC", track.SSRC(),
+			"rid", track.RID(),
+			"stream_id", track.StreamID(),
+		)
+
 		if r, pub := p.router.AddReceiver(receiver, track); pub {
 			p.session.Publish(p.router, r)
 		}
@@ -60,12 +66,12 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 	})
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
-		log.Debugf("ice connection state: %s", connectionState)
+		Logger.V(1).Info("ice connection status", "state", connectionState)
 		switch connectionState {
 		case webrtc.ICEConnectionStateFailed:
 			fallthrough
 		case webrtc.ICEConnectionStateClosed:
-			log.Debugf("webrtc ice closed for peer: %s", p.id)
+			Logger.V(1).Info("webrtc ice closed", "peer_id", p.id)
 			p.Close()
 		}
 
@@ -84,7 +90,7 @@ func (p *Publisher) Answer(offer webrtc.SessionDescription) (webrtc.SessionDescr
 
 	for _, c := range p.candidates {
 		if err := p.pc.AddICECandidate(c); err != nil {
-			log.Errorf("Add publisher ice candidate to peer %s err: %v", p.id, err)
+			Logger.Error(err, "Add publisher ice candidate to peer err", "peer_id", p.id)
 		}
 	}
 	p.candidates = nil
@@ -109,7 +115,7 @@ func (p *Publisher) Close() {
 	p.closeOnce.Do(func() {
 		p.router.Stop()
 		if err := p.pc.Close(); err != nil {
-			log.Errorf("webrtc transport close err: %v", err)
+			Logger.Error(err, "webrtc transport close err")
 		}
 	})
 }

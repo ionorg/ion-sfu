@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/bep/debounce"
-	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 )
@@ -34,14 +33,14 @@ type Subscriber struct {
 func NewSubscriber(id string, cfg WebRTCTransportConfig) (*Subscriber, error) {
 	me, err := getSubscriberMediaEngine()
 	if err != nil {
-		log.Errorf("NewPeer error: %v", err)
+		Logger.Error(err, "NewPeer error")
 		return nil, errPeerConnectionInitFailed
 	}
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me), webrtc.WithSettingEngine(cfg.setting))
 	pc, err := api.NewPeerConnection(cfg.configuration)
 
 	if err != nil {
-		log.Errorf("NewPeer error: %v", err)
+		Logger.Error(err, "NewPeer error")
 		return nil, errPeerConnectionInitFailed
 	}
 
@@ -54,15 +53,15 @@ func NewSubscriber(id string, cfg WebRTCTransportConfig) (*Subscriber, error) {
 	}
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
-		log.Debugf("ice connection state: %s", connectionState)
+		Logger.V(1).Info("ice connection status", "state", connectionState)
 		switch connectionState {
 		case webrtc.ICEConnectionStateFailed:
 			fallthrough
 		case webrtc.ICEConnectionStateClosed:
 			s.closeOnce.Do(func() {
-				log.Debugf("webrtc ice closed for peer: %s", s.id)
+				Logger.V(1).Info("webrtc ice closed", "peer_id", s.id)
 				if err := s.Close(); err != nil {
-					log.Errorf("webrtc transport close err: %v", err)
+					Logger.Error(err, "webrtc transport close err")
 				}
 			})
 		}
@@ -96,6 +95,11 @@ func (s *Subscriber) AddDatachannel(peer *Peer, dc *Datachannel) error {
 	s.channels[dc.Label] = ndc
 
 	return nil
+}
+
+// DataChannel returns the channel for a label
+func (s *Subscriber) DataChannel(label string) *webrtc.DataChannel {
+	return s.channels[label]
 }
 
 func (s *Subscriber) OnNegotiationNeeded(f func()) {
@@ -173,7 +177,7 @@ func (s *Subscriber) AddDataChannel(label string) (*webrtc.DataChannel, error) {
 
 	dc, err := s.pc.CreateDataChannel(label, &webrtc.DataChannelInit{})
 	if err != nil {
-		log.Errorf("dc creation error: %v", err)
+		Logger.Error(err, "dc creation error")
 		return nil, errCreatingDataChannel
 	}
 
@@ -185,13 +189,13 @@ func (s *Subscriber) AddDataChannel(label string) (*webrtc.DataChannel, error) {
 // SetRemoteDescription sets the SessionDescription of the remote peer
 func (s *Subscriber) SetRemoteDescription(desc webrtc.SessionDescription) error {
 	if err := s.pc.SetRemoteDescription(desc); err != nil {
-		log.Errorf("SetRemoteDescription error: %v", err)
+		Logger.Error(err, "SetRemoteDescription error")
 		return err
 	}
 
 	for _, c := range s.candidates {
 		if err := s.pc.AddICECandidate(c); err != nil {
-			log.Errorf("Add subscriber ice candidate to peer %s err: %v", s.id, err)
+			Logger.Error(err, "Add subscriber ice candidate to peer err", "peer_id", s.id)
 		}
 	}
 	s.candidates = nil
@@ -245,7 +249,7 @@ func (s *Subscriber) downTracksReports() {
 				if err == io.EOF || err == io.ErrClosedPipe {
 					return
 				}
-				log.Errorf("Sending downtrack reports err: %v", err)
+				Logger.Error(err, "Sending downtrack reports err")
 			}
 			r = r[:0]
 		}
@@ -265,13 +269,16 @@ func (s *Subscriber) sendStreamDownTracksReports(streamID string) {
 		sd = append(sd, dt.CreateSourceDescriptionChunks()...)
 	}
 	s.RUnlock()
+	if len(sd) == 0 {
+		return
+	}
 	r = append(r, &rtcp.SourceDescription{Chunks: sd})
 	go func() {
 		r := r
 		i := 0
 		for {
 			if err := s.pc.WriteRTCP(r); err != nil {
-				log.Errorf("Sending track binding reports err:%v", err)
+				Logger.Error(err, "Sending track binding reports err")
 			}
 			if i > 5 {
 				return

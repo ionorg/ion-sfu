@@ -5,7 +5,9 @@ import (
 	"testing"
 	"time"
 
-	log "github.com/pion/ion-log"
+	"github.com/lucsky/cuid"
+
+	"github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/webrtc/v3"
 	med "github.com/pion/webrtc/v3/pkg/media"
 	"github.com/stretchr/testify/assert"
@@ -130,10 +132,13 @@ func addMedia(done <-chan struct{}, t *testing.T, pc *webrtc.PeerConnection, med
 }
 
 func TestSFU_SessionScenarios(t *testing.T) {
-	fixByFile := []string{"asm_amd64.s", "proc.go", "icegatherer.go", "jsonrpc2"}
-	fixByFunc := []string{"Handle"}
-	log.Init("trace", fixByFile, fixByFunc)
-	sfu := NewSFU(Config{Log: log.Config{Level: "trace"}})
+	logger.SetGlobalOptions(logger.GlobalConfig{V: 2}) // 2 - TRACE
+	Logger = logger.New()
+	sfu := NewSFU(
+		Config{
+			Router: RouterConfig{MaxPacketTrack: 200},
+		},
+	)
 	sfu.NewDatachannel(APIChannelLabel)
 	tests := []struct {
 		name  string
@@ -367,7 +372,7 @@ func TestSFU_SessionScenarios(t *testing.T) {
 							err = p.remotePub.SetLocalDescription(offer)
 							assert.NoError(t, err)
 							<-gatherComplete
-							err = p.local.Join("test")
+							err = p.local.Join("test sid", cuid.New())
 							assert.NoError(t, err)
 							answer, err := p.local.Answer(*p.remotePub.LocalDescription())
 							err = p.remotePub.SetRemoteDescription(*answer)

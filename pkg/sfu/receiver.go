@@ -5,8 +5,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/pion/ion-log"
-
 	"github.com/gammazero/workerpool"
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/ion-sfu/pkg/stats"
@@ -22,7 +20,7 @@ type Receiver interface {
 	Codec() webrtc.RTPCodecParameters
 	Kind() webrtc.RTPCodecType
 	SSRC(layer int) uint32
-	AddUpTrack(track *webrtc.TrackRemote, buffer *buffer.Buffer)
+	AddUpTrack(track *webrtc.TrackRemote, buffer *buffer.Buffer, bestQualityFirst bool)
 	AddDownTrack(track *DownTrack, bestQualityFirst bool)
 	SubDownTrack(track *DownTrack, layer int) error
 	GetBitrate() [3]uint64
@@ -96,7 +94,7 @@ func (w *WebRTCReceiver) Kind() webrtc.RTPCodecType {
 	return w.kind
 }
 
-func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, buff *buffer.Buffer) {
+func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, buff *buffer.Buffer, bestQualityFirst bool) {
 	var layer int
 
 	switch track.RID() {
@@ -108,10 +106,59 @@ func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, buff *buffer.Buff
 		layer = 0
 	}
 
+	w.locks[layer].Lock()
 	w.upTracks[layer] = track
 	w.buffers[layer] = buff
 	w.downTracks[layer] = make([]*DownTrack, 0, 10)
+	w.locks[layer].Unlock()
+
+	subBestQuality := func(targetLayer int) {
+		for l := 0; l < targetLayer; l++ {
+			w.locks[l].Lock()
+			for _, dt := range w.downTracks[l] {
+				dt.SwitchSpatialLayer(int64(targetLayer), false)
+			}
+			w.locks[l].Unlock()
+		}
+	}
+
+	subLowestQuality := func(targetLayer int) {
+		for l := 2; l != targetLayer; l-- {
+			w.locks[l].Lock()
+			for _, dt := range w.downTracks[l] {
+				dt.SwitchSpatialLayer(int64(targetLayer), false)
+			}
+			w.locks[l].Unlock()
+		}
+	}
+
+	if w.isSimulcast {
+		if bestQualityFirst {
+			if layer < 2 {
+				w.locks[layer+1].Lock()
+				t := w.downTracks[layer+1]
+				w.locks[layer+1].Unlock()
+				if t == nil {
+					subBestQuality(layer)
+				}
+			} else {
+				subBestQuality(layer)
+			}
+		} else {
+			if layer > 0 {
+				w.locks[layer-1].Lock()
+				t := w.downTracks[layer-1]
+				w.locks[layer-1].Unlock()
+				if t == nil {
+					subLowestQuality(layer)
+				}
+			} else {
+				subLowestQuality(layer)
+			}
+		}
+	}
 	go w.writeRTP(layer)
+
 }
 
 func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
@@ -125,31 +172,39 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 				}
 			}
 		}
+		w.locks[layer].Lock()
+		if downTrackSubscribed(w.downTracks[layer], track) {
+			w.locks[layer].Unlock()
+			return
+		}
 		track.SetInitialLayers(int64(layer), 2)
 		track.maxSpatialLayer = 2
 		track.maxTemporalLayer = 2
 		track.trackType = SimulcastDownTrack
 		track.payload = packetFactory.Get().([]byte)
 	} else {
+		w.locks[layer].Lock()
+		if downTrackSubscribed(w.downTracks[layer], track) {
+			w.locks[layer].Unlock()
+			return
+		}
 		track.SetInitialLayers(0, 0)
 		track.trackType = SimpleDownTrack
 	}
 
-	w.locks[layer].Lock()
 	w.downTracks[layer] = append(w.downTracks[layer], track)
 	w.locks[layer].Unlock()
 }
 
 func (w *WebRTCReceiver) SubDownTrack(track *DownTrack, layer int) error {
 	w.locks[layer].Lock()
-	if dts := w.downTracks[layer]; dts != nil {
-		w.downTracks[layer] = append(dts, track)
-	} else {
+	if buf := w.buffers[layer]; buf != nil {
+		w.downTracks[layer] = append(w.downTracks[layer], track)
 		w.locks[layer].Unlock()
-		return errNoReceiverFound
+		return nil
 	}
 	w.locks[layer].Unlock()
-	return nil
+	return errNoReceiverFound
 }
 
 func (w *WebRTCReceiver) GetBitrate() [3]uint64 {
@@ -221,11 +276,11 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 	w.nackWorker.Submit(func() {
 		for _, meta := range packets {
 			pktBuff := packetFactory.Get().([]byte)
-			buff := w.buffers[meta.getLayer()]
+			buff := w.buffers[meta.layer]
 			if buff == nil {
 				break
 			}
-			i, err := buff.GetPacket(pktBuff, meta.getSourceSeqNo())
+			i, err := buff.GetPacket(pktBuff, meta.sourceSeqNo)
 			if err != nil {
 				if err == io.EOF {
 					break
@@ -236,8 +291,10 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 			if err = pkt.Unmarshal(pktBuff[:i]); err != nil {
 				continue
 			}
-			pkt.Header.SequenceNumber = meta.getTargetSeqNo()
-			pkt.Header.Timestamp = meta.getTimestamp()
+			pkt.Header.SequenceNumber = meta.targetSeqNo
+			pkt.Header.Timestamp = meta.timestamp
+			pkt.Header.SSRC = track.ssrc
+			pkt.Header.PayloadType = track.payloadType
 			if track.simulcast.temporalSupported {
 				switch track.mime {
 				case "video/vp8":
@@ -251,7 +308,9 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 			}
 
 			if _, err = track.writeStream.WriteRTP(&pkt.Header, pkt.Payload); err != nil {
-				log.Errorf("Writing rtx packet err: %v", err)
+				Logger.Error(err, "Writing rtx packet err")
+			} else {
+				track.UpdateStats(uint32(i))
 			}
 
 			packetFactory.Put(pktBuff)
@@ -267,7 +326,13 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 		})
 	}()
 	var del []int
-	for pkt := range w.buffers[layer].PacketChan() {
+
+	for {
+		pkt, err := w.buffers[layer].ReadExtended()
+		if err == io.EOF {
+			return
+		}
+
 		w.locks[layer].Lock()
 		for idx, dt := range w.downTracks[layer] {
 			if err := dt.WriteRTP(pkt); err == io.EOF {
@@ -284,6 +349,7 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 		}
 		w.locks[layer].Unlock()
 	}
+
 }
 
 // closeTracks close all tracks from Receiver
@@ -300,4 +366,13 @@ func (w *WebRTCReceiver) closeTracks() {
 	if w.onCloseHandler != nil {
 		w.onCloseHandler()
 	}
+}
+
+func downTrackSubscribed(dts []*DownTrack, dt *DownTrack) bool {
+	for _, cdt := range dts {
+		if cdt == dt {
+			return true
+		}
+	}
+	return false
 }

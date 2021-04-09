@@ -3,7 +3,6 @@ package sfu
 import (
 	"sync"
 
-	log "github.com/pion/ion-log"
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/ion-sfu/pkg/stats"
 	"github.com/pion/ion-sfu/pkg/twcc"
@@ -23,7 +22,7 @@ type Router interface {
 type RouterConfig struct {
 	WithStats           bool            `mapstructure:"withstats"`
 	MaxBandwidth        uint64          `mapstructure:"maxbandwidth"`
-	MaxBufferTime       int             `mapstructure:"maxbuffertime"`
+	MaxPacketTrack      int             `mapstructure:"maxpackettrack"`
 	AudioLevelInterval  int             `mapstructure:"audiolevelinterval"`
 	AudioLevelThreshold uint8           `mapstructure:"audiolevelthreshold"`
 	AudioLevelFilter    int             `mapstructure:"audiolevelfilter"`
@@ -32,29 +31,31 @@ type RouterConfig struct {
 
 type router struct {
 	sync.RWMutex
-	id        string
-	twcc      *twcc.Responder
-	peer      *webrtc.PeerConnection
-	stats     map[uint32]*stats.Stream
-	rtcpCh    chan []rtcp.Packet
-	stopCh    chan struct{}
-	config    RouterConfig
-	session   *Session
-	receivers map[string]Receiver
+	id            string
+	twcc          *twcc.Responder
+	peer          *webrtc.PeerConnection
+	stats         map[uint32]*stats.Stream
+	rtcpCh        chan []rtcp.Packet
+	stopCh        chan struct{}
+	config        RouterConfig
+	session       *Session
+	receivers     map[string]Receiver
+	bufferFactory *buffer.Factory
 }
 
 // newRouter for routing rtp/rtcp packets
-func newRouter(peer *webrtc.PeerConnection, id string, session *Session, config RouterConfig) Router {
+func newRouter(id string, peer *webrtc.PeerConnection, session *Session, config RouterConfig) Router {
 	ch := make(chan []rtcp.Packet, 10)
 	r := &router{
-		id:        id,
-		peer:      peer,
-		rtcpCh:    ch,
-		stopCh:    make(chan struct{}),
-		config:    config,
-		session:   session,
-		receivers: make(map[string]Receiver),
-		stats:     make(map[uint32]*stats.Stream),
+		id:            id,
+		peer:          peer,
+		rtcpCh:        ch,
+		stopCh:        make(chan struct{}),
+		config:        config,
+		session:       session,
+		receivers:     make(map[string]Receiver),
+		stats:         make(map[uint32]*stats.Stream),
+		bufferFactory: session.BufferFactory(),
 	}
 
 	if config.WithStats {
@@ -83,9 +84,8 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 
 	publish := false
 	trackID := track.ID()
-	rid := track.RID()
 
-	buff, rtcpReader := bufferFactory.GetBufferPair(uint32(track.SSRC()))
+	buff, rtcpReader := r.bufferFactory.GetBufferPair(uint32(track.SSRC()))
 
 	buff.OnFeedback(func(fb []rtcp.Packet) {
 		r.rtcpCh <- fb
@@ -117,7 +117,7 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 	rtcpReader.OnPacket(func(bytes []byte) {
 		pkts, err := rtcp.Unmarshal(bytes)
 		if err != nil {
-			log.Errorf("Unmarshal rtcp receiver packets err: %v", err)
+			Logger.Error(err, "Unmarshal rtcp receiver packets err")
 			return
 		}
 		for _, pkt := range pkts {
@@ -163,20 +163,12 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 			}
 			r.deleteReceiver(trackID, uint32(track.SSRC()))
 		})
-		if len(rid) == 0 || r.config.Simulcast.BestQualityFirst && rid == fullResolution ||
-			!r.config.Simulcast.BestQualityFirst && rid == quarterResolution {
-			publish = true
-		}
-	} else if r.config.Simulcast.BestQualityFirst && rid == fullResolution ||
-		!r.config.Simulcast.BestQualityFirst && rid == quarterResolution ||
-		!r.config.Simulcast.BestQualityFirst && rid == halfResolution {
 		publish = true
 	}
 
-	recv.AddUpTrack(track, buff)
+	recv.AddUpTrack(track, buff, r.config.Simulcast.BestQualityFirst)
 
 	buff.Bind(receiver.GetParameters(), buffer.Options{
-		BufferTime: r.config.MaxBufferTime,
 		MaxBitRate: r.config.MaxBandwidth,
 	})
 
@@ -233,7 +225,7 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 		Channels:     codec.Channels,
 		SDPFmtpLine:  codec.SDPFmtpLine,
 		RTCPFeedback: []webrtc.RTCPFeedback{{"goog-remb", ""}, {"nack", ""}, {"nack", "pli"}},
-	}, recv, sub.id)
+	}, recv, r.bufferFactory, sub.id, r.config.MaxPacketTrack)
 	if err != nil {
 		return err
 	}
@@ -251,7 +243,7 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 				if err == webrtc.ErrConnectionClosed {
 					return
 				}
-				log.Errorf("Error closing down track: %v", err)
+				Logger.Error(err, "Error closing down track")
 			} else {
 				sub.RemoveDownTrack(recv.StreamID(), downTrack)
 				sub.negotiate()
@@ -280,7 +272,7 @@ func (r *router) sendRTCP() {
 		select {
 		case pkts := <-r.rtcpCh:
 			if err := r.peer.WriteRTCP(pkts); err != nil {
-				log.Errorf("Write rtcp to peer %s err :%v", r.id, err)
+				Logger.Error(err, "Write rtcp to peer err", "peer_id", r.id)
 			}
 		case <-r.stopCh:
 			return

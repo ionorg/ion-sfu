@@ -1,4 +1,4 @@
-name: grpc docker
+name: allrpc docker
 on:
   push:
     branches:
@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v2
     
       - name: build
-        run: docker build --tag pionwebrtc/ion-sfu:latest-grpc -f cmd/signal/grpc/Dockerfile .
+        run: docker build --tag pionwebrtc/ion-sfu:latest-allrpc -f cmd/signal/allrpc/Dockerfile .
 
       - name: login
         if: github.event_name == 'release'
@@ -25,12 +25,12 @@ jobs:
 
       - name: tag
         if: github.event_name == 'release'
-        run: docker tag pionwebrtc/ion-sfu:latest-grpc pionwebrtc/ion-sfu:"$TAG"-grpc
+        run: docker tag pionwebrtc/ion-sfu:latest-allrpc pionwebrtc/ion-sfu:"$TAG"-allrpc
         env:
           TAG: ${{ github.event.release.tag_name }}
 
       - name: push
         if: github.event_name == 'release'
-        run: docker push pionwebrtc/ion-sfu:latest-grpc && docker push pionwebrtc/ion-sfu:"$TAG"-grpc
+        run: docker push pionwebrtc/ion-sfu:latest-allrpc && docker push pionwebrtc/ion-sfu:"$TAG"-allrpc
         env:
           TAG: ${{ github.event.release.tag_name }}
