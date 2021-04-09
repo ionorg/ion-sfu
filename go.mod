@@ -8,12 +8,11 @@ require (
 	github.com/gammazero/deque v0.0.0-20201010052221-3932da5530cc
 	github.com/gammazero/workerpool v1.1.1
 	github.com/go-logr/logr v0.4.0
-	github.com/google/uuid v1.2.0 // indirect
 	github.com/gorilla/websocket v1.4.2
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/improbable-eng/grpc-web v0.13.0
 	github.com/lucsky/cuid v1.0.2
-	github.com/pion/dtls/v2 v2.0.8
+	github.com/pion/dtls/v2 v2.0.9
 	github.com/pion/ice/v2 v2.0.16
 	github.com/pion/ion-log v1.0.0
 	github.com/pion/logging v0.2.2
@@ -22,7 +21,6 @@ require (
 	github.com/pion/sdp/v3 v3.0.4
 	github.com/pion/transport v0.12.3
 	github.com/pion/turn/v2 v2.0.5
-	github.com/pion/udp v0.1.1 // indirect
 	github.com/pion/webrtc/v3 v3.0.20
 	github.com/prometheus/client_golang v1.9.0
 	github.com/rs/cors v1.7.0 // indirect
@@ -31,8 +29,6 @@ require (
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20200429184054-15c2290dcb37
 	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.7.0
-	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2 // indirect
-	golang.org/x/net v0.0.0-20210331212208-0fccb6fa2b5c // indirect
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 	golang.org/x/sys v0.0.0-20210331175145-43e1dd70ce54 // indirect
 	google.golang.org/grpc v1.35.0
