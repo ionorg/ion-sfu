@@ -102,7 +102,9 @@ func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters,
 		if strings.HasPrefix(d.codec.MimeType, "video/") {
 			d.sequencer = newSequencer(d.maxTrack)
 		}
-		d.onBind()
+		if d.onBind != nil {
+			d.onBind()
+		}
 		d.bound.set(true)
 		return codec, nil
 	}
@@ -144,7 +146,7 @@ func (d *DownTrack) SetTransceiver(transceiver *webrtc.RTPTransceiver) {
 }
 
 // WriteRTP writes a RTP Packet to the DownTrack
-func (d *DownTrack) WriteRTP(p buffer.ExtPacket) error {
+func (d *DownTrack) WriteRTP(p *buffer.ExtPacket) error {
 	if !d.enabled.get() || !d.bound.get() {
 		return nil
 	}
@@ -196,7 +198,7 @@ func (d *DownTrack) SwitchSpatialLayer(targetLayer int64, setAsMax bool) {
 			currentLayer == uint16(targetLayer) {
 			return
 		}
-		if err := d.receiver.SubDownTrack(d, int(targetLayer)); err == nil {
+		if err := d.receiver.SwitchDownTrack(d, int(targetLayer)); err == nil {
 			atomic.StoreInt32(&d.spatialLayer, int32(targetLayer<<16)|int32(currentLayer))
 			atomic.StoreInt64(&d.skipFB, 4)
 			if setAsMax {
@@ -278,7 +280,7 @@ func (d *DownTrack) UpdateStats(packetLen uint32) {
 	atomic.AddUint32(&d.packetCount, 1)
 }
 
-func (d *DownTrack) writeSimpleRTP(extPkt buffer.ExtPacket) error {
+func (d *DownTrack) writeSimpleRTP(extPkt *buffer.ExtPacket) error {
 	if d.reSync.get() {
 		if d.Kind() == webrtc.RTPCodecTypeVideo {
 			if !extPkt.KeyFrame {
@@ -306,19 +308,20 @@ func (d *DownTrack) writeSimpleRTP(extPkt buffer.ExtPacket) error {
 		atomic.StoreInt64(&d.lastPacketMs, extPkt.Arrival/1e6)
 		atomic.StoreUint32(&d.lastTS, newTS)
 	}
-	extPkt.Packet.PayloadType = d.payloadType
-	extPkt.Packet.Timestamp = newTS
-	extPkt.Packet.SequenceNumber = newSN
-	extPkt.Packet.SSRC = d.ssrc
+	hdr := extPkt.Packet.Header
+	hdr.PayloadType = d.payloadType
+	hdr.Timestamp = newTS
+	hdr.SequenceNumber = newSN
+	hdr.SSRC = d.ssrc
 
-	_, err := d.writeStream.WriteRTP(&extPkt.Packet.Header, extPkt.Packet.Payload)
+	_, err := d.writeStream.WriteRTP(&hdr, extPkt.Packet.Payload)
 	if err != nil {
 		Logger.Error(err, "Write packet err")
 	}
 	return err
 }
 
-func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
+func (d *DownTrack) writeSimulcastRTP(extPkt *buffer.ExtPacket) error {
 	// Check if packet SSRC is different from before
 	// if true, the video source changed
 	d.Lock()
@@ -328,15 +331,12 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 		layer := atomic.LoadInt32(&d.spatialLayer)
 		currentLayer := uint16(layer)
 		targetLayer := uint16(layer >> 16)
-		if currentLayer == targetLayer && lastSSRC != 0 && !reSync {
+		if currentLayer == targetLayer && !reSync {
 			d.Unlock()
 			return nil
 		}
-		if reSync && d.simulcast.lTSCalc != 0 {
-			d.simulcast.lTSCalc = extPkt.Arrival
-		}
 		// Wait for a keyframe to sync new source
-		if !extPkt.KeyFrame {
+		if reSync && !extPkt.KeyFrame {
 			// Packet is not a keyframe, discard it
 			d.receiver.SendRTCP([]rtcp.Packet{
 				&rtcp.PictureLossIndication{SenderSSRC: d.ssrc, MediaSSRC: extPkt.Packet.SSRC},
@@ -344,12 +344,15 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 			d.Unlock()
 			return nil
 		}
+		if reSync && d.simulcast.lTSCalc != 0 {
+			d.simulcast.lTSCalc = extPkt.Arrival
+		}
 		// Switch is done remove sender from previous layer
 		// and update current layer
-		if currentLayer != targetLayer {
-			go d.receiver.DeleteDownTrack(int(currentLayer), d.peerID)
+		if currentLayer != targetLayer && !reSync {
+			d.receiver.DeleteDownTrack(int(currentLayer), d.peerID)
+			atomic.StoreInt32(&d.spatialLayer, int32(targetLayer)<<16|int32(targetLayer))
 		}
-		atomic.StoreInt32(&d.spatialLayer, int32(targetLayer)<<16|int32(targetLayer))
 
 		if d.simulcast.temporalSupported {
 			if d.mime == "video/vp8" {
@@ -422,12 +425,13 @@ func (d *DownTrack) writeSimulcastRTP(extPkt buffer.ExtPacket) error {
 	// Update base
 	d.simulcast.lTSCalc = extPkt.Arrival
 	// Update extPkt headers
-	extPkt.Packet.SequenceNumber = newSN
-	extPkt.Packet.Timestamp = newTS
-	extPkt.Packet.Header.SSRC = d.ssrc
-	extPkt.Packet.Header.PayloadType = d.payloadType
+	hdr := extPkt.Packet.Header
+	hdr.SequenceNumber = newSN
+	hdr.Timestamp = newTS
+	hdr.SSRC = d.ssrc
+	hdr.PayloadType = d.payloadType
 
-	_, err := d.writeStream.WriteRTP(&extPkt.Packet.Header, extPkt.Packet.Payload)
+	_, err := d.writeStream.WriteRTP(&hdr, extPkt.Packet.Payload)
 	if err != nil {
 		Logger.Error(err, "Write packet err")
 	}

@@ -30,6 +30,8 @@ type JoinConfig struct {
 	NoPublish bool
 	// If true the peer will not be allowed to subscribe to other peers in session.
 	NoSubscribe bool
+	// If true it will relay all the published tracks of the peer
+	Relay bool
 }
 
 // SessionProvider provides the session to the sfu.Peer{}
@@ -130,7 +132,7 @@ func (p *Peer) Join(sid, uid string, config ...JoinConfig) error {
 	}
 
 	if !conf.NoPublish {
-		p.publisher, err = NewPublisher(p.session, uid, cfg)
+		p.publisher, err = NewPublisher(p.session, uid, conf.Relay, cfg)
 		if err != nil {
 			return fmt.Errorf("error creating transport: %v", err)
 		}
