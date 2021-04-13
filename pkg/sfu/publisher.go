@@ -1,8 +1,14 @@
 package sfu
 
 import (
+	"io"
 	"sync"
 	"sync/atomic"
+	"time"
+
+	"github.com/pion/rtcp"
+
+	"github.com/pion/ion-sfu/pkg/relay"
 
 	"github.com/pion/webrtc/v3"
 )
@@ -13,6 +19,7 @@ type Publisher struct {
 
 	router     Router
 	session    *Session
+	relayPeer  *relay.Peer
 	candidates []webrtc.ICECandidateInit
 
 	onICEConnectionStateChangeHandler atomic.Value // func(webrtc.ICEConnectionState)
@@ -21,7 +28,7 @@ type Publisher struct {
 }
 
 // NewPublisher creates a new Publisher
-func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publisher, error) {
+func NewPublisher(session *Session, id string, relay bool, cfg WebRTCTransportConfig) (*Publisher, error) {
 	me, err := getPublisherMediaEngine()
 	if err != nil {
 		Logger.Error(err, "NewPeer error", "peer_id", id)
@@ -43,6 +50,7 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 		session: session,
 	}
 
+	var relayReports sync.Once
 	pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 		Logger.V(1).Info("Peer got remote track id",
 			"peer_id", p.id,
@@ -52,9 +60,46 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 			"stream_id", track.StreamID(),
 		)
 
-		if r, pub := p.router.AddReceiver(receiver, track); pub {
+		r, pub := p.router.AddReceiver(receiver, track)
+		if pub {
 			p.session.Publish(p.router, r)
 		}
+
+		if relay && cfg.relay != nil && pub {
+			codec := track.Codec()
+			downTrack, err := NewDownTrack(webrtc.RTPCodecCapability{
+				MimeType:     codec.MimeType,
+				ClockRate:    codec.ClockRate,
+				Channels:     codec.Channels,
+				SDPFmtpLine:  codec.SDPFmtpLine,
+				RTCPFeedback: []webrtc.RTCPFeedback{{"goog-remb", ""}, {"nack", ""}, {"nack", "pli"}},
+			}, r, session.bufferFactory, id, cfg.router.MaxPacketTrack)
+			if err != nil {
+				Logger.V(1).Error(err, "Create relay downtrack err", "peer_id", id)
+				return
+			}
+			rr, sdr, err := cfg.relay.Send(session.id, id, receiver, downTrack)
+			if err != nil {
+				Logger.V(1).Error(err, "Relay err", "peer_id", id)
+				return
+			}
+
+			if p.relayPeer == nil {
+				relayReports.Do(func() {
+					p.relayPeer = rr
+					go p.relayReports()
+				})
+			}
+
+			downTrack.OnCloseHandler(func() {
+				if err := sdr.Stop(); err != nil {
+					Logger.V(1).Error(err, "Relay sender close err", "peer_id", id)
+				}
+			})
+
+			r.AddDownTrack(downTrack, true)
+		}
+
 	})
 
 	pc.OnDataChannel(func(dc *webrtc.DataChannel) {
@@ -80,6 +125,11 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 		}
 	})
 
+	if relay && cfg.relay != nil {
+		if err = cfg.relay.AddDataChannels(session.id, id, session.getDataChannelLabels()); err != nil {
+			Logger.Error(err, "Add relaying data channels error")
+		}
+	}
 	return p, nil
 }
 
@@ -140,4 +190,31 @@ func (p *Publisher) AddICECandidate(candidate webrtc.ICECandidateInit) error {
 	}
 	p.candidates = append(p.candidates, candidate)
 	return nil
+}
+
+func (p *Publisher) relayReports() {
+	for {
+		time.Sleep(5 * time.Second)
+
+		var r []rtcp.Packet
+		for _, t := range p.relayPeer.LocalTracks() {
+			if dt, ok := t.(*DownTrack); ok {
+				if !dt.bound.get() {
+					continue
+				}
+				r = append(r, dt.CreateSenderReport())
+			}
+		}
+
+		if len(r) == 0 {
+			continue
+		}
+
+		if err := p.relayPeer.WriteRTCP(r); err != nil {
+			if err == io.EOF || err == io.ErrClosedPipe {
+				return
+			}
+			Logger.Error(err, "Sending downtrack reports err")
+		}
+	}
 }

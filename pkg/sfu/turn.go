@@ -76,10 +76,7 @@ func InitTurnServer(conf TurnConfig, auth func(username, realm string, srcAddr n
 		}
 		config := tls.Config{Certificates: []tls.Certificate{cert}}
 		config.Rand = rand.Reader
-		tlsListener, err := tls.Listen("tcp4", conf.Address, &config)
-		if err != nil {
-			return nil, err
-		}
+		tlsListener := tls.NewListener(tcpListener, &config)
 		listeners = append(listeners, turn.ListenerConfig{
 			Listener: tlsListener,
 			RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{

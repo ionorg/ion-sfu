@@ -99,7 +99,6 @@ func Test_queue_edges(t *testing.T) {
 		},
 	}
 	q := NewBucket(make([]byte, 25000))
-	q.headSN = 65532
 	for _, p := range TestPackets {
 		p := p
 		assert.NotNil(t, p)

@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pion/ion-sfu/pkg/relay"
+
 	"github.com/go-logr/logr"
 	"github.com/pion/ice/v2"
 	"github.com/pion/ion-sfu/pkg/buffer"
@@ -35,6 +37,7 @@ type WebRTCTransportConfig struct {
 	configuration webrtc.Configuration
 	setting       webrtc.SettingEngine
 	router        RouterConfig
+	relay         *relay.Provider
 }
 
 // WebRTCConfig defines parameters for ice
@@ -55,6 +58,7 @@ type Config struct {
 	WebRTC        WebRTCConfig `mapstructure:"webrtc"`
 	Router        RouterConfig `mapstructure:"router"`
 	Turn          TurnConfig   `mapstructure:"turn"`
+	Relay         *relay.Provider
 	BufferFactory *buffer.Factory
 }
 
@@ -125,6 +129,7 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 		},
 		setting: se,
 		router:  c.Router,
+		relay:   c.Relay,
 	}
 
 	if len(c.WebRTC.Candidates.NAT1To1IPs) > 0 {
@@ -171,6 +176,10 @@ func NewSFU(c Config) *SFU {
 		sessions:      make(map[string]*Session),
 		withStats:     c.Router.WithStats,
 		bufferFactory: c.BufferFactory,
+	}
+
+	if c.Relay != nil {
+		c.Relay.SetSettingEngine(w.setting)
 	}
 
 	if c.Turn.Enabled {

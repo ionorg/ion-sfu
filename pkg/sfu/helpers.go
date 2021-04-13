@@ -30,7 +30,7 @@ func (a *atomicBool) get() bool {
 // setVp8TemporalLayer is a helper to detect and modify accordingly the vp8 payload to reflect
 // temporal changes in the SFU.
 // VP8 temporal layers implemented according https://tools.ietf.org/html/rfc7741
-func setVP8TemporalLayer(p buffer.ExtPacket, s *DownTrack) (payload []byte, picID uint16, tlz0Idx uint8, drop bool) {
+func setVP8TemporalLayer(p *buffer.ExtPacket, s *DownTrack) (payload []byte, picID uint16, tlz0Idx uint8, drop bool) {
 	pkt, ok := p.Payload.(buffer.VP8)
 	if !ok {
 		return p.Packet.Payload, 0, 0, false
