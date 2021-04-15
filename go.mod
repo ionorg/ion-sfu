@@ -18,13 +18,13 @@ require (
 	github.com/pion/ion-log v1.0.0
 	github.com/pion/logging v0.2.2
 	github.com/pion/rtcp v1.2.6
-	github.com/pion/rtp v1.6.3-0.20210128035234-5b3f2454a01a
+	github.com/pion/rtp v1.6.3-0.20210128035234-5b3f2454a01a // go get -u github.com/pion/rtp@robin-20210119-seqnum
 	github.com/pion/sctp v1.7.12 // indirect
 	github.com/pion/sdp/v3 v3.0.4
 	github.com/pion/srtp/v2 v2.0.2 // indirect
 	github.com/pion/transport v0.12.3
 	github.com/pion/turn/v2 v2.0.5
-	github.com/pion/webrtc/v3 v3.0.12-0.20210415152030-d3c5bd5dc082
+	github.com/pion/webrtc/v3 v3.0.12-0.20210415152030-d3c5bd5dc082 // go get -u github.com/pion/webrtc/v3@robin-20210409-late-by-time
 	github.com/prometheus/client_golang v1.9.0
 	github.com/rs/cors v1.7.0 // indirect
 	github.com/rs/zerolog v1.20.0
