@@ -32,12 +32,13 @@ type Candidates struct {
 	NAT1To1IPs []string `mapstructure:"nat1to1"`
 }
 
-// WebRTCTransportConfig represents configuration options
+// WebRTCTransportConfig represents Configuration options
 type WebRTCTransportConfig struct {
-	configuration webrtc.Configuration
-	setting       webrtc.SettingEngine
-	router        RouterConfig
-	relay         *relay.Provider
+	Configuration webrtc.Configuration
+	Setting       webrtc.SettingEngine
+	Router        RouterConfig
+	Relay         *relay.Provider
+	BufferFactory *buffer.Factory
 }
 
 // WebRTCConfig defines parameters for ice
@@ -56,7 +57,7 @@ type Config struct {
 		WithStats bool  `mapstructure:"withstats"`
 	} `mapstructure:"sfu"`
 	WebRTC        WebRTCConfig `mapstructure:"webrtc"`
-	Router        RouterConfig `mapstructure:"router"`
+	Router        RouterConfig `mapstructure:"Router"`
 	Turn          TurnConfig   `mapstructure:"turn"`
 	Relay         *relay.Provider
 	BufferFactory *buffer.Factory
@@ -69,12 +70,11 @@ var (
 // SFU represents an sfu instance
 type SFU struct {
 	sync.RWMutex
-	webrtc        WebRTCTransportConfig
-	turn          *turn.Server
-	sessions      map[string]*Session
-	datachannels  []*Datachannel
-	bufferFactory *buffer.Factory
-	withStats     bool
+	webrtc       WebRTCTransportConfig
+	turn         *turn.Server
+	sessions     map[string]*session
+	datachannels []*Datachannel
+	withStats    bool
 }
 
 // NewWebRTCTransportConfig parses our settings and returns a usable WebRTCTransportConfig for creating PeerConnections
@@ -123,25 +123,26 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 	}
 
 	w := WebRTCTransportConfig{
-		configuration: webrtc.Configuration{
+		Configuration: webrtc.Configuration{
 			ICEServers:   iceServers,
 			SDPSemantics: sdpSemantics,
 		},
-		setting: se,
-		router:  c.Router,
-		relay:   c.Relay,
+		Setting:       se,
+		Router:        c.Router,
+		Relay:         c.Relay,
+		BufferFactory: c.BufferFactory,
 	}
 
 	if len(c.WebRTC.Candidates.NAT1To1IPs) > 0 {
-		w.setting.SetNAT1To1IPs(c.WebRTC.Candidates.NAT1To1IPs, webrtc.ICECandidateTypeHost)
+		w.Setting.SetNAT1To1IPs(c.WebRTC.Candidates.NAT1To1IPs, webrtc.ICECandidateTypeHost)
 	}
 
 	if !c.WebRTC.MDNS {
-		w.setting.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
+		w.Setting.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
 	}
 
 	if c.SFU.WithStats {
-		w.router.WithStats = true
+		w.Router.WithStats = true
 		stats.InitStats()
 	}
 
@@ -172,14 +173,13 @@ func NewSFU(c Config) *SFU {
 	w := NewWebRTCTransportConfig(c)
 
 	sfu := &SFU{
-		webrtc:        w,
-		sessions:      make(map[string]*Session),
-		withStats:     c.Router.WithStats,
-		bufferFactory: c.BufferFactory,
+		webrtc:    w,
+		sessions:  make(map[string]*session),
+		withStats: c.Router.WithStats,
 	}
 
 	if c.Relay != nil {
-		c.Relay.SetSettingEngine(w.setting)
+		c.Relay.SetSettingEngine(w.Setting)
 	}
 
 	if c.Turn.Enabled {
@@ -196,8 +196,8 @@ func NewSFU(c Config) *SFU {
 }
 
 // NewSession creates a new session instance
-func (s *SFU) newSession(id string) *Session {
-	session := NewSession(id, s.bufferFactory, s.datachannels, s.webrtc)
+func (s *SFU) newSession(id string) *session {
+	session := NewSession(id, s.datachannels, s.webrtc)
 
 	session.OnClose(func() {
 		s.Lock()
@@ -221,13 +221,13 @@ func (s *SFU) newSession(id string) *Session {
 }
 
 // GetSession by id
-func (s *SFU) getSession(id string) *Session {
+func (s *SFU) getSession(id string) *session {
 	s.RLock()
 	defer s.RUnlock()
 	return s.sessions[id]
 }
 
-func (s *SFU) GetSession(sid string) (*Session, WebRTCTransportConfig) {
+func (s *SFU) GetSession(sid string) (*session, WebRTCTransportConfig) {
 	session := s.getSession(sid)
 	if session == nil {
 		session = s.newSession(sid)
@@ -242,7 +242,7 @@ func (s *SFU) NewDatachannel(label string) *Datachannel {
 }
 
 // GetSessions return all sessions
-func (s *SFU) GetSessions() map[string]*Session {
+func (s *SFU) GetSessions() map[string]*session {
 	s.RLock()
 	defer s.RUnlock()
 	return s.sessions

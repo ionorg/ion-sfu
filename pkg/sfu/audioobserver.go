@@ -11,7 +11,7 @@ type audioStream struct {
 	total int
 }
 
-type audioLevel struct {
+type AudioObserver struct {
 	sync.RWMutex
 	streams   []*audioStream
 	expected  int
@@ -19,7 +19,7 @@ type audioLevel struct {
 	previous  []string
 }
 
-func newAudioLevel(threshold uint8, interval, filter int) *audioLevel {
+func NewAudioObserver(threshold uint8, interval, filter int) *AudioObserver {
 	if threshold > 127 {
 		threshold = 127
 	}
@@ -30,19 +30,19 @@ func newAudioLevel(threshold uint8, interval, filter int) *audioLevel {
 		filter = 100
 	}
 
-	return &audioLevel{
+	return &AudioObserver{
 		threshold: threshold,
 		expected:  interval * filter / 2000,
 	}
 }
 
-func (a *audioLevel) addStream(streamID string) {
+func (a *AudioObserver) addStream(streamID string) {
 	a.Lock()
 	a.streams = append(a.streams, &audioStream{id: streamID})
 	a.Unlock()
 }
 
-func (a *audioLevel) removeStream(streamID string) {
+func (a *AudioObserver) removeStream(streamID string) {
 	a.Lock()
 	defer a.Unlock()
 	idx := -1
@@ -60,7 +60,7 @@ func (a *audioLevel) removeStream(streamID string) {
 	a.streams = a.streams[:len(a.streams)-1]
 }
 
-func (a *audioLevel) observe(streamID string, dBov uint8) {
+func (a *AudioObserver) observe(streamID string, dBov uint8) {
 	a.RLock()
 	defer a.RUnlock()
 	for _, as := range a.streams {
@@ -74,7 +74,7 @@ func (a *audioLevel) observe(streamID string, dBov uint8) {
 	}
 }
 
-func (a *audioLevel) calc() []string {
+func (a *AudioObserver) Calc() []string {
 	a.Lock()
 	defer a.Unlock()
 

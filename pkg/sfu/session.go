@@ -6,52 +6,72 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/webrtc/v3"
 )
 
 // Session represents a set of peers. Transports inside a session
 // are automatically subscribed to each other.
-type Session struct {
+type Session interface {
+	ID() string
+	Publish(router Router, r Receiver)
+	AudioObserver() *AudioObserver
+	AddDatachannel(owner string, dc *webrtc.DataChannel)
+	GetDataChannelLabels() []string
+	GetDataChannels(origin, label string) (dcs []*webrtc.DataChannel)
+}
+
+type session struct {
 	id             string
 	mu             sync.RWMutex
-	peers          map[string]*Peer
+	peers          map[string]Peer
 	closed         atomicBool
+	audioObs       *AudioObserver
 	fanOutDCs      []string
 	datachannels   []*Datachannel
-	audioObserver  *audioLevel
-	bufferFactory  *buffer.Factory
 	onCloseHandler func()
 }
 
 // NewSession creates a new session
-func NewSession(id string, bf *buffer.Factory, dcs []*Datachannel, cfg WebRTCTransportConfig) *Session {
-	s := &Session{
-		id:            id,
-		peers:         make(map[string]*Peer),
-		datachannels:  dcs,
-		bufferFactory: bf,
-		audioObserver: newAudioLevel(cfg.router.AudioLevelThreshold, cfg.router.AudioLevelInterval, cfg.router.AudioLevelFilter),
+func NewSession(id string, dcs []*Datachannel, cfg WebRTCTransportConfig) *session {
+	s := &session{
+		id:           id,
+		peers:        make(map[string]Peer),
+		datachannels: dcs,
+		audioObs:     NewAudioObserver(cfg.Router.AudioLevelThreshold, cfg.Router.AudioLevelInterval, cfg.Router.AudioLevelFilter),
 	}
-	go s.audioLevelObserver(cfg.router.AudioLevelInterval)
+	go s.audioLevelObserver(cfg.Router.AudioLevelInterval)
 	return s
 
 }
 
 // ID return session id
-func (s *Session) ID() string {
+func (s *session) ID() string {
 	return s.id
 }
 
-// AddPublisher adds a transport to the session
-func (s *Session) AddPeer(peer *Peer) {
+func (s *session) AudioObserver() *AudioObserver {
+	return s.audioObs
+}
+
+func (s *session) GetDataChannelLabels() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	res := make([]string, 0, len(s.datachannels)+len(s.fanOutDCs))
+	copy(res, s.fanOutDCs)
+	for _, dc := range s.datachannels {
+		res = append(res, dc.Label)
+	}
+	return res
+}
+
+func (s *session) AddPeer(peer Peer) {
 	s.mu.Lock()
-	s.peers[peer.id] = peer
+	s.peers[peer.ID()] = peer
 	s.mu.Unlock()
 }
 
 // RemovePeer removes a transport from the session
-func (s *Session) RemovePeer(pid string) {
+func (s *session) RemovePeer(pid string) {
 	s.mu.Lock()
 	Logger.V(0).Info("RemovePeer from session", "peer_id", pid, "session_id", s.id)
 	delete(s.peers, pid)
@@ -64,15 +84,15 @@ func (s *Session) RemovePeer(pid string) {
 	}
 }
 
-func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
+func (s *session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 	label := dc.Label()
 
 	s.mu.Lock()
 	s.fanOutDCs = append(s.fanOutDCs, label)
-	s.peers[owner].subscriber.channels[label] = dc
-	peers := make([]*Peer, 0, len(s.peers))
+	s.peers[owner].Subscriber().channels[label] = dc
+	peers := make([]Peer, 0, len(s.peers))
 	for _, p := range s.peers {
-		if p.id == owner || p.subscriber == nil {
+		if p.ID() == owner || p.Subscriber() == nil {
 			continue
 		}
 		peers = append(peers, p)
@@ -84,50 +104,50 @@ func (s *Session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 	})
 
 	for _, p := range peers {
-		n, err := p.subscriber.AddDataChannel(label)
+		n, err := p.Subscriber().AddDataChannel(label)
 
 		if err != nil {
 			Logger.Error(err, "error adding datachannel")
 			continue
 		}
 
-		pid := p.id
+		pid := p.ID()
 		n.OnMessage(func(msg webrtc.DataChannelMessage) {
 			s.onMessage(pid, label, msg)
 		})
 
-		p.subscriber.negotiate()
+		p.Subscriber().negotiate()
 	}
 }
 
-// Publish will add a Sender to all peers in current Session from given
+// Publish will add a Sender to all peers in current session from given
 // Receiver
-func (s *Session) Publish(router Router, r Receiver) {
+func (s *session) Publish(router Router, r Receiver) {
 	peers := s.Peers()
 
 	for _, p := range peers {
 		// Don't sub to self
-		if router.ID() == p.id || p.subscriber == nil {
+		if router.ID() == p.ID() || p.Subscriber() == nil {
 			continue
 		}
 
-		Logger.V(0).Info("Publishing track to peer", "peer_id", p.id)
+		Logger.V(0).Info("Publishing track to peer", "peer_id", p.ID())
 
-		if err := router.AddDownTracks(p.subscriber, r); err != nil {
-			Logger.Error(err, "Error subscribing transport to router")
+		if err := router.AddDownTracks(p.Subscriber(), r); err != nil {
+			Logger.Error(err, "Error subscribing transport to Router")
 			continue
 		}
 	}
 }
 
 // Subscribe will create a Sender for every other Receiver in the session
-func (s *Session) Subscribe(peer *Peer) {
+func (s *session) Subscribe(peer Peer) {
 	s.mu.RLock()
 	fdc := make([]string, len(s.fanOutDCs))
 	copy(fdc, s.fanOutDCs)
-	peers := make([]*Peer, 0, len(s.peers))
+	peers := make([]Peer, 0, len(s.peers))
 	for _, p := range s.peers {
-		if p == peer || p.publisher == nil {
+		if p == peer || p.Publisher() == nil {
 			continue
 		}
 		peers = append(peers, p)
@@ -136,39 +156,34 @@ func (s *Session) Subscribe(peer *Peer) {
 
 	// Subscribe to fan out datachannels
 	for _, label := range fdc {
-		n, err := peer.subscriber.AddDataChannel(label)
+		n, err := peer.Subscriber().AddDataChannel(label)
 		if err != nil {
 			Logger.Error(err, "error adding datachannel")
 			continue
 		}
 		l := label
 		n.OnMessage(func(msg webrtc.DataChannelMessage) {
-			s.onMessage(peer.id, l, msg)
+			s.onMessage(peer.ID(), l, msg)
 		})
 	}
 
 	// Subscribe to publisher streams
 	for _, p := range peers {
-		err := p.publisher.GetRouter().AddDownTracks(peer.subscriber, nil)
+		err := p.Publisher().GetRouter().AddDownTracks(peer.Subscriber(), nil)
 		if err != nil {
-			Logger.Error(err, "Subscribing to router err")
+			Logger.Error(err, "Subscribing to Router err")
 			continue
 		}
 	}
 
-	peer.subscriber.negotiate()
+	peer.Subscriber().negotiate()
 }
 
-// BufferFactory returns current session buffer factory
-func (s *Session) BufferFactory() *buffer.Factory {
-	return s.bufferFactory
-}
-
-// Transports returns peers in this session
-func (s *Session) Peers() []*Peer {
+// Peers returns peers in this session
+func (s *session) Peers() []Peer {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	p := make([]*Peer, 0, len(s.peers))
+	p := make([]Peer, 0, len(s.peers))
 	for _, peer := range s.peers {
 		p = append(p, peer)
 	}
@@ -176,11 +191,11 @@ func (s *Session) Peers() []*Peer {
 }
 
 // OnClose is called when the session is closed
-func (s *Session) OnClose(f func()) {
+func (s *session) OnClose(f func()) {
 	s.onCloseHandler = f
 }
 
-func (s *Session) setRelayedDatachannel(peerID string, datachannel *webrtc.DataChannel) {
+func (s *session) setRelayedDatachannel(peerID string, datachannel *webrtc.DataChannel) {
 	label := datachannel.Label()
 	for _, dc := range s.datachannels {
 		dc := dc
@@ -188,7 +203,7 @@ func (s *Session) setRelayedDatachannel(peerID string, datachannel *webrtc.DataC
 			mws := newDCChain(dc.middlewares)
 			p := mws.Process(ProcessFunc(func(ctx context.Context, args ProcessArgs) {
 				if dc.onMessage != nil {
-					dc.onMessage(ctx, args, s.getDataChannels(peerID, dc.Label))
+					dc.onMessage(ctx, args)
 				}
 			}))
 			s.mu.RLock()
@@ -210,7 +225,7 @@ func (s *Session) setRelayedDatachannel(peerID string, datachannel *webrtc.DataC
 	})
 }
 
-func (s *Session) audioLevelObserver(audioLevelInterval int) {
+func (s *session) audioLevelObserver(audioLevelInterval int) {
 	if audioLevelInterval <= 50 {
 		Logger.V(0).Info("Values near/under 20ms may return unexpected values")
 	}
@@ -222,7 +237,7 @@ func (s *Session) audioLevelObserver(audioLevelInterval int) {
 		if s.closed.get() {
 			return
 		}
-		levels := s.audioObserver.calc()
+		levels := s.audioObs.Calc()
 
 		if levels == nil {
 			continue
@@ -235,7 +250,7 @@ func (s *Session) audioLevelObserver(audioLevelInterval int) {
 		}
 
 		sl := string(l)
-		dcs := s.getDataChannels("", APIChannelLabel)
+		dcs := s.GetDataChannels("", APIChannelLabel)
 
 		for _, ch := range dcs {
 			if err = ch.SendText(sl); err != nil {
@@ -245,8 +260,8 @@ func (s *Session) audioLevelObserver(audioLevelInterval int) {
 	}
 }
 
-func (s *Session) onMessage(origin, label string, msg webrtc.DataChannelMessage) {
-	dcs := s.getDataChannels(origin, label)
+func (s *session) onMessage(origin, label string, msg webrtc.DataChannelMessage) {
+	dcs := s.GetDataChannels(origin, label)
 	for _, dc := range dcs {
 		if msg.IsString {
 			if err := dc.SendText(string(msg.Data)); err != nil {
@@ -260,7 +275,7 @@ func (s *Session) onMessage(origin, label string, msg webrtc.DataChannelMessage)
 	}
 }
 
-func (s *Session) getDataChannels(origin, label string) (dcs []*webrtc.DataChannel) {
+func (s *session) GetDataChannels(origin, label string) (dcs []*webrtc.DataChannel) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for pid, p := range s.peers {
@@ -268,20 +283,9 @@ func (s *Session) getDataChannels(origin, label string) (dcs []*webrtc.DataChann
 			continue
 		}
 
-		if dc, ok := p.subscriber.channels[label]; ok && dc.ReadyState() == webrtc.DataChannelStateOpen {
+		if dc, ok := p.Subscriber().channels[label]; ok && dc.ReadyState() == webrtc.DataChannelStateOpen {
 			dcs = append(dcs, dc)
 		}
 	}
 	return
-}
-
-func (s *Session) getDataChannelLabels() []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	res := make([]string, 0, len(s.datachannels)+len(s.fanOutDCs))
-	copy(res, s.fanOutDCs)
-	for _, dc := range s.datachannels {
-		res = append(res, dc.Label)
-	}
-	return res
 }
