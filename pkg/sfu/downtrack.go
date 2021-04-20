@@ -350,7 +350,7 @@ func (d *DownTrack) writeSimulcastRTP(extPkt *buffer.ExtPacket) error {
 		// Switch is done remove sender from previous layer
 		// and update current layer
 		if currentLayer != targetLayer && !reSync {
-			d.receiver.DeleteDownTrack(int(currentLayer), d.peerID)
+			defer d.receiver.DeleteDownTrack(int(currentLayer), d.peerID)
 			atomic.StoreInt32(&d.spatialLayer, int32(targetLayer)<<16|int32(targetLayer))
 		}
 
