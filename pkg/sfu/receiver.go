@@ -345,12 +345,11 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 		w.locks[layer].Lock()
 
 		if w.isSimulcast && len(w.pendingTracks[layer]) > 0 {
-			if pkt.KeyFrame {
-				w.downTracks[layer] = append(w.downTracks[layer], w.pendingTracks[layer]...)
-				w.pendingTracks[layer] = w.pendingTracks[layer][:0]
-			} else {
+			if !pkt.KeyFrame {
 				w.SendRTCP(pli)
 			}
+			w.downTracks[layer] = append(w.downTracks[layer], w.pendingTracks[layer]...)
+			w.pendingTracks[layer] = w.pendingTracks[layer][:0]
 		}
 
 		for idx, dt := range w.downTracks[layer] {
