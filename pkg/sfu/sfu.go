@@ -2,6 +2,7 @@ package sfu
 
 import (
 	"math/rand"
+	"net"
 	"os"
 	"runtime"
 	"sync"
@@ -42,11 +43,12 @@ type WebRTCTransportConfig struct {
 
 // WebRTCConfig defines parameters for ice
 type WebRTCConfig struct {
-	ICEPortRange []uint16          `mapstructure:"portrange"`
-	ICEServers   []ICEServerConfig `mapstructure:"iceserver"`
-	Candidates   Candidates        `mapstructure:"candidates"`
-	SDPSemantics string            `mapstructure:"sdpsemantics"`
-	MDNS         bool              `mapstructure:"mdns"`
+	ICESinglePort int               `mapstructure:"singleport"`
+	ICEPortRange  []uint16          `mapstructure:"portrange"`
+	ICEServers    []ICEServerConfig `mapstructure:"iceserver"`
+	Candidates    Candidates        `mapstructure:"candidates"`
+	SDPSemantics  string            `mapstructure:"sdpsemantics"`
+	MDNS          bool              `mapstructure:"mdns"`
 }
 
 // Config for base SFU
@@ -82,19 +84,30 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 	se := webrtc.SettingEngine{}
 	se.DisableMediaEngineCopy(true)
 
-	var icePortStart, icePortEnd uint16
-
-	if c.Turn.Enabled && len(c.Turn.PortRange) == 0 {
-		icePortStart = sfuMinPort
-		icePortEnd = sfuMaxPort
-	} else if len(c.WebRTC.ICEPortRange) == 2 {
-		icePortStart = c.WebRTC.ICEPortRange[0]
-		icePortEnd = c.WebRTC.ICEPortRange[1]
-	}
-
-	if icePortStart != 0 || icePortEnd != 0 {
-		if err := se.SetEphemeralUDPPortRange(icePortStart, icePortEnd); err != nil {
+	if c.WebRTC.ICESinglePort != 0 {
+		Logger.Info("Listen on ", "single-port", c.WebRTC.ICESinglePort)
+		udpListener, err := net.ListenUDP("udp", &net.UDPAddr{
+			IP:   net.IP{0, 0, 0, 0},
+			Port: c.WebRTC.ICESinglePort,
+		})
+		if err != nil {
 			panic(err)
+		}
+		se.SetICEUDPMux(webrtc.NewICEUDPMux(nil, udpListener))
+	} else {
+		var icePortStart, icePortEnd uint16
+
+		if c.Turn.Enabled && len(c.Turn.PortRange) == 0 {
+			icePortStart = sfuMinPort
+			icePortEnd = sfuMaxPort
+		} else if len(c.WebRTC.ICEPortRange) == 2 {
+			icePortStart = c.WebRTC.ICEPortRange[0]
+			icePortEnd = c.WebRTC.ICEPortRange[1]
+		}
+		if icePortStart != 0 || icePortEnd != 0 {
+			if err := se.SetEphemeralUDPPortRange(icePortStart, icePortEnd); err != nil {
+				panic(err)
+			}
 		}
 	}
 
