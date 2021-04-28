@@ -243,6 +243,7 @@ func (r *Peer) startDataChannels() error {
 }
 
 func (r *Peer) receive(s Signal) ([]byte, error) {
+	localSignal := Signal{}
 	if r.gatherer.State() == webrtc.ICEGathererStateNew {
 		r.id = s.Metadata.StreamID
 		gatherFinished := make(chan struct{})
@@ -256,6 +257,27 @@ func (r *Peer) receive(s Signal) ([]byte, error) {
 			return nil, err
 		}
 		<-gatherFinished
+
+		var err error
+
+		localSignal.ICECandidates, err = r.gatherer.GetLocalCandidates()
+		if err != nil {
+			return nil, err
+		}
+
+		localSignal.ICEParameters, err = r.gatherer.GetLocalParameters()
+		if err != nil {
+			return nil, err
+		}
+
+		localSignal.DTLSParameters, err = r.dtls.GetLocalParameters()
+		if err != nil {
+			return nil, err
+		}
+
+		sc := r.sctp.GetCapabilities()
+		localSignal.SCTPCapabilities = &sc
+
 	}
 
 	var k webrtc.RTPCodecType
@@ -271,34 +293,6 @@ func (r *Peer) receive(s Signal) ([]byte, error) {
 		return nil, err
 	}
 
-	iceCandidates, err := r.gatherer.GetLocalCandidates()
-	if err != nil {
-		return nil, err
-	}
-
-	iceParams, err := r.gatherer.GetLocalParameters()
-	if err != nil {
-		return nil, err
-	}
-
-	dtlsParams, err := r.dtls.GetLocalParameters()
-	if err != nil {
-		return nil, err
-	}
-
-	sctpCapabilities := r.sctp.GetCapabilities()
-
-	localSignal := Signal{
-		ICECandidates:    iceCandidates,
-		ICEParameters:    iceParams,
-		DTLSParameters:   dtlsParams,
-		SCTPCapabilities: &sctpCapabilities,
-	}
-
-	if err = r.ice.SetRemoteCandidates(s.ICECandidates); err != nil {
-		return nil, err
-	}
-
 	recv, err := r.api.NewRTPReceiver(k, r.dtls)
 	if err != nil {
 		return nil, err
@@ -307,7 +301,13 @@ func (r *Peer) receive(s Signal) ([]byte, error) {
 	if r.ice.State() == webrtc.ICETransportStateNew {
 		go func() {
 			iceRole := webrtc.ICERoleControlled
-			if err = r.ice.Start(nil, s.ICEParameters, &iceRole); err != nil {
+
+			if err = r.ice.SetRemoteCandidates(s.ICECandidates); err != nil {
+				r.provider.log.Error(err, "Start ICE error")
+				return
+			}
+
+			if err = r.ice.Start(r.gatherer, s.ICEParameters, &iceRole); err != nil {
 				r.provider.log.Error(err, "Start ICE error")
 				return
 			}
@@ -376,6 +376,7 @@ func (r *Peer) receive(s Signal) ([]byte, error) {
 }
 
 func (r *Peer) send(receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) (*webrtc.RTPSender, error) {
+	signal := &Signal{}
 	if r.gatherer.State() == webrtc.ICEGathererStateNew {
 		gatherFinished := make(chan struct{})
 		r.gatherer.OnLocalCandidate(func(i *webrtc.ICECandidate) {
@@ -388,6 +389,27 @@ func (r *Peer) send(receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) 
 			return nil, err
 		}
 		<-gatherFinished
+
+		var err error
+
+		signal.ICECandidates, err = r.gatherer.GetLocalCandidates()
+		if err != nil {
+			return nil, err
+		}
+
+		signal.ICEParameters, err = r.gatherer.GetLocalParameters()
+		if err != nil {
+			return nil, err
+		}
+
+		signal.DTLSParameters, err = r.dtls.GetLocalParameters()
+		if err != nil {
+			return nil, err
+		}
+
+		sc := r.sctp.GetCapabilities()
+		signal.SCTPCapabilities = &sc
+
 	}
 	t := receiver.Track()
 	codec := receiver.Track().Codec()
@@ -400,39 +422,17 @@ func (r *Peer) send(receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) 
 		return nil, err
 	}
 
-	iceCandidates, err := r.gatherer.GetLocalCandidates()
-	if err != nil {
-		return nil, err
+	signal.Metadata = SignalMeta{
+		PeerID:    r.pid,
+		StreamID:  r.id,
+		SessionID: r.sid,
+	}
+	signal.CodecParameters = &codec
+	signal.Encodings = &webrtc.RTPCodingParameters{
+		SSRC:        t.SSRC(),
+		PayloadType: t.PayloadType(),
 	}
 
-	iceParams, err := r.gatherer.GetLocalParameters()
-	if err != nil {
-		return nil, err
-	}
-
-	dtlsParams, err := r.dtls.GetLocalParameters()
-	if err != nil {
-		return nil, err
-	}
-
-	sctpCapabilities := r.sctp.GetCapabilities()
-
-	signal := &Signal{
-		Metadata: SignalMeta{
-			PeerID:    r.pid,
-			StreamID:  r.id,
-			SessionID: r.sid,
-		},
-		ICECandidates:    iceCandidates,
-		ICEParameters:    iceParams,
-		DTLSParameters:   dtlsParams,
-		SCTPCapabilities: &sctpCapabilities,
-		CodecParameters:  &codec,
-		Encodings: &webrtc.RTPCodingParameters{
-			SSRC:        t.SSRC(),
-			PayloadType: t.PayloadType(),
-		},
-	}
 	local, err := json.Marshal(signal)
 	if err != nil {
 		return nil, err
@@ -451,13 +451,12 @@ func (r *Peer) send(receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) 
 		return nil, err
 	}
 
-	if err = r.ice.SetRemoteCandidates(remoteSignal.ICECandidates); err != nil {
-		return nil, err
-	}
-
 	if r.ice.State() == webrtc.ICETransportStateNew {
+		if err = r.ice.SetRemoteCandidates(remoteSignal.ICECandidates); err != nil {
+			return nil, err
+		}
 		iceRole := webrtc.ICERoleControlling
-		if err = r.ice.Start(nil, remoteSignal.ICEParameters, &iceRole); err != nil {
+		if err = r.ice.Start(r.gatherer, remoteSignal.ICEParameters, &iceRole); err != nil {
 			return nil, err
 		}
 
@@ -469,6 +468,10 @@ func (r *Peer) send(receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) 
 			if err = r.sctp.Start(*remoteSignal.SCTPCapabilities); err != nil {
 				return nil, err
 			}
+		}
+
+		if err = r.startDataChannels(); err != nil {
+			return nil, err
 		}
 	}
 	params := receiver.GetParameters()
@@ -488,9 +491,6 @@ func (r *Peer) send(receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) 
 		return nil, err
 	}
 
-	if err = r.startDataChannels(); err != nil {
-		return nil, err
-	}
 	r.localTracks = append(r.localTracks, localTrack)
 	return sdr, nil
 }
