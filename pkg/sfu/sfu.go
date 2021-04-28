@@ -62,6 +62,7 @@ type Config struct {
 	Turn          TurnConfig   `mapstructure:"turn"`
 	Relay         *relay.Provider
 	BufferFactory *buffer.Factory
+	TurnAuth      func(username string, realm string, srcAddr net.Addr) ([]byte, bool)
 }
 
 var (
@@ -172,7 +173,6 @@ func init() {
 
 // NewSFU creates a new sfu instance
 func NewSFU(c Config) *SFU {
-
 	// Init random seed
 	rand.Seed(time.Now().UnixNano())
 	// Init ballast
@@ -196,7 +196,7 @@ func NewSFU(c Config) *SFU {
 	}
 
 	if c.Turn.Enabled {
-		ts, err := InitTurnServer(c.Turn, nil)
+		ts, err := InitTurnServer(c.Turn, c.TurnAuth)
 		if err != nil {
 			Logger.Error(err, "Could not init turn server err")
 			os.Exit(1)
