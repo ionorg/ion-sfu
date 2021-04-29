@@ -41,6 +41,7 @@ type SignalMeta struct {
 }
 
 type Peer struct {
+	sync.Mutex
 	me           *webrtc.MediaEngine
 	id           string
 	pid          string
@@ -243,6 +244,9 @@ func (r *Peer) startDataChannels() error {
 }
 
 func (r *Peer) receive(s Signal) ([]byte, error) {
+	r.Lock()
+	defer r.Unlock()
+
 	localSignal := Signal{}
 	if r.gatherer.State() == webrtc.ICEGathererStateNew {
 		r.id = s.Metadata.StreamID
@@ -376,6 +380,9 @@ func (r *Peer) receive(s Signal) ([]byte, error) {
 }
 
 func (r *Peer) send(receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) (*webrtc.RTPSender, error) {
+	r.Lock()
+	defer r.Unlock()
+
 	signal := &Signal{}
 	if r.gatherer.State() == webrtc.ICEGathererStateNew {
 		gatherFinished := make(chan struct{})
