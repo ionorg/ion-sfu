@@ -2,6 +2,7 @@ package relay
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -216,6 +217,10 @@ func (r *Peer) WriteRTCP(pkts []rtcp.Packet) error {
 
 func (r *Peer) LocalTracks() []webrtc.TrackLocal {
 	return r.localTracks
+}
+
+func (r *Peer) Close() error {
+	return JoinErrs(r.sctp.Stop(), r.dtls.Stop(), r.ice.Stop())
 }
 
 func (r *Peer) startDataChannels() error {
@@ -500,4 +505,29 @@ func (r *Peer) send(receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) 
 
 	r.localTracks = append(r.localTracks, localTrack)
 	return sdr, nil
+}
+
+func JoinErrs(errs ...error) error {
+	var joinErrsR func(string, int, ...error) error
+	joinErrsR = func(soFar string, count int, errs ...error) error {
+		if len(errs) == 0 {
+			if count == 0 {
+				return nil
+			}
+			return fmt.Errorf(soFar)
+		}
+		current := errs[0]
+		next := errs[1:]
+		if current == nil {
+			return joinErrsR(soFar, count, next...)
+		}
+		count++
+		if count == 1 {
+			return joinErrsR(fmt.Sprintf("%s", current), count, next...)
+		} else if count == 2 {
+			return joinErrsR(fmt.Sprintf("1: %s\n2: %s", soFar, current), count, next...)
+		}
+		return joinErrsR(fmt.Sprintf("%s\n%d: %s", soFar, count, current), count, next...)
+	}
+	return joinErrsR("", 0, errs...)
 }

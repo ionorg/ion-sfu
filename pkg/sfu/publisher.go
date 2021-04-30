@@ -163,6 +163,11 @@ func (p *Publisher) GetRouter() Router {
 // Close peer
 func (p *Publisher) Close() {
 	p.closeOnce.Do(func() {
+		if p.relayPeer != nil {
+			if err := p.relayPeer.Close(); err != nil {
+				Logger.Error(err, "relay peer transport close err")
+			}
+		}
 		p.router.Stop()
 		if err := p.pc.Close(); err != nil {
 			Logger.Error(err, "webrtc transport close err")
