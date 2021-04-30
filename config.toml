@@ -33,7 +33,11 @@ bestqualityfirst = true
 # EXPERIMENTAL enable temporal layer change is currently an experimental feature,
 # enable only for testing.
 enabletemporallayer = false
+
 [webrtc]
+# Single port, portrange will not work if you enable this
+# singleport = 5000
+
 # Range of ports that ion accepts WebRTC traffic on
 # Format: [min, max]   and max - min >= 100
 portrange = [5000, 5200]

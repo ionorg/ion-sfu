@@ -21,6 +21,9 @@ build_grpc: go_init
 build_jsonrpc: go_init
 	go build -o bin/sfu $(GO_LDFLAGS) ./cmd/signal/json-rpc/main.go
 
+build_allrpc: go_init
+	go build -o bin/sfu $(GO_LDFLAGS) ./cmd/signal/allrpc/main.go
+
 test: go_init
 	go test \
 		-timeout 120s \
