@@ -74,7 +74,7 @@ type SFU struct {
 	sync.RWMutex
 	webrtc       WebRTCTransportConfig
 	turn         *turn.Server
-	sessions     map[string]*session
+	sessions     map[string]Session
 	datachannels []*Datachannel
 	withStats    bool
 }
@@ -187,7 +187,7 @@ func NewSFU(c Config) *SFU {
 
 	sfu := &SFU{
 		webrtc:    w,
-		sessions:  make(map[string]*session),
+		sessions:  make(map[string]Session),
 		withStats: c.Router.WithStats,
 	}
 
@@ -209,8 +209,8 @@ func NewSFU(c Config) *SFU {
 }
 
 // NewSession creates a new session instance
-func (s *SFU) newSession(id string) *session {
-	session := NewSession(id, s.datachannels, s.webrtc)
+func (s *SFU) newSession(id string) Session {
+	session := NewSession(id, s.datachannels, s.webrtc).(*session)
 
 	session.OnClose(func() {
 		s.Lock()
@@ -234,13 +234,13 @@ func (s *SFU) newSession(id string) *session {
 }
 
 // GetSession by id
-func (s *SFU) getSession(id string) *session {
+func (s *SFU) getSession(id string) Session {
 	s.RLock()
 	defer s.RUnlock()
 	return s.sessions[id]
 }
 
-func (s *SFU) GetSession(sid string) (*session, WebRTCTransportConfig) {
+func (s *SFU) GetSession(sid string) (Session, WebRTCTransportConfig) {
 	session := s.getSession(sid)
 	if session == nil {
 		session = s.newSession(sid)
@@ -255,7 +255,7 @@ func (s *SFU) NewDatachannel(label string) *Datachannel {
 }
 
 // GetSessions return all sessions
-func (s *SFU) GetSessions() map[string]*session {
+func (s *SFU) GetSessions() map[string]Session {
 	s.RLock()
 	defer s.RUnlock()
 	return s.sessions

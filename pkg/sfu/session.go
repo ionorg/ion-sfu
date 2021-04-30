@@ -32,7 +32,7 @@ type session struct {
 }
 
 // NewSession creates a new session
-func NewSession(id string, dcs []*Datachannel, cfg WebRTCTransportConfig) *session {
+func NewSession(id string, dcs []*Datachannel, cfg WebRTCTransportConfig) Session {
 	s := &session{
 		id:           id,
 		peers:        make(map[string]Peer),

@@ -45,7 +45,7 @@ type JoinConfig struct {
 // SessionProvider provides the session to the sfu.Peer
 // This allows the sfu.SFU{} implementation to be customized / wrapped by another package
 type SessionProvider interface {
-	GetSession(sid string) (*session, WebRTCTransportConfig)
+	GetSession(sid string) (Session, WebRTCTransportConfig)
 }
 
 // PeerImpl represents a pair peer connection
@@ -90,12 +90,10 @@ func (p *PeerImpl) Join(sid, uid string, config ...JoinConfig) error {
 		uid = cuid.New()
 	}
 	p.id = uid
-	var (
-		cfg WebRTCTransportConfig
-		err error
-	)
+	var err error
 
-	p.session, cfg = p.provider.GetSession(sid)
+	s, cfg := p.provider.GetSession(sid)
+	p.session = s.(*session)
 
 	if !conf.NoSubscribe {
 		p.subscriber, err = NewSubscriber(uid, cfg)
