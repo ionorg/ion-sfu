@@ -9,18 +9,22 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-// Session represents a set of peers. Transports inside a session
+// Session represents a set of peers. Transports inside a SessionLocal
 // are automatically subscribed to each other.
 type Session interface {
 	ID() string
 	Publish(router Router, r Receiver)
+	Subscribe(peer Peer)
+	AddPeer(peer Peer)
+	RemovePeer(peer Peer)
 	AudioObserver() *AudioObserver
 	AddDatachannel(owner string, dc *webrtc.DataChannel)
+	GetDCMiddlewares() []*Datachannel
 	GetDataChannelLabels() []string
 	GetDataChannels(origin, label string) (dcs []*webrtc.DataChannel)
 }
 
-type session struct {
+type SessionLocal struct {
 	id             string
 	mu             sync.RWMutex
 	peers          map[string]Peer
@@ -31,9 +35,9 @@ type session struct {
 	onCloseHandler func()
 }
 
-// NewSession creates a new session
+// NewSession creates a new SessionLocal
 func NewSession(id string, dcs []*Datachannel, cfg WebRTCTransportConfig) Session {
-	s := &session{
+	s := &SessionLocal{
 		id:           id,
 		peers:        make(map[string]Peer),
 		datachannels: dcs,
@@ -44,16 +48,20 @@ func NewSession(id string, dcs []*Datachannel, cfg WebRTCTransportConfig) Sessio
 
 }
 
-// ID return session id
-func (s *session) ID() string {
+// ID return SessionLocal id
+func (s *SessionLocal) ID() string {
 	return s.id
 }
 
-func (s *session) AudioObserver() *AudioObserver {
+func (s *SessionLocal) AudioObserver() *AudioObserver {
 	return s.audioObs
 }
 
-func (s *session) GetDataChannelLabels() []string {
+func (s *SessionLocal) GetDCMiddlewares() []*Datachannel {
+	return s.datachannels
+}
+
+func (s *SessionLocal) GetDataChannelLabels() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	res := make([]string, 0, len(s.datachannels)+len(s.fanOutDCs))
@@ -64,27 +72,27 @@ func (s *session) GetDataChannelLabels() []string {
 	return res
 }
 
-func (s *session) AddPeer(peer Peer) {
+func (s *SessionLocal) AddPeer(peer Peer) {
 	s.mu.Lock()
 	s.peers[peer.ID()] = peer
 	s.mu.Unlock()
 }
 
-// RemovePeer removes a transport from the session
-func (s *session) RemovePeer(pid string) {
+// RemovePeer removes a transport from the SessionLocal
+func (s *SessionLocal) RemovePeer(p Peer) {
 	s.mu.Lock()
-	Logger.V(0).Info("RemovePeer from session", "peer_id", pid, "session_id", s.id)
-	delete(s.peers, pid)
+	Logger.V(0).Info("RemovePeer from SessionLocal", "peer_id", p.ID(), "session_id", s.id)
+	delete(s.peers, p.ID())
 	s.mu.Unlock()
 
-	// Close session if no peers
+	// Close SessionLocal if no peers
 	if len(s.peers) == 0 && s.onCloseHandler != nil && !s.closed.get() {
 		s.closed.set(true)
 		s.onCloseHandler()
 	}
 }
 
-func (s *session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
+func (s *SessionLocal) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 	label := dc.Label()
 
 	s.mu.Lock()
@@ -120,9 +128,9 @@ func (s *session) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 	}
 }
 
-// Publish will add a Sender to all peers in current session from given
+// Publish will add a Sender to all peers in current SessionLocal from given
 // Receiver
-func (s *session) Publish(router Router, r Receiver) {
+func (s *SessionLocal) Publish(router Router, r Receiver) {
 	peers := s.Peers()
 
 	for _, p := range peers {
@@ -140,8 +148,8 @@ func (s *session) Publish(router Router, r Receiver) {
 	}
 }
 
-// Subscribe will create a Sender for every other Receiver in the session
-func (s *session) Subscribe(peer Peer) {
+// Subscribe will create a Sender for every other Receiver in the SessionLocal
+func (s *SessionLocal) Subscribe(peer Peer) {
 	s.mu.RLock()
 	fdc := make([]string, len(s.fanOutDCs))
 	copy(fdc, s.fanOutDCs)
@@ -179,8 +187,8 @@ func (s *session) Subscribe(peer Peer) {
 	peer.Subscriber().negotiate()
 }
 
-// Peers returns peers in this session
-func (s *session) Peers() []Peer {
+// Peers returns peers in this SessionLocal
+func (s *SessionLocal) Peers() []Peer {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	p := make([]Peer, 0, len(s.peers))
@@ -190,12 +198,12 @@ func (s *session) Peers() []Peer {
 	return p
 }
 
-// OnClose is called when the session is closed
-func (s *session) OnClose(f func()) {
+// OnClose is called when the SessionLocal is closed
+func (s *SessionLocal) OnClose(f func()) {
 	s.onCloseHandler = f
 }
 
-func (s *session) setRelayedDatachannel(peerID string, datachannel *webrtc.DataChannel) {
+func (s *SessionLocal) setRelayedDatachannel(peerID string, datachannel *webrtc.DataChannel) {
 	label := datachannel.Label()
 	for _, dc := range s.datachannels {
 		dc := dc
@@ -225,7 +233,7 @@ func (s *session) setRelayedDatachannel(peerID string, datachannel *webrtc.DataC
 	})
 }
 
-func (s *session) audioLevelObserver(audioLevelInterval int) {
+func (s *SessionLocal) audioLevelObserver(audioLevelInterval int) {
 	if audioLevelInterval <= 50 {
 		Logger.V(0).Info("Values near/under 20ms may return unexpected values")
 	}
@@ -260,7 +268,7 @@ func (s *session) audioLevelObserver(audioLevelInterval int) {
 	}
 }
 
-func (s *session) onMessage(origin, label string, msg webrtc.DataChannelMessage) {
+func (s *SessionLocal) onMessage(origin, label string, msg webrtc.DataChannelMessage) {
 	dcs := s.GetDataChannels(origin, label)
 	for _, dc := range dcs {
 		if msg.IsString {
@@ -275,7 +283,7 @@ func (s *session) onMessage(origin, label string, msg webrtc.DataChannelMessage)
 	}
 }
 
-func (s *session) GetDataChannels(origin, label string) (dcs []*webrtc.DataChannel) {
+func (s *SessionLocal) GetDataChannels(origin, label string) (dcs []*webrtc.DataChannel) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for pid, p := range s.peers {
