@@ -19,7 +19,7 @@ var (
 	// ErrTransportExists join is called after a peerconnection is established
 	ErrTransportExists = errors.New("rtc transport already exists for this connection")
 	// ErrNoTransportEstablished cannot signal before join
-	ErrNoTransportEstablished = errors.New("no rtc transport exists for this PeerImpl")
+	ErrNoTransportEstablished = errors.New("no rtc transport exists for this Peer")
 	// ErrOfferIgnored if offer received in unstable state
 	ErrOfferIgnored = errors.New("offered ignored")
 )
@@ -42,7 +42,7 @@ type JoinConfig struct {
 	Relay bool
 }
 
-// SessionProvider provides the session to the sfu.PeerImpl{}
+// SessionProvider provides the session to the sfu.Peer
 // This allows the sfu.SFU{} implementation to be customized / wrapped by another package
 type SessionProvider interface {
 	GetSession(sid string) (*session, WebRTCTransportConfig)
