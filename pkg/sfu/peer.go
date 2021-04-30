@@ -209,7 +209,7 @@ func (p *PeerLocal) SetRemoteDescription(sdp webrtc.SessionDescription) error {
 
 	Logger.V(0).Info("PeerLocal got answer", "peer_id", p.id)
 	if err := p.subscriber.SetRemoteDescription(sdp); err != nil {
-		return fmt.Errorf("error Setting remote description: %v", err)
+		return fmt.Errorf("setting remote description: %w", err)
 	}
 
 	p.remoteAnswerPending = false
