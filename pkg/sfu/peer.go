@@ -144,7 +144,7 @@ func (p *PeerLocal) Join(sid, uid string, config ...JoinConfig) error {
 		}
 		for _, dc := range p.session.GetDCMiddlewares() {
 			if err := p.subscriber.AddDatachannel(p, dc); err != nil {
-				return fmt.Errorf("error Setting subscriber default dc datachannel")
+				return fmt.Errorf("setting subscriber default dc datachannel: %w", err)
 			}
 		}
 
