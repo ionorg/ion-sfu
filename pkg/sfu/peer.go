@@ -93,7 +93,7 @@ func (p *PeerLocal) Join(sid, uid string, config ...JoinConfig) error {
 	var err error
 
 	s, cfg := p.provider.GetSession(sid)
-	p.session = s.(*SessionLocal)
+	p.session = s
 
 	if !conf.NoSubscribe {
 		p.subscriber, err = NewSubscriber(uid, cfg)
