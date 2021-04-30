@@ -231,7 +231,7 @@ func (p *PeerLocal) Trickle(candidate webrtc.ICECandidateInit, target int) error
 	switch target {
 	case publisher:
 		if err := p.publisher.AddICECandidate(candidate); err != nil {
-			return fmt.Errorf("error Setting ice candidate: %s", err)
+			return fmt.Errorf("setting ice candidate: %w", err)
 		}
 	case subscriber:
 		if err := p.subscriber.AddICECandidate(candidate); err != nil {
