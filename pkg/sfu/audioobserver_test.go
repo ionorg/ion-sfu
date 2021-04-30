@@ -263,7 +263,7 @@ func Test_newAudioLevel(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NewAudioLevel(tt.args.threshold, tt.args.interval, tt.args.filter); !reflect.DeepEqual(got, tt.want) {
+			if got := NewAudioObserver(tt.args.threshold, tt.args.interval, tt.args.filter); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("NewAudioLevel() = %v, want %v", got, tt.want)
 			}
 		})
