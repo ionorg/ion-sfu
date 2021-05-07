@@ -83,7 +83,7 @@ type action struct {
 type peer struct {
 	id        string
 	mu        sync.Mutex
-	local     *Peer
+	local     *PeerLocal
 	remotePub *webrtc.PeerConnection
 	remoteSub *webrtc.PeerConnection
 	subs      sync.WaitGroup

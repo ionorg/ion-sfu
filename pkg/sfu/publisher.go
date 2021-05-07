@@ -18,7 +18,7 @@ type Publisher struct {
 	pc *webrtc.PeerConnection
 
 	router     Router
-	session    *Session
+	session    Session
 	relayPeer  *relay.Peer
 	candidates []webrtc.ICECandidateInit
 
@@ -28,15 +28,15 @@ type Publisher struct {
 }
 
 // NewPublisher creates a new Publisher
-func NewPublisher(session *Session, id string, relay bool, cfg WebRTCTransportConfig) (*Publisher, error) {
+func NewPublisher(session Session, id string, relay bool, cfg *WebRTCTransportConfig) (*Publisher, error) {
 	me, err := getPublisherMediaEngine()
 	if err != nil {
 		Logger.Error(err, "NewPeer error", "peer_id", id)
 		return nil, errPeerConnectionInitFailed
 	}
 
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(me), webrtc.WithSettingEngine(cfg.setting))
-	pc, err := api.NewPeerConnection(cfg.configuration)
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(me), webrtc.WithSettingEngine(cfg.Setting))
+	pc, err := api.NewPeerConnection(cfg.Configuration)
 
 	if err != nil {
 		Logger.Error(err, "NewPeer error", "peer_id", id)
@@ -46,7 +46,7 @@ func NewPublisher(session *Session, id string, relay bool, cfg WebRTCTransportCo
 	p := &Publisher{
 		id:      id,
 		pc:      pc,
-		router:  newRouter(id, pc, session, cfg.router),
+		router:  newRouter(id, pc, session, cfg),
 		session: session,
 	}
 
@@ -65,7 +65,7 @@ func NewPublisher(session *Session, id string, relay bool, cfg WebRTCTransportCo
 			p.session.Publish(p.router, r)
 		}
 
-		if relay && cfg.relay != nil && pub {
+		if relay && cfg.Relay != nil && pub {
 			codec := track.Codec()
 			downTrack, err := NewDownTrack(webrtc.RTPCodecCapability{
 				MimeType:     codec.MimeType,
@@ -73,12 +73,12 @@ func NewPublisher(session *Session, id string, relay bool, cfg WebRTCTransportCo
 				Channels:     codec.Channels,
 				SDPFmtpLine:  codec.SDPFmtpLine,
 				RTCPFeedback: []webrtc.RTCPFeedback{{"goog-remb", ""}, {"nack", ""}, {"nack", "pli"}},
-			}, r, session.bufferFactory, id, cfg.router.MaxPacketTrack)
+			}, r, cfg.BufferFactory, id, cfg.Router.MaxPacketTrack)
 			if err != nil {
-				Logger.V(1).Error(err, "Create relay downtrack err", "peer_id", id)
+				Logger.V(1).Error(err, "Create Relay downtrack err", "peer_id", id)
 				return
 			}
-			rr, sdr, err := cfg.relay.Send(session.id, id, receiver, downTrack)
+			rr, sdr, err := cfg.Relay.Send(session.ID(), id, receiver, downTrack)
 			if err != nil {
 				Logger.V(1).Error(err, "Relay err", "peer_id", id)
 				return
@@ -125,8 +125,8 @@ func NewPublisher(session *Session, id string, relay bool, cfg WebRTCTransportCo
 		}
 	})
 
-	if relay && cfg.relay != nil {
-		if err = cfg.relay.AddDataChannels(session.id, id, session.getDataChannelLabels()); err != nil {
+	if relay && cfg.Relay != nil {
+		if err = cfg.Relay.AddDataChannels(session.ID(), id, session.GetDataChannelLabels()); err != nil {
 			Logger.Error(err, "Add relaying data channels error")
 		}
 	}
@@ -155,7 +155,7 @@ func (p *Publisher) Answer(offer webrtc.SessionDescription) (webrtc.SessionDescr
 	return answer, nil
 }
 
-// GetRouter returns router with mediaSSRC
+// GetRouter returns Router with mediaSSRC
 func (p *Publisher) GetRouter() Router {
 	return p.router
 }
@@ -163,6 +163,11 @@ func (p *Publisher) GetRouter() Router {
 // Close peer
 func (p *Publisher) Close() {
 	p.closeOnce.Do(func() {
+		if p.relayPeer != nil {
+			if err := p.relayPeer.Close(); err != nil {
+				Logger.Error(err, "relay peer transport close err")
+			}
+		}
 		p.router.Stop()
 		if err := p.pc.Close(); err != nil {
 			Logger.Error(err, "webrtc transport close err")
@@ -181,6 +186,10 @@ func (p *Publisher) OnICEConnectionStateChange(f func(connectionState webrtc.ICE
 
 func (p *Publisher) SignalingState() webrtc.SignalingState {
 	return p.pc.SignalingState()
+}
+
+func (p *Publisher) PeerConnection() *webrtc.PeerConnection {
+	return p.pc
 }
 
 // AddICECandidate to peer connection

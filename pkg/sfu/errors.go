@@ -3,7 +3,7 @@ package sfu
 import "errors"
 
 var (
-	// Peer erors
+	// PeerLocal erors
 	errPeerConnectionInitFailed = errors.New("pc init failed")
 	errCreatingDataChannel      = errors.New("failed to create data channel")
 	// router errors
