@@ -13,11 +13,11 @@ type (
 	Datachannel struct {
 		Label       string
 		middlewares []func(MessageProcessor) MessageProcessor
-		onMessage   func(ctx context.Context, args ProcessArgs, out []*webrtc.DataChannel)
+		onMessage   func(ctx context.Context, args ProcessArgs)
 	}
 
 	ProcessArgs struct {
-		Peer        *Peer
+		Peer        Peer
 		Message     webrtc.DataChannelMessage
 		DataChannel *webrtc.DataChannel
 	}
@@ -45,7 +45,7 @@ func (dc *Datachannel) Use(middlewares ...func(MessageProcessor) MessageProcesso
 
 // OnMessage sets the message callback for the datachannel, the event is fired
 // after all the middlewares have processed the message.
-func (dc *Datachannel) OnMessage(fn func(ctx context.Context, args ProcessArgs, out []*webrtc.DataChannel)) {
+func (dc *Datachannel) OnMessage(fn func(ctx context.Context, args ProcessArgs)) {
 	dc.onMessage = fn
 }
 

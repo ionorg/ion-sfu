@@ -143,7 +143,7 @@ func InitTurnServer(conf TurnConfig, auth func(username, realm string, srcAddr n
 		// This is called everytime a user tries to authenticate with the TURN server
 		// Return the key for that user, or false when no user is found
 		AuthHandler: auth,
-		// ListenerConfig is a list of Listeners and the configuration around them
+		// ListenerConfig is a list of Listeners and the Configuration around them
 		ListenerConfigs: append(listeners, turn.ListenerConfig{
 			Listener: tcpListener,
 			RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{
@@ -154,7 +154,7 @@ func InitTurnServer(conf TurnConfig, auth func(username, realm string, srcAddr n
 			},
 		},
 		),
-		// PacketConnConfigs is a list of UDP Listeners and the configuration around them
+		// PacketConnConfigs is a list of UDP Listeners and the Configuration around them
 		PacketConnConfigs: []turn.PacketConnConfig{
 			{
 				PacketConn: udpListener,

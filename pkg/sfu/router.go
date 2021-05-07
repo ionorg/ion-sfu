@@ -10,7 +10,7 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-// Router defines a track rtp/rtcp router
+// Router defines a track rtp/rtcp Router
 type Router interface {
 	ID() string
 	AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote) (Receiver, bool)
@@ -18,7 +18,7 @@ type Router interface {
 	Stop()
 }
 
-// RouterConfig defines router configurations
+// RouterConfig defines Router configurations
 type RouterConfig struct {
 	WithStats           bool            `mapstructure:"withstats"`
 	MaxBandwidth        uint64          `mapstructure:"maxbandwidth"`
@@ -38,27 +38,27 @@ type router struct {
 	rtcpCh        chan []rtcp.Packet
 	stopCh        chan struct{}
 	config        RouterConfig
-	session       *Session
+	session       Session
 	receivers     map[string]Receiver
 	bufferFactory *buffer.Factory
 }
 
 // newRouter for routing rtp/rtcp packets
-func newRouter(id string, peer *webrtc.PeerConnection, session *Session, config RouterConfig) Router {
+func newRouter(id string, peer *webrtc.PeerConnection, session Session, config *WebRTCTransportConfig) Router {
 	ch := make(chan []rtcp.Packet, 10)
 	r := &router{
 		id:            id,
 		peer:          peer,
 		rtcpCh:        ch,
 		stopCh:        make(chan struct{}),
-		config:        config,
+		config:        config.Router,
 		session:       session,
 		receivers:     make(map[string]Receiver),
 		stats:         make(map[uint32]*stats.Stream),
-		bufferFactory: session.BufferFactory(),
+		bufferFactory: config.BufferFactory,
 	}
 
-	if config.WithStats {
+	if config.Router.WithStats {
 		stats.Peers.Inc()
 	}
 
@@ -94,9 +94,9 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 	if track.Kind() == webrtc.RTPCodecTypeAudio {
 		streamID := track.StreamID()
 		buff.OnAudioLevel(func(level uint8) {
-			r.session.audioObserver.observe(streamID, level)
+			r.session.AudioObserver().observe(streamID, level)
 		})
-		r.session.audioObserver.addStream(streamID)
+		r.session.AudioObserver().addStream(streamID)
 
 	} else if track.Kind() == webrtc.RTPCodecTypeVideo {
 		if r.twcc == nil {
@@ -159,7 +159,7 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 				}
 			}
 			if recv.Kind() == webrtc.RTPCodecTypeAudio {
-				r.session.audioObserver.removeStream(track.StreamID())
+				r.session.AudioObserver().removeStream(track.StreamID())
 			}
 			r.deleteReceiver(trackID, uint32(track.SSRC()))
 		})
@@ -183,7 +183,7 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 	return recv, publish
 }
 
-// AddWebRTCSender to router
+// AddWebRTCSender to Router
 func (r *router) AddDownTracks(s *Subscriber, recv Receiver) error {
 	r.Lock()
 	defer r.Unlock()

@@ -29,7 +29,7 @@ func Test_audioLevel_addStream(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			a := &audioLevel{}
+			a := &AudioObserver{}
 			a.addStream(tt.args.streamID)
 			assert.Equal(t, tt.want, *a.streams[0])
 
@@ -101,13 +101,13 @@ func Test_audioLevel_calc(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			a := &audioLevel{
+			a := &AudioObserver{
 				streams:  tt.fields.streams,
 				expected: tt.fields.expected,
 				previous: tt.fields.previous,
 			}
-			if got := a.calc(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("calc() = %v, want %v", got, tt.want)
+			if got := a.Calc(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Calc() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -176,7 +176,7 @@ func Test_audioLevel_observe(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			a := &audioLevel{
+			a := &AudioObserver{
 				streams:   tt.fields.streams,
 				threshold: tt.fields.threshold,
 			}
@@ -224,7 +224,7 @@ func Test_audioLevel_removeStream(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			a := &audioLevel{
+			a := &AudioObserver{
 				streams: tt.fields.streams,
 			}
 			a.removeStream(tt.args.streamID)
@@ -245,7 +245,7 @@ func Test_newAudioLevel(t *testing.T) {
 	tests := []struct {
 		name string
 		args args
-		want *audioLevel
+		want *AudioObserver
 	}{
 		{
 			name: "Must return a new audio level",
@@ -254,7 +254,7 @@ func Test_newAudioLevel(t *testing.T) {
 				interval:  1000,
 				filter:    20,
 			},
-			want: &audioLevel{
+			want: &AudioObserver{
 				expected:  1000 * 20 / 2000,
 				threshold: 40,
 			},
@@ -263,8 +263,8 @@ func Test_newAudioLevel(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			if got := newAudioLevel(tt.args.threshold, tt.args.interval, tt.args.filter); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("newAudioLevel() = %v, want %v", got, tt.want)
+			if got := NewAudioObserver(tt.args.threshold, tt.args.interval, tt.args.filter); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewAudioLevel() = %v, want %v", got, tt.want)
 			}
 		})
 	}

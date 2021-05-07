@@ -30,11 +30,11 @@ type Trickle struct {
 }
 
 type JSONSignal struct {
-	*sfu.Peer
+	*sfu.PeerLocal
 	logr.Logger
 }
 
-func NewJSONSignal(p *sfu.Peer, l logr.Logger) *JSONSignal {
+func NewJSONSignal(p *sfu.PeerLocal, l logr.Logger) *JSONSignal {
 	return &JSONSignal{p, l}
 }
 
