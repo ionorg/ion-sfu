@@ -5,8 +5,8 @@ go 1.13
 require (
 	github.com/bep/debounce v1.2.0
 	github.com/desertbit/timer v0.0.0-20180107155436-c41aec40b27f // indirect
-	github.com/gammazero/deque v0.0.0-20201010052221-3932da5530cc
-	github.com/gammazero/workerpool v1.1.1
+	github.com/gammazero/deque v0.1.0
+	github.com/gammazero/workerpool v1.1.2
 	github.com/go-logr/logr v0.4.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
