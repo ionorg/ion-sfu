@@ -346,7 +346,10 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 
 		if w.isSimulcast && len(w.pendingTracks[layer]) > 0 {
 			if pkt.KeyFrame {
-				w.downTracks[layer] = append(w.downTracks[layer], w.pendingTracks[layer]...)
+				for _, dt := range w.pendingTracks[layer] {
+					w.downTracks[layer] = append(w.downTracks[layer], dt)
+					w.DeleteDownTrack(dt.currentSpatialLayer(), dt.peerID)
+				}
 				w.pendingTracks[layer] = w.pendingTracks[layer][:0]
 			} else {
 				w.SendRTCP(pli)
@@ -354,7 +357,7 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 		}
 
 		for idx, dt := range w.downTracks[layer] {
-			if err := dt.WriteRTP(pkt); err == io.EOF || err == io.ErrClosedPipe {
+			if err = dt.WriteRTP(pkt); err == io.EOF || err == io.ErrClosedPipe {
 				del = append(del, idx)
 			}
 		}
