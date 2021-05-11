@@ -396,9 +396,7 @@ func (d *DownTrack) writeSimulcastRTP(extPkt *buffer.ExtPacket) error {
 	}
 	newSN := extPkt.Packet.SequenceNumber - d.snOffset
 	newTS := extPkt.Packet.Timestamp - d.tsOffset
-
-	d.payload = d.payload[:len(extPkt.Packet.Payload)]
-	copy(d.payload, extPkt.Packet.Payload)
+	payload := extPkt.Packet.Payload
 
 	var (
 		picID   uint16
@@ -412,6 +410,7 @@ func (d *DownTrack) writeSimulcastRTP(extPkt *buffer.ExtPacket) error {
 				d.snOffset++
 				return nil
 			}
+			payload = d.payload
 		}
 	}
 
@@ -441,7 +440,7 @@ func (d *DownTrack) writeSimulcastRTP(extPkt *buffer.ExtPacket) error {
 	hdr.SSRC = d.ssrc
 	hdr.PayloadType = d.payloadType
 
-	_, err := d.writeStream.WriteRTP(&hdr, d.payload)
+	_, err := d.writeStream.WriteRTP(&hdr, payload)
 	if err != nil {
 		Logger.Error(err, "Write packet err")
 	}
