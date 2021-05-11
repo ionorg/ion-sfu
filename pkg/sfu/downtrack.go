@@ -397,6 +397,9 @@ func (d *DownTrack) writeSimulcastRTP(extPkt *buffer.ExtPacket) error {
 	newSN := extPkt.Packet.SequenceNumber - d.snOffset
 	newTS := extPkt.Packet.Timestamp - d.tsOffset
 
+	d.payload = d.payload[:len(extPkt.Packet.Payload)]
+	copy(d.payload, extPkt.Packet.Payload)
+
 	var (
 		picID   uint16
 		tlz0Idx uint8
@@ -404,7 +407,7 @@ func (d *DownTrack) writeSimulcastRTP(extPkt *buffer.ExtPacket) error {
 	if d.simulcast.temporalSupported {
 		if d.mime == "video/vp8" {
 			drop := false
-			if extPkt.Packet.Payload, picID, tlz0Idx, drop = setVP8TemporalLayer(extPkt, d); drop {
+			if picID, tlz0Idx, drop = setVP8TemporalLayer(extPkt, d); drop {
 				// Pkt not in temporal getLayer update sequence number offset to avoid gaps
 				d.snOffset++
 				return nil
@@ -438,7 +441,7 @@ func (d *DownTrack) writeSimulcastRTP(extPkt *buffer.ExtPacket) error {
 	hdr.SSRC = d.ssrc
 	hdr.PayloadType = d.payloadType
 
-	_, err := d.writeStream.WriteRTP(&hdr, extPkt.Packet.Payload)
+	_, err := d.writeStream.WriteRTP(&hdr, d.payload)
 	if err != nil {
 		Logger.Error(err, "Write packet err")
 	}
