@@ -1,5 +1,7 @@
 package sfu
 
+import "time"
+
 const (
 	quarterResolution = "q"
 	halfResolution    = "h"
@@ -12,6 +14,7 @@ type SimulcastConfig struct {
 }
 
 type simulcastTrackHelpers struct {
+	switchDelay       time.Time
 	temporalSupported bool
 	temporalEnabled   bool
 	lTSCalc           int64
