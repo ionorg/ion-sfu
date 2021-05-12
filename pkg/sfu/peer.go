@@ -254,7 +254,7 @@ func (p *PeerLocal) SendDCMessage(label string, msg *[]byte) error {
 	dc := p.subscriber.DataChannel(label)
 
 	if dc == nil {
-		return fmt.Errorf("data channel %s doesn't exist", APIChannelLabel)
+		return fmt.Errorf("data channel %s doesn't exist", label)
 	}
 
 	if err := dc.SendText(string(*msg)); err != nil {
