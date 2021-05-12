@@ -30,6 +30,7 @@ type Peer interface {
 	Publisher() *Publisher
 	Subscriber() *Subscriber
 	Close() error
+	SendAPIChannelMessage(msg *[]byte) error
 }
 
 // JoinConfig allow adding more control to the peers joining a SessionLocal.
@@ -46,6 +47,11 @@ type JoinConfig struct {
 // This allows the sfu.SFU{} implementation to be customized / wrapped by another package
 type SessionProvider interface {
 	GetSession(sid string) (Session, WebRTCTransportConfig)
+}
+
+type ChannelAPIMessage struct {
+	Method string      `json:"method"`
+	Params interface{} `json:"params,omitempty"`
 }
 
 // PeerLocal represents a pair peer connection
@@ -237,6 +243,22 @@ func (p *PeerLocal) Trickle(candidate webrtc.ICECandidateInit, target int) error
 		if err := p.subscriber.AddICECandidate(candidate); err != nil {
 			return fmt.Errorf("setting ice candidate: %w", err)
 		}
+	}
+	return nil
+}
+
+func (p *PeerLocal) SendAPIChannelMessage(msg *[]byte) error {
+	if p.subscriber == nil {
+		return fmt.Errorf("No subscriber for this peer")
+	}
+	dc := p.subscriber.DataChannel(APIChannelLabel)
+
+	if dc == nil {
+		return fmt.Errorf("Data channel %s doesn't exist", APIChannelLabel)
+	}
+
+	if err := dc.SendText(string(*msg)); err != nil {
+		return fmt.Errorf("Failed to send message: %v", err)
 	}
 	return nil
 }
