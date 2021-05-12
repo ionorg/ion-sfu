@@ -70,7 +70,7 @@ func transformLayers(layers []string) ([]uint16, error) {
 	return res, nil
 }
 
-func sendMessage(streamID string, peer *sfu.Peer, layers []string, activeLayer int) {
+func sendMessage(streamID string, peer sfu.Peer, layers []string, activeLayer int) {
 	al, _ := layerIntToStr(activeLayer)
 	payload := activeLayerMessage{
 		StreamID:        streamID,

@@ -22,6 +22,7 @@ type Session interface {
 	GetDCMiddlewares() []*Datachannel
 	GetDataChannelLabels() []string
 	GetDataChannels(origin, label string) (dcs []*webrtc.DataChannel)
+	Peers() []Peer
 }
 
 type SessionLocal struct {

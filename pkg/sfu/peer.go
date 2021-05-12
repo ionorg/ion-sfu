@@ -30,6 +30,7 @@ type Peer interface {
 	Publisher() *Publisher
 	Subscriber() *Subscriber
 	Close() error
+	SendAPIChannelMessage(msg *[]byte) error
 }
 
 // JoinConfig allow adding more control to the peers joining a SessionLocal.
@@ -246,7 +247,7 @@ func (p *PeerLocal) Trickle(candidate webrtc.ICECandidateInit, target int) error
 	return nil
 }
 
-func (p *Peer) SendAPIChannelMessage(msg *[]byte) error {
+func (p *PeerLocal) SendAPIChannelMessage(msg *[]byte) error {
 	if p.subscriber == nil {
 		return fmt.Errorf("No subscriber for this peer")
 	}
