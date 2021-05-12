@@ -30,7 +30,7 @@ type Peer interface {
 	Publisher() *Publisher
 	Subscriber() *Subscriber
 	Close() error
-	SendAPIChannelMessage(msg *[]byte) error
+	SendDCMessage(label string, msg *[]byte) error
 }
 
 // JoinConfig allow adding more control to the peers joining a SessionLocal.
@@ -247,18 +247,18 @@ func (p *PeerLocal) Trickle(candidate webrtc.ICECandidateInit, target int) error
 	return nil
 }
 
-func (p *PeerLocal) SendAPIChannelMessage(msg *[]byte) error {
+func (p *PeerLocal) SendDCMessage(label string, msg *[]byte) error {
 	if p.subscriber == nil {
-		return fmt.Errorf("No subscriber for this peer")
+		return fmt.Errorf("no subscriber for this peer")
 	}
-	dc := p.subscriber.DataChannel(APIChannelLabel)
+	dc := p.subscriber.DataChannel(label)
 
 	if dc == nil {
-		return fmt.Errorf("Data channel %s doesn't exist", APIChannelLabel)
+		return fmt.Errorf("data channel %s doesn't exist", label)
 	}
 
 	if err := dc.SendText(string(*msg)); err != nil {
-		return fmt.Errorf("Failed to send message: %v", err)
+		return fmt.Errorf("failed to send message: %v", err)
 	}
 	return nil
 }
