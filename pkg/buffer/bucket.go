@@ -5,7 +5,7 @@ import (
 	"math"
 )
 
-const maxPktSize = 1350
+const maxPktSize = 1500
 
 type Bucket struct {
 	buf []byte
