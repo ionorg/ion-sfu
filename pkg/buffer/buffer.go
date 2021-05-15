@@ -10,7 +10,6 @@ import (
 
 	"github.com/gammazero/deque"
 	"github.com/go-logr/logr"
-	log "github.com/pion/ion-log"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/sdp/v3"
@@ -310,7 +309,6 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 		if err == errRTXPacket {
 			return
 		}
-		log.Errorf("buffer write err: %v", err)
 		return
 	}
 	if err = p.Unmarshal(pb); err != nil {

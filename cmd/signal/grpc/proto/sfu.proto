@@ -32,6 +32,7 @@ message JoinRequest {
     string sid = 1;
     string uid = 2;
     bytes description = 3;
+    map<string, string> config = 4;
 }
 
 message JoinReply {
