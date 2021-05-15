@@ -29,6 +29,7 @@ require (
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20210201082850-366fbb520750
 	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.7.0
+	go.etcd.io/etcd/client/v3 v3.5.0-alpha.0 // indirect
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 	google.golang.org/grpc v1.35.0
 	google.golang.org/grpc/examples v0.0.0-20201209011439-fd32f6a4fefe // indirect

@@ -19,6 +19,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
+
+	"github.com/pion/ion-sfu/pkg/etcd"
 )
 
 type grpcConfig struct {
@@ -39,8 +41,8 @@ var (
 	metricsAddr    string
 	verbosityLevel int
 	paddr          string
-
-	logger = log.New()
+	ipaddr, eaddr  string
+	logger         = log.New()
 )
 
 const (
@@ -102,6 +104,8 @@ func parse() bool {
 	flag.StringVar(&metricsAddr, "m", ":8100", "merics to use")
 	flag.IntVar(&verbosityLevel, "v", -1, "verbosity level, higher value - more logs")
 	flag.StringVar(&paddr, "paddr", "", "pprof listening address")
+	flag.StringVar(&eaddr, "eaddr", "", "eaddr listening address ipaddr is mandatory")
+	flag.StringVar(&ipaddr, "ipaddr", "", "host ip address")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
 
@@ -161,6 +165,18 @@ func main() {
 
 	log.SetGlobalOptions(log.GlobalConfig{V: verbosityLevel})
 	logger := log.New()
+
+	if eaddr != "" {
+		if ipaddr == "" {
+			fmt.Println("ipaddr mandatory if eaddr provided")
+			showHelp()
+			os.Exit(-1)
+		}
+		var port string = addr
+		var ntype string = "grpc"
+		etcd.InitEtcd(eaddr, ipaddr, port, ntype, logger)
+		// etcd.TestKV()
+	}
 
 	logger.Info("--- Starting SFU Node ---")
 	lis, err := net.Listen("tcp", addr)

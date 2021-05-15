@@ -3,6 +3,8 @@ package sfu
 import (
 	"sync"
 
+	"github.com/pion/ion-sfu/pkg/etcd"
+
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/ion-sfu/pkg/stats"
 	"github.com/pion/ion-sfu/pkg/twcc"
@@ -61,6 +63,9 @@ func newRouter(id string, peer *webrtc.PeerConnection, session Session, config *
 	if config.Router.WithStats {
 		stats.Peers.Inc()
 	}
+	if etcd.IsEtcd {
+		etcd.RegisterSession(session.ID())
+	}
 
 	go r.sendRTCP()
 	return r
@@ -75,6 +80,9 @@ func (r *router) Stop() {
 
 	if r.config.WithStats {
 		stats.Peers.Dec()
+	}
+	if etcd.IsEtcd {
+		etcd.CloseSession(r.session.ID())
 	}
 }
 

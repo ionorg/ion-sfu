@@ -76,7 +76,6 @@ func (s *Server) ServeJSONRPC(jaddr, cert, key string) error {
 			panic(err)
 		}
 		defer c.Close()
-
 		p := jsonrpcServer.NewJSONSignal(sfu.NewPeer(s.sfu), s.logger)
 		defer p.Close()
 
