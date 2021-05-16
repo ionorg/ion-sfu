@@ -54,7 +54,7 @@ type Peer struct {
 	provider     *Provider
 	gatherer     *webrtc.ICEGatherer
 	localTracks  []webrtc.TrackLocal
-	datachannels []string
+	dataChannels []string
 }
 
 func New(iceServers []webrtc.ICEServer, logger logr.Logger) *Provider {
@@ -95,18 +95,19 @@ func (p *Provider) AddDataChannels(sessionID, peerID string, labels []string) er
 		}
 	}
 	if r.ice.State() != webrtc.ICETransportStateNew {
-		r.datachannels = labels
+		r.dataChannels = labels
 		return r.startDataChannels()
 	}
-	r.datachannels = labels
+	r.dataChannels = labels
 	return nil
 }
 
-func (p *Provider) Send(sessionID, peerID string, receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) (*Peer, *webrtc.RTPSender, error) {
+func (p *Provider) Send(sessionID, peerID string, receiver *webrtc.RTPReceiver, remoteTrack *webrtc.TrackRemote,
+	localTrack webrtc.TrackLocal) (*Peer, *webrtc.RTPSender, error) {
 	p.mu.RLock()
 	if r, ok := p.peers[peerID]; ok {
 		p.mu.RUnlock()
-		s, err := r.send(receiver, localTrack)
+		s, err := r.send(receiver, remoteTrack, localTrack)
 		return r, s, err
 	}
 	p.mu.RUnlock()
@@ -116,7 +117,7 @@ func (p *Provider) Send(sessionID, peerID string, receiver *webrtc.RTPReceiver, 
 		return nil, nil, err
 	}
 
-	s, err := r.send(receiver, localTrack)
+	s, err := r.send(receiver, remoteTrack, localTrack)
 	return r, s, err
 }
 
@@ -224,10 +225,10 @@ func (r *Peer) Close() error {
 }
 
 func (r *Peer) startDataChannels() error {
-	if len(r.datachannels) == 0 {
+	if len(r.dataChannels) == 0 {
 		return nil
 	}
-	for idx, label := range r.datachannels {
+	for idx, label := range r.dataChannels {
 		id := uint16(idx)
 		dcParams := &webrtc.DataChannelParameters{
 			Label: label,
@@ -384,7 +385,8 @@ func (r *Peer) receive(s Signal) ([]byte, error) {
 	return b, nil
 }
 
-func (r *Peer) send(receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) (*webrtc.RTPSender, error) {
+func (r *Peer) send(receiver *webrtc.RTPReceiver, remoteTrack *webrtc.TrackRemote,
+	localTrack webrtc.TrackLocal) (*webrtc.RTPSender, error) {
 	r.Lock()
 	defer r.Unlock()
 
@@ -423,14 +425,13 @@ func (r *Peer) send(receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) 
 		signal.SCTPCapabilities = &sc
 
 	}
-	t := receiver.Track()
-	codec := receiver.Track().Codec()
+	codec := remoteTrack.Codec()
 	sdr, err := r.api.NewRTPSender(localTrack, r.dtls)
-	r.id = t.StreamID()
+	r.id = remoteTrack.StreamID()
 	if err != nil {
 		return nil, err
 	}
-	if err = r.me.RegisterCodec(codec, t.Kind()); err != nil {
+	if err = r.me.RegisterCodec(codec, remoteTrack.Kind()); err != nil {
 		return nil, err
 	}
 
@@ -441,8 +442,8 @@ func (r *Peer) send(receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) 
 	}
 	signal.CodecParameters = &codec
 	signal.Encodings = &webrtc.RTPCodingParameters{
-		SSRC:        t.SSRC(),
-		PayloadType: t.PayloadType(),
+		SSRC:        remoteTrack.SSRC(),
+		PayloadType: remoteTrack.PayloadType(),
 	}
 
 	local, err := json.Marshal(signal)
@@ -493,16 +494,15 @@ func (r *Peer) send(receiver *webrtc.RTPReceiver, localTrack webrtc.TrackLocal) 
 		Encodings: []webrtc.RTPEncodingParameters{
 			{
 				webrtc.RTPCodingParameters{
-					SSRC:        t.SSRC(),
-					PayloadType: t.PayloadType(),
-					RID:         t.RID(),
+					SSRC:        remoteTrack.SSRC(),
+					PayloadType: remoteTrack.PayloadType(),
+					RID:         remoteTrack.RID(),
 				},
 			},
 		},
 	}); err != nil {
 		return nil, err
 	}
-
 	r.localTracks = append(r.localTracks, localTrack)
 	return sdr, nil
 }

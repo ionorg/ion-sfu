@@ -78,7 +78,7 @@ func NewPublisher(session Session, id string, relay bool, cfg *WebRTCTransportCo
 				Logger.V(1).Error(err, "Create Relay downtrack err", "peer_id", id)
 				return
 			}
-			rr, sdr, err := cfg.Relay.Send(session.ID(), id, receiver, downTrack)
+			rr, sdr, err := cfg.Relay.Send(session.ID(), id, receiver, track, downTrack)
 			if err != nil {
 				Logger.V(1).Error(err, "Relay err", "peer_id", id)
 				return
