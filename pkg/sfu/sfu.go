@@ -42,14 +42,21 @@ type WebRTCTransportConfig struct {
 	BufferFactory *buffer.Factory
 }
 
+type WebRTCTimeoutsConfig struct {
+	ICEDisconnectedTimeout int `mapstructure:"disconnected"`
+	ICEFailedTimeout       int `mapstructure:"failed"`
+	ICEKeepaliveInterval   int `mapstructure:"keepalive"`
+}
+
 // WebRTCConfig defines parameters for ice
 type WebRTCConfig struct {
-	ICESinglePort int               `mapstructure:"singleport"`
-	ICEPortRange  []uint16          `mapstructure:"portrange"`
-	ICEServers    []ICEServerConfig `mapstructure:"iceserver"`
-	Candidates    Candidates        `mapstructure:"candidates"`
-	SDPSemantics  string            `mapstructure:"sdpsemantics"`
-	MDNS          bool              `mapstructure:"mdns"`
+	ICESinglePort int                  `mapstructure:"singleport"`
+	ICEPortRange  []uint16             `mapstructure:"portrange"`
+	ICEServers    []ICEServerConfig    `mapstructure:"iceserver"`
+	Candidates    Candidates           `mapstructure:"candidates"`
+	SDPSemantics  string               `mapstructure:"sdpsemantics"`
+	MDNS          bool                 `mapstructure:"mdns"`
+	Timeouts      WebRTCTimeoutsConfig `mapstructure:"timeouts"`
 }
 
 // Config for base SFU
@@ -135,6 +142,12 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 	case "plan-b":
 		sdpSemantics = webrtc.SDPSemanticsPlanB
 	}
+
+	se.SetICETimeouts(
+		time.Duration(c.WebRTC.Timeouts.ICEDisconnectedTimeout)*time.Second,
+		time.Duration(c.WebRTC.Timeouts.ICEFailedTimeout)*time.Second,
+		time.Duration(c.WebRTC.Timeouts.ICEKeepaliveInterval)*time.Second,
+	)
 
 	w := WebRTCTransportConfig{
 		Configuration: webrtc.Configuration{

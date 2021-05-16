@@ -70,6 +70,14 @@ mdns = true
 # nat1to1 = ["1.2.3.4"]
 # icelite = true
 
+[webrtc.timeouts]
+# The duration in [sec] without network activity before a ICE Agent is considered disconnected
+disconnected = 5
+# The duration in [sec] without network activity before a ICE Agent is considered failed after disconnected
+failed = 25
+# How often in [sec] the ICE Agent sends extra traffic if there is no activity, if media is flowing no traffic will be sent
+keepalive = 2
+
 [turn]
 # Enables embeded turn server
 enabled = false
