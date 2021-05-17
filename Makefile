@@ -16,13 +16,13 @@ protos:
 
 
 build_grpc: go_init
-	go build -o bin/sfu $(GO_LDFLAGS) ./cmd/signal/grpc/main.go
+	go build -o bin/sfu-grpc $(GO_LDFLAGS) ./cmd/signal/grpc/main.go
 
 build_jsonrpc: go_init
-	go build -o bin/sfu $(GO_LDFLAGS) ./cmd/signal/json-rpc/main.go
+	go build -o bin/sfu-json-rpc $(GO_LDFLAGS) ./cmd/signal/json-rpc/main.go
 
 build_allrpc: go_init
-	go build -o bin/sfu $(GO_LDFLAGS) ./cmd/signal/allrpc/main.go
+	go build -o bin/sfu-allrpc $(GO_LDFLAGS) ./cmd/signal/allrpc/main.go
 
 test: go_init
 	go test \
