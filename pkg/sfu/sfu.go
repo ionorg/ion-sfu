@@ -143,11 +143,17 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 		sdpSemantics = webrtc.SDPSemanticsPlanB
 	}
 
-	se.SetICETimeouts(
-		time.Duration(c.WebRTC.Timeouts.ICEDisconnectedTimeout)*time.Second,
-		time.Duration(c.WebRTC.Timeouts.ICEFailedTimeout)*time.Second,
-		time.Duration(c.WebRTC.Timeouts.ICEKeepaliveInterval)*time.Second,
-	)
+	if c.WebRTC.Timeouts.ICEDisconnectedTimeout == 0 &&
+		c.WebRTC.Timeouts.ICEFailedTimeout == 0 &&
+		c.WebRTC.Timeouts.ICEKeepaliveInterval == 0 {
+		Logger.Info("No webrtc timeouts found in config, using default ones")
+	} else {
+		se.SetICETimeouts(
+			time.Duration(c.WebRTC.Timeouts.ICEDisconnectedTimeout)*time.Second,
+			time.Duration(c.WebRTC.Timeouts.ICEFailedTimeout)*time.Second,
+			time.Duration(c.WebRTC.Timeouts.ICEKeepaliveInterval)*time.Second,
+		)
+	}
 
 	w := WebRTCTransportConfig{
 		Configuration: webrtc.Configuration{

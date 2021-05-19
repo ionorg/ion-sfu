@@ -134,13 +134,6 @@ func addMedia(done <-chan struct{}, t *testing.T, pc *webrtc.PeerConnection, med
 func newTestConfig() Config {
 	return Config{
 		Router: RouterConfig{MaxPacketTrack: 200},
-		WebRTC: WebRTCConfig{
-			Timeouts: WebRTCTimeoutsConfig{
-				ICEDisconnectedTimeout: 5,
-				ICEFailedTimeout:       25,
-				ICEKeepaliveInterval:   2,
-			},
-		},
 	}
 }
 
