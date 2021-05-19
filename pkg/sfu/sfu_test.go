@@ -131,14 +131,17 @@ func addMedia(done <-chan struct{}, t *testing.T, pc *webrtc.PeerConnection, med
 	return senders
 }
 
+func newTestConfig() Config {
+	return Config{
+		Router: RouterConfig{MaxPacketTrack: 200},
+	}
+}
+
 func TestSFU_SessionScenarios(t *testing.T) {
 	logger.SetGlobalOptions(logger.GlobalConfig{V: 2}) // 2 - TRACE
 	Logger = logger.New()
-	sfu := NewSFU(
-		Config{
-			Router: RouterConfig{MaxPacketTrack: 200},
-		},
-	)
+	config := newTestConfig()
+	sfu := NewSFU(config)
 	sfu.NewDatachannel(APIChannelLabel)
 	tests := []struct {
 		name  string
