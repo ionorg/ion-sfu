@@ -3,8 +3,10 @@ package relay
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pion/rtcp"
 
@@ -221,7 +223,7 @@ func (r *Peer) LocalTracks() []webrtc.TrackLocal {
 }
 
 func (r *Peer) Close() error {
-	return JoinErrs(r.sctp.Stop(), r.dtls.Stop(), r.ice.Stop())
+	return joinErrs(r.sctp.Stop(), r.dtls.Stop(), r.ice.Stop())
 }
 
 func (r *Peer) startDataChannels() error {
@@ -441,8 +443,10 @@ func (r *Peer) send(receiver *webrtc.RTPReceiver, remoteTrack *webrtc.TrackRemot
 		SessionID: r.sid,
 	}
 	signal.CodecParameters = &codec
+
+	rr := rand.New(rand.NewSource(time.Now().UnixNano()))
 	signal.Encodings = &webrtc.RTPCodingParameters{
-		SSRC:        remoteTrack.SSRC(),
+		SSRC:        webrtc.SSRC(rr.Uint32()),
 		PayloadType: remoteTrack.PayloadType(),
 	}
 
@@ -494,8 +498,8 @@ func (r *Peer) send(receiver *webrtc.RTPReceiver, remoteTrack *webrtc.TrackRemot
 		Encodings: []webrtc.RTPEncodingParameters{
 			{
 				webrtc.RTPCodingParameters{
-					SSRC:        remoteTrack.SSRC(),
-					PayloadType: remoteTrack.PayloadType(),
+					SSRC:        signal.Encodings.SSRC,
+					PayloadType: signal.Encodings.PayloadType,
 					RID:         remoteTrack.RID(),
 				},
 			},
@@ -507,7 +511,7 @@ func (r *Peer) send(receiver *webrtc.RTPReceiver, remoteTrack *webrtc.TrackRemot
 	return sdr, nil
 }
 
-func JoinErrs(errs ...error) error {
+func joinErrs(errs ...error) error {
 	var joinErrsR func(string, int, ...error) error
 	joinErrsR = func(soFar string, count int, errs ...error) error {
 		if len(errs) == 0 {
