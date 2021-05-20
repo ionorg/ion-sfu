@@ -23,6 +23,7 @@ type Receiver interface {
 	SSRC(layer int) uint32
 	AddUpTrack(track *webrtc.TrackRemote, buffer *buffer.Buffer, bestQualityFirst bool)
 	AddDownTrack(track *DownTrack, bestQualityFirst bool)
+	RemoveDownTrack(track *DownTrack)
 	SwitchDownTrack(track *DownTrack, layer int) error
 	GetBitrate() [3]uint64
 	GetMaxTemporalLayer() [3]int64
@@ -237,23 +238,29 @@ func (w *WebRTCReceiver) OnCloseHandler(fn func()) {
 	w.onCloseHandler = fn
 }
 
+// RemoveDownTrack completely removes a DownTrack from a Receiver
+func (w *WebRTCReceiver) RemoveDownTrack(track *DownTrack) {
+	for layer := 0; layer <= 2; layer++ {
+		w.locks[layer].Lock()
+
+		w.downTracks[layer] = deleteDownTrack(w.downTracks[layer], track)
+		w.pendingTracks[layer] = deleteDownTrack(w.pendingTracks[layer], track)
+
+		w.locks[layer].Unlock()
+	}
+}
+
 // DeleteDownTrack removes a DownTrack from a Receiver
 func (w *WebRTCReceiver) DeleteDownTrack(layer int, id string) {
 	w.locks[layer].Lock()
-	idx := -1
+
 	for i, dt := range w.downTracks[layer] {
 		if dt.peerID == id {
-			idx = i
+			w.downTracks[layer] = deleteDownTrackByIdx(w.downTracks[layer], i)
 			break
 		}
 	}
-	if idx == -1 {
-		w.locks[layer].Unlock()
-		return
-	}
-	w.downTracks[layer][idx] = w.downTracks[layer][len(w.downTracks[layer])-1]
-	w.downTracks[layer][len(w.downTracks[layer])-1] = nil
-	w.downTracks[layer] = w.downTracks[layer][:len(w.downTracks[layer])-1]
+
 	w.locks[layer].Unlock()
 }
 
@@ -363,9 +370,7 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 		}
 		if len(del) > 0 {
 			for i := len(del) - 1; i >= 0; i-- {
-				w.downTracks[layer][del[i]] = w.downTracks[layer][len(w.downTracks[layer])-1]
-				w.downTracks[layer][len(w.downTracks[layer])-1] = nil
-				w.downTracks[layer] = w.downTracks[layer][:len(w.downTracks[layer])-1]
+				w.downTracks[layer] = deleteDownTrackByIdx(w.downTracks[layer], del[i])
 			}
 			del = del[:0]
 		}
@@ -397,4 +402,21 @@ func downTrackSubscribed(dts []*DownTrack, dt *DownTrack) bool {
 		}
 	}
 	return false
+}
+
+func deleteDownTrack(dts []*DownTrack, dt *DownTrack) []*DownTrack {
+	for i, cdt := range dts {
+		if cdt == dt {
+			dts = deleteDownTrackByIdx(dts, i)
+			break
+		}
+	}
+	return dts
+}
+
+func deleteDownTrackByIdx(dts []*DownTrack, idx int) []*DownTrack {
+	dts[idx] = dts[len(dts)-1]
+	dts[len(dts)-1] = nil
+	dts = dts[:len(dts)-1]
+	return dts
 }

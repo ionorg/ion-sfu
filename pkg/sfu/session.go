@@ -15,6 +15,7 @@ type Session interface {
 	ID() string
 	Publish(router Router, r Receiver)
 	Subscribe(peer Peer)
+	Unsubscribe(peer Peer)
 	AddPeer(peer Peer)
 	RemovePeer(peer Peer)
 	AudioObserver() *AudioObserver
@@ -189,6 +190,28 @@ func (s *SessionLocal) Subscribe(peer Peer) {
 	}
 
 	peer.Subscriber().negotiate()
+}
+
+// Unsubscribe removes down tracks from every Receiver in the SessionLocal
+func (s *SessionLocal) Unsubscribe(peer Peer) {
+	s.mu.RLock()
+	peers := make([]Peer, 0, len(s.peers))
+	for _, p := range s.peers {
+		if p == peer || p.Publisher() == nil {
+			continue
+		}
+		peers = append(peers, p)
+	}
+	s.mu.RUnlock()
+
+	// Unsubscribe from publisher streams
+	for _, p := range peers {
+		err := p.Publisher().GetRouter().RemoveDownTracks(peer.Subscriber())
+		if err != nil {
+			Logger.Error(err, "Subscribing to Router err")
+			continue
+		}
+	}
 }
 
 // Peers returns peers in this SessionLocal

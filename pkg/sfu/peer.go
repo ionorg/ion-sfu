@@ -273,10 +273,15 @@ func (p *PeerLocal) Close() error {
 	if p.session != nil {
 		p.session.RemovePeer(p)
 	}
+
 	if p.publisher != nil {
 		p.publisher.Close()
 	}
+
 	if p.subscriber != nil {
+		if p.session != nil {
+			p.session.Unsubscribe(p)
+		}
 		if err := p.subscriber.Close(); err != nil {
 			return err
 		}

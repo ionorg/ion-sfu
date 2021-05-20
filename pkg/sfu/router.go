@@ -15,6 +15,7 @@ type Router interface {
 	ID() string
 	AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote) (Receiver, bool)
 	AddDownTracks(s *Subscriber, r Receiver) error
+	RemoveDownTracks(s *Subscriber) error
 	Stop()
 }
 
@@ -203,6 +204,21 @@ func (r *router) AddDownTracks(s *Subscriber, recv Receiver) error {
 			}
 		}
 		s.negotiate()
+	}
+	return nil
+}
+
+// RemoveDownTracks removes Subscriber's DownTracks from Router
+func (r *router) RemoveDownTracks(s *Subscriber) error {
+	r.Lock()
+	defer r.Unlock()
+
+	if len(r.receivers) > 0 {
+		for _, rcv := range r.receivers {
+			for _, dt := range s.GetDownTracks(rcv.StreamID()) {
+				rcv.RemoveDownTrack(dt)
+			}
+		}
 	}
 	return nil
 }
