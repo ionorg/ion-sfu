@@ -54,6 +54,8 @@ type Peer struct {
 	sctp         *webrtc.SCTPTransport
 	dtls         *webrtc.DTLSTransport
 	provider     *Provider
+	senders      []*webrtc.RTPSender
+	receivers    []*webrtc.RTPReceiver
 	gatherer     *webrtc.ICEGatherer
 	localTracks  []webrtc.TrackLocal
 	dataChannels []string
@@ -223,7 +225,17 @@ func (r *Peer) LocalTracks() []webrtc.TrackLocal {
 }
 
 func (r *Peer) Close() error {
-	return joinErrs(r.sctp.Stop(), r.dtls.Stop(), r.ice.Stop())
+	closeErrs := make([]error, 3+len(r.senders)+len(r.receivers))
+	for _, sdr := range r.senders {
+		closeErrs = append(closeErrs, sdr.Stop())
+	}
+	for _, recv := range r.receivers {
+		closeErrs = append(closeErrs, recv.Stop())
+	}
+
+	closeErrs = append(closeErrs, r.sctp.Stop(), r.dtls.Stop(), r.ice.Stop())
+
+	return joinErrs(closeErrs...)
 }
 
 func (r *Peer) startDataChannels() error {
@@ -379,6 +391,7 @@ func (r *Peer) receive(s Signal) ([]byte, error) {
 		}
 	}
 
+	r.receivers = append(r.receivers, recv)
 	b, err := json.Marshal(localSignal)
 	if err != nil {
 		return nil, err
@@ -508,6 +521,7 @@ func (r *Peer) send(receiver *webrtc.RTPReceiver, remoteTrack *webrtc.TrackRemot
 		return nil, err
 	}
 	r.localTracks = append(r.localTracks, localTrack)
+	r.senders = append(r.senders, sdr)
 	return sdr, nil
 }
 
