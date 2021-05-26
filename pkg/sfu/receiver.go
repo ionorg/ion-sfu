@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/gammazero/workerpool"
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/ion-sfu/pkg/stats"
@@ -334,7 +336,6 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 	pli := []rtcp.Packet{
 		&rtcp.PictureLossIndication{SenderSSRC: rand.Uint32(), MediaSSRC: w.SSRC(layer)},
 	}
-	var del []int
 
 	for {
 		pkt, err := w.buffers[layer].ReadExtended()
@@ -348,7 +349,8 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 			if pkt.KeyFrame {
 				for _, dt := range w.pendingTracks[layer] {
 					w.downTracks[layer] = append(w.downTracks[layer], dt)
-					w.DeleteDownTrack(dt.currentSpatialLayer(), dt.peerID)
+					w.DeleteDownTrack(dt.CurrentSpatialLayer(), dt.peerID)
+					dt.SwitchSpatialLayerDone()
 				}
 				w.pendingTracks[layer] = w.pendingTracks[layer][:0]
 			} else {
@@ -356,18 +358,10 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 			}
 		}
 
-		for idx, dt := range w.downTracks[layer] {
-			if err = dt.WriteRTP(pkt); err == io.EOF || err == io.ErrClosedPipe {
-				del = append(del, idx)
+		for _, dt := range w.downTracks[layer] {
+			if err = dt.WriteRTP(pkt); err != nil {
+				log.Error().Err(err).Str("id", dt.id).Msg("Error writing to down track")
 			}
-		}
-		if len(del) > 0 {
-			for i := len(del) - 1; i >= 0; i-- {
-				w.downTracks[layer][del[i]] = w.downTracks[layer][len(w.downTracks[layer])-1]
-				w.downTracks[layer][len(w.downTracks[layer])-1] = nil
-				w.downTracks[layer] = w.downTracks[layer][:len(w.downTracks[layer])-1]
-			}
-			del = del[:0]
 		}
 		w.locks[layer].Unlock()
 	}
@@ -384,7 +378,7 @@ func (w *WebRTCReceiver) closeTracks() {
 		w.downTracks[idx] = w.downTracks[idx][:0]
 		w.locks[idx].Unlock()
 	}
-	w.nackWorker.Stop()
+	w.nackWorker.StopWait()
 	if w.onCloseHandler != nil {
 		w.onCloseHandler()
 	}
