@@ -148,7 +148,7 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 			}
 
 			_, nopub := payload.Join.Config["NoPublish"]
-			_, nosub := payload.Join.Config["NoSublish"]
+			_, nosub := payload.Join.Config["NoSubscribe"]
 			_, relay := payload.Join.Config["Relay"]
 
 			cfg := sfu.JoinConfig{
