@@ -186,7 +186,7 @@ func (p *Publisher) Relay(ice []webrtc.ICEServer) (*relay.Peer, error) {
 		for _, lbl := range p.session.GetDataChannelLabels() {
 			_, err := rp.CreateDataChannel(lbl)
 			if err != nil {
-				Logger.V(1).Error(err, "Error creating data channels", "peer_id", p.id)
+				Logger.V(1).Error(err, "Creating data channels.", "peer_id", p.id)
 			}
 		}
 
