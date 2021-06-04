@@ -30,7 +30,7 @@ type Peer interface {
 	Publisher() *Publisher
 	Subscriber() *Subscriber
 	Close() error
-	SendDCMessage(label string, msg *[]byte) error
+	SendDCMessage(label string, msg []byte) error
 }
 
 // JoinConfig allow adding more control to the peers joining a SessionLocal.
@@ -39,8 +39,6 @@ type JoinConfig struct {
 	NoPublish bool
 	// If true the peer will not be allowed to subscribe to other peers in SessionLocal.
 	NoSubscribe bool
-	// If true it will Relay all the published tracks of the peer
-	Relay bool
 }
 
 // SessionProvider provides the SessionLocal to the sfu.Peer
@@ -144,7 +142,7 @@ func (p *PeerLocal) Join(sid, uid string, config ...JoinConfig) error {
 	}
 
 	if !conf.NoPublish {
-		p.publisher, err = NewPublisher(p.session, uid, conf.Relay, &cfg)
+		p.publisher, err = NewPublisher(uid, p.session, &cfg)
 		if err != nil {
 			return fmt.Errorf("error creating transport: %v", err)
 		}
@@ -247,7 +245,7 @@ func (p *PeerLocal) Trickle(candidate webrtc.ICECandidateInit, target int) error
 	return nil
 }
 
-func (p *PeerLocal) SendDCMessage(label string, msg *[]byte) error {
+func (p *PeerLocal) SendDCMessage(label string, msg []byte) error {
 	if p.subscriber == nil {
 		return fmt.Errorf("no subscriber for this peer")
 	}
@@ -257,7 +255,7 @@ func (p *PeerLocal) SendDCMessage(label string, msg *[]byte) error {
 		return fmt.Errorf("data channel %s doesn't exist", label)
 	}
 
-	if err := dc.SendText(string(*msg)); err != nil {
+	if err := dc.SendText(string(msg)); err != nil {
 		return fmt.Errorf("failed to send message: %v", err)
 	}
 	return nil
