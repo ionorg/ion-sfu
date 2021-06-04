@@ -86,7 +86,7 @@ func sendMessage(streamID string, peer sfu.Peer, layers []string, activeLayer in
 		sfu.Logger.Error(err, "unable to marshal active layer message")
 	}
 
-	if err := peer.SendDCMessage(sfu.APIChannelLabel, &bytes); err != nil {
+	if err := peer.SendDCMessage(sfu.APIChannelLabel, bytes); err != nil {
 		sfu.Logger.Error(err, "unable to send ActiveLayerMessage to peer", "peer_id", peer.ID())
 	}
 }

@@ -38,7 +38,7 @@ type WebRTCTransportConfig struct {
 	Configuration webrtc.Configuration
 	Setting       webrtc.SettingEngine
 	Router        RouterConfig
-	Relay         *relay.Provider
+	Relay         func(meta relay.PeerMeta, signal []byte) ([]byte, error)
 	BufferFactory *buffer.Factory
 }
 
@@ -68,7 +68,7 @@ type Config struct {
 	WebRTC        WebRTCConfig `mapstructure:"webrtc"`
 	Router        RouterConfig `mapstructure:"Router"`
 	Turn          TurnConfig   `mapstructure:"turn"`
-	Relay         *relay.Provider
+	Relay         func(meta relay.PeerMeta, signal []byte) ([]byte, error)
 	BufferFactory *buffer.Factory
 	TurnAuth      func(username string, realm string, srcAddr net.Addr) ([]byte, bool)
 }
@@ -208,10 +208,6 @@ func NewSFU(c Config) *SFU {
 		webrtc:    w,
 		sessions:  make(map[string]Session),
 		withStats: c.Router.WithStats,
-	}
-
-	if c.Relay != nil {
-		c.Relay.SetSettingEngine(w.Setting)
 	}
 
 	if c.Turn.Enabled {

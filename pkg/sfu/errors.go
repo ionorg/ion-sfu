@@ -11,7 +11,7 @@ var (
 	// Helpers errors
 	errShortPacket = errors.New("packet is not large enough")
 	errNilPacket   = errors.New("invalid nil packet")
-	// Downtrack errors
+
 	ErrSpatialNotSupported = errors.New("current track does not support simulcast/SVC")
 	ErrSpatialLayerBusy    = errors.New("a spatial layer change is in progress, try latter")
 )
