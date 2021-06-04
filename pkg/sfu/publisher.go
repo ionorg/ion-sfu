@@ -140,7 +140,7 @@ func (p *Publisher) Close() {
 			p.mu.Lock()
 			for _, rp := range p.relayPeer {
 				if err := rp.Close(); err != nil {
-					Logger.Error(err, "relay peer transport close err")
+					Logger.Error(err, "Closing relay peer transport.")
 				}
 			}
 			p.mu.Unlock()
