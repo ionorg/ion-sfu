@@ -240,7 +240,7 @@ func (p *Publisher) createRelayTrack(track *webrtc.TrackRemote, receiver Receive
 
 	downTrack.OnCloseHandler(func() {
 		if err = sdr.Stop(); err != nil {
-			Logger.V(1).Error(err, "Relay sender close err", "peer_id", p.id)
+			Logger.V(1).Error(err, "Stopping relay sender.", "peer_id", p.id)
 		}
 	})
 
