@@ -73,7 +73,7 @@ func NewPublisher(id string, session Session, cfg *WebRTCTransportConfig) (*Publ
 			p.tracks = append(p.tracks, publisherTracks{track, r})
 			for _, rp := range p.relayPeer {
 				if err = p.createRelayTrack(track, r, rp); err != nil {
-					Logger.V(1).Error(err, "Error creating relay track", "peer_id", p.id)
+					Logger.V(1).Error(err, "Creating relay track.", "peer_id", p.id)
 				}
 			}
 			p.mu.Unlock()
