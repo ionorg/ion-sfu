@@ -58,7 +58,7 @@ func NewPublisher(id string, session Session, cfg *WebRTCTransportConfig) (*Publ
 	}
 
 	pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-		Logger.V(1).Info("relayPeer got remote track id",
+		Logger.V(1).Info("Peer got remote track id",
 			"peer_id", p.id,
 			"track_id", track.ID(),
 			"mediaSSRC", track.SSRC(),
