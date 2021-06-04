@@ -235,7 +235,7 @@ func (p *Publisher) createRelayTrack(track *webrtc.TrackRemote, receiver Receive
 	sdr, err := rp.Send(receiver.(*WebRTCReceiver).receiver, track, downTrack)
 	if err != nil {
 		Logger.V(1).Error(err, "Relaying track.", "peer_id", p.id)
-		return err
+		return fmt.Errorf("relay: %w", err)
 	}
 
 	downTrack.OnCloseHandler(func() {
