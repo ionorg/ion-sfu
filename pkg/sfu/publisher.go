@@ -203,7 +203,7 @@ func (p *Publisher) Relay(ice []webrtc.ICEServer) (*relay.Peer, error) {
 	})
 
 	if err = rp.Offer(p.cfg.Relay); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("relay: %w", err)
 	}
 
 	return rp, nil
