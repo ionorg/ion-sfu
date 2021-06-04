@@ -193,7 +193,7 @@ func (p *Publisher) Relay(ice []webrtc.ICEServer) (*relay.Peer, error) {
 		p.mu.Lock()
 		for _, tp := range p.tracks {
 			if err = p.createRelayTrack(tp.track, tp.receiver, rp); err != nil {
-				Logger.V(1).Error(err, "Error creating relay track", "peer_id", p.id)
+				Logger.V(1).Error(err, "Creating relay track.", "peer_id", p.id)
 			}
 		}
 		p.relayPeer = append(p.relayPeer, rp)
