@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,8 +16,8 @@ import (
 )
 
 const (
-	signalerLabel = "ion_sfu_relay_signaler"
-	signalerEvent = "ion_sfu_relay_event"
+	signalerLabel        = "ion_sfu_relay_signaler"
+	signalerRequestEvent = "ion_relay_request"
 )
 
 var (
@@ -34,14 +35,16 @@ type signal struct {
 	TrackMeta        *TrackMeta                  `json:"trackInfo,omitempty"`
 }
 
-type signalRequest struct {
-	ID     uint32  `json:"id"`
-	Signal *signal `json:"signal,omitempty"`
-}
-
-type Request struct {
+type request struct {
+	ID      uint64 `json:"id"`
+	IsReply bool   `json:"reply"`
 	Event   string `json:"event"`
 	Payload []byte `json:"payload"`
+}
+
+type pendingRequest struct {
+	done chan []byte
+	req  request
 }
 
 type TrackMeta struct {
@@ -62,26 +65,27 @@ type PeerMeta struct {
 }
 
 type Peer struct {
-	mu            sync.Mutex
-	me            *webrtc.MediaEngine
-	log           logr.Logger
-	api           *webrtc.API
-	ice           *webrtc.ICETransport
-	meta          PeerMeta
-	sctp          *webrtc.SCTPTransport
-	dtls          *webrtc.DTLSTransport
-	role          *webrtc.ICERole
-	ready         bool
-	senders       []*webrtc.RTPSender
-	receivers     []*webrtc.RTPReceiver
-	pendingSender map[uint32]func()
-	gatherer      *webrtc.ICEGatherer
-	localTracks   []webrtc.TrackLocal
-	dcIndex       uint16
-	signalingDC   *webrtc.DataChannel
+	mu              sync.Mutex
+	me              *webrtc.MediaEngine
+	log             logr.Logger
+	api             *webrtc.API
+	ice             *webrtc.ICETransport
+	rand            *rand.Rand
+	meta            PeerMeta
+	sctp            *webrtc.SCTPTransport
+	dtls            *webrtc.DTLSTransport
+	role            *webrtc.ICERole
+	ready           bool
+	senders         []*webrtc.RTPSender
+	receivers       []*webrtc.RTPReceiver
+	pendingRequests map[uint64]pendingRequest
+	localTracks     []webrtc.TrackLocal
+	signalingDC     *webrtc.DataChannel
+	gatherer        *webrtc.ICEGatherer
+	dcIndex         uint16
 
 	onReady       func()
-	onRequest     func(r Request)
+	onRequest     func(event string, message Message)
 	onDataChannel func(channel *webrtc.DataChannel)
 	onTrack       func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, meta *TrackMeta)
 }
@@ -110,15 +114,16 @@ func NewPeer(meta PeerMeta, conf *PeerConfig) (*Peer, error) {
 	}
 
 	p := &Peer{
-		me:            &me,
-		api:           api,
-		log:           conf.Logger,
-		ice:           i,
-		meta:          meta,
-		sctp:          sctp,
-		dtls:          dtls,
-		gatherer:      gatherer,
-		pendingSender: make(map[uint32]func()),
+		me:              &me,
+		api:             api,
+		log:             conf.Logger,
+		ice:             i,
+		rand:            rand.New(rand.NewSource(time.Now().UnixNano())),
+		meta:            meta,
+		sctp:            sctp,
+		dtls:            dtls,
+		gatherer:        gatherer,
+		pendingRequests: make(map[uint64]pendingRequest),
 	}
 
 	sctp.OnDataChannel(func(channel *webrtc.DataChannel) {
@@ -292,27 +297,10 @@ func (p *Peer) OnReady(f func()) {
 }
 
 // OnRequest calls the callback when Peer gets a request message from remote Peer
-func (p *Peer) OnRequest(f func(r Request)) {
+func (p *Peer) OnRequest(f func(event string, msg Message)) {
 	p.mu.Lock()
 	p.onRequest = f
 	p.mu.Unlock()
-}
-
-// Request is used to send messages to remote Peer that will end in remote Peer. Other
-// data channels if used in ion-sfu may act as middlewares or fan outs.
-func (p *Peer) Request(r Request) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if p.signalingDC == nil {
-		return ErrRelaySignalDCNotReady
-	}
-
-	b, err := json.Marshal(r)
-	if err != nil {
-		return err
-	}
-	return p.signalingDC.Send(b)
 }
 
 // OnDataChannel sets an event handler which is invoked when a data
@@ -428,8 +416,8 @@ func (p *Peer) receive(s *signal) error {
 	return nil
 }
 
-// Send is used to negotiate a track to the remote peer
-func (p *Peer) Send(receiver *webrtc.RTPReceiver, remoteTrack *webrtc.TrackRemote,
+// AddTrack is used to negotiate a track to the remote peer
+func (p *Peer) AddTrack(receiver *webrtc.RTPReceiver, remoteTrack *webrtc.TrackRemote,
 	localTrack webrtc.TrackLocal) (*webrtc.RTPSender, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -443,19 +431,16 @@ func (p *Peer) Send(receiver *webrtc.RTPReceiver, remoteTrack *webrtc.TrackRemot
 		return nil, err
 	}
 
-	rr := rand.New(rand.NewSource(time.Now().UnixNano()))
-	s := signalRequest{
-		ID:     rr.Uint32(),
-		Signal: &signal{},
-	}
-	s.Signal.TrackMeta = &TrackMeta{
+	s := &signal{}
+
+	s.TrackMeta = &TrackMeta{
 		StreamID:        remoteTrack.StreamID(),
 		TrackID:         remoteTrack.ID(),
 		CodecParameters: &codec,
 	}
 
-	s.Signal.Encodings = &webrtc.RTPCodingParameters{
-		SSRC:        webrtc.SSRC(rr.Uint32()),
+	s.Encodings = &webrtc.RTPCodingParameters{
+		SSRC:        webrtc.SSRC(p.rand.Uint32()),
 		PayloadType: remoteTrack.PayloadType(),
 	}
 	pld, err := json.Marshal(&s)
@@ -463,9 +448,57 @@ func (p *Peer) Send(receiver *webrtc.RTPReceiver, remoteTrack *webrtc.TrackRemot
 		return nil, err
 	}
 
-	req := Request{
-		Event:   signalerEvent,
-		Payload: pld,
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+	defer cancel()
+	if _, err = p.noMutexRequest(ctx, signalerRequestEvent, pld); err != nil {
+		return nil, err
+	}
+
+	params := receiver.GetParameters()
+
+	if err = sdr.Send(webrtc.RTPSendParameters{
+		RTPParameters: params,
+		Encodings: []webrtc.RTPEncodingParameters{
+			{
+				webrtc.RTPCodingParameters{
+					SSRC:        s.Encodings.SSRC,
+					PayloadType: s.Encodings.PayloadType,
+				},
+			},
+		},
+	}); err != nil {
+		p.log.Error(err, "Send RTPSender failed")
+	}
+
+	p.localTracks = append(p.localTracks, localTrack)
+	p.senders = append(p.senders, sdr)
+	return sdr, nil
+}
+
+// Emit emits the data argument to remote peer.
+func (p *Peer) Emit(event string, data []byte) error {
+	req := request{
+		ID:      p.rand.Uint64(),
+		Event:   event,
+		Payload: data,
+	}
+
+	msg, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+
+	if err = p.signalingDC.Send(msg); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *Peer) Request(ctx context.Context, event string, data []byte) ([]byte, error) {
+	req := request{
+		ID:      p.rand.Uint64(),
+		Event:   event,
+		Payload: data,
 	}
 
 	msg, err := json.Marshal(req)
@@ -477,83 +510,140 @@ func (p *Peer) Send(receiver *webrtc.RTPReceiver, remoteTrack *webrtc.TrackRemot
 		return nil, err
 	}
 
-	params := receiver.GetParameters()
+	resp := make(chan []byte, 1)
 
-	p.pendingSender[s.ID] = func() {
-		if err = sdr.Send(webrtc.RTPSendParameters{
-			RTPParameters: params,
-			Encodings: []webrtc.RTPEncodingParameters{
-				{
-					webrtc.RTPCodingParameters{
-						SSRC:        s.Signal.Encodings.SSRC,
-						PayloadType: s.Signal.Encodings.PayloadType,
-					},
-				},
-			},
-		}); err != nil {
-			p.log.Error(err, "Send RTPSender failed")
-		}
+	p.mu.Lock()
+	p.pendingRequests[req.ID] = pendingRequest{
+		done: resp,
+		req:  req,
 	}
-	p.localTracks = append(p.localTracks, localTrack)
-	p.senders = append(p.senders, sdr)
-	return sdr, nil
+	p.mu.Unlock()
+
+	defer func() {
+		p.mu.Lock()
+		delete(p.pendingRequests, req.ID)
+		p.mu.Unlock()
+	}()
+
+	select {
+	case r := <-resp:
+		return r, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (p *Peer) noMutexRequest(ctx context.Context, event string, data []byte) ([]byte, error) {
+	req := request{
+		ID:      p.rand.Uint64(),
+		Event:   event,
+		Payload: data,
+	}
+
+	msg, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = p.signalingDC.Send(msg); err != nil {
+		return nil, err
+	}
+
+	resp := make(chan []byte, 1)
+
+	p.pendingRequests[req.ID] = pendingRequest{
+		done: resp,
+		req:  req,
+	}
+
+	defer func() {
+		p.mu.Lock()
+		delete(p.pendingRequests, req.ID)
+		p.mu.Unlock()
+	}()
+
+	select {
+	case r := <-resp:
+		return r, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
 }
 
 func (p *Peer) handleRequest(msg webrtc.DataChannelMessage) {
-	mr := &Request{}
+	mr := &request{}
 	if err := json.Unmarshal(msg.Data, mr); err != nil {
 		p.log.Error(err, "Error marshaling remote message", "peer_id", p.meta.PeerID, "session_id", p.meta.SessionID)
 		return
 	}
 
-	if mr.Event != signalerEvent {
+	if mr.Event == signalerRequestEvent {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+
+		r := &signal{}
+		if err := json.Unmarshal(mr.Payload, r); err != nil {
+			p.log.Error(err, "Error marshaling remote message", "peer_id", p.meta.PeerID, "session_id", p.meta.SessionID)
+			return
+		}
+		if err := p.receive(r); err != nil {
+			p.log.Error(err, "Error receiving remote track", "peer_id", p.meta.PeerID, "session_id", p.meta.SessionID)
+			return
+		}
+		if err := p.reply(mr.ID, mr.Event, nil); err != nil {
+			p.log.Error(err, "Error replying message", "peer_id", p.meta.PeerID, "session_id", p.meta.SessionID)
+			return
+		}
+
+		return
+	}
+
+	if mr.IsReply {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+
+		if m, ok := p.pendingRequests[mr.ID]; ok {
+			m.done <- mr.Payload
+			delete(p.pendingRequests, mr.ID)
+		}
+
+		return
+	}
+
+	if mr.Event != signalerRequestEvent {
 		p.mu.Lock()
 		if p.onRequest != nil {
-			p.onRequest(*mr)
+			p.onRequest(mr.Event, Message{
+				p:     p,
+				event: mr.Event,
+				id:    mr.ID,
+				msg:   mr.Payload,
+			})
 		}
 		p.mu.Unlock()
 		return
 	}
 
-	r := &signalRequest{}
-	if err := json.Unmarshal(mr.Payload, r); err != nil {
-		p.log.Error(err, "Error marshaling remote message", "peer_id", p.meta.PeerID, "session_id", p.meta.SessionID)
-		return
+}
+
+func (p *Peer) reply(id uint64, event string, payload []byte) error {
+	req := request{
+		ID:      id,
+		Event:   event,
+		Payload: payload,
+		IsReply: true,
 	}
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if r.Signal == nil {
-		if f, ok := p.pendingSender[r.ID]; ok {
-			f()
-		}
-		return
-	}
-
-	if err := p.receive(r.Signal); err != nil {
-		return
-	}
-	rr := &signalRequest{
-		ID: r.ID,
-	}
-	d, err := json.Marshal(rr)
+	msg, err := json.Marshal(req)
 	if err != nil {
-		p.log.Error(err, "Error marshaling remote signalRequest", "peer_id", p.meta.PeerID, "session_id", p.meta.SessionID, "stream_id")
-		return
+		return err
 	}
-	req := Request{
-		Event:   signalerEvent,
-		Payload: d,
+
+	if err = p.signalingDC.Send(msg); err != nil {
+		return err
 	}
-	d, err = json.Marshal(req)
-	if err != nil {
-		p.log.Error(err, "Error marshaling response Request", "peer_id", p.meta.PeerID, "session_id", p.meta.SessionID, "stream_id")
-		return
-	}
-	if err = p.signalingDC.Send(d); err != nil {
-		p.log.Error(err, "Error sending response", "peer_id", p.meta.PeerID, "session_id", p.meta.SessionID, "stream_id")
-	}
+	return nil
 }
 
 func joinErrs(errs ...error) error {
@@ -579,4 +669,19 @@ func joinErrs(errs ...error) error {
 		return joinErrsR(fmt.Sprintf("%s\n%d: %s", soFar, count, current), count, next...)
 	}
 	return joinErrsR("", 0, errs...)
+}
+
+type Message struct {
+	p     *Peer
+	event string
+	id    uint64
+	msg   []byte
+}
+
+func (m *Message) Payload() []byte {
+	return m.msg
+}
+
+func (m *Message) Reply(msg []byte) error {
+	return m.p.reply(m.id, m.event, msg)
 }
