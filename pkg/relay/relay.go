@@ -66,6 +66,7 @@ type PeerMeta struct {
 
 type Peer struct {
 	mu              sync.Mutex
+	rmu             sync.Mutex
 	me              *webrtc.MediaEngine
 	log             logr.Logger
 	api             *webrtc.API
@@ -450,7 +451,7 @@ func (p *Peer) AddTrack(receiver *webrtc.RTPReceiver, remoteTrack *webrtc.TrackR
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
-	if _, err = p.noMutexRequest(ctx, signalerRequestEvent, pld); err != nil {
+	if _, err = p.Request(ctx, signalerRequestEvent, pld); err != nil {
 		return nil, err
 	}
 
@@ -512,17 +513,17 @@ func (p *Peer) Request(ctx context.Context, event string, data []byte) ([]byte, 
 
 	resp := make(chan []byte, 1)
 
-	p.mu.Lock()
+	p.rmu.Lock()
 	p.pendingRequests[req.ID] = pendingRequest{
 		done: resp,
 		req:  req,
 	}
-	p.mu.Unlock()
+	p.rmu.Unlock()
 
 	defer func() {
-		p.mu.Lock()
+		p.rmu.Lock()
 		delete(p.pendingRequests, req.ID)
-		p.mu.Unlock()
+		p.rmu.Unlock()
 	}()
 
 	select {
@@ -531,44 +532,6 @@ func (p *Peer) Request(ctx context.Context, event string, data []byte) ([]byte, 
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
-}
-
-func (p *Peer) noMutexRequest(ctx context.Context, event string, data []byte) ([]byte, error) {
-	req := request{
-		ID:      p.rand.Uint64(),
-		Event:   event,
-		Payload: data,
-	}
-
-	msg, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = p.signalingDC.Send(msg); err != nil {
-		return nil, err
-	}
-
-	resp := make(chan []byte, 1)
-
-	p.pendingRequests[req.ID] = pendingRequest{
-		done: resp,
-		req:  req,
-	}
-
-	defer func() {
-		p.mu.Lock()
-		delete(p.pendingRequests, req.ID)
-		p.mu.Unlock()
-	}()
-
-	select {
-	case r := <-resp:
-		return r, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-
 }
 
 func (p *Peer) handleRequest(msg webrtc.DataChannelMessage) {
@@ -600,8 +563,8 @@ func (p *Peer) handleRequest(msg webrtc.DataChannelMessage) {
 	}
 
 	if mr.IsReply {
-		p.mu.Lock()
-		defer p.mu.Unlock()
+		p.rmu.Lock()
+		defer p.rmu.Unlock()
 
 		if m, ok := p.pendingRequests[mr.ID]; ok {
 			m.done <- mr.Payload
