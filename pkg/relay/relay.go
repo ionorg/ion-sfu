@@ -42,11 +42,6 @@ type request struct {
 	Payload []byte `json:"payload"`
 }
 
-type pendingRequest struct {
-	done chan []byte
-	req  request
-}
-
 type TrackMeta struct {
 	StreamID        string                     `json:"streamId"`
 	TrackID         string                     `json:"trackId"`
@@ -79,7 +74,7 @@ type Peer struct {
 	ready           bool
 	senders         []*webrtc.RTPSender
 	receivers       []*webrtc.RTPReceiver
-	pendingRequests map[uint64]pendingRequest
+	pendingRequests map[uint64]chan []byte
 	localTracks     []webrtc.TrackLocal
 	signalingDC     *webrtc.DataChannel
 	gatherer        *webrtc.ICEGatherer
@@ -124,7 +119,7 @@ func NewPeer(meta PeerMeta, conf *PeerConfig) (*Peer, error) {
 		sctp:            sctp,
 		dtls:            dtls,
 		gatherer:        gatherer,
-		pendingRequests: make(map[uint64]pendingRequest),
+		pendingRequests: make(map[uint64]chan []byte),
 	}
 
 	sctp.OnDataChannel(func(channel *webrtc.DataChannel) {
@@ -514,10 +509,7 @@ func (p *Peer) Request(ctx context.Context, event string, data []byte) ([]byte, 
 	resp := make(chan []byte, 1)
 
 	p.rmu.Lock()
-	p.pendingRequests[req.ID] = pendingRequest{
-		done: resp,
-		req:  req,
-	}
+	p.pendingRequests[req.ID] = resp
 	p.rmu.Unlock()
 
 	defer func() {
@@ -541,7 +533,7 @@ func (p *Peer) handleRequest(msg webrtc.DataChannelMessage) {
 		return
 	}
 
-	if mr.Event == signalerRequestEvent {
+	if mr.Event == signalerRequestEvent && !mr.IsReply {
 		p.mu.Lock()
 		defer p.mu.Unlock()
 
@@ -564,13 +556,11 @@ func (p *Peer) handleRequest(msg webrtc.DataChannelMessage) {
 
 	if mr.IsReply {
 		p.rmu.Lock()
-		defer p.rmu.Unlock()
-
-		if m, ok := p.pendingRequests[mr.ID]; ok {
-			m.done <- mr.Payload
+		if c, ok := p.pendingRequests[mr.ID]; ok {
+			c <- mr.Payload
 			delete(p.pendingRequests, mr.ID)
 		}
-
+		p.rmu.Unlock()
 		return
 	}
 
