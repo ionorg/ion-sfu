@@ -45,6 +45,7 @@ type WebRTCReceiver struct {
 	trackID        string
 	streamID       string
 	kind           webrtc.RTPCodecType
+	closed         atomicBool
 	bandwidth      uint64
 	lastPli        int64
 	stream         string
@@ -100,8 +101,11 @@ func (w *WebRTCReceiver) Kind() webrtc.RTPCodecType {
 }
 
 func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, buff *buffer.Buffer, bestQualityFirst bool) {
-	var layer int
+	if w.closed.get() {
+		return
+	}
 
+	var layer int
 	switch track.RID() {
 	case fullResolution:
 		layer = 2
@@ -167,6 +171,10 @@ func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, buff *buffer.Buff
 }
 
 func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
+	if w.closed.get() {
+		return
+	}
+
 	layer := 0
 	if w.isSimulcast {
 		w.Lock()
@@ -205,6 +213,10 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 }
 
 func (w *WebRTCReceiver) SwitchDownTrack(track *DownTrack, layer int) error {
+	if w.closed.get() {
+		return errNoReceiverFound
+	}
+
 	if buf := w.buffers[layer]; buf != nil {
 		w.locks[layer].Lock()
 		w.pendingTracks[layer] = append(w.pendingTracks[layer], track)
@@ -241,6 +253,10 @@ func (w *WebRTCReceiver) OnCloseHandler(fn func()) {
 
 // DeleteDownTrack removes a DownTrack from a Receiver
 func (w *WebRTCReceiver) DeleteDownTrack(layer int, id string) {
+	if w.closed.get() {
+		return
+	}
+
 	w.locks[layer].Lock()
 	idx := -1
 	for i, dt := range w.downTracks[layer] {
@@ -329,7 +345,8 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 func (w *WebRTCReceiver) writeRTP(layer int) {
 	defer func() {
 		w.closeOnce.Do(func() {
-			go w.closeTracks()
+			w.closed.set(true)
+			w.closeTracks()
 		})
 	}()
 

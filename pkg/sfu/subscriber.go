@@ -155,6 +155,7 @@ func (s *Subscriber) RemoveDownTrack(streamID string, downTrack *DownTrack) {
 		for i, dt := range dts {
 			if dt == downTrack {
 				idx = i
+				break
 			}
 		}
 		if idx >= 0 {
