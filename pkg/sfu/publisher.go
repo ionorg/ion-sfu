@@ -32,6 +32,10 @@ type Publisher struct {
 type publisherTracks struct {
 	track    *webrtc.TrackRemote
 	receiver Receiver
+	// This will be used in the future for tracks that will be relayed as clients or servers
+	// This is for SVC and Simulcast where you will be able to chose if the relayed peer just
+	// want a single track (for recording/ processing) or get all the tracks (for load balancing)
+	clientRelay bool
 }
 
 // NewPublisher creates a new Publisher
@@ -71,12 +75,16 @@ func NewPublisher(id string, session Session, cfg *WebRTCTransportConfig) (*Publ
 		if pub {
 			p.session.Publish(p.router, r)
 			p.mu.Lock()
-			p.tracks = append(p.tracks, publisherTracks{track, r})
+			p.tracks = append(p.tracks, publisherTracks{track, r, true})
 			for _, rp := range p.relayPeer {
 				if err = p.createRelayTrack(track, r, rp); err != nil {
 					Logger.V(1).Error(err, "Creating relay track.", "peer_id", p.id)
 				}
 			}
+			p.mu.Unlock()
+		} else {
+			p.mu.Lock()
+			p.tracks = append(p.tracks, publisherTracks{track, r, false})
 			p.mu.Unlock()
 		}
 	})
@@ -192,6 +200,10 @@ func (p *Publisher) Relay(ice []webrtc.ICEServer) (*relay.Peer, error) {
 
 		p.mu.Lock()
 		for _, tp := range p.tracks {
+			if !tp.clientRelay {
+				// simulcast will just relay client track for now
+				continue
+			}
 			if err = p.createRelayTrack(tp.track, tp.receiver, rp); err != nil {
 				Logger.V(1).Error(err, "Creating relay track.", "peer_id", p.id)
 			}
@@ -207,6 +219,17 @@ func (p *Publisher) Relay(ice []webrtc.ICEServer) (*relay.Peer, error) {
 	}
 
 	return rp, nil
+}
+
+func (p *Publisher) Tracks() []*webrtc.TrackRemote {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	tracks := make([]*webrtc.TrackRemote, len(p.tracks))
+	for idx, track := range p.tracks {
+		tracks[idx] = track.track
+	}
+	return tracks
 }
 
 // AddICECandidate to peer connection
