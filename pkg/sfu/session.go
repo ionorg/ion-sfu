@@ -16,6 +16,7 @@ type Session interface {
 	Publish(router Router, r Receiver)
 	Subscribe(peer Peer)
 	AddPeer(peer Peer)
+	AddRelayPeer(peer *RelayPeer)
 	RemovePeer(peer Peer)
 	AudioObserver() *AudioObserver
 	AddDatachannel(owner string, dc *webrtc.DataChannel)
@@ -23,12 +24,14 @@ type Session interface {
 	GetDataChannelLabels() []string
 	GetDataChannels(origin, label string) (dcs []*webrtc.DataChannel)
 	Peers() []Peer
+	RelayPeers() []*RelayPeer
 }
 
 type SessionLocal struct {
 	id             string
 	mu             sync.RWMutex
 	peers          map[string]Peer
+	relayPeers     map[string]*RelayPeer
 	closed         atomicBool
 	audioObs       *AudioObserver
 	fanOutDCs      []string
@@ -79,6 +82,12 @@ func (s *SessionLocal) GetDataChannelLabels() []string {
 func (s *SessionLocal) AddPeer(peer Peer) {
 	s.mu.Lock()
 	s.peers[peer.ID()] = peer
+	s.mu.Unlock()
+}
+
+func (s *SessionLocal) AddRelayPeer(peer *RelayPeer) {
+	s.mu.Lock()
+	s.relayPeers[peer.ID()] = peer
 	s.mu.Unlock()
 }
 
@@ -135,9 +144,7 @@ func (s *SessionLocal) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 // Publish will add a Sender to all peers in current SessionLocal from given
 // Receiver
 func (s *SessionLocal) Publish(router Router, r Receiver) {
-	peers := s.Peers()
-
-	for _, p := range peers {
+	for _, p := range s.Peers() {
 		// Don't sub to self
 		if router.ID() == p.ID() || p.Subscriber() == nil {
 			continue
@@ -188,6 +195,15 @@ func (s *SessionLocal) Subscribe(peer Peer) {
 		}
 	}
 
+	// Subscribe to relay streams
+	for _, p := range s.RelayPeers() {
+		err := p.GetRouter().AddDownTracks(peer.Subscriber(), nil)
+		if err != nil {
+			Logger.Error(err, "Subscribing to Router err")
+			continue
+		}
+	}
+
 	peer.Subscriber().negotiate()
 }
 
@@ -197,6 +213,17 @@ func (s *SessionLocal) Peers() []Peer {
 	defer s.mu.RUnlock()
 	p := make([]Peer, 0, len(s.peers))
 	for _, peer := range s.peers {
+		p = append(p, peer)
+	}
+	return p
+}
+
+// RelayPeers returns relay peers in this SessionLocal
+func (s *SessionLocal) RelayPeers() []*RelayPeer {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	p := make([]*RelayPeer, 0, len(s.peers))
+	for _, peer := range s.relayPeers {
 		p = append(p, peer)
 	}
 	return p

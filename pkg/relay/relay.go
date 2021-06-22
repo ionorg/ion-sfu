@@ -86,7 +86,7 @@ type Peer struct {
 	onTrack       func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, meta *TrackMeta)
 }
 
-func NewPeer(meta PeerMeta, conf *PeerConfig) (*Peer, error) {
+func NewPeer(id string, meta PeerMeta, conf *PeerConfig) (*Peer, error) {
 	// Prepare ICE gathering options
 	iceOptions := webrtc.ICEGatherOptions{
 		ICEServers: conf.ICEServers,
@@ -149,6 +149,10 @@ func NewPeer(meta PeerMeta, conf *PeerConfig) (*Peer, error) {
 	})
 
 	return p, nil
+}
+
+func (p *Peer) ID() string {
+	return p.meta.PeerID
 }
 
 // Offer is used for establish the connection of the local relay Peer
@@ -402,7 +406,14 @@ func (p *Peer) receive(s *signal) error {
 			},
 		},
 	}}); err != nil {
+		return err
 	}
+
+	recv.SetRTPParameters(webrtc.RTPParameters{
+		HeaderExtensions: nil,
+		Codecs:           []webrtc.RTPCodecParameters{*s.TrackMeta.CodecParameters},
+	})
+
 	if p.onTrack != nil {
 		p.onTrack(recv.Track(), recv, s.TrackMeta)
 	}

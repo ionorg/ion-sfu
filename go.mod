@@ -20,7 +20,7 @@ require (
 	github.com/pion/sdp/v3 v3.0.4
 	github.com/pion/transport v0.12.3
 	github.com/pion/turn/v2 v2.0.5
-	github.com/pion/webrtc/v3 v3.0.29
+	github.com/pion/webrtc/v3 v3.0.30-0.20210620185043-7948437b0b46
 	github.com/prometheus/client_golang v1.9.0
 	github.com/rs/cors v1.7.0 // indirect
 	github.com/rs/zerolog v1.20.0
@@ -28,7 +28,10 @@ require (
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20210201082850-366fbb520750
 	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.7.0
+	golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e // indirect
+	golang.org/x/net v0.0.0-20210614182718-04defd469f4e // indirect
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
+	golang.org/x/sys v0.0.0-20210616094352-59db8d763f22 // indirect
 	google.golang.org/grpc v1.35.0
 	google.golang.org/grpc/examples v0.0.0-20201209011439-fd32f6a4fefe // indirect
 	google.golang.org/protobuf v1.25.0

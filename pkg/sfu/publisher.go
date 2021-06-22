@@ -58,7 +58,7 @@ func NewPublisher(id string, session Session, cfg *WebRTCTransportConfig) (*Publ
 		id:      id,
 		pc:      pc,
 		cfg:     cfg,
-		router:  newRouter(id, pc, session, cfg),
+		router:  newRouter(id, session, cfg),
 		session: session,
 	}
 
@@ -111,6 +111,8 @@ func NewPublisher(id string, session Session, cfg *WebRTCTransportConfig) (*Publ
 			handler(connectionState)
 		}
 	})
+
+	p.router.SetRTCPWriter(p.pc.WriteRTCP)
 
 	return p, nil
 }
@@ -178,8 +180,8 @@ func (p *Publisher) PeerConnection() *webrtc.PeerConnection {
 	return p.pc
 }
 
-func (p *Publisher) Relay(ice []webrtc.ICEServer) (*relay.Peer, error) {
-	rp, err := relay.NewPeer(relay.PeerMeta{
+func (p *Publisher) Relay(signalFn func(meta relay.PeerMeta, signal []byte) ([]byte, error), ice []webrtc.ICEServer) (*relay.Peer, error) {
+	rp, err := relay.NewPeer(p.id, relay.PeerMeta{
 		PeerID:    p.id,
 		SessionID: p.session.ID(),
 	}, &relay.PeerConfig{
@@ -214,7 +216,7 @@ func (p *Publisher) Relay(ice []webrtc.ICEServer) (*relay.Peer, error) {
 		p.mu.Unlock()
 	})
 
-	if err = rp.Offer(p.cfg.Relay); err != nil {
+	if err = rp.Offer(signalFn); err != nil {
 		return nil, fmt.Errorf("relay: %w", err)
 	}
 

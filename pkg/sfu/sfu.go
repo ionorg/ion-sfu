@@ -8,8 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pion/ion-sfu/pkg/relay"
-
 	"github.com/go-logr/logr"
 	"github.com/pion/ice/v2"
 	"github.com/pion/ion-sfu/pkg/buffer"
@@ -38,7 +36,6 @@ type WebRTCTransportConfig struct {
 	Configuration webrtc.Configuration
 	Setting       webrtc.SettingEngine
 	Router        RouterConfig
-	Relay         func(meta relay.PeerMeta, signal []byte) ([]byte, error)
 	BufferFactory *buffer.Factory
 }
 
@@ -68,7 +65,6 @@ type Config struct {
 	WebRTC        WebRTCConfig `mapstructure:"webrtc"`
 	Router        RouterConfig `mapstructure:"Router"`
 	Turn          TurnConfig   `mapstructure:"turn"`
-	Relay         func(meta relay.PeerMeta, signal []byte) ([]byte, error)
 	BufferFactory *buffer.Factory
 	TurnAuth      func(username string, realm string, srcAddr net.Addr) ([]byte, bool)
 }
@@ -162,7 +158,6 @@ func NewWebRTCTransportConfig(c Config) WebRTCTransportConfig {
 		},
 		Setting:       se,
 		Router:        c.Router,
-		Relay:         c.Relay,
 		BufferFactory: c.BufferFactory,
 	}
 

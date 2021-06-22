@@ -15,6 +15,7 @@ type Router interface {
 	ID() string
 	AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote) (Receiver, bool)
 	AddDownTracks(s *Subscriber, r Receiver) error
+	SetRTCPWriter(func([]rtcp.Packet) error)
 	Stop()
 }
 
@@ -33,7 +34,6 @@ type router struct {
 	sync.RWMutex
 	id            string
 	twcc          *twcc.Responder
-	peer          *webrtc.PeerConnection
 	stats         map[uint32]*stats.Stream
 	rtcpCh        chan []rtcp.Packet
 	stopCh        chan struct{}
@@ -41,14 +41,14 @@ type router struct {
 	session       Session
 	receivers     map[string]Receiver
 	bufferFactory *buffer.Factory
+	writeRTCP     func([]rtcp.Packet) error
 }
 
 // newRouter for routing rtp/rtcp packets
-func newRouter(id string, peer *webrtc.PeerConnection, session Session, config *WebRTCTransportConfig) Router {
+func newRouter(id string, session Session, config *WebRTCTransportConfig) Router {
 	ch := make(chan []rtcp.Packet, 10)
 	r := &router{
 		id:            id,
-		peer:          peer,
 		rtcpCh:        ch,
 		stopCh:        make(chan struct{}),
 		config:        config.Router,
@@ -62,7 +62,6 @@ func newRouter(id string, peer *webrtc.PeerConnection, session Session, config *
 		stats.Peers.Inc()
 	}
 
-	go r.sendRTCP()
 	return r
 }
 
@@ -183,7 +182,6 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 	return recv, publish
 }
 
-// AddWebRTCSender to Router
 func (r *router) AddDownTracks(s *Subscriber, recv Receiver) error {
 	r.Lock()
 	defer r.Unlock()
@@ -205,6 +203,11 @@ func (r *router) AddDownTracks(s *Subscriber, recv Receiver) error {
 		s.negotiate()
 	}
 	return nil
+}
+
+func (r *router) SetRTCPWriter(fn func(packet []rtcp.Packet) error) {
+	r.writeRTCP = fn
+	go r.sendRTCP()
 }
 
 func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
@@ -271,7 +274,7 @@ func (r *router) sendRTCP() {
 	for {
 		select {
 		case pkts := <-r.rtcpCh:
-			if err := r.peer.WriteRTCP(pkts); err != nil {
+			if err := r.writeRTCP(pkts); err != nil {
 				Logger.Error(err, "Write rtcp to peer err", "peer_id", r.id)
 			}
 		case <-r.stopCh:
