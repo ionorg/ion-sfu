@@ -27,6 +27,7 @@ type RouterConfig struct {
 	AudioLevelThreshold uint8           `mapstructure:"audiolevelthreshold"`
 	AudioLevelFilter    int             `mapstructure:"audiolevelfilter"`
 	Simulcast           SimulcastConfig `mapstructure:"simulcast"`
+	PliThrottle         int64           `mapstructure:"plithrottle"`
 }
 
 type router struct {
@@ -147,7 +148,7 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 
 	recv, ok := r.receivers[trackID]
 	if !ok {
-		recv = NewWebRTCReceiver(receiver, track, r.id)
+		recv = NewWebRTCReceiver(receiver, track, r.id, WithPliThrottle(r.config.PliThrottle * 1e6))
 		r.receivers[trackID] = recv
 		recv.SetRTCPCh(r.rtcpCh)
 		recv.OnCloseHandler(func() {

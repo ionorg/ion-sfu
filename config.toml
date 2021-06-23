@@ -26,6 +26,9 @@ audiolevelinterval=1000
 # calculated as audiolevelinterval/packetization time (20ms for 8kHz)
 # Values from [0-100]
 audiolevelfilter = 20
+# Sets the minimum throttling duration in [ms] between PLIs
+# forwarded to each WebRTCReceiver.
+plithrottle = 500
 
 [router.simulcast]
 # Prefer best quality initially

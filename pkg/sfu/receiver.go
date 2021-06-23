@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gammazero/workerpool"
 	"github.com/rs/zerolog/log"
 
-	"github.com/gammazero/workerpool"
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/ion-sfu/pkg/stats"
 	"github.com/pion/rtcp"
@@ -61,11 +61,21 @@ type WebRTCReceiver struct {
 	nackWorker     *workerpool.WorkerPool
 	isSimulcast    bool
 	onCloseHandler func()
+	pliThrottle    int64
+}
+
+type ReceiverOpts func(w *WebRTCReceiver) *WebRTCReceiver
+
+func WithPliThrottle(period int64) ReceiverOpts {
+	return func(w *WebRTCReceiver) *WebRTCReceiver {
+		w.pliThrottle = period * 1e6
+		return w
+	}
 }
 
 // NewWebRTCReceiver creates a new webrtc track receivers
-func NewWebRTCReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote, pid string) Receiver {
-	return &WebRTCReceiver{
+func NewWebRTCReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote, pid string, opts ...ReceiverOpts) Receiver {
+	w := &WebRTCReceiver{
 		peerID:      pid,
 		receiver:    receiver,
 		trackID:     track.ID(),
@@ -74,7 +84,12 @@ func NewWebRTCReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote, 
 		kind:        track.Kind(),
 		nackWorker:  workerpool.New(1),
 		isSimulcast: len(track.RID()) > 0,
+		pliThrottle: 500e6,
 	}
+	for _, opt := range opts {
+		w = opt(w)
+	}
+	return w
 }
 
 func (w *WebRTCReceiver) StreamID() string {
@@ -279,7 +294,7 @@ func (w *WebRTCReceiver) SendRTCP(p []rtcp.Packet) {
 	if _, ok := p[0].(*rtcp.PictureLossIndication); ok {
 		w.rtcpMu.Lock()
 		defer w.rtcpMu.Unlock()
-		if time.Now().UnixNano()-w.lastPli < 500e6 {
+		if time.Now().UnixNano()-w.lastPli < w.pliThrottle {
 			return
 		}
 		w.lastPli = time.Now().UnixNano()
