@@ -6,11 +6,12 @@ import (
 	"io"
 	"sync"
 
-	pb "github.com/pion/ion-sfu/cmd/signal/grpc/proto"
-	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/pion/webrtc/v3"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	pb "github.com/pion/ion-sfu/cmd/signal/grpc/proto"
+	"github.com/pion/ion-sfu/pkg/sfu"
 )
 
 type SFUServer struct {

@@ -27,6 +27,16 @@ func (a *atomicBool) get() bool {
 	return atomic.LoadInt32((*int32)(a)) != 0
 }
 
+type atomicInt32 int32
+
+func (a *atomicInt32) set(value int32) {
+	atomic.StoreInt32((*int32)(a), value)
+}
+
+func (a *atomicInt32) get() int32 {
+	return atomic.LoadInt32((*int32)(a))
+}
+
 // setVp8TemporalLayer is a helper to detect and modify accordingly the vp8 payload to reflect
 // temporal changes in the SFU.
 // VP8 temporal layers implemented according https://tools.ietf.org/html/rfc7741

@@ -7,9 +7,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pion/ion-sfu/pkg/relay"
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
+
+	"github.com/pion/ion-sfu/pkg/relay"
 )
 
 type Publisher struct {

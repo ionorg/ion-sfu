@@ -3,11 +3,12 @@ package sfu
 import (
 	"sync"
 
+	"github.com/pion/rtcp"
+	"github.com/pion/webrtc/v3"
+
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/ion-sfu/pkg/stats"
 	"github.com/pion/ion-sfu/pkg/twcc"
-	"github.com/pion/rtcp"
-	"github.com/pion/webrtc/v3"
 )
 
 // Router defines a track rtp/rtcp Router
@@ -148,7 +149,7 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 
 	recv, ok := r.receivers[trackID]
 	if !ok {
-		recv = NewWebRTCReceiver(receiver, track, r.id, WithPliThrottle(r.config.PliThrottle * 1e6))
+		recv = NewWebRTCReceiver(receiver, track, r.id, WithPliThrottle(r.config.PliThrottle*1e6))
 		r.receivers[trackID] = recv
 		recv.SetRTCPCh(r.rtcpCh)
 		recv.OnCloseHandler(func() {

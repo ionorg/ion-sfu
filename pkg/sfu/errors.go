@@ -12,6 +12,7 @@ var (
 	errShortPacket = errors.New("packet is not large enough")
 	errNilPacket   = errors.New("invalid nil packet")
 
-	ErrSpatialNotSupported = errors.New("current track does not support simulcast/SVC")
-	ErrSpatialLayerBusy    = errors.New("a spatial layer change is in progress, try latter")
+	ErrSpatialNotSupported  = errors.New("current track does not support simulcast/SVC")
+	ErrSpatialLayerNotFound = errors.New("the requested layer does not exist")
+	ErrSpatialLayerBusy     = errors.New("a spatial layer change is in progress, try latter")
 )

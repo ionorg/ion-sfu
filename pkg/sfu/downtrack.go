@@ -40,8 +40,8 @@ type DownTrack struct {
 	bufferFactory *buffer.Factory
 	payload       []byte
 
-	currentSpatialLayer int
-	targetSpatialLayer  int
+	currentSpatialLayer atomicInt32
+	targetSpatialLayer  atomicInt32
 	temporalLayer       int32
 
 	enabled  atomicBool
@@ -54,8 +54,8 @@ type DownTrack struct {
 	lastTS   uint32
 
 	simulcast        simulcastTrackHelpers
-	maxSpatialLayer  int64
-	maxTemporalLayer int64
+	maxSpatialLayer  atomicInt32
+	maxTemporalLayer atomicInt32
 
 	codec          webrtc.RTPCodecCapability
 	receiver       Receiver
@@ -118,7 +118,7 @@ func (d *DownTrack) Bind(t webrtc.TrackLocalContext) (webrtc.RTPCodecParameters,
 // because a track has been stopped.
 func (d *DownTrack) Unbind(_ webrtc.TrackLocalContext) error {
 	d.bound.set(false)
-	d.receiver.DeleteDownTrack(d.CurrentSpatialLayer(), d.id)
+	d.receiver.DeleteDownTrack(d.peerID)
 	return nil
 }
 
@@ -187,52 +187,49 @@ func (d *DownTrack) Close() {
 	})
 }
 
-func (d *DownTrack) SetInitialLayers(spatialLayer, temporalLayer int64) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	d.currentSpatialLayer = int(spatialLayer)
-	d.targetSpatialLayer = d.currentSpatialLayer
-	atomic.StoreInt32(&d.temporalLayer, int32(temporalLayer<<16)|int32(temporalLayer))
+func (d *DownTrack) SetInitialLayers(spatialLayer, temporalLayer int32) {
+	d.currentSpatialLayer.set(spatialLayer)
+	d.targetSpatialLayer.set(spatialLayer)
+	atomic.StoreInt32(&d.temporalLayer, (temporalLayer<<16)|temporalLayer)
 }
 
-func (d *DownTrack) CurrentSpatialLayer() int {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	return d.currentSpatialLayer
+func (d *DownTrack) CurrentSpatialLayer() int32 {
+	return d.currentSpatialLayer.get()
 }
 
-func (d *DownTrack) SwitchSpatialLayer(targetLayer int64, setAsMax bool) error {
-	if d.trackType == SimulcastDownTrack {
-		d.mu.Lock()
-		defer d.mu.Unlock()
-		// Don't switch until previous switch is done or canceled
-		if d.currentSpatialLayer != d.targetSpatialLayer ||
-			d.currentSpatialLayer == int(targetLayer) {
-			return ErrSpatialLayerBusy
-		}
-		if err := d.receiver.SwitchDownTrack(d, int(targetLayer)); err == nil {
-			d.targetSpatialLayer = int(targetLayer)
-			if setAsMax {
-				atomic.StoreInt64(&d.maxSpatialLayer, targetLayer)
-			}
-		}
+func (d *DownTrack) TargetSpatialLayer() int32 {
+	return d.targetSpatialLayer.get()
+}
+
+// SwitchSpatialLayer switches the current layer
+func (d *DownTrack) SwitchSpatialLayer(targetLayer int32, setAsMax bool) error {
+	if d.trackType != SimulcastDownTrack {
+		return ErrSpatialNotSupported
+	}
+	if !d.receiver.HasSpatialLayer(targetLayer) {
+		return ErrSpatialLayerNotFound
+	}
+
+	// already set
+	if d.CurrentSpatialLayer() == targetLayer {
 		return nil
 	}
-	return ErrSpatialNotSupported
+
+	d.targetSpatialLayer.set(targetLayer)
+	if setAsMax {
+		d.maxSpatialLayer.set(targetLayer)
+	}
+	return nil
 }
 
-func (d *DownTrack) SwitchSpatialLayerDone() {
-	d.mu.Lock()
-	d.currentSpatialLayer = d.targetSpatialLayer
-	d.mu.Unlock()
+func (d *DownTrack) SwitchSpatialLayerDone(targetLayer int32) {
+	d.currentSpatialLayer.set(targetLayer)
 }
 
-func (d *DownTrack) UptrackLayersChange(availableLayers []uint16) (int64, error) {
+func (d *DownTrack) UptrackLayersChange(availableLayers []uint16) (int32, error) {
 	if d.trackType == SimulcastDownTrack {
-		d.mu.RLock()
-		currentLayer := uint16(d.currentSpatialLayer)
-		d.mu.RUnlock()
-		maxLayer := uint16(atomic.LoadInt64(&d.maxSpatialLayer))
+		currentLayer := uint16(d.CurrentSpatialLayer())
+		maxLayer := uint16(d.maxSpatialLayer.get())
 
 		var maxFound uint16 = 0
 		layerFound := false
@@ -256,16 +253,16 @@ func (d *DownTrack) UptrackLayersChange(availableLayers []uint16) (int64, error)
 			targetLayer = minFound
 		}
 		if currentLayer != targetLayer {
-			if err := d.SwitchSpatialLayer(int64(targetLayer), false); err != nil {
-				return int64(targetLayer), err
+			if err := d.SwitchSpatialLayer(int32(targetLayer), false); err != nil {
+				return int32(targetLayer), err
 			}
 		}
-		return int64(targetLayer), nil
+		return int32(targetLayer), nil
 	}
 	return -1, fmt.Errorf("downtrack %s does not support simulcast", d.id)
 }
 
-func (d *DownTrack) SwitchTemporalLayer(targetLayer int64, setAsMax bool) {
+func (d *DownTrack) SwitchTemporalLayer(targetLayer int32, setAsMax bool) {
 	if d.trackType == SimulcastDownTrack {
 		layer := atomic.LoadInt32(&d.temporalLayer)
 		currentLayer := uint16(layer)
@@ -275,9 +272,9 @@ func (d *DownTrack) SwitchTemporalLayer(targetLayer int64, setAsMax bool) {
 		if currentLayer != currentTargetLayer {
 			return
 		}
-		atomic.StoreInt32(&d.temporalLayer, int32(targetLayer<<16)|int32(currentLayer))
+		atomic.StoreInt32(&d.temporalLayer, (targetLayer<<16)|int32(currentLayer))
 		if setAsMax {
-			atomic.StoreInt64(&d.maxTemporalLayer, targetLayer)
+			d.maxTemporalLayer.set(targetLayer)
 		}
 	}
 }
@@ -451,9 +448,7 @@ func (d *DownTrack) writeSimulcastRTP(extPkt *buffer.ExtPacket) error {
 	}
 
 	if d.sequencer != nil {
-		d.mu.RLock()
-		layer := d.currentSpatialLayer
-		d.mu.RUnlock()
+		layer := d.CurrentSpatialLayer()
 		if meta := d.sequencer.push(extPkt.Packet.SequenceNumber, newSN, newTS, uint8(layer), extPkt.Head); meta != nil &&
 			d.simulcast.temporalSupported && d.mime == "video/vp8" {
 			meta.setVP8PayloadMeta(tlz0Idx, picID)
@@ -556,13 +551,13 @@ func (d *DownTrack) handleRTCP(bytes []byte) {
 
 func (d *DownTrack) handleLayerChange(maxRatePacketLoss uint8, expectedMinBitrate uint64) {
 	d.mu.RLock()
-	currentSpatialLayer := int64(d.currentSpatialLayer)
-	targetSpatialLayer := int64(d.targetSpatialLayer)
+	currentSpatialLayer := d.CurrentSpatialLayer()
+	targetSpatialLayer := d.TargetSpatialLayer()
 	d.mu.RUnlock()
 
 	temporalLayer := atomic.LoadInt32(&d.temporalLayer)
-	currentTemporalLayer := int64(temporalLayer & 0x0f)
-	targetTemporalLayer := int64(temporalLayer >> 16)
+	currentTemporalLayer := temporalLayer & 0x0f
+	targetTemporalLayer := temporalLayer >> 16
 
 	if targetSpatialLayer == currentSpatialLayer && currentTemporalLayer == targetTemporalLayer {
 		if time.Now().After(d.simulcast.switchDelay) {
@@ -572,12 +567,12 @@ func (d *DownTrack) handleLayerChange(maxRatePacketLoss uint8, expectedMinBitrat
 			mctl := mtl[currentSpatialLayer]
 
 			if maxRatePacketLoss <= 5 {
-				if currentTemporalLayer < mctl && currentTemporalLayer+1 <= atomic.LoadInt64(&d.maxTemporalLayer) &&
+				if currentTemporalLayer < mctl && currentTemporalLayer+1 <= d.maxTemporalLayer.get() &&
 					expectedMinBitrate >= 3*cbr/4 {
 					d.SwitchTemporalLayer(currentTemporalLayer+1, false)
 					d.simulcast.switchDelay = time.Now().Add(3 * time.Second)
 				}
-				if currentTemporalLayer >= mctl && expectedMinBitrate >= 3*cbr/2 && currentSpatialLayer+1 <= atomic.LoadInt64(&d.maxSpatialLayer) &&
+				if currentTemporalLayer >= mctl && expectedMinBitrate >= 3*cbr/2 && currentSpatialLayer+1 <= d.maxSpatialLayer.get() &&
 					currentSpatialLayer+1 <= 2 {
 					if err := d.SwitchSpatialLayer(currentSpatialLayer+1, false); err == nil {
 						d.SwitchTemporalLayer(0, false)
@@ -600,7 +595,6 @@ func (d *DownTrack) handleLayerChange(maxRatePacketLoss uint8, expectedMinBitrat
 			}
 		}
 	}
-
 }
 
 func (d *DownTrack) getSRStats() (octets, packets uint32) {
