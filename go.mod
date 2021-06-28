@@ -31,6 +31,6 @@ require (
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 	google.golang.org/grpc v1.35.0
 	google.golang.org/grpc/examples v0.0.0-20201209011439-fd32f6a4fefe // indirect
-	google.golang.org/protobuf v1.25.0
+	google.golang.org/protobuf v1.27.1
 	gopkg.in/ini.v1 v1.51.1 // indirect
 )
