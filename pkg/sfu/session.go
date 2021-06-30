@@ -296,7 +296,7 @@ func (s *SessionLocal) GetDataChannels(origin, label string) (dcs []*webrtc.Data
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for pid, p := range s.peers {
-		if origin == pid {
+		if origin == pid || p.Subscriber() == nil {
 			continue
 		}
 
