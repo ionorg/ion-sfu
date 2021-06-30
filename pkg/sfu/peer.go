@@ -146,9 +146,11 @@ func (p *PeerLocal) Join(sid, uid string, config ...JoinConfig) error {
 		if err != nil {
 			return fmt.Errorf("error creating transport: %v", err)
 		}
-		for _, dc := range p.session.GetDCMiddlewares() {
-			if err := p.subscriber.AddDatachannel(p, dc); err != nil {
-				return fmt.Errorf("setting subscriber default dc datachannel: %w", err)
+		if !conf.NoSubscribe {
+			for _, dc := range p.session.GetDCMiddlewares() {
+				if err := p.subscriber.AddDatachannel(p, dc); err != nil {
+					return fmt.Errorf("setting subscriber default dc datachannel: %w", err)
+				}
 			}
 		}
 
