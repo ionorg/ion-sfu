@@ -177,6 +177,7 @@ func (d *DownTrack) Mute(val bool) {
 
 // Close track
 func (d *DownTrack) Close() {
+	d.enabled.set(false)
 	d.closeOnce.Do(func() {
 		Logger.V(1).Info("Closing sender", "peer_id", d.peerID)
 		if d.payload != nil {
