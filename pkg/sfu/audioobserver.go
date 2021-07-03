@@ -12,8 +12,8 @@ type audioStream struct {
 }
 
 type AudioObserver struct {
-	sync.RWMutex
-	streams   []*audioStream
+	sync.Mutex
+	streams   map[string]*audioStream
 	expected  int
 	threshold uint8
 	previous  []string
@@ -31,82 +31,77 @@ func NewAudioObserver(threshold uint8, interval, filter int) *AudioObserver {
 	}
 
 	return &AudioObserver{
+		streams:   make(map[string]*audioStream),
 		threshold: threshold,
 		expected:  interval * filter / 2000,
 	}
 }
 
 func (a *AudioObserver) addStream(streamID string) {
+	stream := &audioStream{id: streamID}
 	a.Lock()
-	a.streams = append(a.streams, &audioStream{id: streamID})
+	a.streams[streamID] = stream
 	a.Unlock()
 }
 
 func (a *AudioObserver) removeStream(streamID string) {
 	a.Lock()
-	defer a.Unlock()
-	idx := -1
-	for i, s := range a.streams {
-		if s.id == streamID {
-			idx = i
-			break
-		}
-	}
-	if idx == -1 {
-		return
-	}
-	a.streams[idx] = a.streams[len(a.streams)-1]
-	a.streams[len(a.streams)-1] = nil
-	a.streams = a.streams[:len(a.streams)-1]
+	delete(a.streams, streamID)
+	a.Unlock()
 }
 
 func (a *AudioObserver) observe(streamID string, dBov uint8) {
-	a.RLock()
-	defer a.RUnlock()
-	for _, as := range a.streams {
-		if as.id == streamID {
-			if dBov <= a.threshold {
-				as.sum += int(dBov)
-				as.total++
-			}
-			return
-		}
+	if dBov > a.threshold {
+		return
 	}
+	a.Lock()
+	if stream := a.streams[streamID]; stream != nil {
+		stream.sum += int(dBov)
+		stream.total++
+	}
+	a.Unlock()
 }
 
 func (a *AudioObserver) Calc() []string {
+	var previous []string
+	if n := len(a.previous); n > 0 {
+		previous = make([]string, n)
+		copy(previous, a.previous)
+	}
+	streamIDs := a.previous[:0]
+
 	a.Lock()
-	defer a.Unlock()
-
-	sort.Slice(a.streams, func(i, j int) bool {
-		si, sj := a.streams[i], a.streams[j]
-		switch {
-		case si.total != sj.total:
-			return si.total > sj.total
-		default:
-			return si.sum < sj.sum
-		}
-	})
-
-	streamIDs := make([]string, 0, len(a.streams))
 	for _, s := range a.streams {
 		if s.total >= a.expected {
 			streamIDs = append(streamIDs, s.id)
+		} else {
+			s.total = 0
+			s.sum = 0
 		}
+	}
+	sort.Slice(streamIDs, func(i, j int) bool {
+		si, sj := a.streams[streamIDs[i]], a.streams[streamIDs[j]]
+		if si.total != sj.total {
+			return si.total > sj.total
+		}
+		return si.sum < sj.sum
+	})
+	for _, id := range streamIDs {
+		s := a.streams[id]
 		s.total = 0
 		s.sum = 0
 	}
+	a.Unlock()
 
-	if len(a.previous) == len(streamIDs) {
-		for i, s := range a.previous {
+	a.previous = streamIDs
+	if len(previous) == len(streamIDs) {
+		for i, s := range previous {
 			if s != streamIDs[i] {
-				a.previous = streamIDs
 				return streamIDs
 			}
 		}
 		return nil
 	}
 
-	a.previous = streamIDs
 	return streamIDs
 }

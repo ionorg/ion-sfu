@@ -29,9 +29,11 @@ func Test_audioLevel_addStream(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			a := &AudioObserver{}
+			a := &AudioObserver{
+				streams: make(map[string]*audioStream),
+			}
 			a.addStream(tt.args.streamID)
-			assert.Equal(t, tt.want, *a.streams[0])
+			assert.Equal(t, tt.want, *a.streams[tt.want.id])
 
 		})
 	}
@@ -101,8 +103,12 @@ func Test_audioLevel_calc(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			streams := make(map[string]*audioStream)
+			for _, s := range tt.fields.streams {
+				streams[s.id] = s
+			}
 			a := &AudioObserver{
-				streams:  tt.fields.streams,
+				streams:  streams,
 				expected: tt.fields.expected,
 				previous: tt.fields.previous,
 			}
@@ -176,12 +182,16 @@ func Test_audioLevel_observe(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			streams := make(map[string]*audioStream)
+			for _, s := range tt.fields.streams {
+				streams[s.id] = s
+			}
 			a := &AudioObserver{
-				streams:   tt.fields.streams,
+				streams:   streams,
 				threshold: tt.fields.threshold,
 			}
 			a.observe(tt.args.streamID, tt.args.dBov)
-			assert.Equal(t, *a.streams[0], tt.want)
+			assert.Equal(t, *a.streams[tt.want.id], tt.want)
 		})
 	}
 }
@@ -224,8 +234,12 @@ func Test_audioLevel_removeStream(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			streams := make(map[string]*audioStream)
+			for _, s := range tt.fields.streams {
+				streams[s.id] = s
+			}
 			a := &AudioObserver{
-				streams: tt.fields.streams,
+				streams: streams,
 			}
 			a.removeStream(tt.args.streamID)
 			assert.Equal(t, len(a.streams), len(tt.fields.streams)-1)
@@ -255,6 +269,7 @@ func Test_newAudioLevel(t *testing.T) {
 				filter:    20,
 			},
 			want: &AudioObserver{
+				streams:   make(map[string]*audioStream),
 				expected:  1000 * 20 / 2000,
 				threshold: 40,
 			},
