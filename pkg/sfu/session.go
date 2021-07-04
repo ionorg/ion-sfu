@@ -104,15 +104,16 @@ func (s *SessionLocal) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 
 	s.mu.Lock()
 	s.fanOutDCs = append(s.fanOutDCs, label)
-	s.peers[owner].Subscriber().channels[label] = dc
+	peerOwner := s.peers[owner]
 	peers := make([]Peer, 0, len(s.peers))
 	for _, p := range s.peers {
-		if p.ID() == owner || p.Subscriber() == nil {
+		if p == peerOwner || p.Subscriber() == nil {
 			continue
 		}
 		peers = append(peers, p)
 	}
 	s.mu.Unlock()
+	peerOwner.Subscriber().RegisterDatachannel(label, dc)
 
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 		s.onMessage(owner, label, msg)
@@ -304,17 +305,18 @@ func (s *SessionLocal) onMessage(origin, label string, msg webrtc.DataChannelMes
 	}
 }
 
-func (s *SessionLocal) GetDataChannels(origin, label string) (dcs []*webrtc.DataChannel) {
+func (s *SessionLocal) GetDataChannels(origin, label string) []*webrtc.DataChannel {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	dcs := make([]*webrtc.DataChannel, 0, len(s.peers))
 	for pid, p := range s.peers {
 		if origin == pid || p.Subscriber() == nil {
 			continue
 		}
 
-		if dc, ok := p.Subscriber().channels[label]; ok && dc.ReadyState() == webrtc.DataChannelStateOpen {
+		if dc := p.Subscriber().DataChannel(label); dc != nil && dc.ReadyState() == webrtc.DataChannelStateOpen {
 			dcs = append(dcs, dc)
 		}
 	}
-	return
+	return dcs
 }
