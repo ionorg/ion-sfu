@@ -84,15 +84,18 @@ func (s *SessionLocal) AddPeer(peer Peer) {
 
 // RemovePeer removes a transport from the SessionLocal
 func (s *SessionLocal) RemovePeer(p Peer) {
+	pid := p.ID()
+	Logger.V(0).Info("RemovePeer from SessionLocal", "peer_id", pid, "session_id", s.id)
 	s.mu.Lock()
-	Logger.V(0).Info("RemovePeer from SessionLocal", "peer_id", p.ID(), "session_id", s.id)
-	delete(s.peers, p.ID())
+	if s.peers[pid] == p {
+		delete(s.peers, pid)
+	}
+	peerCount := len(s.peers)
 	s.mu.Unlock()
 
 	// Close SessionLocal if no peers
-	if len(s.peers) == 0 && s.onCloseHandler != nil && !s.closed.get() {
-		s.closed.set(true)
-		s.onCloseHandler()
+	if peerCount == 0 {
+		s.Close()
 	}
 }
 
@@ -205,6 +208,15 @@ func (s *SessionLocal) Peers() []Peer {
 // OnClose is called when the SessionLocal is closed
 func (s *SessionLocal) OnClose(f func()) {
 	s.onCloseHandler = f
+}
+
+func (s *SessionLocal) Close() {
+	if !s.closed.set(true) {
+		return
+	}
+	if s.onCloseHandler != nil {
+		s.onCloseHandler()
+	}
 }
 
 func (s *SessionLocal) setRelayedDatachannel(peerID string, datachannel *webrtc.DataChannel) {
