@@ -76,28 +76,37 @@ func WithPliThrottle(period int64) ReceiverOpts {
 	}
 }
 
+func WithWritePool(pool *workerpool.WorkerPool) ReceiverOpts {
+	return func(w *WebRTCReceiver) *WebRTCReceiver {
+		w.rtpWritePool = pool
+		return w
+	}
+}
+
 // NewWebRTCReceiver creates a new webrtc track receivers
 func NewWebRTCReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote, pid string, opts ...ReceiverOpts) Receiver {
 	buckets := runtime.NumCPU()
 	w := &WebRTCReceiver{
-		peerID:       pid,
-		receiver:     receiver,
-		trackID:      track.ID(),
-		streamID:     track.StreamID(),
-		codec:        track.Codec(),
-		kind:         track.Kind(),
-		nackWorker:   workerpool.New(1),
-		rtpWritePool: workerpool.New(buckets),
-		isSimulcast:  len(track.RID()) > 0,
-		pliThrottle:  500e6,
-		downTracks:   make([]map[string]*DownTrack, buckets),
-		buckets:      uint32(buckets),
+		peerID:      pid,
+		receiver:    receiver,
+		trackID:     track.ID(),
+		streamID:    track.StreamID(),
+		codec:       track.Codec(),
+		kind:        track.Kind(),
+		nackWorker:  workerpool.New(1),
+		isSimulcast: len(track.RID()) > 0,
+		pliThrottle: 500e6,
+		downTracks:  make([]map[string]*DownTrack, buckets),
+		buckets:     uint32(buckets),
 	}
 	for b := 0; b < buckets; b++ {
 		w.downTracks[b] = make(map[string]*DownTrack)
 	}
 	for _, opt := range opts {
 		w = opt(w)
+	}
+	if w.rtpWritePool == nil {
+		w.rtpWritePool = workerpool.New(buckets)
 	}
 	return w
 }
