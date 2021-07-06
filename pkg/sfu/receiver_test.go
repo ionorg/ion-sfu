@@ -2,11 +2,12 @@ package sfu
 
 import (
 	"fmt"
-	"math"
+	"hash/fnv"
+	"math/rand"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/gammazero/workerpool"
 	"github.com/stretchr/testify/assert"
@@ -38,51 +39,53 @@ func TestWebRTCReceiver_OnCloseHandler(t *testing.T) {
 }
 
 func BenchmarkWriteRTP(b *testing.B) {
-	cases := []int{1, 10, 100, 500}
+	cases := []int{1, 2, 5, 10, 100, 250, 500}
 	workers := runtime.NumCPU()
 	wp := workerpool.New(workers)
 	for _, c := range cases {
 		// fills each bucket with a max of 50, i.e. []int{50, 50} for c=100
 		fill := make([]int, 0)
 		for i := 50; ; i += 50 {
-			if i == c {
-				break
-			} else if i > c {
+			if i > c {
 				fill = append(fill, c%50)
 				break
-			} else {
-				fill = append(fill, 50)
+			}
+
+			fill = append(fill, 50)
+			if i == c {
+				break
 			}
 		}
 
-		// splits c into numCPU buckets, i.e. []int{9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 1} for 12 cpus and c=100
+		// splits c into numCPU buckets, i.e. []int{9, 9, 9, 9, 8, 8, 8, 8, 8, 8, 8, 8} for 12 cpus and c=100
 		split := make([]int, workers)
-		batch := int(math.Ceil(float64(c) / float64(workers)))
-		total := 0
-		for i := 0; i < workers; i++ {
-			if total+batch > c {
-				split[i] = c - total
-			} else {
-				split[i] = batch
-				total += batch
-			}
+		for i := range split {
+			split[i] = c / workers
+		}
+		for i := 0; i < c%workers; i++ {
+			split[i]++
 		}
 
 		b.Run(fmt.Sprintf("%d-Downtracks/Control", c), func(b *testing.B) {
 			benchmarkNoPool(b, c)
 		})
-		b.Run(fmt.Sprintf("%d-Downtracks/Fill", c), func(b *testing.B) {
+		b.Run(fmt.Sprintf("%d-Downtracks/Pool(Fill)", c), func(b *testing.B) {
 			benchmarkPool(b, wp, fill)
 		})
-		b.Run(fmt.Sprintf("%d-Downtracks/Split", c), func(b *testing.B) {
+		b.Run(fmt.Sprintf("%d-Downtracks/Pool(Hash)", c), func(b *testing.B) {
 			benchmarkPool(b, wp, split)
+		})
+		b.Run(fmt.Sprintf("%d-Downtracks/Goroutines", c), func(b *testing.B) {
+			benchmarkGoroutine(b, split)
+		})
+		b.Run(fmt.Sprintf("%d-Downtracks/LoadBalanced", c), func(b *testing.B) {
+			benchmarkLoadBalanced(b, workers, 2, c)
 		})
 	}
 }
 
 func benchmarkNoPool(b *testing.B, downTracks int) {
 	for i := 0; i < b.N; i++ {
-		readBuffer()
 		for dt := 0; dt < downTracks; dt++ {
 			writeRTP()
 		}
@@ -91,7 +94,6 @@ func benchmarkNoPool(b *testing.B, downTracks int) {
 
 func benchmarkPool(b *testing.B, wp *workerpool.WorkerPool, buckets []int) {
 	for i := 0; i < b.N; i++ {
-		readBuffer()
 		var wg sync.WaitGroup
 		for j := range buckets {
 			downTracks := buckets[j]
@@ -110,10 +112,58 @@ func benchmarkPool(b *testing.B, wp *workerpool.WorkerPool, buckets []int) {
 	}
 }
 
-func readBuffer() {
-	time.Sleep(time.Millisecond * 5)
+func benchmarkGoroutine(b *testing.B, buckets []int) {
+	for i := 0; i < b.N; i++ {
+		var wg sync.WaitGroup
+		for j := range buckets {
+			downTracks := buckets[j]
+			if downTracks == 0 {
+				continue
+			}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for dt := 0; dt < downTracks; dt++ {
+					writeRTP()
+				}
+			}()
+		}
+		wg.Wait()
+	}
+}
+
+func benchmarkLoadBalanced(b *testing.B, numProcs, step, downTracks int) {
+	for i := 0; i < b.N; i++ {
+		start := uint64(0)
+		step := uint64(step)
+		end := uint64(downTracks)
+
+		var wg sync.WaitGroup
+		wg.Add(numProcs)
+		for p := 0; p < numProcs; p++ {
+			go func() {
+				defer wg.Done()
+				for {
+					n := atomic.AddUint64(&start, step)
+					if n >= end+step {
+						return
+					}
+
+					for i := n - step; i < n && i < end; i++ {
+						writeRTP()
+					}
+				}
+			}()
+		}
+		wg.Wait()
+	}
 }
 
 func writeRTP() {
-	time.Sleep(time.Microsecond * 50)
+	s := []byte("simulate some work")
+	stop := 1900 + rand.Intn(200)
+	for j := 0; j < stop; j++ {
+		h := fnv.New128()
+		s = h.Sum(s)
+	}
 }
