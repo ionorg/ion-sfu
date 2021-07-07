@@ -28,6 +28,7 @@ type Receiver interface {
 	AddUpTrack(track *webrtc.TrackRemote, buffer *buffer.Buffer, bestQualityFirst bool)
 	AddDownTrack(track *DownTrack, bestQualityFirst bool)
 	HasSpatialLayer(layer int32) bool
+	SetAvailableLayers(layers []uint16)
 	GetBitrate() [3]uint64
 	GetMaxTemporalLayer() [3]int32
 	RetransmitPackets(track *DownTrack, packets []packetMeta) error
@@ -39,20 +40,21 @@ type Receiver interface {
 
 // WebRTCReceiver receives a video track
 type WebRTCReceiver struct {
-	peerID         string
-	trackID        string
-	streamID       string
-	kind           webrtc.RTPCodecType
-	bandwidth      uint64
-	stream         string
-	receiver       *webrtc.RTPReceiver
-	codec          webrtc.RTPCodecParameters
-	stats          [3]*stats.Stream
-	nackWorker     *workerpool.WorkerPool
-	isSimulcast    bool
-	onCloseHandler func()
-	closeOnce      sync.Once
-	closed         atomicBool
+	peerID          string
+	trackID         string
+	streamID        string
+	kind            webrtc.RTPCodecType
+	bandwidth       uint64
+	stream          string
+	receiver        *webrtc.RTPReceiver
+	codec           webrtc.RTPCodecParameters
+	stats           [3]*stats.Stream
+	nackWorker      *workerpool.WorkerPool
+	isSimulcast     bool
+	availableLayers atomic.Value
+	onCloseHandler  func()
+	closeOnce       sync.Once
+	closed          atomicBool
 
 	rtcpMu      sync.Mutex
 	rtcpCh      chan []rtcp.Packet
@@ -150,6 +152,21 @@ func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, buff *buffer.Buff
 
 	w.upTrackMu.Lock()
 	w.upTracks[layer] = track
+	layers, ok := w.availableLayers.Load().([]uint16)
+	if !ok {
+		layers = make([]uint16, 0, 3)
+	}
+	hasLayer := false
+	for _, l := range layers {
+		if l == uint16(layer) {
+			hasLayer = true
+			break
+		}
+	}
+	if !hasLayer {
+		layers = append(layers, uint16(layer))
+	}
+	w.availableLayers.Store(layers)
 	w.upTrackMu.Unlock()
 
 	w.bufferMu.Lock()
@@ -223,9 +240,29 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 }
 
 func (w *WebRTCReceiver) HasSpatialLayer(layer int32) bool {
-	// TODO: actual implementation, depends on if we are receiving data or not
-	// if the client stopped sending a layer due to bandwidth constraints, then we won't be able to switch
-	return true
+	layers, ok := w.availableLayers.Load().([]uint16)
+	if !ok {
+		return false
+	}
+	desired := uint16(layer)
+	for _, l := range layers {
+		if l == desired {
+			return true
+		}
+	}
+	return false
+}
+
+func (w *WebRTCReceiver) SetAvailableLayers(layers []uint16) {
+	if layers == nil {
+		return
+	}
+	w.downTrackMu.RLock()
+	defer w.downTrackMu.RUnlock()
+	w.availableLayers.Store(layers)
+	for _, dt := range w.downTracks {
+		_, _ = dt.UptrackLayersChange(layers)
+	}
 }
 
 func (w *WebRTCReceiver) GetBitrate() [3]uint64 {
