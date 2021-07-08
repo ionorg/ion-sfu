@@ -163,7 +163,7 @@ func isH264Keyframe(payload []byte) bool {
 				return false
 			}
 			n := payload[i+offset] & 0x1F
-			if n == 5 {
+			if n == 7 {
 				return true
 			} else if n >= 24 {
 				// is this legal?
@@ -184,7 +184,7 @@ func isH264Keyframe(payload []byte) bool {
 			// not a starting fragment
 			return false
 		}
-		return payload[1]&0x1F == 5
+		return payload[1]&0x1F == 7
 	}
 	return false
 }
