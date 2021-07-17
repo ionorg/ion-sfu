@@ -268,7 +268,9 @@ func (p *PeerLocal) Close() error {
 	p.Lock()
 	defer p.Unlock()
 
-	p.closed.set(true)
+	if !p.closed.set(true) {
+		return nil
+	}
 
 	if p.session != nil {
 		p.session.RemovePeer(p)

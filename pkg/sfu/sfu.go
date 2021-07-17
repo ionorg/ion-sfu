@@ -270,8 +270,12 @@ func (s *SFU) NewDatachannel(label string) *Datachannel {
 }
 
 // GetSessions return all sessions
-func (s *SFU) GetSessions() map[string]Session {
+func (s *SFU) GetSessions() []Session {
 	s.RLock()
 	defer s.RUnlock()
-	return s.sessions
+	sessions := make([]Session, 0, len(s.sessions))
+	for _, session := range s.sessions {
+		sessions = append(sessions, session)
+	}
+	return sessions
 }

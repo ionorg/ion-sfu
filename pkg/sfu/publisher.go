@@ -209,9 +209,8 @@ func (p *Publisher) Relay(ice []webrtc.ICEServer) (*relay.Peer, error) {
 			}
 		}
 		p.relayPeer = append(p.relayPeer, rp)
-
-		go p.relayReports(rp)
 		p.mu.Unlock()
+		go p.relayReports(rp)
 	})
 
 	if err = rp.Offer(p.cfg.Relay); err != nil {
