@@ -29,8 +29,6 @@ package logger
 
 import (
 	"io"
-	"path/filepath"
-	"runtime"
 	"sync/atomic"
 
 	"github.com/go-logr/logr"
@@ -44,7 +42,7 @@ const (
 	timeFormat  = "2006-01-02 15:04:05.000"
 )
 
-//GlobalConfig config contains global options
+// GlobalConfig config contains global options
 type GlobalConfig struct {
 	V int `mapstructure:"v"`
 }
@@ -88,23 +86,9 @@ type Options struct {
 
 type logger struct {
 	l      *zerolog.Logger
-	vlevel int
 	prefix string
 	depth  int
 	values []interface{}
-}
-
-type callerID struct {
-	File string `json:"file"`
-	Line int    `json:"line"`
-}
-
-func (l logger) caller() callerID {
-	_, file, line, ok := runtime.Caller(framesToCaller() + l.depth + 1) // +1 for this frame
-	if !ok {
-		return callerID{"<unknown>", 0}
-	}
-	return callerID{filepath.Base(file), line}
 }
 
 // New returns a logr.Logger which is implemented by zerolog.
@@ -131,43 +115,50 @@ func NewWithOptions(opts Options) logr.Logger {
 		opts.Logger = &l
 	}
 
-	return logger{
+	zl := &logger{
 		l:      opts.Logger,
-		vlevel: 0,
 		prefix: opts.Name,
-		values: nil,
 	}
+	return logr.New(zl)
 }
 
-func (l logger) Info(msg string, keysAndVals ...interface{}) {
+func (l *logger) Init(ri logr.RuntimeInfo) {
+	l.depth = ri.CallDepth + zerolog.CallerSkipFrameCount + 1
+}
+
+func (l *logger) Info(lvl int, msg string, keysAndVals ...interface{}) {
 	// Checking that logger vlevel isn't greater than global verbosity level
 	// and
-	if l.Enabled() {
-		var e *zerolog.Event
-		if l.vlevel == infoVLevel {
-			e = l.l.Info()
-		} else if l.vlevel == debugVLevel {
-			e = l.l.Debug()
-		} else if l.vlevel >= traceVLevel {
-			e = l.l.Trace()
-		}
-		if l.prefix != "" {
-			e.Str("name", l.prefix)
-		}
-		keysAndVals = append(keysAndVals, "v", l.vlevel)
-		add(e, l.values)
-		add(e, keysAndVals)
-		e.Msg(msg)
+	if !l.Enabled(lvl) {
+		return
 	}
+	var e *zerolog.Event
+	if lvl == infoVLevel {
+		e = l.l.Info()
+	} else if lvl == debugVLevel {
+		e = l.l.Debug()
+	} else if lvl >= traceVLevel {
+		e = l.l.Trace()
+	}
+	if e == nil {
+		return
+	}
+	if l.prefix != "" {
+		e.Str("name", l.prefix)
+	}
+	keysAndVals = append(keysAndVals, "v", lvl)
+	add(e, l.values)
+	add(e, keysAndVals)
+	e.Msg(msg)
 }
 
 // Enabled checks that the global V-Level is not less than logger V-Level
-func (l logger) Enabled() bool {
-	return l.vlevel <= int(atomic.LoadInt32(globalVLevel))
+func (l *logger) Enabled(lvl int) bool {
+	return lvl <= int(atomic.LoadInt32(globalVLevel))
 }
 
 // Error always prints error, not metter which log level was set
-func (l logger) Error(err error, msg string, keysAndVals ...interface{}) {
+func (l *logger) Error(err error, msg string, keysAndVals ...interface{}) {
 	e := l.l.Error().Err(err)
 	if l.prefix != "" {
 		e.Str("name", l.prefix)
@@ -177,32 +168,39 @@ func (l logger) Error(err error, msg string, keysAndVals ...interface{}) {
 	e.Msg(msg)
 }
 
-// V returns new logger with less or more log level
-func (l logger) V(vlevel int) logr.Logger {
-	new := l.clone()
-	new.vlevel += vlevel
-	return new
-}
-
 // WithName returns a new logr.Logger with the specified name appended. zerologr
 // uses '/' characters to separate name elements.  Callers should not pass '/'
 // in the provided name string, but this library does not actually enforce that.
-func (l logger) WithName(name string) logr.Logger {
-	new := l.clone()
+func (l logger) WithName(name string) logr.LogSink {
 	if len(l.prefix) > 0 {
-		new.prefix = l.prefix + "/"
+		l.prefix += "/"
 	}
-	new.prefix += name
-	return new
-}
-func (l logger) WithValues(kvList ...interface{}) logr.Logger {
-	new := l.clone()
-	new.values = append(new.values, kvList...)
-	return new
+	l.prefix += name
+	return &l
+
 }
 
-func (l logger) WithCallDepth(depth int) logr.Logger {
-	new := l.clone()
-	new.depth += depth
-	return new
+func (l logger) WithValues(kvList ...interface{}) logr.LogSink {
+	// Three slice args forces a copy.
+	n := len(l.values)
+	l.values = append(l.values[:n:n], kvList...)
+	return &l
 }
+
+func (l logger) WithCallDepth(depth int) logr.LogSink {
+	l.depth += depth
+	ll := l.l.With().CallerWithSkipFrameCount(l.depth).Logger()
+	l.l = &ll
+	return &l
+}
+
+type Underlier interface {
+	GetUnderlying() *zerolog.Logger
+}
+
+func (l logger) GetUnderlying() *zerolog.Logger {
+	return l.l
+}
+
+var _ logr.LogSink = &logger{}
+var _ logr.CallDepthLogSink = &logger{}
