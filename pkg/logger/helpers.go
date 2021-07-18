@@ -11,19 +11,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func getVLevelByString(level string) int {
-	var zerologlvl int
-	switch level {
-	case "trace":
-		zerologlvl = traceVLevel
-	case "debug":
-		zerologlvl = debugVLevel
-	case "info":
-		zerologlvl = infoVLevel
-	}
-	return zerologlvl
-}
-
 func getOutputFormat() zerolog.ConsoleWriter {
 	output := zerolog.ConsoleWriter{Out: os.Stdout, NoColor: false}
 	output.FormatTimestamp = func(i interface{}) string {

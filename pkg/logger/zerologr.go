@@ -29,7 +29,6 @@ package logger
 
 import (
 	"io"
-	"sync/atomic"
 
 	"github.com/go-logr/logr"
 	"github.com/rs/zerolog"
@@ -47,31 +46,32 @@ type GlobalConfig struct {
 	V int `mapstructure:"v"`
 }
 
-var (
-	globalVLevel = new(int32)
-)
-
 // SetGlobalOptions sets the global options, like level against which all info logs will be
 // compared.  If this is greater than or equal to the "V" of the logger, the
 // message will be logged. Concurrent-safe.
 func SetGlobalOptions(config GlobalConfig) {
-	atomic.StoreInt32(globalVLevel, int32(config.V))
+	zerolog.SetGlobalLevel(toZerologLevel(config.V))
 }
 
 // SetVLevelByStringGlobal does the same as SetGlobalOptions but
 // trying to expose verbosity level as more familiar "word-based" log levels
 func SetVLevelByStringGlobal(level string) {
+	v := infoVLevel
 	switch level {
-	case "trace":
-		SetGlobalOptions(GlobalConfig{V: traceVLevel})
-	case "debug":
-		SetGlobalOptions(GlobalConfig{V: debugVLevel})
-	case "info":
-		SetGlobalOptions(GlobalConfig{V: infoVLevel})
-	default:
-		SetGlobalOptions(GlobalConfig{V: infoVLevel})
+	case zerolog.TraceLevel.String():
+		v = traceVLevel
+	case zerolog.DebugLevel.String():
+		v = debugVLevel
 	}
+	SetGlobalOptions(GlobalConfig{V: v})
+}
 
+// logr ensure no negative values.
+func toZerologLevel(lvl int) zerolog.Level {
+	if lvl > traceVLevel {
+		lvl = traceVLevel
+	}
+	return zerolog.Level(1 - lvl)
 }
 
 // Options that can be passed to NewWithOptions
@@ -91,23 +91,24 @@ type logger struct {
 	values []interface{}
 }
 
-// New returns a logr.Logger which is implemented by zerolog.
+// New returns a logr.Logger, LogSink is implemented by zerolog.
 func New() logr.Logger {
 	return NewWithOptions(Options{})
 }
 
-// NewWithOptions returns a logr.Logger which is implemented by zerolog.
+// NewWithOptions returns a logr.Logger, LogSink is implemented by zerolog.
 func NewWithOptions(opts Options) logr.Logger {
-
-	zerolog.TimeFieldFormat = timeFormat
 	if opts.TimeFormat != "" {
 		zerolog.TimeFieldFormat = opts.TimeFormat
+	} else {
+		zerolog.TimeFieldFormat = timeFormat
 	}
 
 	var out io.Writer
-	out = getOutputFormat()
 	if opts.Output != nil {
 		out = opts.Output
+	} else {
+		out = getOutputFormat()
 	}
 
 	if opts.Logger == nil {
@@ -127,19 +128,7 @@ func (l *logger) Init(ri logr.RuntimeInfo) {
 }
 
 func (l *logger) Info(lvl int, msg string, keysAndVals ...interface{}) {
-	// Checking that logger vlevel isn't greater than global verbosity level
-	// and
-	if !l.Enabled(lvl) {
-		return
-	}
-	var e *zerolog.Event
-	if lvl == infoVLevel {
-		e = l.l.Info()
-	} else if lvl == debugVLevel {
-		e = l.l.Debug()
-	} else if lvl >= traceVLevel {
-		e = l.l.Trace()
-	}
+	e := l.l.WithLevel(toZerologLevel(lvl))
 	if e == nil {
 		return
 	}
@@ -154,7 +143,7 @@ func (l *logger) Info(lvl int, msg string, keysAndVals ...interface{}) {
 
 // Enabled checks that the global V-Level is not less than logger V-Level
 func (l *logger) Enabled(lvl int) bool {
-	return lvl <= int(atomic.LoadInt32(globalVLevel))
+	return toZerologLevel(lvl) >= zerolog.GlobalLevel()
 }
 
 // Error always prints error, not metter which log level was set
@@ -192,14 +181,6 @@ func (l logger) WithCallDepth(depth int) logr.LogSink {
 	ll := l.l.With().CallerWithSkipFrameCount(l.depth).Logger()
 	l.l = &ll
 	return &l
-}
-
-type Underlier interface {
-	GetUnderlying() *zerolog.Logger
-}
-
-func (l logger) GetUnderlying() *zerolog.Logger {
-	return l.l
 }
 
 var _ logr.LogSink = &logger{}
