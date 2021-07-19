@@ -26,11 +26,10 @@ require (
 	github.com/rs/zerolog v1.23.0
 	github.com/soheilhy/cmux v0.1.4
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20210201082850-366fbb520750
-	github.com/spf13/viper v1.7.1
+	github.com/spf13/viper v1.8.1
 	github.com/stretchr/testify v1.7.0
-	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
-	google.golang.org/grpc v1.35.0
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	google.golang.org/grpc v1.38.0
 	google.golang.org/grpc/examples v0.0.0-20201209011439-fd32f6a4fefe // indirect
-	google.golang.org/protobuf v1.25.0
-	gopkg.in/ini.v1 v1.51.1 // indirect
+	google.golang.org/protobuf v1.26.0
 )
