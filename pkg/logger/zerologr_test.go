@@ -11,6 +11,7 @@ import (
 func TestDefaultVerbosityLevel(t *testing.T) {
 
 	t.Run("info", func(t *testing.T) {
+		SetGlobalOptions(GlobalConfig{V: 0})
 		out := &bytes.Buffer{}
 		log := NewWithOptions(Options{TimeFormat: "NOTIME", Output: out})
 		log.Info("info")
