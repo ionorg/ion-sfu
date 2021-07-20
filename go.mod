@@ -13,7 +13,7 @@ require (
 	github.com/improbable-eng/grpc-web v0.13.0
 	github.com/lucsky/cuid v1.0.2
 	github.com/pion/dtls/v2 v2.0.9
-	github.com/pion/ice/v2 v2.1.7
+	github.com/pion/ice/v2 v2.1.8
 	github.com/pion/logging v0.2.2
 	github.com/pion/rtcp v1.2.6
 	github.com/pion/rtp v1.6.5
