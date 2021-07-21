@@ -39,15 +39,20 @@ func (n *nackQueue) push(extSN uint32) {
 	if i < len(n.nacks) && n.nacks[i].sn == extSN {
 		return
 	}
-	n.nacks = append(n.nacks, nack{})
-	copy(n.nacks[i+1:], n.nacks[i:])
-	n.nacks[i] = nack{
+
+	nck := nack{
 		sn:     extSN,
 		nacked: 0,
 	}
+	if i == len(n.nacks) {
+		n.nacks = append(n.nacks, nck)
+	} else {
+		n.nacks = append(n.nacks[:i+1], n.nacks[i:]...)
+		n.nacks[i] = nck
+	}
 
-	if len(n.nacks) > maxNackCache {
-		n.nacks = n.nacks[1:]
+	if len(n.nacks) >= maxNackCache {
+		copy(n.nacks, n.nacks[1:])
 	}
 }
 
