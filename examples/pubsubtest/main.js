@@ -82,7 +82,7 @@ clientLocal.ontrack = (track, stream) => {
     // If the stream is not there in the streams map.
     if (!streams[stream.id]) {
       // Create a video element for rendering the stream
-      remoteVideo = document.createElement("video");
+      const remoteVideo = document.createElement("video");
       remoteVideo.srcObject = stream;
       remoteVideo.autoplay = true;
       remoteVideo.muted = remoteVideoIsMuted;

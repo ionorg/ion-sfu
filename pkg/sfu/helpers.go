@@ -15,12 +15,11 @@ const (
 
 type atomicBool int32
 
-func (a *atomicBool) set(value bool) {
-	var i int32
+func (a *atomicBool) set(value bool) (swapped bool) {
 	if value {
-		i = 1
+		return atomic.SwapInt32((*int32)(a), 1) == 0
 	}
-	atomic.StoreInt32((*int32)(a), i)
+	return atomic.SwapInt32((*int32)(a), 0) == 1
 }
 
 func (a *atomicBool) get() bool {

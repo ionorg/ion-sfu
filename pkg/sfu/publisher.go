@@ -211,9 +211,8 @@ func (p *Publisher) Relay(signalFn func(meta relay.PeerMeta, signal []byte) ([]b
 			}
 		}
 		p.relayPeer = append(p.relayPeer, rp)
-
-		go p.relayReports(rp)
 		p.mu.Unlock()
+		go p.relayReports(rp)
 	})
 
 	if err = rp.Offer(signalFn); err != nil {

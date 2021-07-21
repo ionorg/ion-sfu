@@ -93,15 +93,18 @@ func (s *SessionLocal) AddRelayPeer(peer *RelayPeer) {
 
 // RemovePeer removes a transport from the SessionLocal
 func (s *SessionLocal) RemovePeer(p Peer) {
+	pid := p.ID()
+	Logger.V(0).Info("RemovePeer from SessionLocal", "peer_id", pid, "session_id", s.id)
 	s.mu.Lock()
-	Logger.V(0).Info("RemovePeer from SessionLocal", "peer_id", p.ID(), "session_id", s.id)
-	delete(s.peers, p.ID())
+	if s.peers[pid] == p {
+		delete(s.peers, pid)
+	}
+	peerCount := len(s.peers)
 	s.mu.Unlock()
 
 	// Close SessionLocal if no peers
-	if len(s.peers) == 0 && s.onCloseHandler != nil && !s.closed.get() {
-		s.closed.set(true)
-		s.onCloseHandler()
+	if peerCount == 0 {
+		s.Close()
 	}
 }
 
@@ -110,15 +113,16 @@ func (s *SessionLocal) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 
 	s.mu.Lock()
 	s.fanOutDCs = append(s.fanOutDCs, label)
-	s.peers[owner].Subscriber().channels[label] = dc
+	peerOwner := s.peers[owner]
 	peers := make([]Peer, 0, len(s.peers))
 	for _, p := range s.peers {
-		if p.ID() == owner || p.Subscriber() == nil {
+		if p == peerOwner || p.Subscriber() == nil {
 			continue
 		}
 		peers = append(peers, p)
 	}
 	s.mu.Unlock()
+	peerOwner.Subscriber().RegisterDatachannel(label, dc)
 
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 		s.onMessage(owner, label, msg)
@@ -234,6 +238,15 @@ func (s *SessionLocal) OnClose(f func()) {
 	s.onCloseHandler = f
 }
 
+func (s *SessionLocal) Close() {
+	if !s.closed.set(true) {
+		return
+	}
+	if s.onCloseHandler != nil {
+		s.onCloseHandler()
+	}
+}
+
 func (s *SessionLocal) setRelayedDatachannel(peerID string, datachannel *webrtc.DataChannel) {
 	label := datachannel.Label()
 	for _, dc := range s.datachannels {
@@ -319,17 +332,18 @@ func (s *SessionLocal) onMessage(origin, label string, msg webrtc.DataChannelMes
 	}
 }
 
-func (s *SessionLocal) GetDataChannels(origin, label string) (dcs []*webrtc.DataChannel) {
+func (s *SessionLocal) GetDataChannels(origin, label string) []*webrtc.DataChannel {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	dcs := make([]*webrtc.DataChannel, 0, len(s.peers))
 	for pid, p := range s.peers {
-		if origin == pid {
+		if origin == pid || p.Subscriber() == nil {
 			continue
 		}
 
-		if dc, ok := p.Subscriber().channels[label]; ok && dc.ReadyState() == webrtc.DataChannelStateOpen {
+		if dc := p.Subscriber().DataChannel(label); dc != nil && dc.ReadyState() == webrtc.DataChannelStateOpen {
 			dcs = append(dcs, dc)
 		}
 	}
-	return
+	return dcs
 }

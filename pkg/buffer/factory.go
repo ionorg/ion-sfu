@@ -19,12 +19,12 @@ type Factory struct {
 
 func NewBufferFactory(trackingPackets int, logger logr.Logger) *Factory {
 	// Enable package wide logging for non-method functions.
-	// If logger is nil - buffer logs will be disabled.
+	// If logger is empty - use default Logger.
 	// Logger is a public variable in buffer package.
-	if logger != nil {
-		Logger = logger
-	} else {
+	if logger == (logr.Logger{}) {
 		logger = Logger
+	} else {
+		Logger = logger
 	}
 
 	return &Factory{

@@ -98,6 +98,8 @@ func (s *Subscriber) AddDatachannel(peer Peer, dc *Datachannel) error {
 
 // DataChannel returns the channel for a label
 func (s *Subscriber) DataChannel(label string) *webrtc.DataChannel {
+	s.RLock()
+	defer s.RUnlock()
 	return s.channels[label]
 }
 
@@ -204,11 +206,13 @@ func (s *Subscriber) SetRemoteDescription(desc webrtc.SessionDescription) error 
 }
 
 func (s *Subscriber) RegisterDatachannel(label string, dc *webrtc.DataChannel) {
+	s.Lock()
 	s.channels[label] = dc
+	s.Unlock()
 }
 
 func (s *Subscriber) GetDatachannel(label string) *webrtc.DataChannel {
-	return s.channels[label]
+	return s.DataChannel(label)
 }
 
 func (s *Subscriber) GetDownTracks(streamID string) []*DownTrack {

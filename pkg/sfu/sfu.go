@@ -17,7 +17,7 @@ import (
 )
 
 // Logger is an implementation of logr.Logger. If is not provided - will be turned off.
-var Logger logr.Logger = new(logr.DiscardLogger)
+var Logger logr.Logger = logr.Discard()
 
 // ICEServerConfig defines parameters for ice servers
 type ICEServerConfig struct {
@@ -265,8 +265,12 @@ func (s *SFU) NewDatachannel(label string) *Datachannel {
 }
 
 // GetSessions return all sessions
-func (s *SFU) GetSessions() map[string]Session {
+func (s *SFU) GetSessions() []Session {
 	s.RLock()
 	defer s.RUnlock()
-	return s.sessions
+	sessions := make([]Session, 0, len(s.sessions))
+	for _, session := range s.sessions {
+		sessions = append(sessions, session)
+	}
+	return sessions
 }
