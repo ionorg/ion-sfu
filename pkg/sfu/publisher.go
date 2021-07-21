@@ -181,7 +181,7 @@ func (p *Publisher) PeerConnection() *webrtc.PeerConnection {
 }
 
 func (p *Publisher) Relay(signalFn func(meta relay.PeerMeta, signal []byte) ([]byte, error), ice []webrtc.ICEServer) (*relay.Peer, error) {
-	rp, err := relay.NewPeer(p.id, relay.PeerMeta{
+	rp, err := relay.NewPeer(relay.PeerMeta{
 		PeerID:    p.id,
 		SessionID: p.session.ID(),
 	}, &relay.PeerConfig{

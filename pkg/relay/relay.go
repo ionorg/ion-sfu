@@ -59,6 +59,15 @@ type PeerMeta struct {
 	SessionID string `json:"sessionId"`
 }
 
+type Options struct {
+	// RelayMiddlewareDC if set to true middleware data channels will be created and forwarded
+	// to the relayed peer
+	RelayMiddlewareDC bool
+	// RelaySessionDC if set to true fanout data channels will be created and forwarded to the
+	// relayed peer
+	RelaySessionDC bool
+}
+
 type Peer struct {
 	mu              sync.Mutex
 	rmu             sync.Mutex
@@ -86,7 +95,7 @@ type Peer struct {
 	onTrack       func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, meta *TrackMeta)
 }
 
-func NewPeer(id string, meta PeerMeta, conf *PeerConfig) (*Peer, error) {
+func NewPeer(meta PeerMeta, conf *PeerConfig) (*Peer, error) {
 	// Prepare ICE gathering options
 	iceOptions := webrtc.ICEGatherOptions{
 		ICEServers: conf.ICEServers,
