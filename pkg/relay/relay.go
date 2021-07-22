@@ -90,6 +90,7 @@ type Peer struct {
 	dcIndex         uint16
 
 	onReady       func()
+	onClose       func()
 	onRequest     func(event string, message Message)
 	onDataChannel func(channel *webrtc.DataChannel)
 	onTrack       func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, meta *TrackMeta)
@@ -236,6 +237,11 @@ func (p *Peer) Offer(signalFn func(meta PeerMeta, signal []byte) ([]byte, error)
 	return nil
 }
 
+// OnClose sets a callback that is called when relay Peer is closed.
+func (p *Peer) OnClose(fn func()) {
+	p.onClose = fn
+}
+
 // Answer answers the remote Peer signal signalRequest
 func (p *Peer) Answer(request []byte) ([]byte, error) {
 	if p.gatherer.State() != webrtc.ICEGathererStateNew {
@@ -339,6 +345,10 @@ func (p *Peer) Close() error {
 	}
 
 	closeErrs = append(closeErrs, p.sctp.Stop(), p.dtls.Stop(), p.ice.Stop())
+
+	if p.onClose != nil {
+		p.onClose()
+	}
 
 	return joinErrs(closeErrs...)
 }
