@@ -48,6 +48,7 @@ func NewSession(id string, dcs []*Datachannel, cfg WebRTCTransportConfig) Sessio
 	s := &SessionLocal{
 		id:           id,
 		peers:        make(map[string]Peer),
+		relayPeers:   make(map[string]*RelayPeer),
 		datachannels: dcs,
 		audioObs:     NewAudioObserver(cfg.Router.AudioLevelThreshold, cfg.Router.AudioLevelInterval, cfg.Router.AudioLevelFilter),
 	}

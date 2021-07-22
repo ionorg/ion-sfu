@@ -180,13 +180,13 @@ func (p *Publisher) PeerConnection() *webrtc.PeerConnection {
 	return p.pc
 }
 
-func (p *Publisher) Relay(signalFn func(meta relay.PeerMeta, signal []byte) ([]byte, error), ice []webrtc.ICEServer) (*relay.Peer, error) {
+func (p *Publisher) Relay(signalFn func(meta relay.PeerMeta, signal []byte) ([]byte, error)) (*relay.Peer, error) {
 	rp, err := relay.NewPeer(relay.PeerMeta{
 		PeerID:    p.id,
 		SessionID: p.session.ID(),
 	}, &relay.PeerConfig{
 		SettingEngine: p.cfg.Setting,
-		ICEServers:    ice,
+		ICEServers:    p.cfg.Configuration.ICEServers,
 		Logger:        Logger,
 	})
 	if err != nil {
