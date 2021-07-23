@@ -161,6 +161,10 @@ func (d *DownTrack) WriteRTP(p *buffer.ExtPacket) error {
 	return nil
 }
 
+func (d *DownTrack) Enabled() bool {
+	return d.enabled.get()
+}
+
 // Mute enables or disables media forwarding
 func (d *DownTrack) Mute(val bool) {
 	if d.enabled.get() != val {
