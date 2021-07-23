@@ -6,7 +6,7 @@ RUN go get google.golang.org/protobuf/cmd/protoc-gen-go
 
 RUN echo $GOPATH
 
-FROM alpine:3.12.3
+FROM alpine:3.14.0
 
 RUN apk --no-cache add protobuf
 
