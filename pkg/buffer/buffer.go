@@ -68,7 +68,7 @@ type Buffer struct {
 
 	minPacketProbe     int
 	lastPacketRead     int
-	maxTemporalLayer   int64
+	maxTemporalLayer   int32
 	bitrate            uint64
 	bitrateHelper      uint64
 	lastSRNTPTime      uint64
@@ -345,9 +345,9 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 
 		if b.mime == "video/vp8" {
 			pld := ep.Payload.(VP8)
-			mtl := atomic.LoadInt64(&b.maxTemporalLayer)
-			if mtl < int64(pld.TID) {
-				atomic.StoreInt64(&b.maxTemporalLayer, int64(pld.TID))
+			mtl := atomic.LoadInt32(&b.maxTemporalLayer)
+			if mtl < int32(pld.TID) {
+				atomic.StoreInt32(&b.maxTemporalLayer, int32(pld.TID))
 			}
 		}
 
@@ -525,8 +525,8 @@ func (b *Buffer) Bitrate() uint64 {
 	return atomic.LoadUint64(&b.bitrate)
 }
 
-func (b *Buffer) MaxTemporalLayer() int64 {
-	return atomic.LoadInt64(&b.maxTemporalLayer)
+func (b *Buffer) MaxTemporalLayer() int32 {
+	return atomic.LoadInt32(&b.maxTemporalLayer)
 }
 
 func (b *Buffer) OnTransportWideCC(fn func(sn uint16, timeNS int64, marker bool)) {
