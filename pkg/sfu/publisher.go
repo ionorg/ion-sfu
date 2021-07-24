@@ -25,6 +25,7 @@ type Publisher struct {
 	candidates []webrtc.ICECandidateInit
 
 	onICEConnectionStateChangeHandler atomic.Value // func(webrtc.ICEConnectionState)
+	onPublisherTrack                  func(PublisherTrack)
 
 	closeOnce sync.Once
 }
@@ -72,10 +73,12 @@ func NewPublisher(id string, session Session, cfg *WebRTCTransportConfig) (*Publ
 		)
 
 		r, pub := p.router.AddReceiver(receiver, track)
+		var publisherTrack PublisherTrack
 		if pub {
 			p.session.Publish(p.router, r)
 			p.mu.Lock()
-			p.tracks = append(p.tracks, PublisherTrack{track, r, true})
+			publisherTrack = PublisherTrack{track, r, true}
+			p.tracks = append(p.tracks, publisherTrack)
 			for _, rp := range p.relayPeer {
 				if err = p.createRelayTrack(track, r, rp); err != nil {
 					Logger.V(1).Error(err, "Creating relay track.", "peer_id", p.id)
@@ -84,8 +87,13 @@ func NewPublisher(id string, session Session, cfg *WebRTCTransportConfig) (*Publ
 			p.mu.Unlock()
 		} else {
 			p.mu.Lock()
-			p.tracks = append(p.tracks, PublisherTrack{track, r, false})
+			publisherTrack = PublisherTrack{track, r, false}
+			p.tracks = append(p.tracks, publisherTrack)
 			p.mu.Unlock()
+		}
+
+		if p.onPublisherTrack != nil {
+			p.onPublisherTrack(publisherTrack)
 		}
 	})
 
@@ -159,6 +167,10 @@ func (p *Publisher) Close() {
 			Logger.Error(err, "webrtc transport close err")
 		}
 	})
+}
+
+func (p *Publisher) OnPublisherTrack(f func(track PublisherTrack)) {
+	p.onPublisherTrack = f
 }
 
 // OnICECandidate handler
