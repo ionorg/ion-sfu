@@ -25,7 +25,7 @@ type Publisher struct {
 	candidates []webrtc.ICECandidateInit
 
 	onICEConnectionStateChangeHandler atomic.Value // func(webrtc.ICEConnectionState)
-	onPublisherTrack                  func(PublisherTrack)
+	onPublisherTrack                  atomic.Value // func(PublisherTrack)
 
 	closeOnce sync.Once
 }
@@ -36,7 +36,7 @@ type PublisherTrack struct {
 	// This will be used in the future for tracks that will be relayed as clients or servers
 	// This is for SVC and Simulcast where you will be able to chose if the relayed peer just
 	// want a single track (for recording/ processing) or get all the tracks (for load balancing)
-	ClientRelay bool
+	clientRelay bool
 }
 
 // NewPublisher creates a new Publisher
@@ -73,11 +73,10 @@ func NewPublisher(id string, session Session, cfg *WebRTCTransportConfig) (*Publ
 		)
 
 		r, pub := p.router.AddReceiver(receiver, track)
-		var publisherTrack PublisherTrack
 		if pub {
 			p.session.Publish(p.router, r)
 			p.mu.Lock()
-			publisherTrack = PublisherTrack{track, r, true}
+			publisherTrack := PublisherTrack{track, r, true}
 			p.tracks = append(p.tracks, publisherTrack)
 			for _, rp := range p.relayPeer {
 				if err = p.createRelayTrack(track, r, rp); err != nil {
@@ -85,15 +84,13 @@ func NewPublisher(id string, session Session, cfg *WebRTCTransportConfig) (*Publ
 				}
 			}
 			p.mu.Unlock()
+			if handler, ok := p.onPublisherTrack.Load().(func(PublisherTrack)); ok && handler != nil {
+				handler(publisherTrack)
+			}
 		} else {
 			p.mu.Lock()
-			publisherTrack = PublisherTrack{track, r, false}
-			p.tracks = append(p.tracks, publisherTrack)
+			p.tracks = append(p.tracks, PublisherTrack{track, r, false})
 			p.mu.Unlock()
-		}
-
-		if p.onPublisherTrack != nil {
-			p.onPublisherTrack(publisherTrack)
 		}
 	})
 
@@ -170,7 +167,7 @@ func (p *Publisher) Close() {
 }
 
 func (p *Publisher) OnPublisherTrack(f func(track PublisherTrack)) {
-	p.onPublisherTrack = f
+	p.onPublisherTrack.Store(f)
 }
 
 // OnICECandidate handler
@@ -212,7 +209,7 @@ func (p *Publisher) Relay(ice []webrtc.ICEServer) (*relay.Peer, error) {
 
 		p.mu.Lock()
 		for _, tp := range p.tracks {
-			if !tp.ClientRelay {
+			if !tp.clientRelay {
 				// simulcast will just relay client track for now
 				continue
 			}

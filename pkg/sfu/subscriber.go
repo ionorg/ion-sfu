@@ -218,12 +218,12 @@ func (s *Subscriber) GetDatachannel(label string) *webrtc.DataChannel {
 	return s.DataChannel(label)
 }
 
-func (s *Subscriber) DownTracks() map[string][]*DownTrack {
+func (s *Subscriber) DownTracks() []*DownTrack {
 	s.RLock()
 	defer s.RUnlock()
-	downTracks := make(map[string][]*DownTrack)
-	for streamID, tracks := range s.tracks {
-		downTracks[streamID] = tracks
+	var downTracks []*DownTrack
+	for _, tracks := range s.tracks {
+		downTracks = append(downTracks, tracks...)
 	}
 	return downTracks
 }
