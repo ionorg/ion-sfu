@@ -71,7 +71,6 @@ type PeerLocal struct {
 	OnOffer                    func(*webrtc.SessionDescription)
 	OnIceCandidate             func(*webrtc.ICECandidateInit, int)
 	OnICEConnectionStateChange func(webrtc.ICEConnectionState)
-	OnPublisherTrack           func(PublisherTrack)
 
 	remoteAnswerPending bool
 	negotiationPending  bool

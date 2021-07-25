@@ -144,7 +144,10 @@ func (d *DownTrack) Kind() webrtc.RTPCodecType {
 }
 
 func (d *DownTrack) Stop() error {
-	return d.transceiver.Stop()
+	if d.transceiver != nil {
+		return d.transceiver.Stop()
+	}
+	return fmt.Errorf("d.transceiver not exists")
 }
 
 func (d *DownTrack) SetTransceiver(transceiver *webrtc.RTPTransceiver) {
