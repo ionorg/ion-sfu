@@ -201,7 +201,6 @@ func (d *DownTrack) SwitchSpatialLayer(targetLayer int32, setAsMax bool) error {
 		if csl != atomic.LoadInt32(&d.targetSpatialLayer) || csl == targetLayer {
 			return ErrSpatialLayerBusy
 		}
-		println(targetLayer, csl)
 		if err := d.receiver.SwitchDownTrack(d, int(targetLayer)); err == nil {
 			atomic.StoreInt32(&d.targetSpatialLayer, targetLayer)
 			if setAsMax {
@@ -361,9 +360,6 @@ func (d *DownTrack) writeSimpleRTP(extPkt *buffer.ExtPacket) error {
 	hdr.SSRC = d.ssrc
 
 	_, err := d.writeStream.WriteRTP(&hdr, extPkt.Packet.Payload)
-	if err != nil {
-		Logger.Error(err, "Write packet err")
-	}
 	return err
 }
 
@@ -469,10 +465,6 @@ func (d *DownTrack) writeSimulcastRTP(extPkt *buffer.ExtPacket, layer int) error
 	hdr.PayloadType = d.payloadType
 
 	_, err := d.writeStream.WriteRTP(&hdr, payload)
-	if err != nil {
-		Logger.Error(err, "Write packet err")
-	}
-
 	return err
 }
 

@@ -188,8 +188,9 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 		track.SetInitialLayers(0, 0)
 		track.trackType = SimpleDownTrack
 	}
-
+	w.Lock()
 	w.storeDownTrack(layer, track)
+	w.Unlock()
 }
 
 func (w *WebRTCReceiver) SwitchDownTrack(track *DownTrack, layer int) error {
@@ -234,7 +235,6 @@ func (w *WebRTCReceiver) DeleteDownTrack(layer int, id string) {
 		return
 	}
 
-	w.Lock()
 	dts := w.downTracks[layer].Load().([]*DownTrack)
 	ndts := make([]*DownTrack, 0, len(dts))
 	for _, dt := range dts {
@@ -243,15 +243,14 @@ func (w *WebRTCReceiver) DeleteDownTrack(layer int, id string) {
 		}
 	}
 	w.downTracks[layer].Store(ndts)
-	w.Unlock()
 }
 
 func (w *WebRTCReceiver) SendRTCP(p []rtcp.Packet) {
 	if _, ok := p[0].(*rtcp.PictureLossIndication); ok {
-		if time.Now().UnixNano()-w.lastPli < 500e6 {
+		if time.Now().UnixNano()-atomic.LoadInt64(&w.lastPli) < 500e6 {
 			return
 		}
-		w.lastPli = time.Now().UnixNano()
+		atomic.StoreInt64(&w.lastPli, time.Now().UnixNano())
 	}
 
 	w.rtcpCh <- p
@@ -333,12 +332,15 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 			pts := w.pendingTracks[layer].Load().([]*DownTrack)
 			if len(pts) > 0 {
 				if pkt.KeyFrame {
+					w.Lock()
 					for _, dt := range pts {
 						w.DeleteDownTrack(dt.CurrentSpatialLayer(), dt.peerID)
 						w.storeDownTrack(layer, dt)
 						dt.SwitchSpatialLayerDone(int32(layer))
+
 					}
 					w.pendingTracks[layer].Store(make([]*DownTrack, 0, 10))
+					w.Unlock()
 				} else {
 					w.SendRTCP(pli)
 				}
@@ -349,7 +351,9 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 		for _, dt := range dts {
 			if err = dt.WriteRTP(pkt, layer); err != nil {
 				if err == io.EOF && err == io.ErrClosedPipe {
+					w.Lock()
 					w.DeleteDownTrack(layer, dt.id)
+					w.Unlock()
 				}
 				log.Error().Err(err).Str("id", dt.id).Msg("Error writing to down track")
 			}
@@ -385,13 +389,11 @@ func (w *WebRTCReceiver) downTrackSubscribed(layer int, dt *DownTrack) bool {
 }
 
 func (w *WebRTCReceiver) storeDownTrack(layer int, dt *DownTrack) {
-	w.Lock()
 	dts := w.downTracks[layer].Load().([]*DownTrack)
 	ndts := make([]*DownTrack, len(dts)+1)
 	copy(ndts, dts)
 	ndts[len(ndts)-1] = dt
 	w.downTracks[layer].Store(ndts)
-	w.Unlock()
 }
 
 func (w *WebRTCReceiver) storePendingTrack(layer int, dt *DownTrack) {
