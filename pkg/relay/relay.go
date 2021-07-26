@@ -296,8 +296,8 @@ func (p *Peer) Answer(request []byte) ([]byte, error) {
 // WriteRTCP sends a user provided RTCP packet to the connected Peer. If no Peer is connected the
 // packet is discarded. It also runs any configured interceptors.
 func (p *Peer) WriteRTCP(pkts []rtcp.Packet) error {
-	_, err := p.dtls.WriteRTCP(pkts)
-	return err
+	// _, err := p.dtls.WriteRTCP(pkts)
+	return nil
 }
 
 func (p *Peer) LocalTracks() []webrtc.TrackLocal {
@@ -466,7 +466,7 @@ func (p *Peer) AddTrack(receiver *webrtc.RTPReceiver, remoteTrack *webrtc.TrackR
 	}
 
 	s.Encodings = &webrtc.RTPCodingParameters{
-		SSRC:        webrtc.SSRC(p.rand.Uint32()),
+		SSRC:        sdr.GetParameters().Encodings[0].SSRC,
 		PayloadType: remoteTrack.PayloadType(),
 	}
 	pld, err := json.Marshal(&s)
@@ -514,10 +514,7 @@ func (p *Peer) Emit(event string, data []byte) error {
 		return err
 	}
 
-	if err = p.signalingDC.Send(msg); err != nil {
-		return err
-	}
-	return nil
+	return p.signalingDC.Send(msg)
 }
 
 func (p *Peer) Request(ctx context.Context, event string, data []byte) ([]byte, error) {
