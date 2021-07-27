@@ -134,15 +134,14 @@ func NewPeer(meta PeerMeta, conf *PeerConfig) (*Peer, error) {
 	}
 
 	sctp.OnDataChannel(func(channel *webrtc.DataChannel) {
-		p.mu.Lock()
-		defer p.mu.Unlock()
 		if channel.Label() == signalerLabel {
 			p.signalingDC = channel
 			channel.OnMessage(p.handleRequest)
-			p.ready = true
-			if f := p.onReady.Load(); f != nil {
-				f.(func())()
-			}
+			channel.OnOpen(func() {
+				if f := p.onReady.Load(); f != nil {
+					f.(func())()
+				}
+			})
 			return
 		}
 
@@ -227,9 +226,6 @@ func (p *Peer) Offer(signalFn func(meta PeerMeta, signal []byte) ([]byte, error)
 	}
 
 	p.signalingDC.OnOpen(func() {
-		p.mu.Lock()
-		p.ready = true
-		p.mu.Unlock()
 		if f := p.onReady.Load(); f != nil {
 			f.(func())()
 		}
@@ -387,6 +383,7 @@ func (p *Peer) start(s *signal) error {
 			return err
 		}
 	}
+	p.ready = true
 	return nil
 }
 
