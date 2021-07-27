@@ -423,8 +423,12 @@ func (p *Peer) receive(s *signal) error {
 		Codecs:           []webrtc.RTPCodecParameters{*s.TrackMeta.CodecParameters},
 	})
 
+	track := recv.Track()
+	track.SetID(s.TrackMeta.TrackID)
+	track.SetStreamID(s.TrackMeta.StreamID)
+
 	if f := p.onTrack.Load(); f != nil {
-		f.(func(remote *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, meta *TrackMeta))(recv.Track(), recv, s.TrackMeta)
+		f.(func(remote *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, meta *TrackMeta))(track, recv, s.TrackMeta)
 	}
 
 	p.receivers = append(p.receivers, recv)
