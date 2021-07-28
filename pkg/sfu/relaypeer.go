@@ -29,8 +29,9 @@ func NewRelayPeer(peer *relay.Peer, session Session, config *WebRTCTransportConf
 
 	rp := &RelayPeer{
 		peer:    peer,
-		session: session,
 		router:  r,
+		config:  config,
+		session: session,
 	}
 
 	peer.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, meta *relay.TrackMeta) {
