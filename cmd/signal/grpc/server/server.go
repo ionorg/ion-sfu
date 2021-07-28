@@ -149,10 +149,12 @@ func (s *SFUServer) Signal(stream pb.SFU_SignalServer) error {
 
 			_, nopub := payload.Join.Config["NoPublish"]
 			_, nosub := payload.Join.Config["NoSubscribe"]
+			_, noautosub := payload.Join.Config["NoAutoSubscribe"]
 
 			cfg := sfu.JoinConfig{
-				NoPublish:   nopub,
-				NoSubscribe: nosub,
+				NoPublish:       nopub,
+				NoSubscribe:     nosub,
+				NoAutoSubscribe: noautosub,
 			}
 			err = peer.Join(payload.Join.Sid, payload.Join.Uid, cfg)
 			if err != nil {

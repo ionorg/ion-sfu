@@ -143,6 +143,13 @@ func (d *DownTrack) Kind() webrtc.RTPCodecType {
 	}
 }
 
+func (d *DownTrack) Stop() error {
+	if d.transceiver != nil {
+		return d.transceiver.Stop()
+	}
+	return fmt.Errorf("d.transceiver not exists")
+}
+
 func (d *DownTrack) SetTransceiver(transceiver *webrtc.RTPTransceiver) {
 	d.transceiver = transceiver
 }
@@ -159,6 +166,10 @@ func (d *DownTrack) WriteRTP(p *buffer.ExtPacket) error {
 		return d.writeSimulcastRTP(p)
 	}
 	return nil
+}
+
+func (d *DownTrack) Enabled() bool {
+	return d.enabled.get()
 }
 
 // Mute enables or disables media forwarding
