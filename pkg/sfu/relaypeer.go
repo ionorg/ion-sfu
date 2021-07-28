@@ -6,9 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pion/rtcp"
-
+	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/ion-sfu/pkg/relay"
+	"github.com/pion/rtcp"
+	"github.com/pion/transport/packetio"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -124,6 +125,33 @@ func (r *RelayPeer) createRelayTrack(track *webrtc.TrackRemote, receiver Receive
 		Logger.V(1).Error(err, "Relaying track.", "peer_id", r.ID())
 		return fmt.Errorf("relay: %w", err)
 	}
+
+	r.config.BufferFactory.GetOrNew(packetio.RTCPBufferPacket,
+		uint32(sdr.GetParameters().Encodings[0].SSRC)).(*buffer.RTCPReader).OnPacket(func(bytes []byte) {
+		pkts, err := rtcp.Unmarshal(bytes)
+		if err != nil {
+			Logger.V(1).Error(err, "Unmarshal rtcp reports", "peer_id", r.ID())
+			return
+		}
+		var rpkts []rtcp.Packet
+		for _, pkt := range pkts {
+			switch pk := pkt.(type) {
+			case *rtcp.PictureLossIndication:
+				rpkts = append(rpkts, &rtcp.PictureLossIndication{
+					SenderSSRC: pk.MediaSSRC,
+					MediaSSRC:  uint32(track.SSRC()),
+				})
+			case *rtcp.SenderReport:
+				// TODO: Propagate timestamps
+			}
+		}
+
+		if len(rpkts) > 0 {
+			if err := r.peer.WriteRTCP(rpkts); err != nil {
+				Logger.V(1).Error(err, "Sending rtcp relay reports", "peer_id", r.ID())
+			}
+		}
+	})
 
 	downTrack.OnCloseHandler(func() {
 		if err = sdr.Stop(); err != nil {
