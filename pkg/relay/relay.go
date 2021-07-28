@@ -460,7 +460,7 @@ func (p *Peer) AddTrack(receiver *webrtc.RTPReceiver, remoteTrack *webrtc.TrackR
 	}
 
 	s.Encodings = &webrtc.RTPCodingParameters{
-		SSRC:        sdr.GetParameters().Encodings[0].SSRC,
+		SSRC:        webrtc.SSRC(p.rand.Uint32()),
 		PayloadType: remoteTrack.PayloadType(),
 	}
 	pld, err := json.Marshal(&s)
