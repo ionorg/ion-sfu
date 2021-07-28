@@ -293,8 +293,8 @@ func (p *Peer) Answer(request []byte) ([]byte, error) {
 // WriteRTCP sends a user provided RTCP packet to the connected Peer. If no Peer is connected the
 // packet is discarded. It also runs any configured interceptors.
 func (p *Peer) WriteRTCP(pkts []rtcp.Packet) error {
-	// _, err := p.dtls.WriteRTCP(pkts)
-	return nil
+	_, err := p.dtls.WriteRTCP(pkts)
+	return err
 }
 
 func (p *Peer) LocalTracks() []webrtc.TrackLocal {
