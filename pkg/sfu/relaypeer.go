@@ -165,21 +165,23 @@ func (r *RelayPeer) relayReports(rp *relay.Peer) {
 	for {
 		time.Sleep(5 * time.Second)
 
-		var r []rtcp.Packet
+		var packets []rtcp.Packet
 		for _, t := range rp.LocalTracks() {
 			if dt, ok := t.(*DownTrack); ok {
 				if !dt.bound.get() {
 					continue
 				}
-				r = append(r, dt.CreateSenderReport())
+				if sr := dt.CreateSenderReport(); sr != nil {
+					packets = append(packets, sr)
+				}
 			}
 		}
 
-		if len(r) == 0 {
+		if len(packets) == 0 {
 			continue
 		}
 
-		if err := rp.WriteRTCP(r); err != nil {
+		if err := rp.WriteRTCP(packets); err != nil {
 			if err == io.EOF || err == io.ErrClosedPipe {
 				return
 			}
