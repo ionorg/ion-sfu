@@ -37,7 +37,7 @@ http://localhost:8000/
 
 ### SFU with json-rpc signaling
 
-The json-rpc signaling service can be used to easily get up and running with the sfu. It can be used with the [corresponding javascript signaling module](https://github.com/pion/ion-sdk-js/blob/master/src/signal/ion-sfu.ts).
+The json-rpc signaling service can be used to easily get up and running with the sfu. It can be used with the [corresponding javascript signaling module](https://github.com/pion/ion-sdk-js/blob/master/src/signal/json-rpc-impl.ts).
 
 ##### Using golang environment
 
