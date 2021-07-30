@@ -247,7 +247,9 @@ func (s *Subscriber) downTracksReports() {
 				if !dt.bound.get() {
 					continue
 				}
-				r = append(r, dt.CreateSenderReport())
+				if sr := dt.CreateSenderReport(); sr != nil {
+					r = append(r, sr)
+				}
 				sd = append(sd, dt.CreateSourceDescriptionChunks()...)
 			}
 		}

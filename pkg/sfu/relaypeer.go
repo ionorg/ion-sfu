@@ -141,8 +141,6 @@ func (r *RelayPeer) createRelayTrack(track *webrtc.TrackRemote, receiver Receive
 					SenderSSRC: pk.MediaSSRC,
 					MediaSSRC:  uint32(track.SSRC()),
 				})
-			case *rtcp.SenderReport:
-				// TODO: Propagate timestamps
 			}
 		}
 

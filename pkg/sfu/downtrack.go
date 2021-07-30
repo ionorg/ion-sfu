@@ -63,10 +63,9 @@ type DownTrack struct {
 	closeOnce      sync.Once
 
 	// Report helpers
-	octetCount   uint32
-	packetCount  uint32
-	maxPacketTs  uint32
-	lastPacketMs int64
+	octetCount  uint32
+	packetCount uint32
+	maxPacketTs uint32
 }
 
 // NewDownTrack returns a DownTrack.
@@ -303,16 +302,24 @@ func (d *DownTrack) CreateSenderReport() *rtcp.SenderReport {
 	if !d.bound.get() {
 		return nil
 	}
-	now := time.Now().UnixNano()
-	nowNTP := timeToNtp(now)
-	lastPktMs := atomic.LoadInt64(&d.lastPacketMs)
-	maxPktTs := atomic.LoadUint32(&d.lastTS)
-	diffTs := uint32((now/1e6)-lastPktMs) * d.codec.ClockRate / 1000
+	srRTP, srNTP := d.receiver.GetSenderReportTime(int(atomic.LoadInt32(&d.currentSpatialLayer)))
+	if srRTP == 0 {
+		return nil
+	}
+
+	now := time.Now()
+	nowNTP := toNtpTime(now)
+
+	diff := (uint64(now.Sub(ntpTime(srNTP).Time())) * uint64(d.codec.ClockRate)) / uint64(time.Second)
+	if diff < 0 {
+		diff = 0
+	}
 	octets, packets := d.getSRStats()
+
 	return &rtcp.SenderReport{
 		SSRC:        d.ssrc,
-		NTPTime:     nowNTP,
-		RTPTime:     maxPktTs + diffTs,
+		NTPTime:     uint64(nowNTP),
+		RTPTime:     srRTP + uint32(diff),
 		PacketCount: packets,
 		OctetCount:  octets,
 	}
@@ -334,9 +341,10 @@ func (d *DownTrack) writeSimpleRTP(extPkt *buffer.ExtPacket) error {
 			}
 		}
 
-		d.snOffset = extPkt.Packet.SequenceNumber - d.lastSN - 1
-		d.tsOffset = extPkt.Packet.Timestamp - d.lastTS - 1
-
+		if d.lastSN != 0 {
+			d.snOffset = extPkt.Packet.SequenceNumber - d.lastSN - 1
+			d.tsOffset = extPkt.Packet.Timestamp - d.lastTS - 1
+		}
 		atomic.StoreUint32(&d.lastSSRC, extPkt.Packet.SSRC)
 		d.reSync.set(false)
 	}
@@ -348,10 +356,9 @@ func (d *DownTrack) writeSimpleRTP(extPkt *buffer.ExtPacket) error {
 	if d.sequencer != nil {
 		d.sequencer.push(extPkt.Packet.SequenceNumber, newSN, newTS, 0, extPkt.Head)
 	}
-	if (newSN-d.lastSN)&0x8000 == 0 || d.lastSN == 0 {
+	if extPkt.Head {
 		d.lastSN = newSN
-		atomic.StoreInt64(&d.lastPacketMs, extPkt.Arrival/1e6)
-		atomic.StoreUint32(&d.lastTS, newTS)
+		d.lastTS = newTS
 	}
 	hdr := extPkt.Packet.Header
 	hdr.PayloadType = d.payloadType
@@ -452,8 +459,6 @@ func (d *DownTrack) writeSimulcastRTP(extPkt *buffer.ExtPacket, layer int) error
 	if extPkt.Head {
 		d.lastSN = newSN
 		d.lastTS = newTS
-		atomic.StoreInt64(&d.lastPacketMs, time.Now().UnixNano()/1e6)
-		atomic.StoreUint32(&d.lastTS, newTS)
 	}
 	// Update base
 	d.simulcast.lTSCalc = extPkt.Arrival

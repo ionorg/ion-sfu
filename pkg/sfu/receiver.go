@@ -34,6 +34,7 @@ type Receiver interface {
 	OnCloseHandler(fn func())
 	SendRTCP(p []rtcp.Packet)
 	SetRTCPCh(ch chan []rtcp.Packet)
+	GetSenderReportTime(layer int) (rtpTS uint32, ntpTS uint64)
 }
 
 // WebRTCReceiver receives a video track
@@ -258,6 +259,11 @@ func (w *WebRTCReceiver) SendRTCP(p []rtcp.Packet) {
 
 func (w *WebRTCReceiver) SetRTCPCh(ch chan []rtcp.Packet) {
 	w.rtcpCh = ch
+}
+
+func (w *WebRTCReceiver) GetSenderReportTime(layer int) (rtpTS uint32, ntpTS uint64) {
+	rtpTS, ntpTS, _ = w.buffers[layer].GetSenderReportData()
+	return
 }
 
 func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMeta) error {
