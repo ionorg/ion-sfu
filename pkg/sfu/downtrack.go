@@ -13,7 +13,7 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-// DownTrackType determines the type of a track
+// DownTrackType determines the type of track
 type DownTrackType int
 
 const (
