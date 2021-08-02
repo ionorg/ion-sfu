@@ -16,7 +16,7 @@ import (
 )
 
 type Publisher struct {
-	mu  sync.Mutex
+	mu  sync.RWMutex
 	id  string
 	pc  *webrtc.PeerConnection
 	cfg *WebRTCTransportConfig
@@ -24,12 +24,20 @@ type Publisher struct {
 	router     Router
 	session    Session
 	tracks     []publisherTracks
-	relayPeer  []*relay.Peer
+	relayed    atomicBool
+	relayPeers []*relayPeer
 	candidates []webrtc.ICECandidateInit
 
 	onICEConnectionStateChangeHandler atomic.Value // func(webrtc.ICEConnectionState)
 
 	closeOnce sync.Once
+}
+
+type relayPeer struct {
+	peer                    *relay.Peer
+	dcs                     []*webrtc.DataChannel
+	withSRReports           bool
+	relayFanOutDataChannels bool
 }
 
 type publisherTracks struct {
@@ -79,8 +87,8 @@ func NewPublisher(id string, session Session, cfg *WebRTCTransportConfig) (*Publ
 			p.session.Publish(p.router, r)
 			p.mu.Lock()
 			p.tracks = append(p.tracks, publisherTracks{track, r, true})
-			for _, rp := range p.relayPeer {
-				if err = p.createRelayTrack(track, r, rp); err != nil {
+			for _, rp := range p.relayPeers {
+				if err = p.createRelayTrack(track, r, rp.peer); err != nil {
 					Logger.V(1).Error(err, "Creating relay track.", "peer_id", p.id)
 				}
 			}
@@ -150,10 +158,10 @@ func (p *Publisher) GetRouter() Router {
 // Close peer
 func (p *Publisher) Close() {
 	p.closeOnce.Do(func() {
-		if len(p.relayPeer) > 0 {
+		if len(p.relayPeers) > 0 {
 			p.mu.Lock()
-			for _, rp := range p.relayPeer {
-				if err := rp.Close(); err != nil {
+			for _, rp := range p.relayPeers {
+				if err := rp.peer.Close(); err != nil {
 					Logger.Error(err, "Closing relay peer transport.")
 				}
 			}
@@ -183,7 +191,14 @@ func (p *Publisher) PeerConnection() *webrtc.PeerConnection {
 	return p.pc
 }
 
-func (p *Publisher) Relay(signalFn func(meta relay.PeerMeta, signal []byte) ([]byte, error)) (*relay.Peer, error) {
+// Relay will relay all current and future tracks from current Publisher
+func (p *Publisher) Relay(signalFn func(meta relay.PeerMeta, signal []byte) ([]byte, error),
+	options ...func(r *relayPeer)) (*relay.Peer, error) {
+	lrp := &relayPeer{}
+	for _, o := range options {
+		o(lrp)
+	}
+
 	rp, err := relay.NewPeer(relay.PeerMeta{
 		PeerID:    p.id,
 		SessionID: p.session.ID(),
@@ -195,11 +210,34 @@ func (p *Publisher) Relay(signalFn func(meta relay.PeerMeta, signal []byte) ([]b
 	if err != nil {
 		return nil, fmt.Errorf("relay: %w", err)
 	}
+	lrp.peer = rp
 
 	rp.OnReady(func() {
-		for _, lbl := range p.session.GetDataChannelLabels() {
-			if _, err := rp.CreateDataChannel(lbl); err != nil {
-				Logger.V(1).Error(err, "Creating data channels.", "peer_id", p.id)
+		peer := p.session.GetPeer(p.id)
+
+		p.relayed.set(true)
+		if lrp.relayFanOutDataChannels {
+			for _, lbl := range p.session.GetFanOutDataChannelLabels() {
+				dc, err := rp.CreateDataChannel(lbl)
+				if err != nil {
+					Logger.V(1).Error(err, "Creating data channels.", "peer_id", p.id)
+				}
+				dc.OnMessage(func(msg webrtc.DataChannelMessage) {
+					if peer == nil || peer.Subscriber() == nil {
+						return
+					}
+					if sdc := peer.Subscriber().DataChannel(lbl); sdc != nil {
+						if msg.IsString {
+							if err = sdc.SendText(string(msg.Data)); err != nil {
+								Logger.Error(err, "Sending dc message err")
+							}
+						} else {
+							if err = sdc.Send(msg.Data); err != nil {
+								Logger.Error(err, "Sending dc message err")
+							}
+						}
+					}
+				})
 			}
 		}
 
@@ -213,9 +251,23 @@ func (p *Publisher) Relay(signalFn func(meta relay.PeerMeta, signal []byte) ([]b
 				Logger.V(1).Error(err, "Creating relay track.", "peer_id", p.id)
 			}
 		}
-		p.relayPeer = append(p.relayPeer, rp)
+		p.relayPeers = append(p.relayPeers, lrp)
 		p.mu.Unlock()
-		go p.relayReports(rp)
+
+		if lrp.withSRReports {
+			go p.relayReports(rp)
+		}
+	})
+
+	rp.OnDataChannel(func(channel *webrtc.DataChannel) {
+		if !lrp.relayFanOutDataChannels {
+			return
+		}
+		p.mu.Lock()
+		lrp.dcs = append(lrp.dcs, channel)
+		p.mu.Unlock()
+
+		p.session.AddDatachannel("", channel)
 	})
 
 	if err = rp.Offer(signalFn); err != nil {
@@ -225,9 +277,54 @@ func (p *Publisher) Relay(signalFn func(meta relay.PeerMeta, signal []byte) ([]b
 	return rp, nil
 }
 
+// AddRelayFanOutDataChannel adds fan out data channel to relayed peers
+func (p *Publisher) AddRelayFanOutDataChannel(label string) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	for _, rp := range p.relayPeers {
+		for _, dc := range rp.dcs {
+			if dc.Label() == label {
+				continue
+			}
+		}
+
+		dc, err := rp.peer.CreateDataChannel(label)
+		if err != nil {
+			Logger.V(1).Error(err, "Creating data channels.", "peer_id", p.id)
+		}
+		dc.OnMessage(func(msg webrtc.DataChannelMessage) {
+			p.session.FanOutMessage("", label, msg)
+		})
+	}
+}
+
+// GetRelayedDataChannels Returns a slice of data channels that belongs to relayed
+// peers
+func (p *Publisher) GetRelayedDataChannels(label string) []*webrtc.DataChannel {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	dcs := make([]*webrtc.DataChannel, 0, len(p.relayPeers))
+	for _, rp := range p.relayPeers {
+		for _, dc := range rp.dcs {
+			if dc.Label() == label {
+				dcs = append(dcs, dc)
+				break
+			}
+		}
+	}
+	return dcs
+}
+
+// Relayed returns true if the publisher has been relayed at least once
+func (p *Publisher) Relayed() bool {
+	return p.relayed.get()
+}
+
 func (p *Publisher) Tracks() []*webrtc.TrackRemote {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 
 	tracks := make([]*webrtc.TrackRemote, len(p.tracks))
 	for idx, track := range p.tracks {

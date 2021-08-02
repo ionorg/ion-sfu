@@ -14,14 +14,15 @@ import (
 )
 
 type RelayPeer struct {
-	mu sync.Mutex
+	mu sync.RWMutex
 
-	peer       *relay.Peer
-	session    Session
-	router     Router
-	tracks     []publisherTracks
-	relayPeers []*relay.Peer
-	config     *WebRTCTransportConfig
+	peer         *relay.Peer
+	session      Session
+	router       Router
+	config       *WebRTCTransportConfig
+	tracks       []publisherTracks
+	relayPeers   []*relay.Peer
+	dataChannels []*webrtc.DataChannel
 }
 
 func NewRelayPeer(peer *relay.Peer, session Session, config *WebRTCTransportConfig) *RelayPeer {
@@ -78,12 +79,6 @@ func (r *RelayPeer) Relay(signalFn func(meta relay.PeerMeta, signal []byte) ([]b
 	}
 
 	rp.OnReady(func() {
-		for _, lbl := range r.session.GetDataChannelLabels() {
-			if _, err := rp.CreateDataChannel(lbl); err != nil {
-				Logger.V(1).Error(err, "Creating data channels.", "peer_id", r.ID())
-			}
-		}
-
 		r.mu.Lock()
 		for _, tp := range r.tracks {
 			if !tp.clientRelay {
@@ -99,11 +94,29 @@ func (r *RelayPeer) Relay(signalFn func(meta relay.PeerMeta, signal []byte) ([]b
 		go r.relayReports(rp)
 	})
 
+	rp.OnDataChannel(func(channel *webrtc.DataChannel) {
+		r.mu.Lock()
+		r.dataChannels = append(r.dataChannels, channel)
+		r.mu.Unlock()
+		r.session.AddDatachannel("", channel)
+	})
+
 	if err = rp.Offer(signalFn); err != nil {
 		return nil, fmt.Errorf("relay: %w", err)
 	}
 
 	return rp, nil
+}
+
+func (r *RelayPeer) DataChannel(label string) *webrtc.DataChannel {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, dc := range r.dataChannels {
+		if dc.Label() == label {
+			return dc
+		}
+	}
+	return nil
 }
 
 func (r *RelayPeer) createRelayTrack(track *webrtc.TrackRemote, receiver Receiver, rp *relay.Peer) error {
