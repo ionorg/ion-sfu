@@ -1,7 +1,6 @@
 package sfu
 
 import (
-	"context"
 	"encoding/json"
 	"sync"
 	"time"
@@ -370,36 +369,6 @@ func (s *SessionLocal) GetDataChannels(peerID, label string) []*webrtc.DataChann
 	}
 
 	return dcs
-}
-
-func (s *SessionLocal) setRelayedDatachannel(peerID string, datachannel *webrtc.DataChannel) {
-	label := datachannel.Label()
-	for _, dc := range s.datachannels {
-		dc := dc
-		if dc.Label == label {
-			mws := newDCChain(dc.middlewares)
-			p := mws.Process(ProcessFunc(func(ctx context.Context, args ProcessArgs) {
-				if dc.onMessage != nil {
-					dc.onMessage(ctx, args)
-				}
-			}))
-			s.mu.RLock()
-			peer := s.peers[peerID]
-			s.mu.RUnlock()
-			datachannel.OnMessage(func(msg webrtc.DataChannelMessage) {
-				p.Process(context.Background(), ProcessArgs{
-					Peer:        peer,
-					Message:     msg,
-					DataChannel: datachannel,
-				})
-			})
-		}
-		return
-	}
-
-	datachannel.OnMessage(func(msg webrtc.DataChannelMessage) {
-		s.FanOutMessage(peerID, label, msg)
-	})
 }
 
 func (s *SessionLocal) audioLevelObserver(audioLevelInterval int) {
