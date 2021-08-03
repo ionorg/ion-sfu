@@ -6,6 +6,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pion/ion-sfu/pkg/logger"
+	"github.com/pion/ion-sfu/pkg/relay"
+	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/pion/webrtc/v3"
 )
 
@@ -18,7 +24,7 @@ type Session interface {
 	AddPeer(peer Peer)
 	GetPeer(peerID string) Peer
 	RemovePeer(peer Peer)
-	AddRelayPeer(peer *RelayPeer)
+	AddRelayPeer(peerID string, signalData []byte) ([]byte, error)
 	AudioObserver() *AudioObserver
 	AddDatachannel(owner string, dc *webrtc.DataChannel)
 	GetDCMiddlewares() []*Datachannel
@@ -32,6 +38,7 @@ type Session interface {
 type SessionLocal struct {
 	id             string
 	mu             sync.RWMutex
+	config         WebRTCTransportConfig
 	peers          map[string]Peer
 	relayPeers     map[string]*RelayPeer
 	closed         atomicBool
@@ -52,6 +59,7 @@ func NewSession(id string, dcs []*Datachannel, cfg WebRTCTransportConfig) Sessio
 		peers:        make(map[string]Peer),
 		relayPeers:   make(map[string]*RelayPeer),
 		datachannels: dcs,
+		config:       cfg,
 		audioObs:     NewAudioObserver(cfg.Router.AudioLevelThreshold, cfg.Router.AudioLevelInterval, cfg.Router.AudioLevelFilter),
 	}
 	go s.audioLevelObserver(cfg.Router.AudioLevelInterval)
@@ -91,10 +99,46 @@ func (s *SessionLocal) GetPeer(peerID string) Peer {
 	return s.peers[peerID]
 }
 
-func (s *SessionLocal) AddRelayPeer(peer *RelayPeer) {
-	s.mu.Lock()
-	s.relayPeers[peer.ID()] = peer
-	s.mu.Unlock()
+func (s *SessionLocal) AddRelayPeer(peerID string, signalData []byte) ([]byte, error) {
+	p, err := relay.NewPeer(relay.PeerMeta{
+		PeerID:    peerID,
+		SessionID: s.id,
+	}, &relay.PeerConfig{
+		SettingEngine: s.config.Setting,
+		ICEServers:    s.config.Configuration.ICEServers,
+		Logger:        logger.New(),
+	})
+	if err != nil {
+		log.Err(err).Msg("Creating relay peer")
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	resp, err := p.Answer(signalData)
+	if err != nil {
+		log.Err(err).Msg("Creating answer for relay")
+		return nil, err
+	}
+
+	p.OnReady(func() {
+		rp := NewRelayPeer(p, s, &s.config)
+		s.mu.Lock()
+		s.relayPeers[peerID] = rp
+		s.mu.Unlock()
+	})
+
+	p.OnClose(func() {
+		s.mu.Lock()
+		delete(s.relayPeers, peerID)
+		s.mu.Unlock()
+	})
+
+	return resp, nil
+}
+
+func (s *SessionLocal) GetRelayPeer(peerID string) *RelayPeer {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.relayPeers[peerID]
 }
 
 // RemovePeer removes Peer from the SessionLocal
