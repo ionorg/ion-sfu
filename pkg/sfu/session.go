@@ -177,26 +177,27 @@ func (s *SessionLocal) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 	})
 
 	for _, p := range peers {
-		if p.ID() == owner || p.Subscriber() == nil {
+		peer := p
+		if peer.ID() == owner || peer.Subscriber() == nil {
 			continue
 		}
-		ndc, err := p.Subscriber().AddDataChannel(label)
+		ndc, err := peer.Subscriber().AddDataChannel(label)
 
 		if err != nil {
 			Logger.Error(err, "error adding datachannel")
 			continue
 		}
 
-		if p.Publisher() != nil && p.Publisher().Relayed() {
-			p.Publisher().AddRelayFanOutDataChannel(label)
+		if peer.Publisher() != nil && peer.Publisher().Relayed() {
+			peer.Publisher().AddRelayFanOutDataChannel(label)
 		}
 
-		pid := p.ID()
+		pid := peer.ID()
 		ndc.OnMessage(func(msg webrtc.DataChannelMessage) {
 			s.FanOutMessage(pid, label, msg)
 
-			if p.Publisher().Relayed() {
-				for _, rdc := range p.Publisher().GetRelayedDataChannels(label) {
+			if peer.Publisher().Relayed() {
+				for _, rdc := range peer.Publisher().GetRelayedDataChannels(label) {
 					if msg.IsString {
 						if err = rdc.SendText(string(msg.Data)); err != nil {
 							Logger.Error(err, "Sending dc message err")
@@ -210,7 +211,7 @@ func (s *SessionLocal) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 			}
 		})
 
-		p.Subscriber().negotiate()
+		peer.Subscriber().negotiate()
 	}
 }
 
@@ -258,7 +259,7 @@ func (s *SessionLocal) Subscribe(peer Peer) {
 			s.FanOutMessage(peer.ID(), l, msg)
 
 			if peer.Publisher().Relayed() {
-				for _, rdc := range peer.Publisher().GetRelayedDataChannels(label) {
+				for _, rdc := range peer.Publisher().GetRelayedDataChannels(l) {
 					if msg.IsString {
 						if err = rdc.SendText(string(msg.Data)); err != nil {
 							Logger.Error(err, "Sending dc message err")

@@ -227,6 +227,7 @@ func (p *Publisher) Relay(signalFn func(meta relay.PeerMeta, signal []byte) ([]b
 		p.relayed.set(true)
 		if lrp.relayFanOutDataChannels {
 			for _, lbl := range p.session.GetFanOutDataChannelLabels() {
+				lbl := lbl
 				dc, err := rp.CreateDataChannel(lbl)
 				if err != nil {
 					Logger.V(1).Error(err, "Creating data channels.", "peer_id", p.id)
