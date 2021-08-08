@@ -235,7 +235,13 @@ func (w *WebRTCReceiver) DeleteDownTrack(layer int, id string) {
 	if w.closed.get() {
 		return
 	}
+	w.Lock()
+	w.deleteDownTrack(layer, id)
+	w.Unlock()
 
+}
+
+func (w *WebRTCReceiver) deleteDownTrack(layer int, id string) {
 	dts := w.downTracks[layer].Load().([]*DownTrack)
 	ndts := make([]*DownTrack, 0, len(dts))
 	for _, dt := range dts {
@@ -340,7 +346,7 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 				if pkt.KeyFrame {
 					w.Lock()
 					for _, dt := range pts {
-						w.DeleteDownTrack(dt.CurrentSpatialLayer(), dt.peerID)
+						w.deleteDownTrack(dt.CurrentSpatialLayer(), dt.peerID)
 						w.storeDownTrack(layer, dt)
 						dt.SwitchSpatialLayerDone(int32(layer))
 
@@ -358,7 +364,7 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 			if err = dt.WriteRTP(pkt, layer); err != nil {
 				if err == io.EOF && err == io.ErrClosedPipe {
 					w.Lock()
-					w.DeleteDownTrack(layer, dt.id)
+					w.deleteDownTrack(layer, dt.id)
 					w.Unlock()
 				}
 				log.Error().Err(err).Str("id", dt.id).Msg("Error writing to down track")
