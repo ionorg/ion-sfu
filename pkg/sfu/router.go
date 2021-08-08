@@ -16,6 +16,7 @@ type Router interface {
 	AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote) (Receiver, bool)
 	AddDownTracks(s *Subscriber, r Receiver) error
 	SetRTCPWriter(func([]rtcp.Packet) error)
+	AddDownTrack(s *Subscriber, r Receiver) (*DownTrack, error)
 	Stop()
 }
 
@@ -186,8 +187,13 @@ func (r *router) AddDownTracks(s *Subscriber, recv Receiver) error {
 	r.Lock()
 	defer r.Unlock()
 
+	if s.noAutoSubscribe {
+		Logger.Info("peer turns off automatic subscription, skip tracks add")
+		return nil
+	}
+
 	if recv != nil {
-		if err := r.addDownTrack(s, recv); err != nil {
+		if _, err := r.AddDownTrack(s, recv); err != nil {
 			return err
 		}
 		s.negotiate()
@@ -196,7 +202,7 @@ func (r *router) AddDownTracks(s *Subscriber, recv Receiver) error {
 
 	if len(r.receivers) > 0 {
 		for _, rcv := range r.receivers {
-			if err := r.addDownTrack(s, rcv); err != nil {
+			if _, err := r.AddDownTrack(s, rcv); err != nil {
 				return err
 			}
 		}
@@ -210,16 +216,16 @@ func (r *router) SetRTCPWriter(fn func(packet []rtcp.Packet) error) {
 	go r.sendRTCP()
 }
 
-func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
+func (r *router) AddDownTrack(sub *Subscriber, recv Receiver) (*DownTrack, error) {
 	for _, dt := range sub.GetDownTracks(recv.StreamID()) {
 		if dt.ID() == recv.TrackID() {
-			return nil
+			return dt, nil
 		}
 	}
 
 	codec := recv.Codec()
 	if err := sub.me.RegisterCodec(codec, recv.Kind()); err != nil {
-		return err
+		return nil, err
 	}
 
 	downTrack, err := NewDownTrack(webrtc.RTPCodecCapability{
@@ -230,13 +236,13 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 		RTCPFeedback: []webrtc.RTCPFeedback{{"goog-remb", ""}, {"nack", ""}, {"nack", "pli"}},
 	}, recv, r.bufferFactory, sub.id, r.config.MaxPacketTrack)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// Create webrtc sender for the peer we are sending track to
 	if downTrack.transceiver, err = sub.pc.AddTransceiverFromTrack(downTrack, webrtc.RTPTransceiverInit{
 		Direction: webrtc.RTPTransceiverDirectionSendonly,
 	}); err != nil {
-		return err
+		return nil, err
 	}
 
 	// nolint:scopelint
@@ -260,7 +266,7 @@ func (r *router) addDownTrack(sub *Subscriber, recv Receiver) error {
 
 	sub.AddDownTrack(recv.StreamID(), downTrack)
 	recv.AddDownTrack(downTrack, r.config.Simulcast.BestQualityFirst)
-	return nil
+	return downTrack, nil
 }
 
 func (r *router) deleteReceiver(track string, ssrc uint32) {

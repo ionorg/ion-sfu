@@ -41,7 +41,8 @@ var TestPackets = []*rtp.Packet{
 }
 
 func Test_queue(t *testing.T) {
-	q := NewBucket(make([]byte, 25000))
+	b := make([]byte, 25000)
+	q := NewBucket(&b)
 
 	for _, p := range TestPackets {
 		p := p
@@ -98,7 +99,8 @@ func Test_queue_edges(t *testing.T) {
 			},
 		},
 	}
-	q := NewBucket(make([]byte, 25000))
+	b := make([]byte, 25000)
+	q := NewBucket(&b)
 	for _, p := range TestPackets {
 		p := p
 		assert.NotNil(t, p)

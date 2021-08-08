@@ -39,6 +39,11 @@ type JoinConfig struct {
 	NoPublish bool
 	// If true the peer will not be allowed to subscribe to other peers in SessionLocal.
 	NoSubscribe bool
+	// If true the peer will not automatically subscribe all tracks,
+	// and then the peer can use peer.Subscriber().AddDownTrack/RemoveDownTrack
+	// to customize the subscrbe stream combination as needed.
+	// this parameter depends on NoSubscribe=false.
+	NoAutoSubscribe bool
 }
 
 // SessionProvider provides the SessionLocal to the sfu.Peer
@@ -104,6 +109,8 @@ func (p *PeerLocal) Join(sid, uid string, config ...JoinConfig) error {
 		if err != nil {
 			return fmt.Errorf("error creating transport: %v", err)
 		}
+
+		p.subscriber.noAutoSubscribe = conf.NoAutoSubscribe
 
 		p.subscriber.OnNegotiationNeeded(func() {
 			p.Lock()

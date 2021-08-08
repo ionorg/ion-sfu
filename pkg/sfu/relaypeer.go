@@ -20,7 +20,7 @@ type RelayPeer struct {
 	session      Session
 	router       Router
 	config       *WebRTCTransportConfig
-	tracks       []publisherTracks
+	tracks       []PublisherTrack
 	relayPeers   []*relay.Peer
 	dataChannels []*webrtc.DataChannel
 }
@@ -40,7 +40,7 @@ func NewRelayPeer(peer *relay.Peer, session Session, config *WebRTCTransportConf
 		if recv, pub := r.AddReceiver(receiver, track); pub {
 			session.Publish(r, recv)
 			rp.mu.Lock()
-			rp.tracks = append(rp.tracks, publisherTracks{track, recv, true})
+			rp.tracks = append(rp.tracks, PublisherTrack{track, recv, true})
 			for _, lrp := range rp.relayPeers {
 				if err := rp.createRelayTrack(track, recv, lrp); err != nil {
 					Logger.V(1).Error(err, "Creating relay track.", "peer_id", peer.ID())
@@ -49,7 +49,7 @@ func NewRelayPeer(peer *relay.Peer, session Session, config *WebRTCTransportConf
 			rp.mu.Unlock()
 		} else {
 			rp.mu.Lock()
-			rp.tracks = append(rp.tracks, publisherTracks{track, recv, false})
+			rp.tracks = append(rp.tracks, PublisherTrack{track, recv, false})
 			rp.mu.Unlock()
 		}
 	})
@@ -85,7 +85,7 @@ func (r *RelayPeer) Relay(signalFn func(meta relay.PeerMeta, signal []byte) ([]b
 				// simulcast will just relay client track for now
 				continue
 			}
-			if err = r.createRelayTrack(tp.track, tp.receiver, rp); err != nil {
+			if err = r.createRelayTrack(tp.Track, tp.Receiver, rp); err != nil {
 				Logger.V(1).Error(err, "Creating relay track.", "peer_id", r.ID())
 			}
 		}

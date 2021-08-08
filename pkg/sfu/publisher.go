@@ -23,12 +23,13 @@ type Publisher struct {
 
 	router     Router
 	session    Session
-	tracks     []publisherTracks
+	tracks     []PublisherTrack
 	relayed    atomicBool
 	relayPeers []*relayPeer
 	candidates []webrtc.ICECandidateInit
 
 	onICEConnectionStateChangeHandler atomic.Value // func(webrtc.ICEConnectionState)
+	onPublisherTrack                  atomic.Value // func(PublisherTrack)
 
 	closeOnce sync.Once
 }
@@ -40,9 +41,9 @@ type relayPeer struct {
 	relayFanOutDataChannels bool
 }
 
-type publisherTracks struct {
-	track    *webrtc.TrackRemote
-	receiver Receiver
+type PublisherTrack struct {
+	Track    *webrtc.TrackRemote
+	Receiver Receiver
 	// This will be used in the future for tracks that will be relayed as clients or servers
 	// This is for SVC and Simulcast where you will be able to chose if the relayed peer just
 	// want a single track (for recording/ processing) or get all the tracks (for load balancing)
@@ -86,16 +87,20 @@ func NewPublisher(id string, session Session, cfg *WebRTCTransportConfig) (*Publ
 		if pub {
 			p.session.Publish(p.router, r)
 			p.mu.Lock()
-			p.tracks = append(p.tracks, publisherTracks{track, r, true})
+			publisherTrack := PublisherTrack{track, r, true}
+			p.tracks = append(p.tracks, publisherTrack)
 			for _, rp := range p.relayPeers {
 				if err = p.createRelayTrack(track, r, rp.peer); err != nil {
 					Logger.V(1).Error(err, "Creating relay track.", "peer_id", p.id)
 				}
 			}
 			p.mu.Unlock()
+			if handler, ok := p.onPublisherTrack.Load().(func(PublisherTrack)); ok && handler != nil {
+				handler(publisherTrack)
+			}
 		} else {
 			p.mu.Lock()
-			p.tracks = append(p.tracks, publisherTracks{track, r, false})
+			p.tracks = append(p.tracks, PublisherTrack{track, r, false})
 			p.mu.Unlock()
 		}
 	})
@@ -174,6 +179,10 @@ func (p *Publisher) Close() {
 	})
 }
 
+func (p *Publisher) OnPublisherTrack(f func(track PublisherTrack)) {
+	p.onPublisherTrack.Store(f)
+}
+
 // OnICECandidate handler
 func (p *Publisher) OnICECandidate(f func(c *webrtc.ICECandidate)) {
 	p.pc.OnICECandidate(f)
@@ -247,7 +256,7 @@ func (p *Publisher) Relay(signalFn func(meta relay.PeerMeta, signal []byte) ([]b
 				// simulcast will just relay client track for now
 				continue
 			}
-			if err = p.createRelayTrack(tp.track, tp.receiver, rp); err != nil {
+			if err = p.createRelayTrack(tp.Track, tp.Receiver, rp); err != nil {
 				Logger.V(1).Error(err, "Creating relay track.", "peer_id", p.id)
 			}
 		}
@@ -275,6 +284,17 @@ func (p *Publisher) Relay(signalFn func(meta relay.PeerMeta, signal []byte) ([]b
 	}
 
 	return rp, nil
+}
+
+func (p *Publisher) PublisherTracks() []PublisherTrack {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	tracks := make([]PublisherTrack, len(p.tracks))
+	for idx, track := range p.tracks {
+		tracks[idx] = track
+	}
+	return tracks
 }
 
 // AddRelayFanOutDataChannel adds fan out data channel to relayed peers
@@ -328,7 +348,7 @@ func (p *Publisher) Tracks() []*webrtc.TrackRemote {
 
 	tracks := make([]*webrtc.TrackRemote, len(p.tracks))
 	for idx, track := range p.tracks {
-		tracks[idx] = track.track
+		tracks[idx] = track.Track
 	}
 	return tracks
 }
