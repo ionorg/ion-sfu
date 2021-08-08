@@ -7,14 +7,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/gammazero/workerpool"
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/ion-sfu/pkg/stats"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
+	"github.com/rs/zerolog/log"
 )
 
 // Receiver defines a interface for a track receivers
@@ -58,7 +57,8 @@ type WebRTCReceiver struct {
 	stats          [3]*stats.Stream
 	available      [3]atomicBool
 	downTracks     [3]atomic.Value // []*DownTrack
-	pendingTracks  [3]atomic.Value // []*DownTrack
+	pending        [3]atomicBool
+	pendingTracks  [3][]*DownTrack
 	nackWorker     *workerpool.WorkerPool
 	isSimulcast    bool
 	onCloseHandler func()
@@ -121,7 +121,7 @@ func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, buff *buffer.Buff
 	w.buffers[layer] = buff
 	w.available[layer].set(true)
 	w.downTracks[layer].Store(make([]*DownTrack, 0, 10))
-	w.pendingTracks[layer].Store(make([]*DownTrack, 0, 10))
+	w.pendingTracks[layer] = make([]*DownTrack, 0, 10)
 	w.Unlock()
 
 	subBestQuality := func(targetLayer int) {
@@ -131,7 +131,7 @@ func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, buff *buffer.Buff
 				continue
 			}
 			for _, dt := range dts.([]*DownTrack) {
-				dt.SwitchSpatialLayer(int32(targetLayer), false)
+				_ = dt.SwitchSpatialLayer(int32(targetLayer), false)
 			}
 		}
 	}
@@ -143,7 +143,7 @@ func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, buff *buffer.Buff
 				continue
 			}
 			for _, dt := range dts.([]*DownTrack) {
-				dt.SwitchSpatialLayer(int32(targetLayer), false)
+				_ = dt.SwitchSpatialLayer(int32(targetLayer), false)
 			}
 		}
 	}
@@ -199,7 +199,10 @@ func (w *WebRTCReceiver) SwitchDownTrack(track *DownTrack, layer int) error {
 		return errNoReceiverFound
 	}
 	if w.available[layer].get() {
-		w.storePendingTrack(layer, track)
+		w.Lock()
+		w.pending[layer].set(true)
+		w.pendingTracks[layer] = append(w.pendingTracks[layer], track)
+		w.Unlock()
 		return nil
 	}
 	return errNoReceiverFound
@@ -238,7 +241,6 @@ func (w *WebRTCReceiver) DeleteDownTrack(layer int, id string) {
 	w.Lock()
 	w.deleteDownTrack(layer, id)
 	w.Unlock()
-
 }
 
 func (w *WebRTCReceiver) deleteDownTrack(layer int, id string) {
@@ -341,17 +343,17 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 		}
 
 		if w.isSimulcast {
-			pts := w.pendingTracks[layer].Load().([]*DownTrack)
-			if len(pts) > 0 {
+			if w.pending[layer].get() {
 				if pkt.KeyFrame {
 					w.Lock()
-					for _, dt := range pts {
+					for idx, dt := range w.pendingTracks[layer] {
 						w.deleteDownTrack(dt.CurrentSpatialLayer(), dt.peerID)
 						w.storeDownTrack(layer, dt)
 						dt.SwitchSpatialLayerDone(int32(layer))
-
+						w.pendingTracks[layer][idx] = nil
 					}
-					w.pendingTracks[layer].Store(make([]*DownTrack, 0, 10))
+					w.pendingTracks[layer] = w.pendingTracks[layer][:0]
+					w.pending[layer].set(false)
 					w.Unlock()
 				} else {
 					w.SendRTCP(pli)
@@ -359,8 +361,7 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 			}
 		}
 
-		dts := w.downTracks[layer].Load().([]*DownTrack)
-		for _, dt := range dts {
+		for _, dt := range w.downTracks[layer].Load().([]*DownTrack) {
 			if err = dt.WriteRTP(pkt, layer); err != nil {
 				if err == io.EOF && err == io.ErrClosedPipe {
 					w.Lock()
@@ -406,14 +407,4 @@ func (w *WebRTCReceiver) storeDownTrack(layer int, dt *DownTrack) {
 	copy(ndts, dts)
 	ndts[len(ndts)-1] = dt
 	w.downTracks[layer].Store(ndts)
-}
-
-func (w *WebRTCReceiver) storePendingTrack(layer int, dt *DownTrack) {
-	w.Lock()
-	dts := w.pendingTracks[layer].Load().([]*DownTrack)
-	ndts := make([]*DownTrack, len(dts)+1)
-	copy(ndts, dts)
-	ndts[len(ndts)-1] = dt
-	w.pendingTracks[layer].Store(ndts)
-	w.Unlock()
 }
