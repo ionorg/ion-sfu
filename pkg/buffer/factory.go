@@ -30,12 +30,14 @@ func NewBufferFactory(trackingPackets int, logger logr.Logger) *Factory {
 	return &Factory{
 		videoPool: &sync.Pool{
 			New: func() interface{} {
-				return make([]byte, trackingPackets*maxPktSize)
+				b := make([]byte, trackingPackets*maxPktSize)
+				return &b
 			},
 		},
 		audioPool: &sync.Pool{
 			New: func() interface{} {
-				return make([]byte, maxPktSize*25)
+				b := make([]byte, maxPktSize*25)
+				return &b
 			},
 		},
 		rtpBuffers:  make(map[uint32]*Buffer),

@@ -36,7 +36,7 @@ type DownTrack struct {
 	sequencer     *sequencer
 	trackType     DownTrackType
 	bufferFactory *buffer.Factory
-	payload       []byte
+	payload       *[]byte
 
 	currentSpatialLayer int32
 	targetSpatialLayer  int32
@@ -436,12 +436,11 @@ func (d *DownTrack) writeSimulcastRTP(extPkt *buffer.ExtPacket, layer int) error
 	if d.simulcast.temporalSupported {
 		if d.mime == "video/vp8" {
 			drop := false
-			if picID, tlz0Idx, drop = setVP8TemporalLayer(extPkt, d); drop {
+			if payload, picID, tlz0Idx, drop = setVP8TemporalLayer(extPkt, d); drop {
 				// Pkt not in temporal getLayer update sequence number offset to avoid gaps
 				d.snOffset++
 				return nil
 			}
-			payload = d.payload
 		}
 	}
 

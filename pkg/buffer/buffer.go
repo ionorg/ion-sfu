@@ -134,10 +134,10 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 	switch {
 	case strings.HasPrefix(b.mime, "audio/"):
 		b.codecType = webrtc.RTPCodecTypeAudio
-		b.bucket = NewBucket(b.audioPool.Get().([]byte))
+		b.bucket = NewBucket(b.audioPool.Get().(*[]byte))
 	case strings.HasPrefix(b.mime, "video/"):
 		b.codecType = webrtc.RTPCodecTypeVideo
-		b.bucket = NewBucket(b.videoPool.Get().([]byte))
+		b.bucket = NewBucket(b.videoPool.Get().(*[]byte))
 	default:
 		b.codecType = webrtc.RTPCodecType(0)
 	}
@@ -253,10 +253,10 @@ func (b *Buffer) Close() error {
 
 	b.closeOnce.Do(func() {
 		if b.bucket != nil && b.codecType == webrtc.RTPCodecTypeVideo {
-			b.videoPool.Put(b.bucket.buf)
+			b.videoPool.Put(b.bucket.src)
 		}
 		if b.bucket != nil && b.codecType == webrtc.RTPCodecTypeAudio {
-			b.audioPool.Put(b.bucket.buf)
+			b.audioPool.Put(b.bucket.src)
 		}
 		b.closed.set(true)
 		b.onClose()

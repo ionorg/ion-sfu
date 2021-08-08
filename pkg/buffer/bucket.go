@@ -9,6 +9,7 @@ const maxPktSize = 1500
 
 type Bucket struct {
 	buf []byte
+	src *[]byte
 
 	init     bool
 	step     int
@@ -16,10 +17,11 @@ type Bucket struct {
 	maxSteps int
 }
 
-func NewBucket(buf []byte) *Bucket {
+func NewBucket(buf *[]byte) *Bucket {
 	return &Bucket{
-		buf:      buf,
-		maxSteps: int(math.Floor(float64(len(buf))/float64(maxPktSize))) - 1,
+		src:      buf,
+		buf:      *buf,
+		maxSteps: int(math.Floor(float64(len(*buf))/float64(maxPktSize))) - 1,
 	}
 }
 

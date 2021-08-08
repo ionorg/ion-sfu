@@ -181,7 +181,8 @@ func init() {
 	// Init packet factory
 	packetFactory = &sync.Pool{
 		New: func() interface{} {
-			return make([]byte, 1460)
+			b := make([]byte, 1460)
+			return &b
 		},
 	}
 }

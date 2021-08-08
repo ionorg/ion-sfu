@@ -181,7 +181,7 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 		track.maxTemporalLayer = 2
 		track.lastSSRC = w.SSRC(layer)
 		track.trackType = SimulcastDownTrack
-		track.payload = packetFactory.Get().([]byte)
+		track.payload = packetFactory.Get().(*[]byte)
 	} else {
 		if w.downTrackSubscribed(layer, track) {
 			return
@@ -277,8 +277,9 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 		return io.ErrClosedPipe
 	}
 	w.nackWorker.Submit(func() {
+		src := packetFactory.Get().(*[]byte)
 		for _, meta := range packets {
-			pktBuff := packetFactory.Get().([]byte)
+			pktBuff := *src
 			buff := w.buffers[meta.layer]
 			if buff == nil {
 				break
@@ -315,9 +316,8 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 			} else {
 				track.UpdateStats(uint32(i))
 			}
-
-			packetFactory.Put(pktBuff)
 		}
+		packetFactory.Put(src)
 	})
 	return nil
 }
