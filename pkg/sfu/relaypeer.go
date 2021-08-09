@@ -36,8 +36,9 @@ func NewRelayPeer(peer *relay.Peer, session Session, config *WebRTCTransportConf
 		session: session,
 	}
 
-	peer.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+	peer.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, meta *relay.TrackMeta) {
 		if recv, pub := r.AddReceiver(receiver, track); pub {
+			recv.SetTrackMeta(meta.TrackID, meta.StreamID)
 			session.Publish(r, recv)
 			rp.mu.Lock()
 			rp.tracks = append(rp.tracks, PublisherTrack{track, recv, true})

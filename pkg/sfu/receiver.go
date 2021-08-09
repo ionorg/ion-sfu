@@ -23,6 +23,7 @@ type Receiver interface {
 	Codec() webrtc.RTPCodecParameters
 	Kind() webrtc.RTPCodecType
 	SSRC(layer int) uint32
+	SetTrackMeta(trackID, streamID string)
 	AddUpTrack(track *webrtc.TrackRemote, buffer *buffer.Buffer, bestQualityFirst bool)
 	AddDownTrack(track *DownTrack, bestQualityFirst bool)
 	SwitchDownTrack(track *DownTrack, layer int) error
@@ -76,6 +77,11 @@ func NewWebRTCReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote, 
 		nackWorker:  workerpool.New(1),
 		isSimulcast: len(track.RID()) > 0,
 	}
+}
+
+func (w *WebRTCReceiver) SetTrackMeta(trackID, streamID string) {
+	w.streamID = streamID
+	w.trackID = trackID
 }
 
 func (w *WebRTCReceiver) StreamID() string {

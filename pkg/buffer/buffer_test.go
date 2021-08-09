@@ -16,7 +16,6 @@ func CreateTestPacket(pktStamp *SequenceNumberAndTimeStamp) *rtp.Packet {
 	if pktStamp == nil {
 		return &rtp.Packet{
 			Header:  rtp.Header{},
-			Raw:     []byte{1, 2, 3},
 			Payload: []byte{1, 2, 3},
 		}
 	}
@@ -26,7 +25,6 @@ func CreateTestPacket(pktStamp *SequenceNumberAndTimeStamp) *rtp.Packet {
 			SequenceNumber: pktStamp.SequenceNumber,
 			Timestamp:      pktStamp.Timestamp,
 		},
-		Raw:     []byte{1, 2, 3},
 		Payload: []byte{1, 2, 3},
 	}
 }

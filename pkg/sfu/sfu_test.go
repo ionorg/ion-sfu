@@ -293,10 +293,12 @@ func TestSFU_SessionScenarios(t *testing.T) {
 					func() {
 						switch action.kind {
 						case "join":
-							me := webrtc.MediaEngine{}
+							me, _ := getPublisherMediaEngine()
+							se := webrtc.SettingEngine{}
+							se.DisableMediaEngineCopy(true)
 							err := me.RegisterDefaultCodecs()
 							assert.NoError(t, err)
-							api := webrtc.NewAPI(webrtc.WithMediaEngine(&me))
+							api := webrtc.NewAPI(webrtc.WithMediaEngine(me), webrtc.WithSettingEngine(se))
 							pub, err := api.NewPeerConnection(webrtc.Configuration{})
 							assert.NoError(t, err)
 							sub, err := api.NewPeerConnection(webrtc.Configuration{})

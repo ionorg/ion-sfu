@@ -26,6 +26,6 @@ build_allrpc: go_init
 
 test: go_init
 	go test \
-		-timeout 120s \
+		-timeout 240s \
 		-coverprofile=cover.out -covermode=atomic \
 		-v -race ${GO_TESTPKGS} 

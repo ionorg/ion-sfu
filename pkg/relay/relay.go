@@ -94,7 +94,7 @@ type Peer struct {
 	onClose       atomic.Value // func()
 	onRequest     atomic.Value // func(event string, message Message)
 	onDataChannel atomic.Value // func(channel *webrtc.DataChannel)
-	onTrack       atomic.Value // func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver)
+	onTrack       atomic.Value // func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, meta *TrackMeta)
 }
 
 func NewPeer(meta PeerMeta, conf *PeerConfig) (*Peer, error) {
@@ -319,7 +319,7 @@ func (p *Peer) OnDataChannel(f func(channel *webrtc.DataChannel)) {
 
 // OnTrack sets an event handler which is called when remote track
 // arrives from a remote Peer
-func (p *Peer) OnTrack(f func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver)) {
+func (p *Peer) OnTrack(f func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, meta *TrackMeta)) {
 	p.onTrack.Store(f)
 }
 
@@ -424,11 +424,9 @@ func (p *Peer) receive(s *signal) error {
 	})
 
 	track := recv.Track()
-	track.SetID(s.TrackMeta.TrackID)
-	track.SetStreamID(s.TrackMeta.StreamID)
 
 	if f := p.onTrack.Load(); f != nil {
-		f.(func(remote *webrtc.TrackRemote, receiver *webrtc.RTPReceiver))(track, recv)
+		f.(func(remote *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, meta *TrackMeta))(track, recv, s.TrackMeta)
 	}
 
 	p.receivers = append(p.receivers, recv)
