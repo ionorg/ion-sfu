@@ -68,7 +68,7 @@ type Buffer struct {
 
 	minPacketProbe     int
 	lastPacketRead     int
-	maxTemporalLayer   int64
+	maxTemporalLayer   int32
 	bitrate            uint64
 	bitrateHelper      uint64
 	lastSRNTPTime      uint64
@@ -134,10 +134,10 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 	switch {
 	case strings.HasPrefix(b.mime, "audio/"):
 		b.codecType = webrtc.RTPCodecTypeAudio
-		b.bucket = NewBucket(b.audioPool.Get().([]byte))
+		b.bucket = NewBucket(b.audioPool.Get().(*[]byte))
 	case strings.HasPrefix(b.mime, "video/"):
 		b.codecType = webrtc.RTPCodecTypeVideo
-		b.bucket = NewBucket(b.videoPool.Get().([]byte))
+		b.bucket = NewBucket(b.videoPool.Get().(*[]byte))
 	default:
 		b.codecType = webrtc.RTPCodecType(0)
 	}
@@ -253,10 +253,10 @@ func (b *Buffer) Close() error {
 
 	b.closeOnce.Do(func() {
 		if b.bucket != nil && b.codecType == webrtc.RTPCodecTypeVideo {
-			b.videoPool.Put(b.bucket.buf)
+			b.videoPool.Put(b.bucket.src)
 		}
 		if b.bucket != nil && b.codecType == webrtc.RTPCodecTypeAudio {
-			b.audioPool.Put(b.bucket.buf)
+			b.audioPool.Put(b.bucket.src)
 		}
 		b.closed.set(true)
 		b.onClose()
@@ -345,9 +345,9 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 
 		if b.mime == "video/vp8" {
 			pld := ep.Payload.(VP8)
-			mtl := atomic.LoadInt64(&b.maxTemporalLayer)
-			if mtl < int64(pld.TID) {
-				atomic.StoreInt64(&b.maxTemporalLayer, int64(pld.TID))
+			mtl := atomic.LoadInt32(&b.maxTemporalLayer)
+			if mtl < int32(pld.TID) {
+				atomic.StoreInt32(&b.maxTemporalLayer, int32(pld.TID))
 			}
 		}
 
@@ -525,8 +525,8 @@ func (b *Buffer) Bitrate() uint64 {
 	return atomic.LoadUint64(&b.bitrate)
 }
 
-func (b *Buffer) MaxTemporalLayer() int64 {
-	return atomic.LoadInt64(&b.maxTemporalLayer)
+func (b *Buffer) MaxTemporalLayer() int32 {
+	return atomic.LoadInt32(&b.maxTemporalLayer)
 }
 
 func (b *Buffer) OnTransportWideCC(fn func(sn uint16, timeNS int64, marker bool)) {

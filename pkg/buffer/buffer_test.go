@@ -16,7 +16,6 @@ func CreateTestPacket(pktStamp *SequenceNumberAndTimeStamp) *rtp.Packet {
 	if pktStamp == nil {
 		return &rtp.Packet{
 			Header:  rtp.Header{},
-			Raw:     []byte{1, 2, 3},
 			Payload: []byte{1, 2, 3},
 		}
 	}
@@ -26,7 +25,6 @@ func CreateTestPacket(pktStamp *SequenceNumberAndTimeStamp) *rtp.Packet {
 			SequenceNumber: pktStamp.SequenceNumber,
 			Timestamp:      pktStamp.Timestamp,
 		},
-		Raw:     []byte{1, 2, 3},
 		Payload: []byte{1, 2, 3},
 	}
 }
@@ -48,7 +46,8 @@ func CreateTestListPackets(snsAndTSs []SequenceNumberAndTimeStamp) (packetList [
 func TestNack(t *testing.T) {
 	pool := &sync.Pool{
 		New: func() interface{} {
-			return make([]byte, 1500)
+			b := make([]byte, 1500)
+			return &b
 		},
 	}
 	logger.SetGlobalOptions(logger.GlobalConfig{V: 1}) // 2 - TRACE
@@ -149,7 +148,8 @@ func TestNewBuffer(t *testing.T) {
 			}
 			pool := &sync.Pool{
 				New: func() interface{} {
-					return make([]byte, 1500)
+					b := make([]byte, 1500)
+					return &b
 				},
 			}
 			logger.SetGlobalOptions(logger.GlobalConfig{V: 2}) // 2 - TRACE

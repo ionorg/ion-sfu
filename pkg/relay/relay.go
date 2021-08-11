@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -59,6 +60,15 @@ type PeerMeta struct {
 	SessionID string `json:"sessionId"`
 }
 
+type Options struct {
+	// RelayMiddlewareDC if set to true middleware data channels will be created and forwarded
+	// to the relayed peer
+	RelayMiddlewareDC bool
+	// RelaySessionDC if set to true fanout data channels will be created and forwarded to the
+	// relayed peer
+	RelaySessionDC bool
+}
+
 type Peer struct {
 	mu              sync.Mutex
 	rmu             sync.Mutex
@@ -80,10 +90,11 @@ type Peer struct {
 	gatherer        *webrtc.ICEGatherer
 	dcIndex         uint16
 
-	onReady       func()
-	onRequest     func(event string, message Message)
-	onDataChannel func(channel *webrtc.DataChannel)
-	onTrack       func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, meta *TrackMeta)
+	onReady       atomic.Value // func()
+	onClose       atomic.Value // func()
+	onRequest     atomic.Value // func(event string, message Message)
+	onDataChannel atomic.Value // func(channel *webrtc.DataChannel)
+	onTrack       atomic.Value // func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, meta *TrackMeta)
 }
 
 func NewPeer(meta PeerMeta, conf *PeerConfig) (*Peer, error) {
@@ -123,20 +134,19 @@ func NewPeer(meta PeerMeta, conf *PeerConfig) (*Peer, error) {
 	}
 
 	sctp.OnDataChannel(func(channel *webrtc.DataChannel) {
-		p.mu.Lock()
-		defer p.mu.Unlock()
 		if channel.Label() == signalerLabel {
 			p.signalingDC = channel
 			channel.OnMessage(p.handleRequest)
-			p.ready = true
-			if p.onReady != nil {
-				p.onReady()
-			}
+			channel.OnOpen(func() {
+				if f := p.onReady.Load(); f != nil {
+					f.(func())()
+				}
+			})
 			return
 		}
 
-		if p.onDataChannel != nil {
-			p.onDataChannel(channel)
+		if f := p.onDataChannel.Load(); f != nil {
+			f.(func(dataChannel *webrtc.DataChannel))(channel)
 		}
 	})
 
@@ -149,6 +159,10 @@ func NewPeer(meta PeerMeta, conf *PeerConfig) (*Peer, error) {
 	})
 
 	return p, nil
+}
+
+func (p *Peer) ID() string {
+	return p.meta.PeerID
 }
 
 // Offer is used for establish the connection of the local relay Peer
@@ -212,15 +226,17 @@ func (p *Peer) Offer(signalFn func(meta PeerMeta, signal []byte) ([]byte, error)
 	}
 
 	p.signalingDC.OnOpen(func() {
-		p.mu.Lock()
-		p.ready = true
-		p.mu.Unlock()
-		if p.onReady != nil {
-			p.onReady()
+		if f := p.onReady.Load(); f != nil {
+			f.(func())()
 		}
 	})
 	p.signalingDC.OnMessage(p.handleRequest)
 	return nil
+}
+
+// OnClose sets a callback that is called when relay Peer is closed.
+func (p *Peer) OnClose(fn func()) {
+	p.onClose.Store(fn)
 }
 
 // Answer answers the remote Peer signal signalRequest
@@ -287,32 +303,24 @@ func (p *Peer) LocalTracks() []webrtc.TrackLocal {
 
 // OnReady calls the callback when relay Peer is ready to start sending/receiving and creating DC
 func (p *Peer) OnReady(f func()) {
-	p.mu.Lock()
-	p.onReady = f
-	p.mu.Unlock()
+	p.onReady.Store(f)
 }
 
 // OnRequest calls the callback when Peer gets a request message from remote Peer
 func (p *Peer) OnRequest(f func(event string, msg Message)) {
-	p.mu.Lock()
-	p.onRequest = f
-	p.mu.Unlock()
+	p.onRequest.Store(f)
 }
 
 // OnDataChannel sets an event handler which is invoked when a data
 // channel message arrives from a remote Peer.
 func (p *Peer) OnDataChannel(f func(channel *webrtc.DataChannel)) {
-	p.mu.Lock()
-	p.onDataChannel = f
-	p.mu.Unlock()
+	p.onDataChannel.Store(f)
 }
 
 // OnTrack sets an event handler which is called when remote track
 // arrives from a remote Peer
 func (p *Peer) OnTrack(f func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, meta *TrackMeta)) {
-	p.mu.Lock()
-	p.onTrack = f
-	p.mu.Unlock()
+	p.onTrack.Store(f)
 }
 
 // Close ends the relay Peer
@@ -326,6 +334,10 @@ func (p *Peer) Close() error {
 	}
 
 	closeErrs = append(closeErrs, p.sctp.Stop(), p.dtls.Stop(), p.ice.Stop())
+
+	if f := p.onClose.Load(); f != nil {
+		f.(func())()
+	}
 
 	return joinErrs(closeErrs...)
 }
@@ -371,6 +383,7 @@ func (p *Peer) start(s *signal) error {
 			return err
 		}
 	}
+	p.ready = true
 	return nil
 }
 
@@ -402,9 +415,18 @@ func (p *Peer) receive(s *signal) error {
 			},
 		},
 	}}); err != nil {
+		return err
 	}
-	if p.onTrack != nil {
-		p.onTrack(recv.Track(), recv, s.TrackMeta)
+
+	recv.SetRTPParameters(webrtc.RTPParameters{
+		HeaderExtensions: nil,
+		Codecs:           []webrtc.RTPCodecParameters{*s.TrackMeta.CodecParameters},
+	})
+
+	track := recv.Track()
+
+	if f := p.onTrack.Load(); f != nil {
+		f.(func(remote *webrtc.TrackRemote, receiver *webrtc.RTPReceiver, meta *TrackMeta))(track, recv, s.TrackMeta)
 	}
 
 	p.receivers = append(p.receivers, recv)
@@ -436,7 +458,7 @@ func (p *Peer) AddTrack(receiver *webrtc.RTPReceiver, remoteTrack *webrtc.TrackR
 	}
 
 	s.Encodings = &webrtc.RTPCodingParameters{
-		SSRC:        webrtc.SSRC(p.rand.Uint32()),
+		SSRC:        sdr.GetParameters().Encodings[0].SSRC,
 		PayloadType: remoteTrack.PayloadType(),
 	}
 	pld, err := json.Marshal(&s)
@@ -484,10 +506,7 @@ func (p *Peer) Emit(event string, data []byte) error {
 		return err
 	}
 
-	if err = p.signalingDC.Send(msg); err != nil {
-		return err
-	}
-	return nil
+	return p.signalingDC.Send(msg)
 }
 
 func (p *Peer) Request(ctx context.Context, event string, data []byte) ([]byte, error) {
@@ -565,16 +584,14 @@ func (p *Peer) handleRequest(msg webrtc.DataChannelMessage) {
 	}
 
 	if mr.Event != signalerRequestEvent {
-		p.mu.Lock()
-		if p.onRequest != nil {
-			p.onRequest(mr.Event, Message{
+		if f := p.onRequest.Load(); f != nil {
+			f.(func(string, Message))(mr.Event, Message{
 				p:     p,
 				event: mr.Event,
 				id:    mr.ID,
 				msg:   mr.Payload,
 			})
 		}
-		p.mu.Unlock()
 		return
 	}
 
