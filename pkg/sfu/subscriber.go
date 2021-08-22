@@ -93,6 +93,11 @@ func (s *Subscriber) AddDatachannel(peer Peer, dc *Datachannel) error {
 			DataChannel: ndc,
 		})
 	})
+	ndc.OnClose(func() {
+		if dc.onRemovePeer != nil {
+			dc.onRemovePeer( peer )
+		}
+	})
 
 	s.channels[dc.Label] = ndc
 
