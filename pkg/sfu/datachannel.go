@@ -11,10 +11,10 @@ type (
 	// The datachannels created will be negotiated on join to all peers that joins
 	// the SFU.
 	Datachannel struct {
-		Label       string
-		middlewares []func(MessageProcessor) MessageProcessor
-		onMessage   func(ctx context.Context, args ProcessArgs)
-		onRemovePeer func( peer Peer )
+		Label        string
+		middlewares  []func(MessageProcessor) MessageProcessor
+		onMessage    func(ctx context.Context, args ProcessArgs)
+		onRemovePeer func(peer Peer)
 	}
 
 	ProcessArgs struct {
