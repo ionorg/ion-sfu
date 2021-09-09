@@ -83,7 +83,7 @@ func NewPublisher(id string, session Session, cfg *WebRTCTransportConfig) (*Publ
 			"stream_id", track.StreamID(),
 		)
 
-		r, pub := p.router.AddReceiver(receiver, track)
+		r, pub := p.router.AddReceiver(receiver, track, track.ID(), track.StreamID())
 		if pub {
 			p.session.Publish(p.router, r)
 			p.mu.Lock()

@@ -13,7 +13,7 @@ import (
 // Router defines a track rtp/rtcp Router
 type Router interface {
 	ID() string
-	AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote) (Receiver, bool)
+	AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote, trackID, streamID string) (Receiver, bool)
 	AddDownTracks(s *Subscriber, r Receiver) error
 	SetRTCPWriter(func([]rtcp.Packet) error)
 	AddDownTrack(s *Subscriber, r Receiver) (*DownTrack, error)
@@ -78,12 +78,11 @@ func (r *router) Stop() {
 	}
 }
 
-func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote) (Receiver, bool) {
+func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote, trackID, streamID string) (Receiver, bool) {
 	r.Lock()
 	defer r.Unlock()
 
 	publish := false
-	trackID := track.ID()
 
 	buff, rtcpReader := r.bufferFactory.GetBufferPair(uint32(track.SSRC()))
 
@@ -92,7 +91,6 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 	})
 
 	if track.Kind() == webrtc.RTPCodecTypeAudio {
-		streamID := track.StreamID()
 		buff.OnAudioLevel(func(level uint8) {
 			r.session.AudioObserver().observe(streamID, level)
 		})
