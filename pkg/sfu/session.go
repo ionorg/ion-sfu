@@ -163,6 +163,7 @@ func (s *SessionLocal) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 	s.mu.Lock()
 	for _, lbl := range s.fanOutDCs {
 		if label == lbl {
+			s.mu.Unlock()
 			return
 		}
 	}
