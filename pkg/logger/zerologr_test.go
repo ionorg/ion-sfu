@@ -22,7 +22,7 @@ func TestDefaultVerbosityLevel(t *testing.T) {
 		out := &bytes.Buffer{}
 		log := NewWithOptions(Options{TimeFormat: "NOTIME", Output: out})
 		log.Info("", "test_field", 123)
-		assert.Equal(t, `{"level":"info","test_field":123,"v":0,"time":"NOTIME"}`+"\n", out.String())
+		assert.Equal(t, `{"level":"info","v":0,"test_field":123,"time":"NOTIME"}`+"\n", out.String())
 	})
 
 	t.Run("empty", func(t *testing.T) {
@@ -54,7 +54,7 @@ func TestVerbosityLevel2(t *testing.T) {
 		out := &bytes.Buffer{}
 		log := NewWithOptions(Options{TimeFormat: "NOTIME", Output: out})
 		log.Info("", "test_field", 123)
-		assert.Equal(t, `{"level":"info","test_field":123,"v":0,"time":"NOTIME"}`+"\n", out.String())
+		assert.Equal(t, `{"level":"info","v":0,"test_field":123,"time":"NOTIME"}`+"\n", out.String())
 	})
 
 	t.Run("empty", func(t *testing.T) {

@@ -28,17 +28,20 @@
 package logger
 
 import (
+	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/go-logr/logr"
+	"github.com/go-logr/zerologr"
 	"github.com/rs/zerolog"
 )
 
 const (
-	infoVLevel  = iota // info
-	debugVLevel        // debug
-	traceVLevel        // trace
-	timeFormat  = "2006-01-02 15:04:05.000"
+	timeFormat = "2006-01-02 15:04:05.000"
 )
 
 // GlobalConfig config contains global options
@@ -50,28 +53,21 @@ type GlobalConfig struct {
 // compared.  If this is greater than or equal to the "V" of the logger, the
 // message will be logged. Concurrent-safe.
 func SetGlobalOptions(config GlobalConfig) {
-	zerolog.SetGlobalLevel(toZerologLevel(config.V))
+	lvl := 1 - config.V
+	if v := int(zerolog.TraceLevel); lvl < v {
+		lvl = v
+	} else if v := int(zerolog.InfoLevel); lvl > v {
+		lvl = v
+	}
+	zerolog.SetGlobalLevel(zerolog.Level(lvl))
 }
 
 // SetVLevelByStringGlobal does the same as SetGlobalOptions but
 // trying to expose verbosity level as more familiar "word-based" log levels
 func SetVLevelByStringGlobal(level string) {
-	v := infoVLevel
-	switch level {
-	case zerolog.TraceLevel.String():
-		v = traceVLevel
-	case zerolog.DebugLevel.String():
-		v = debugVLevel
+	if v, err := zerolog.ParseLevel(level); err == nil {
+		zerolog.SetGlobalLevel(v)
 	}
-	SetGlobalOptions(GlobalConfig{V: v})
-}
-
-// logr ensure no negative values.
-func toZerologLevel(lvl int) zerolog.Level {
-	if lvl > traceVLevel {
-		lvl = traceVLevel
-	}
-	return zerolog.Level(1 - lvl)
 }
 
 // Options that can be passed to NewWithOptions
@@ -82,13 +78,6 @@ type Options struct {
 	Output     io.Writer
 	// Logger is an instance of zerolog, if nil a default logger is used
 	Logger *zerolog.Logger
-}
-
-type logger struct {
-	l      *zerolog.Logger
-	prefix string
-	depth  int
-	values []interface{}
 }
 
 // New returns a logr.Logger, LogSink is implemented by zerolog.
@@ -116,72 +105,29 @@ func NewWithOptions(opts Options) logr.Logger {
 		opts.Logger = &l
 	}
 
-	zl := &logger{
-		l:      opts.Logger,
-		prefix: opts.Name,
+	ls := zerologr.NewLogSink(opts.Logger)
+	if zerolog.LevelFieldName == "" {
+		// Restore field removed by Zerologr
+		zerolog.LevelFieldName = "level"
 	}
-	return logr.New(zl)
-}
-
-func (l *logger) Init(ri logr.RuntimeInfo) {
-	l.depth = ri.CallDepth + zerolog.CallerSkipFrameCount + 1
-}
-
-func (l *logger) Info(lvl int, msg string, keysAndVals ...interface{}) {
-	e := l.l.WithLevel(toZerologLevel(lvl))
-	if e == nil {
-		return
+	l := logr.New(ls)
+	if opts.Name != "" {
+		l = l.WithName(opts.Name)
 	}
-	if l.prefix != "" {
-		e.Str("name", l.prefix)
+	return l
+}
+
+func getOutputFormat() zerolog.ConsoleWriter {
+	output := zerolog.ConsoleWriter{Out: os.Stdout, NoColor: false}
+	output.FormatTimestamp = func(i interface{}) string {
+		return "[" + i.(string) + "]"
 	}
-	keysAndVals = append(keysAndVals, "v", lvl)
-	add(e, l.values)
-	add(e, keysAndVals)
-	e.Msg(msg)
-}
-
-// Enabled checks that the global V-Level is not less than logger V-Level
-func (l *logger) Enabled(lvl int) bool {
-	return toZerologLevel(lvl) >= zerolog.GlobalLevel()
-}
-
-// Error always prints error, not metter which log level was set
-func (l *logger) Error(err error, msg string, keysAndVals ...interface{}) {
-	e := l.l.Error().Err(err)
-	if l.prefix != "" {
-		e.Str("name", l.prefix)
+	output.FormatLevel = func(i interface{}) string {
+		return strings.ToUpper(fmt.Sprintf("[%-3s]", i))
 	}
-	add(e, l.values)
-	add(e, keysAndVals)
-	e.Msg(msg)
-}
-
-// WithName returns a new logr.Logger with the specified name appended. zerologr
-// uses '/' characters to separate name elements.  Callers should not pass '/'
-// in the provided name string, but this library does not actually enforce that.
-func (l logger) WithName(name string) logr.LogSink {
-	if len(l.prefix) > 0 {
-		l.prefix += "/"
+	output.FormatMessage = func(i interface{}) string {
+		_, file, line, _ := runtime.Caller(10)
+		return fmt.Sprintf("[%s:%d] => %s", filepath.Base(file), line, i)
 	}
-	l.prefix += name
-	return &l
-
+	return output
 }
-
-func (l logger) WithValues(kvList ...interface{}) logr.LogSink {
-	// Three slice args forces a copy.
-	n := len(l.values)
-	l.values = append(l.values[:n:n], kvList...)
-	return &l
-}
-
-func (l logger) WithCallDepth(depth int) logr.LogSink {
-	l.depth += depth
-	ll := l.l.With().CallerWithSkipFrameCount(l.depth).Logger()
-	l.l = &ll
-	return &l
-}
-
-var _ logr.LogSink = &logger{}
-var _ logr.CallDepthLogSink = &logger{}
