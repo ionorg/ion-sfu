@@ -31,11 +31,6 @@ func TestVP8Helper_Unmarshal(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "Small payloads must return errors",
-			args:    args{payload: []byte{0x0, 0x1, 0x2}},
-			wantErr: true,
-		},
-		{
 			name:            "Temporal must be supported by setting T bit to 1",
 			args:            args{payload: []byte{0xff, 0x20, 0x1, 0x2, 0x3, 0x4}},
 			checkTemporal:   true,
