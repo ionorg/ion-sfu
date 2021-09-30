@@ -67,7 +67,7 @@ func (p *VP8) Unmarshal(payload []byte) error {
 
 	payloadLen := len(payload)
 
-	if payloadLen < 4 {
+	if payloadLen < 1 {
 		return errShortPacket
 	}
 
@@ -76,6 +76,9 @@ func (p *VP8) Unmarshal(payload []byte) error {
 	// Check for extended bit control
 	if payload[idx]&0x80 > 0 {
 		idx++
+		if payloadLen < idx+1 {
+			return errShortPacket
+		}
 		// Check if T is present, if not, no temporal layer is available
 		p.TemporalSupported = payload[idx]&0x20 > 0
 		K := payload[idx]&0x10 > 0
@@ -83,11 +86,17 @@ func (p *VP8) Unmarshal(payload []byte) error {
 		// Check for PictureID
 		if payload[idx]&0x80 > 0 {
 			idx++
+			if payloadLen < idx+1 {
+				return errShortPacket
+			}
 			p.PicIDIdx = idx
 			pid := payload[idx] & 0x7f
 			// Check if m is 1, then Picture ID is 15 bits
 			if payload[idx]&0x80 > 0 {
 				idx++
+				if payloadLen < idx+1 {
+					return errShortPacket
+				}
 				p.MBit = true
 				p.PictureID = binary.BigEndian.Uint16([]byte{pid, payload[idx]})
 			} else {
@@ -97,6 +106,9 @@ func (p *VP8) Unmarshal(payload []byte) error {
 		// Check if TL0PICIDX is present
 		if L {
 			idx++
+			if payloadLen < idx+1 {
+				return errShortPacket
+			}
 			p.TlzIdx = idx
 
 			if int(idx) >= payloadLen {
@@ -106,16 +118,25 @@ func (p *VP8) Unmarshal(payload []byte) error {
 		}
 		if p.TemporalSupported || K {
 			idx++
+			if payloadLen < idx+1 {
+				return errShortPacket
+			}
 			p.TID = (payload[idx] & 0xc0) >> 6
 		}
-		if int(idx) >= payloadLen {
+		if idx >= payloadLen {
 			return errShortPacket
 		}
 		idx++
+		if payloadLen < idx+1 {
+			return errShortPacket
+		}
 		// Check is packet is a keyframe by looking at P bit in vp8 payload
 		p.IsKeyFrame = payload[idx]&0x01 == 0 && S
 	} else {
 		idx++
+		if payloadLen < idx+1 {
+			return errShortPacket
+		}
 		// Check is packet is a keyframe by looking at P bit in vp8 payload
 		p.IsKeyFrame = payload[idx]&0x01 == 0 && S
 	}
