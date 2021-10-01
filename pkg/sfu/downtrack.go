@@ -35,7 +35,7 @@ type DownTrack struct {
 	payloadType   uint8
 	sequencer     *sequencer
 	trackType     DownTrackType
-	bufferFactory *buffer.Factory
+	bufferFactory buffer.Factory
 	payload       *[]byte
 
 	currentSpatialLayer int32
@@ -69,7 +69,7 @@ type DownTrack struct {
 }
 
 // NewDownTrack returns a DownTrack.
-func NewDownTrack(c webrtc.RTPCodecCapability, r Receiver, bf *buffer.Factory, peerID string, mt int) (*DownTrack, error) {
+func NewDownTrack(c webrtc.RTPCodecCapability, r Receiver, bf buffer.Factory, peerID string, mt int) (*DownTrack, error) {
 	return &DownTrack{
 		id:            r.TrackID(),
 		peerID:        peerID,

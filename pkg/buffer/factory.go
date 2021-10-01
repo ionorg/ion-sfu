@@ -8,7 +8,14 @@ import (
 	"github.com/pion/transport/packetio"
 )
 
-type Factory struct {
+type Factory interface {
+	GetOrNew(packetType packetio.BufferPacketType, ssrc uint32) io.ReadWriteCloser
+	GetBufferPair(ssrc uint32) (*Buffer, *RTCPReader)
+	GetBuffer(ssrc uint32) *Buffer
+	GetRTCPReader(ssrc uint32) *RTCPReader
+}
+
+type factory struct {
 	sync.RWMutex
 	videoPool   *sync.Pool
 	audioPool   *sync.Pool
@@ -17,7 +24,7 @@ type Factory struct {
 	logger      logr.Logger
 }
 
-func NewBufferFactory(trackingPackets int, logger logr.Logger) *Factory {
+func NewBufferFactory(trackingPackets int, logger logr.Logger) *factory {
 	// Enable package wide logging for non-method functions.
 	// If logger is empty - use default Logger.
 	// Logger is a public variable in buffer package.
@@ -27,7 +34,7 @@ func NewBufferFactory(trackingPackets int, logger logr.Logger) *Factory {
 		Logger = logger
 	}
 
-	return &Factory{
+	return &factory{
 		videoPool: &sync.Pool{
 			New: func() interface{} {
 				b := make([]byte, trackingPackets*maxPktSize)
@@ -46,7 +53,7 @@ func NewBufferFactory(trackingPackets int, logger logr.Logger) *Factory {
 	}
 }
 
-func (f *Factory) GetOrNew(packetType packetio.BufferPacketType, ssrc uint32) io.ReadWriteCloser {
+func (f *factory) GetOrNew(packetType packetio.BufferPacketType, ssrc uint32) io.ReadWriteCloser {
 	f.Lock()
 	defer f.Unlock()
 	switch packetType {
@@ -78,19 +85,19 @@ func (f *Factory) GetOrNew(packetType packetio.BufferPacketType, ssrc uint32) io
 	return nil
 }
 
-func (f *Factory) GetBufferPair(ssrc uint32) (*Buffer, *RTCPReader) {
+func (f *factory) GetBufferPair(ssrc uint32) (*Buffer, *RTCPReader) {
 	f.RLock()
 	defer f.RUnlock()
 	return f.rtpBuffers[ssrc], f.rtcpReaders[ssrc]
 }
 
-func (f *Factory) GetBuffer(ssrc uint32) *Buffer {
+func (f *factory) GetBuffer(ssrc uint32) *Buffer {
 	f.RLock()
 	defer f.RUnlock()
 	return f.rtpBuffers[ssrc]
 }
 
-func (f *Factory) GetRTCPReader(ssrc uint32) *RTCPReader {
+func (f *factory) GetRTCPReader(ssrc uint32) *RTCPReader {
 	f.RLock()
 	defer f.RUnlock()
 	return f.rtcpReaders[ssrc]

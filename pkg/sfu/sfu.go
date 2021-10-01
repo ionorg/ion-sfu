@@ -36,7 +36,7 @@ type WebRTCTransportConfig struct {
 	Configuration webrtc.Configuration
 	Setting       webrtc.SettingEngine
 	Router        RouterConfig
-	BufferFactory *buffer.Factory
+	BufferFactory buffer.Factory
 }
 
 type WebRTCTimeoutsConfig struct {
@@ -65,7 +65,7 @@ type Config struct {
 	WebRTC        WebRTCConfig `mapstructure:"webrtc"`
 	Router        RouterConfig `mapstructure:"Router"`
 	Turn          TurnConfig   `mapstructure:"turn"`
-	BufferFactory *buffer.Factory
+	BufferFactory buffer.Factory
 	TurnAuth      func(username string, realm string, srcAddr net.Addr) ([]byte, bool)
 }
 

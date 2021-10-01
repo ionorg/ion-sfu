@@ -41,7 +41,7 @@ type router struct {
 	config        RouterConfig
 	session       Session
 	receivers     map[string]Receiver
-	bufferFactory *buffer.Factory
+	bufferFactory buffer.Factory
 	writeRTCP     func([]rtcp.Packet) error
 }
 
