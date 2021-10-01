@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pion/ion-sfu/pkg/buffer"
+
 	"github.com/pion/transport/packetio"
 
 	"github.com/pion/ion-sfu/pkg/relay"
@@ -384,7 +385,7 @@ func (p *Publisher) createRelayTrack(track *webrtc.TrackRemote, receiver Receive
 	}
 
 	p.cfg.BufferFactory.GetOrNew(packetio.RTCPBufferPacket,
-		uint32(sdr.GetParameters().Encodings[0].SSRC)).(*buffer.RTCPReader).OnPacket(func(bytes []byte) {
+		uint32(sdr.GetParameters().Encodings[0].SSRC)).(buffer.RTCPReader).OnPacket(func(bytes []byte) {
 		pkts, err := rtcp.Unmarshal(bytes)
 		if err != nil {
 			Logger.V(1).Error(err, "Unmarshal rtcp reports", "peer_id", p.id)

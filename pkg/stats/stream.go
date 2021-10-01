@@ -95,7 +95,7 @@ func InitStats() {
 // Stream contains buffer statistics
 type Stream struct {
 	sync.RWMutex
-	Buffer        *buffer.Buffer
+	Buffer        buffer.Buffer
 	cname         string
 	driftInMillis uint64
 	hasStats      bool
@@ -104,7 +104,7 @@ type Stream struct {
 }
 
 // NewStream constructs a new Stream
-func NewStream(buffer *buffer.Buffer) *Stream {
+func NewStream(buffer buffer.Buffer) *Stream {
 	s := &Stream{
 		Buffer: buffer,
 	}

@@ -5,18 +5,26 @@ import (
 	"sync/atomic"
 )
 
-type RTCPReader struct {
+type RTCPReader interface {
+	Write(p []byte) (n int, err error)
+	OnClose(fn func())
+	Close() error
+	OnPacket(f func([]byte))
+	Read(_ []byte) (n int, err error)
+}
+
+type reader struct {
 	ssrc     uint32
 	closed   atomicBool
 	onPacket atomic.Value //func([]byte)
 	onClose  func()
 }
 
-func NewRTCPReader(ssrc uint32) *RTCPReader {
-	return &RTCPReader{ssrc: ssrc}
+func NewRTCPReader(ssrc uint32) *reader {
+	return &reader{ssrc: ssrc}
 }
 
-func (r *RTCPReader) Write(p []byte) (n int, err error) {
+func (r *reader) Write(p []byte) (n int, err error) {
 	if r.closed.get() {
 		err = io.EOF
 		return
@@ -27,18 +35,18 @@ func (r *RTCPReader) Write(p []byte) (n int, err error) {
 	return
 }
 
-func (r *RTCPReader) OnClose(fn func()) {
+func (r *reader) OnClose(fn func()) {
 	r.onClose = fn
 }
 
-func (r *RTCPReader) Close() error {
+func (r *reader) Close() error {
 	r.closed.set(true)
 	r.onClose()
 	return nil
 }
 
-func (r *RTCPReader) OnPacket(f func([]byte)) {
+func (r *reader) OnPacket(f func([]byte)) {
 	r.onPacket.Store(f)
 }
 
-func (r *RTCPReader) Read(_ []byte) (n int, err error) { return }
+func (r *reader) Read(_ []byte) (n int, err error) { return }

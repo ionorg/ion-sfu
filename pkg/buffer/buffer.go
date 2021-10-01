@@ -39,8 +39,28 @@ type ExtPacket struct {
 	KeyFrame bool
 }
 
-// Buffer contains all packets
-type Buffer struct {
+type Buffer interface {
+	Bind(params webrtc.RTPParameters, o Options)
+	Write(pkt []byte) (n int, err error)
+	Read(buff []byte) (n int, err error)
+	ReadExtended() (*ExtPacket, error)
+	Close() error
+	Bitrate() uint64
+	OnClose(fn func())
+	GetPacket(buff []byte, sn uint16) (int, error)
+	SetSenderReportData(rtpTime uint32, ntpTime uint64)
+	MaxTemporalLayer() int32
+	OnTransportWideCC(fn func(sn uint16, timeNS int64, marker bool))
+	OnFeedback(fn func(fb []rtcp.Packet))
+	OnAudioLevel(fn func(level uint8))
+	GetMediaSSRC() uint32
+	GetClockRate() uint32
+	GetSenderReportData() (rtpTime uint32, ntpTime uint64, lastReceivedTimeInNanosSinceEpoch int64)
+	GetStats() (stats Stats)
+	GetLatestTimestamp() (latestTimestamp uint32, latestTimestampTimeInNanosSinceEpoch int64)
+}
+
+type buffer struct {
 	sync.Mutex
 	bucket     *Bucket
 	nacker     *nackQueue
@@ -110,9 +130,9 @@ type Options struct {
 	MaxBitRate uint64
 }
 
-// NewBuffer constructs a new Buffer
-func NewBuffer(ssrc uint32, vp, ap *sync.Pool, logger logr.Logger) *Buffer {
-	b := &Buffer{
+// NewBuffer constructs a new buffer
+func NewBuffer(ssrc uint32, vp, ap *sync.Pool, logger logr.Logger) *buffer {
+	b := &buffer{
 		mediaSSRC: ssrc,
 		videoPool: vp,
 		audioPool: ap,
@@ -122,7 +142,7 @@ func NewBuffer(ssrc uint32, vp, ap *sync.Pool, logger logr.Logger) *Buffer {
 	return b
 }
 
-func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
+func (b *buffer) Bind(params webrtc.RTPParameters, o Options) {
 	b.Lock()
 	defer b.Unlock()
 
@@ -183,7 +203,7 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 }
 
 // Write adds a RTP Packet, out of order, new packet may be arrived later
-func (b *Buffer) Write(pkt []byte) (n int, err error) {
+func (b *buffer) Write(pkt []byte) (n int, err error) {
 	b.Lock()
 	defer b.Unlock()
 
@@ -207,7 +227,7 @@ func (b *Buffer) Write(pkt []byte) (n int, err error) {
 	return
 }
 
-func (b *Buffer) Read(buff []byte) (n int, err error) {
+func (b *buffer) Read(buff []byte) (n int, err error) {
 	for {
 		if b.closed.get() {
 			err = io.EOF
@@ -231,7 +251,7 @@ func (b *Buffer) Read(buff []byte) (n int, err error) {
 	}
 }
 
-func (b *Buffer) ReadExtended() (*ExtPacket, error) {
+func (b *buffer) ReadExtended() (*ExtPacket, error) {
 	for {
 		if b.closed.get() {
 			return nil, io.EOF
@@ -247,7 +267,7 @@ func (b *Buffer) ReadExtended() (*ExtPacket, error) {
 	}
 }
 
-func (b *Buffer) Close() error {
+func (b *buffer) Close() error {
 	b.Lock()
 	defer b.Unlock()
 
@@ -264,11 +284,11 @@ func (b *Buffer) Close() error {
 	return nil
 }
 
-func (b *Buffer) OnClose(fn func()) {
+func (b *buffer) OnClose(fn func()) {
 	b.onClose = fn
 }
 
-func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
+func (b *buffer) calc(pkt []byte, arrivalTime int64) {
 	sn := binary.BigEndian.Uint16(pkt[2:4])
 
 	if b.stats.PacketCount == 0 {
@@ -407,7 +427,7 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	}
 }
 
-func (b *Buffer) buildNACKPacket() []rtcp.Packet {
+func (b *buffer) buildNACKPacket() []rtcp.Packet {
 	if nacks, askKeyframe := b.nacker.pairs(b.cycles | uint32(b.maxSeqNo)); (nacks != nil && len(nacks) > 0) || askKeyframe {
 		var pkts []rtcp.Packet
 		if len(nacks) > 0 {
@@ -427,7 +447,7 @@ func (b *Buffer) buildNACKPacket() []rtcp.Packet {
 	return nil
 }
 
-func (b *Buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
+func (b *buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
 	br := b.bitrate
 	if b.stats.LostRate < 0.02 {
 		br = uint64(float64(br)*1.09) + 2000
@@ -449,7 +469,7 @@ func (b *Buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
 	}
 }
 
-func (b *Buffer) buildReceptionReport() rtcp.ReceptionReport {
+func (b *buffer) buildReceptionReport() rtcp.ReceptionReport {
 	extMaxSeq := b.cycles | uint32(b.maxSeqNo)
 	expected := extMaxSeq - uint32(b.baseSN) + 1
 	lost := uint32(0)
@@ -489,7 +509,7 @@ func (b *Buffer) buildReceptionReport() rtcp.ReceptionReport {
 	return rr
 }
 
-func (b *Buffer) SetSenderReportData(rtpTime uint32, ntpTime uint64) {
+func (b *buffer) SetSenderReportData(rtpTime uint32, ntpTime uint64) {
 	b.Lock()
 	b.lastSRRTPTime = rtpTime
 	b.lastSRNTPTime = ntpTime
@@ -497,7 +517,7 @@ func (b *Buffer) SetSenderReportData(rtpTime uint32, ntpTime uint64) {
 	b.Unlock()
 }
 
-func (b *Buffer) getRTCP() []rtcp.Packet {
+func (b *buffer) getRTCP() []rtcp.Packet {
 	var pkts []rtcp.Packet
 
 	pkts = append(pkts, &rtcp.ReceiverReport{
@@ -511,7 +531,7 @@ func (b *Buffer) getRTCP() []rtcp.Packet {
 	return pkts
 }
 
-func (b *Buffer) GetPacket(buff []byte, sn uint16) (int, error) {
+func (b *buffer) GetPacket(buff []byte, sn uint16) (int, error) {
 	b.Lock()
 	defer b.Unlock()
 	if b.closed.get() {
@@ -521,38 +541,38 @@ func (b *Buffer) GetPacket(buff []byte, sn uint16) (int, error) {
 }
 
 // Bitrate returns the current publisher stream bitrate.
-func (b *Buffer) Bitrate() uint64 {
+func (b *buffer) Bitrate() uint64 {
 	return atomic.LoadUint64(&b.bitrate)
 }
 
-func (b *Buffer) MaxTemporalLayer() int32 {
+func (b *buffer) MaxTemporalLayer() int32 {
 	return atomic.LoadInt32(&b.maxTemporalLayer)
 }
 
-func (b *Buffer) OnTransportWideCC(fn func(sn uint16, timeNS int64, marker bool)) {
+func (b *buffer) OnTransportWideCC(fn func(sn uint16, timeNS int64, marker bool)) {
 	b.feedbackTWCC = fn
 }
 
-func (b *Buffer) OnFeedback(fn func(fb []rtcp.Packet)) {
+func (b *buffer) OnFeedback(fn func(fb []rtcp.Packet)) {
 	b.feedbackCB = fn
 }
 
-func (b *Buffer) OnAudioLevel(fn func(level uint8)) {
+func (b *buffer) OnAudioLevel(fn func(level uint8)) {
 	b.onAudioLevel = fn
 }
 
 // GetMediaSSRC returns the associated SSRC of the RTP stream
-func (b *Buffer) GetMediaSSRC() uint32 {
+func (b *buffer) GetMediaSSRC() uint32 {
 	return b.mediaSSRC
 }
 
 // GetClockRate returns the RTP clock rate
-func (b *Buffer) GetClockRate() uint32 {
+func (b *buffer) GetClockRate() uint32 {
 	return b.clockRate
 }
 
 // GetSenderReportData returns the rtp, ntp and nanos of the last sender report
-func (b *Buffer) GetSenderReportData() (rtpTime uint32, ntpTime uint64, lastReceivedTimeInNanosSinceEpoch int64) {
+func (b *buffer) GetSenderReportData() (rtpTime uint32, ntpTime uint64, lastReceivedTimeInNanosSinceEpoch int64) {
 	rtpTime = atomic.LoadUint32(&b.lastSRRTPTime)
 	ntpTime = atomic.LoadUint64(&b.lastSRNTPTime)
 	lastReceivedTimeInNanosSinceEpoch = atomic.LoadInt64(&b.lastSRRecv)
@@ -561,7 +581,7 @@ func (b *Buffer) GetSenderReportData() (rtpTime uint32, ntpTime uint64, lastRece
 }
 
 // GetStats returns the raw statistics about a particular buffer state
-func (b *Buffer) GetStats() (stats Stats) {
+func (b *buffer) GetStats() (stats Stats) {
 	b.Lock()
 	stats = b.stats
 	b.Unlock()
@@ -569,7 +589,7 @@ func (b *Buffer) GetStats() (stats Stats) {
 }
 
 // GetLatestTimestamp returns the latest RTP timestamp factoring in potential RTP timestamp wrap-around
-func (b *Buffer) GetLatestTimestamp() (latestTimestamp uint32, latestTimestampTimeInNanosSinceEpoch int64) {
+func (b *buffer) GetLatestTimestamp() (latestTimestamp uint32, latestTimestampTimeInNanosSinceEpoch int64) {
 	latestTimestamp = atomic.LoadUint32(&b.latestTimestamp)
 	latestTimestampTimeInNanosSinceEpoch = atomic.LoadInt64(&b.latestTimestampTime)
 

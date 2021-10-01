@@ -24,7 +24,7 @@ type Receiver interface {
 	Kind() webrtc.RTPCodecType
 	SSRC(layer int) uint32
 	SetTrackMeta(trackID, streamID string)
-	AddUpTrack(track *webrtc.TrackRemote, buffer *buffer.Buffer, bestQualityFirst bool)
+	AddUpTrack(track *webrtc.TrackRemote, buffer buffer.Buffer, bestQualityFirst bool)
 	AddDownTrack(track *DownTrack, bestQualityFirst bool)
 	SwitchDownTrack(track *DownTrack, layer int) error
 	GetBitrate() [3]uint64
@@ -53,7 +53,7 @@ type WebRTCReceiver struct {
 	receiver       *webrtc.RTPReceiver
 	codec          webrtc.RTPCodecParameters
 	rtcpCh         chan []rtcp.Packet
-	buffers        [3]*buffer.Buffer
+	buffers        [3]buffer.Buffer
 	upTracks       [3]*webrtc.TrackRemote
 	stats          [3]*stats.Stream
 	available      [3]atomicBool
@@ -107,7 +107,7 @@ func (w *WebRTCReceiver) Kind() webrtc.RTPCodecType {
 	return w.kind
 }
 
-func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, buff *buffer.Buffer, bestQualityFirst bool) {
+func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, buff buffer.Buffer, bestQualityFirst bool) {
 	if w.closed.get() {
 		return
 	}
