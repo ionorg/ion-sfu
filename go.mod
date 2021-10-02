@@ -8,7 +8,7 @@ require (
 	github.com/gammazero/deque v0.1.0
 	github.com/gammazero/workerpool v1.1.2
 	github.com/go-logr/logr v1.1.0
-	github.com/go-logr/zerologr v1.1.3
+	github.com/go-logr/zerologr v1.1.4
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/websocket v1.4.2
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
