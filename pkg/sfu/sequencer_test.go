@@ -35,6 +35,19 @@ func Test_sequencer(t *testing.T) {
 		assert.Equal(t, val.sourceSeqNo, req[i]-off)
 		assert.Equal(t, val.layer, uint8(2))
 	}
+
+	s := seq.push(521, 521+off, 123, 1, true)
+	var (
+		tlzIdx = uint8(15)
+		picID  = uint16(16)
+	)
+	s.setVP8PayloadMeta(tlzIdx, picID)
+	s.sourceSeqNo = 12
+	m := seq.getSeqNoPairs([]uint16{521 + off})
+	assert.Equal(t, 1, len(m))
+	tlz0, pID := m[0].getVP8PayloadMeta()
+	assert.Equal(t, tlzIdx, tlz0)
+	assert.Equal(t, picID, pID)
 }
 
 func Test_sequencer_getNACKSeqNo(t *testing.T) {
