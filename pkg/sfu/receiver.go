@@ -266,6 +266,9 @@ func (w *WebRTCReceiver) SendRTCP(p []rtcp.Packet) {
 			return
 		}
 		atomic.StoreInt64(&w.lastPli, time.Now().UnixNano())
+		if !w.buffers[0].ForwardPLI() {
+			return
+		}
 	}
 
 	w.rtcpCh <- p

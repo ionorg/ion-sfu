@@ -19,8 +19,8 @@ type factory struct {
 	sync.RWMutex
 	videoPool   *sync.Pool
 	audioPool   *sync.Pool
-	rtpBuffers  map[uint32]*buffer
-	rtcpReaders map[uint32]*reader
+	rtpBuffers  map[uint32]Buffer
+	rtcpReaders map[uint32]RTCPReader
 	logger      logr.Logger
 }
 
@@ -47,8 +47,8 @@ func NewBufferFactory(trackingPackets int, logger logr.Logger) *factory {
 				return &b
 			},
 		},
-		rtpBuffers:  make(map[uint32]*buffer),
-		rtcpReaders: make(map[uint32]*reader),
+		rtpBuffers:  make(map[uint32]Buffer),
+		rtcpReaders: make(map[uint32]RTCPReader),
 		logger:      logger,
 	}
 }

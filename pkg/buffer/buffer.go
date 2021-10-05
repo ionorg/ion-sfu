@@ -45,6 +45,7 @@ type Buffer interface {
 	Read(buff []byte) (n int, err error)
 	ReadExtended() (*ExtPacket, error)
 	Close() error
+	ForwardPLI() bool
 	Bitrate() uint64
 	OnClose(fn func())
 	GetPacket(buff []byte, sn uint16) (int, error)
@@ -131,7 +132,7 @@ type Options struct {
 }
 
 // NewBuffer constructs a new buffer
-func NewBuffer(ssrc uint32, vp, ap *sync.Pool, logger logr.Logger) *buffer {
+func NewBuffer(ssrc uint32, vp, ap *sync.Pool, logger logr.Logger) Buffer {
 	b := &buffer{
 		mediaSSRC: ssrc,
 		videoPool: vp,
@@ -140,6 +141,10 @@ func NewBuffer(ssrc uint32, vp, ap *sync.Pool, logger logr.Logger) *buffer {
 	}
 	b.extPackets.SetMinCapacity(7)
 	return b
+}
+
+func (b *buffer) ForwardPLI() bool {
+	return true
 }
 
 func (b *buffer) Bind(params webrtc.RTPParameters, o Options) {
