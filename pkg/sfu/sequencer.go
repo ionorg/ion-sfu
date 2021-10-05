@@ -34,11 +34,11 @@ type packetMeta struct {
 	misc uint32
 }
 
-func (p packetMeta) setVP8PayloadMeta(tlz0Idx uint8, picID uint16) {
+func (p *packetMeta) setVP8PayloadMeta(tlz0Idx uint8, picID uint16) {
 	p.misc = uint32(tlz0Idx)<<16 | uint32(picID)
 }
 
-func (p packetMeta) getVP8PayloadMeta() (uint8, uint16) {
+func (p *packetMeta) getVP8PayloadMeta() (uint8, uint16) {
 	return uint8(p.misc >> 16), uint16(p.misc)
 }
 
@@ -96,11 +96,12 @@ func (n *sequencer) push(sn, offSn uint16, timeStamp uint32, layer uint8, head b
 		timestamp:   timeStamp,
 		layer:       layer,
 	}
+	pm := &n.seq[n.step]
 	n.step++
 	if n.step >= n.max {
 		n.step = 0
 	}
-	return &n.seq[n.step]
+	return pm
 }
 
 func (n *sequencer) getSeqNoPairs(seqNo []uint16) []packetMeta {
