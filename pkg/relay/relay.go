@@ -435,31 +435,40 @@ func (p *Peer) receive(s *signal) error {
 }
 
 // AddTrack is used to negotiate a track to the remote peer
-func (p *Peer) AddTrack(receiver *webrtc.RTPReceiver, remoteTrack *webrtc.TrackRemote,
-	localTrack webrtc.TrackLocal) (*webrtc.RTPSender, error) {
+func (p *Peer) AddTrack(streamID, trackID string, params webrtc.RTPParameters, localTrack webrtc.TrackLocal) (*webrtc.RTPSender, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	codec := remoteTrack.Codec()
+	codec := params.Codecs[0]
+	var kind webrtc.RTPCodecType
+	switch {
+	case strings.HasPrefix(codec.MimeType, "audio/"):
+		kind = webrtc.RTPCodecTypeAudio
+	case strings.HasPrefix(codec.MimeType, "video/"):
+		kind = webrtc.RTPCodecTypeVideo
+	default:
+		kind = webrtc.RTPCodecType(0)
+	}
+
 	sdr, err := p.api.NewRTPSender(localTrack, p.dtls)
 	if err != nil {
 		return nil, err
 	}
-	if err = p.me.RegisterCodec(codec, remoteTrack.Kind()); err != nil {
+	if err = p.me.RegisterCodec(codec, kind); err != nil {
 		return nil, err
 	}
 
 	s := &signal{}
 
 	s.TrackMeta = &TrackMeta{
-		StreamID:        remoteTrack.StreamID(),
-		TrackID:         remoteTrack.ID(),
+		StreamID:        streamID,
+		TrackID:         trackID,
 		CodecParameters: &codec,
 	}
 
 	s.Encodings = &webrtc.RTPCodingParameters{
 		SSRC:        sdr.GetParameters().Encodings[0].SSRC,
-		PayloadType: remoteTrack.PayloadType(),
+		PayloadType: codec.PayloadType,
 	}
 	pld, err := json.Marshal(&s)
 	if err != nil {
@@ -471,8 +480,6 @@ func (p *Peer) AddTrack(receiver *webrtc.RTPReceiver, remoteTrack *webrtc.TrackR
 	if _, err = p.Request(ctx, signalerRequestEvent, pld); err != nil {
 		return nil, err
 	}
-
-	params := receiver.GetParameters()
 
 	if err = sdr.Send(webrtc.RTPSendParameters{
 		RTPParameters: params,
