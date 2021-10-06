@@ -165,6 +165,13 @@ func (b *Buffer) Bind(params webrtc.RTPParameters, o Options) {
 			}
 		}
 	} else if b.codecType == webrtc.RTPCodecTypeAudio {
+		if len(params.HeaderExtensions) == 0 {
+			t := &webrtc.RTPHeaderExtensionParameter{
+				URI: "urn:ietf:params:rtp-hdrext:ssrc-audio-level",
+				ID:  1,
+			}
+			params.HeaderExtensions = append(params.HeaderExtensions, *t)
+		}
 		for _, h := range params.HeaderExtensions {
 			if h.URI == sdp.AudioLevelURI {
 				b.audioLevel = true
