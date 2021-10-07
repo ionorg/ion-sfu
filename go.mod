@@ -14,7 +14,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/improbable-eng/grpc-web v0.13.0
 	github.com/lucsky/cuid v1.0.2
-	github.com/pion/dtls/v2 v2.0.9
+	github.com/pion/dtls/v2 v2.0.10
 	github.com/pion/ice/v2 v2.1.10
 	github.com/pion/logging v0.2.2
 	github.com/pion/rtcp v1.2.6
@@ -30,8 +30,6 @@ require (
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20210201082850-366fbb520750
 	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.7.0
-	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97 // indirect
-	golang.org/x/net v0.0.0-20210805182204-aaa1db679c0d // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20210806184541-e5e7981a1069 // indirect
 	google.golang.org/grpc v1.35.0
