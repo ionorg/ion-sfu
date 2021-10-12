@@ -17,7 +17,7 @@ import (
 )
 
 // Logger is an implementation of logr.Logger. If is not provided - will be turned off.
-var Logger logr.Logger = logr.Discard()
+var Logger logr.Logger = new(logr.DiscardLogger)
 
 // ICEServerConfig defines parameters for ice servers
 type ICEServerConfig struct {

@@ -28,10 +28,10 @@ func NewBufferFactory(trackingPackets int, logger logr.Logger) *factory {
 	// Enable package wide logging for non-method functions.
 	// If logger is empty - use default Logger.
 	// Logger is a public variable in buffer package.
-	if logger == (logr.Logger{}) {
-		logger = Logger
-	} else {
+	if logger != nil {
 		Logger = logger
+	} else {
+		logger = Logger
 	}
 
 	return &factory{

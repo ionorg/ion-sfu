@@ -52,7 +52,7 @@ func TestNack(t *testing.T) {
 	}
 	logger.SetGlobalOptions(logger.GlobalConfig{V: 1}) // 2 - TRACE
 	logger := logger.New()
-	buff := NewBuffer(123, pool, pool, logger)
+	buff := NewBuffer(123, pool, pool, logger).(*buffer)
 	buff.codecType = webrtc.RTPCodecTypeVideo
 	assert.NotNil(t, buff)
 	var wg sync.WaitGroup
@@ -154,7 +154,7 @@ func TestNewBuffer(t *testing.T) {
 			}
 			logger.SetGlobalOptions(logger.GlobalConfig{V: 2}) // 2 - TRACE
 			logger := logger.New()
-			buff := NewBuffer(123, pool, pool, logger)
+			buff := NewBuffer(123, pool, pool, logger).(*buffer)
 			buff.codecType = webrtc.RTPCodecTypeVideo
 			assert.NotNil(t, buff)
 			assert.NotNil(t, TestPackets)
