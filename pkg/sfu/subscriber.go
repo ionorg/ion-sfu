@@ -99,6 +99,10 @@ func (s *Subscriber) AddDatachannel(peer Peer, dc *Datachannel) error {
 	return nil
 }
 
+func (s *Subscriber) PeerConnection() *webrtc.PeerConnection {
+	return s.pc
+}
+
 // DataChannel returns the channel for a label
 func (s *Subscriber) DataChannel(label string) *webrtc.DataChannel {
 	s.RLock()
