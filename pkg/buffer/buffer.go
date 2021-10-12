@@ -36,6 +36,7 @@ type ExtPacket struct {
 	Arrival  int64
 	Packet   rtp.Packet
 	Payload  interface{}
+	Raw      []byte
 	KeyFrame bool
 }
 
@@ -347,6 +348,7 @@ func (b *buffer) calc(pkt []byte, arrivalTime int64) {
 	ep := ExtPacket{
 		Head:    sn == b.maxSeqNo,
 		Cycle:   b.cycles,
+		Raw:     pb,
 		Packet:  p,
 		Arrival: arrivalTime,
 	}
