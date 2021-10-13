@@ -103,6 +103,10 @@ func (s *Subscriber) PeerConnection() *webrtc.PeerConnection {
 	return s.pc
 }
 
+func (s *Subscriber) MediaEngine() *webrtc.MediaEngine {
+	return s.me
+}
+
 // DataChannel returns the channel for a label
 func (s *Subscriber) DataChannel(label string) *webrtc.DataChannel {
 	s.RLock()
