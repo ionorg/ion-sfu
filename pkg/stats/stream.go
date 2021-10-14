@@ -88,6 +88,7 @@ func InitStats() {
 	prometheus.MustRegister(lostRate)
 	prometheus.MustRegister(jitter)
 	prometheus.MustRegister(Sessions)
+	prometheus.MustRegister(Peers)
 	prometheus.MustRegister(AudioTracks)
 	prometheus.MustRegister(VideoTracks)
 }
