@@ -107,7 +107,7 @@ func (p *JSONSignal) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonr
 		var negotiation Negotiation
 		err := json.Unmarshal(*req.Params, &negotiation)
 		if err != nil {
-			p.Logger.Error(err, "connect: error parsing offer")
+			p.Logger.Error(err, "connect: error parsing answer")
 			replyError(err)
 			break
 		}
