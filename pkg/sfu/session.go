@@ -148,7 +148,7 @@ func (s *SessionLocal) RemovePeer(p Peer) {
 	if s.peers[pid] == p {
 		delete(s.peers, pid)
 	}
-	peerCount := len(s.peers)
+	peerCount := len(s.peers) + len(s.relayPeers)
 	s.mu.Unlock()
 
 	// Close SessionLocal if no peers
