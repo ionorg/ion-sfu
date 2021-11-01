@@ -522,8 +522,8 @@ func (d *DownTrack) handleRTCP(bytes []byte) {
 				firOnce = false
 			}
 		case *rtcp.ReceiverEstimatedMaximumBitrate:
-			if expectedMinBitrate == 0 || expectedMinBitrate > p.Bitrate {
-				expectedMinBitrate = p.Bitrate
+			if expectedMinBitrate == 0 || expectedMinBitrate > uint64(p.Bitrate) {
+				expectedMinBitrate = uint64(p.Bitrate)
 			}
 		case *rtcp.ReceiverReport:
 			for _, r := range p.Reports {
