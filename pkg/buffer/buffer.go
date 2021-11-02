@@ -444,7 +444,7 @@ func (b *Buffer) buildREMBPacket() *rtcp.ReceiverEstimatedMaximumBitrate {
 	b.stats.TotalByte = 0
 
 	return &rtcp.ReceiverEstimatedMaximumBitrate{
-		Bitrate: br,
+		Bitrate: float32(br),
 		SSRCs:   []uint32{b.mediaSSRC},
 	}
 }
