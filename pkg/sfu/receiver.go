@@ -13,7 +13,6 @@ import (
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
-	"github.com/rs/zerolog/log"
 )
 
 // Receiver defines a interface for a track receivers
@@ -374,7 +373,7 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 					w.deleteDownTrack(layer, dt.id)
 					w.Unlock()
 				}
-				log.Error().Err(err).Str("id", dt.id).Msg("Error writing to down track")
+				Logger.Error(err, "Error writing to down track", "id", dt.id)
 			}
 		}
 	}
