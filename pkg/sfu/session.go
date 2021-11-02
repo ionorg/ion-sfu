@@ -5,9 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/ion-sfu/pkg/relay"
-	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -105,16 +103,16 @@ func (s *SessionLocal) AddRelayPeer(peerID string, signalData []byte) ([]byte, e
 	}, &relay.PeerConfig{
 		SettingEngine: s.config.Setting,
 		ICEServers:    s.config.Configuration.ICEServers,
-		Logger:        logger.New(),
+		Logger:        Logger,
 	})
 	if err != nil {
-		log.Err(err).Msg("Creating relay peer")
+		Logger.Error(err, "Creating relay peer")
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	resp, err := p.Answer(signalData)
 	if err != nil {
-		log.Err(err).Msg("Creating answer for relay")
+		Logger.Error(err, "Creating answer for relay")
 		return nil, err
 	}
 
