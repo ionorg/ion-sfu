@@ -19,6 +19,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 type grpcConfig struct {
@@ -188,6 +190,7 @@ func main() {
 	dc.Use(datachannel.SubscriberAPI)
 
 	pb.RegisterSFUServer(s, server.NewServer(nsfu))
+	grpc_health_v1.RegisterHealthServer(s, health.NewServer())
 	grpc_prometheus.Register(s)
 
 	go startMetrics(metricsAddr)

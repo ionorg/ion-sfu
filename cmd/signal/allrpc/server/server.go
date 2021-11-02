@@ -14,6 +14,8 @@ import (
 	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 
 	// pprof
 	_ "net/http/pprof"
@@ -51,6 +53,7 @@ func (s *Server) ServeGRPC(gaddr string) error {
 		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
 	)
 	pb.RegisterSFUServer(gs, grpcServer.NewServer(s.sfu))
+	grpc_health_v1.RegisterHealthServer(gs, health.NewServer())
 	s.logger.Info("GRPC Listening", "addr", gaddr)
 
 	if err := gs.Serve(l); err != nil {

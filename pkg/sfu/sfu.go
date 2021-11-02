@@ -203,7 +203,7 @@ func NewSFU(c Config) *SFU {
 	sfu := &SFU{
 		webrtc:    w,
 		sessions:  make(map[string]Session),
-		withStats: c.Router.WithStats,
+		withStats: w.Router.WithStats,
 	}
 
 	if c.Turn.Enabled {
