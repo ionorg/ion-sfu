@@ -149,7 +149,7 @@ func main() {
 	node := server.New(conf.Config, logger)
 
 	if gaddr != "" {
-		go node.ServeGRPC(gaddr)
+		go node.ServeGRPC(gaddr, cert, key)
 	}
 
 	if jaddr != "" {

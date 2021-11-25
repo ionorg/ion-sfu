@@ -7,15 +7,10 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
 
-	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	pb "github.com/pion/ion-sfu/cmd/signal/grpc/proto"
-	grpcServer "github.com/pion/ion-sfu/cmd/signal/grpc/server"
+	"github.com/pion/ion-sfu/cmd/signal/grpc/server"
 	jsonrpcServer "github.com/pion/ion-sfu/cmd/signal/json-rpc/server"
 	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/health"
-	"google.golang.org/grpc/health/grpc_health_v1"
 
 	// pprof
 	_ "net/http/pprof"
@@ -43,24 +38,8 @@ func New(c sfu.Config, logger logr.Logger) *Server { // Register default middlew
 }
 
 // ServeGRPC serve grpc
-func (s *Server) ServeGRPC(gaddr string) error {
-	l, err := net.Listen("tcp", gaddr)
-	if err != nil {
-		return err
-	}
-
-	gs := grpc.NewServer(
-		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
-	)
-	pb.RegisterSFUServer(gs, grpcServer.NewServer(s.sfu))
-	grpc_health_v1.RegisterHealthServer(gs, health.NewServer())
-	s.logger.Info("GRPC Listening", "addr", gaddr)
-
-	if err := gs.Serve(l); err != nil {
-		s.logger.Error(err, "grpc server error")
-		return err
-	}
-	return nil
+func (s *Server) ServeGRPC(gaddr, cert, key string) error {
+	return server.WrapperedGRPCWebServe(s.sfu, gaddr, cert, key)
 }
 
 // ServeJSONRPC serve jsonrpc

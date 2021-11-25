@@ -95,7 +95,7 @@
           remotesDiv.appendChild(videosDiv);
 
           this.client = new IonSDK.Client(this.signal);
-          this.signal.onopen = () => this.client.join("test session");
+          this.signal.onopen = () => this.client.join("ion");
           this.client.ontrack = (track, stream) => {
             if (track.kind === "video") {
               if (!streams[stream.id]) {

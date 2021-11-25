@@ -9,18 +9,13 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	"github.com/pion/ion-sfu/cmd/signal/grpc/server"
 	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
 
-	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	pb "github.com/pion/ion-sfu/cmd/signal/grpc/proto"
-	"github.com/pion/ion-sfu/cmd/signal/grpc/server"
 	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/viper"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/health"
-	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 type grpcConfig struct {
@@ -42,6 +37,10 @@ var (
 	verbosityLevel int
 	paddr          string
 
+	enableTLS bool
+	cert      string
+	key       string
+
 	logger = log.New()
 )
 
@@ -53,6 +52,9 @@ func showHelp() {
 	fmt.Printf("Usage:%s {params}\n", os.Args[0])
 	fmt.Println("      -c {config file}")
 	fmt.Println("      -a {listen addr}")
+	fmt.Println("      -tls (enable tls)")
+	fmt.Println("      -cert {cert file}")
+	fmt.Println("      -key {key file}")
 	fmt.Println("      -h (show help info)")
 	fmt.Println("      -v {0-10} (verbosity level, default 0)")
 	fmt.Println("      -paddr {pprof listen addr}")
@@ -101,6 +103,9 @@ func load() bool {
 func parse() bool {
 	flag.StringVar(&file, "c", "config.toml", "config file")
 	flag.StringVar(&addr, "a", ":50051", "address to use")
+	flag.BoolVar(&enableTLS, "tls", false, "enable tls")
+	flag.StringVar(&cert, "cert", "", "cert file")
+	flag.StringVar(&key, "key", "", "key file")
 	flag.StringVar(&metricsAddr, "m", ":8100", "merics to use")
 	flag.IntVar(&verbosityLevel, "v", -1, "verbosity level, higher value - more logs")
 	flag.StringVar(&paddr, "paddr", "", "pprof listening address")
@@ -165,11 +170,6 @@ func main() {
 	logger := log.New()
 
 	logger.Info("--- Starting SFU Node ---")
-	lis, err := net.Listen("tcp", addr)
-	if err != nil {
-		logger.Error(err, "failed to listen")
-		os.Exit(1)
-	}
 
 	if paddr != "" {
 		go func() {
@@ -177,10 +177,7 @@ func main() {
 			_ = http.ListenAndServe(paddr, http.DefaultServeMux)
 		}()
 	}
-
-	s := grpc.NewServer(
-		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
-	)
+	go startMetrics(metricsAddr)
 
 	// SFU instance needs to be created with logr implementation
 	sfu.Logger = logger
@@ -189,14 +186,8 @@ func main() {
 	dc := nsfu.NewDatachannel(sfu.APIChannelLabel)
 	dc.Use(datachannel.SubscriberAPI)
 
-	pb.RegisterSFUServer(s, server.NewServer(nsfu))
-	grpc_health_v1.RegisterHealthServer(s, health.NewServer())
-	grpc_prometheus.Register(s)
-
-	go startMetrics(metricsAddr)
-
-	logger.Info("SFU Listening", "addr", addr)
-	if err := s.Serve(lis); err != nil {
+	err := server.WrapperedGRPCWebServe(nsfu, addr, cert, key)
+	if err != nil {
 		logger.Error(err, "failed to serve SFU")
 		os.Exit(1)
 	}

@@ -362,8 +362,8 @@
       const clientLocal = new IonSDK.Client(signalLocal);
       const clientRemote = new IonSDK.Client(signalRemote);
 
-      signalLocal.onopen = () => clientLocal.join("test session");
-      signalRemote.onopen = () => clientRemote.join("test session");
+      signalLocal.onopen = () => clientLocal.join("ion");
+      signalRemote.onopen = () => clientRemote.join("ion");
 
       let localStream;
       const start = (sc) => {
