@@ -15,7 +15,7 @@ require (
 	github.com/pion/dtls/v2 v2.0.10
 	github.com/pion/ice/v2 v2.1.13
 	github.com/pion/ion v1.10.0
-	github.com/pion/ion-log v1.2.1
+	github.com/pion/ion-log v1.2.2
 	github.com/pion/logging v0.2.2
 	github.com/pion/rtcp v1.2.8
 	github.com/pion/rtp v1.7.4
