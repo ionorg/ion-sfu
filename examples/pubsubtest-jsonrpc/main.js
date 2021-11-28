@@ -19,7 +19,7 @@ const config = {
 const signalLocal = new Signal.IonSFUJSONRPCSignal(serverUrl);
 
 const clientLocal = new IonSDK.Client(signalLocal, config);
-signalLocal.onopen = () => clientLocal.join(params.has("session") ? params.get("session") : "test session");
+signalLocal.onopen = () => clientLocal.join(params.has("session") ? params.get("session") : "ion");
 
 /**
  * For every remote stream this object will hold the follwing information:

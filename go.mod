@@ -14,6 +14,8 @@ require (
 	github.com/lucsky/cuid v1.2.1
 	github.com/pion/dtls/v2 v2.0.10
 	github.com/pion/ice/v2 v2.1.13
+	github.com/pion/ion v1.10.0
+	github.com/pion/ion-log v1.2.1
 	github.com/pion/logging v0.2.2
 	github.com/pion/rtcp v1.2.8
 	github.com/pion/rtp v1.7.4
@@ -29,5 +31,4 @@ require (
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	google.golang.org/grpc v1.41.0
-	google.golang.org/protobuf v1.27.1
 )
