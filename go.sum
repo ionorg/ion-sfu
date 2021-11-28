@@ -536,8 +536,9 @@ github.com/pion/interceptor v0.1.0/go.mod h1:j5NIl3tJJPB3u8+Z2Xz8MZs/VV6rc+If9mX
 github.com/pion/ion v1.10.0 h1:X1qpVCZwWpX/4mrXCU9JNUCoijI3rfPujUUpxEsPr3M=
 github.com/pion/ion v1.10.0/go.mod h1:PiH6J8i3NheVTTOxh1wC/c5aAH68eUMzgmnboxEio3A=
 github.com/pion/ion-log v1.2.0/go.mod h1:oUlvCy7LZNPzOxmCZVraaMhcS/hB9XFog4m1A8QpVgM=
-github.com/pion/ion-log v1.2.1 h1:czzuUZeMIPdpc5zZTdKQb9xw1345amGN+eSAPAgLxnA=
 github.com/pion/ion-log v1.2.1/go.mod h1:oUlvCy7LZNPzOxmCZVraaMhcS/hB9XFog4m1A8QpVgM=
+github.com/pion/ion-log v1.2.2 h1:aA2JlPtkpJYLFzq2gH4sEIkN/+flXE1d3YH84Gh0h34=
+github.com/pion/ion-log v1.2.2/go.mod h1:oUlvCy7LZNPzOxmCZVraaMhcS/hB9XFog4m1A8QpVgM=
 github.com/pion/ion-sfu v1.10.10/go.mod h1:sP+lxPeuzUqabYC6u+YOXZI8YENtqqbnCHnHfOxA/dQ=
 github.com/pion/logging v0.2.2 h1:M9+AIj/+pxNsDfAT64+MAVgJO0rsyLnoJKCqf//DoeY=
 github.com/pion/logging v0.2.2/go.mod h1:k0/tDVsRCX2Mb2ZEmTqNa7CWsQPc+YYCB7Q+5pahoms=
