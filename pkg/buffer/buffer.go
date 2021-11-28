@@ -471,8 +471,9 @@ func (b *Buffer) buildReceptionReport() rtcp.ReceptionReport {
 	}
 	var dlsr uint32
 
-	if b.lastSRRecv != 0 {
-		delayMS := uint32((time.Now().UnixNano() - b.lastSRRecv) / 1e6)
+	lastSRRecv := atomic.LoadInt64(&b.lastSRRecv)
+	if lastSRRecv != 0 {
+		delayMS := uint32((time.Now().UnixNano() - lastSRRecv) / 1e6)
 		dlsr = (delayMS / 1e3) << 16
 		dlsr |= (delayMS % 1e3) * 65536 / 1000
 	}
@@ -483,18 +484,16 @@ func (b *Buffer) buildReceptionReport() rtcp.ReceptionReport {
 		TotalLost:          lost,
 		LastSequenceNumber: extMaxSeq,
 		Jitter:             uint32(b.stats.Jitter),
-		LastSenderReport:   uint32(b.lastSRNTPTime >> 16),
+		LastSenderReport:   uint32(atomic.LoadUint64(&b.lastSRNTPTime) >> 16),
 		Delay:              dlsr,
 	}
 	return rr
 }
 
 func (b *Buffer) SetSenderReportData(rtpTime uint32, ntpTime uint64) {
-	b.Lock()
-	b.lastSRRTPTime = rtpTime
-	b.lastSRNTPTime = ntpTime
-	b.lastSRRecv = time.Now().UnixNano()
-	b.Unlock()
+	atomic.StoreUint64(&b.lastSRNTPTime, ntpTime)
+	atomic.StoreUint32(&b.lastSRRTPTime, rtpTime)
+	atomic.StoreInt64(&b.lastSRRecv, time.Now().UnixNano())
 }
 
 func (b *Buffer) getRTCP() []rtcp.Packet {
