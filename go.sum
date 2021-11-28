@@ -199,8 +199,9 @@ github.com/go-logfmt/logfmt v0.4.0/go.mod h1:3RMwSq7FuexP4Kalkev3ejPJsZTpXXBr9+V
 github.com/go-logfmt/logfmt v0.5.0/go.mod h1:wCYkCAKZfumFQihp8CzCvQ3paCTfi41vtzG1KdI/P7A=
 github.com/go-logr/logr v1.2.0 h1:QK40JKJyMdUDz+h+xvCsru/bJhvG0UxvePV0ufL/AcE=
 github.com/go-logr/logr v1.2.0/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=
-github.com/go-logr/zerologr v1.2.0 h1:oS1fjSSEHwpv8Lam3SNmPTLTUw6V4DoB2ZzryqrkMB0=
 github.com/go-logr/zerologr v1.2.0/go.mod h1:O82obOiXzyxiBNgAMRT1m+XbOvY8K18Kf6XhT52oqoc=
+github.com/go-logr/zerologr v1.2.1 h1:ueMQwFM9oKfjZzeooSNz7AeXvz82gsjdQwXMh+5UtYo=
+github.com/go-logr/zerologr v1.2.1/go.mod h1:O82obOiXzyxiBNgAMRT1m+XbOvY8K18Kf6XhT52oqoc=
 github.com/go-playground/assert/v2 v2.0.1 h1:MsBgLAaY856+nPRTKrp3/OZK38U/wa0CcBYNjji3q3A=
 github.com/go-playground/assert/v2 v2.0.1/go.mod h1:VDjEfimB/XKnb+ZQfWdccd7VUvScMdVu0Titje2rxJ4=
 github.com/go-playground/locales v0.13.0 h1:HyWk6mgj5qFqCT5fjGBuRArbVDfE4hi8+e8ceBS/t7Q=
