@@ -16,11 +16,21 @@
 A [selective forwarding unit](https://webrtcglossary.com/sfu/) is a video routing service which allows webrtc sessions to scale more efficiently. This package provides a simple, flexible, high performance Go implementation of a WebRTC SFU. It can be called directly or through a [gRPC](cmd/signal/grpc) or [json-rpc](cmd/signal/json-rpc) interface.
 
 ## Features
+
 * Audio/Video/Datachannel forwarding
 * Congestion Control (TWCC, REMB, RR/SR)
 * Unified plan semantics
 * Pub/Sub Peer Connection (`O(n)` port usage)
 * Audio level indication (RFC6464). "X is speaking"
+
+## End to end solutions
+
+ion-sfu is the engine behind several projects. It's designed to be focused, with minimal signaling or external dependencies. It's simple to embed ion-sfu within your service: we include a few examples inside `cmd/signal`.
+
+For "batteries-included", end-to-end solutions that are easier to deploy, check out:
+
+* [LiveKit](https://github.com/livekit/livekit-server): Open source platform for real-time communication (SDKs for all major platforms)
+* [Ion](https://github.com/pion/ion): Real-Distributed RTC System by pure Go and Flutter
 
 ## Quickstart
 
@@ -88,6 +98,7 @@ MIT License - see [LICENSE](LICENSE) for full text
 ## Development
 
 Generate the protocol buffers and grpc code:
+
  1. Best choice (uses docker): `make protos`.
  2. Manually:
      - Install protocol buffers and the protcol buffers compiler. On Fedora `dnf install protobuf protobuf-compiler`.
