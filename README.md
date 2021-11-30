@@ -37,7 +37,7 @@ For "batteries-included", end-to-end solutions that are easier to deploy, check 
 Run the Echo Test example
 
 ```
-docker-compose -f examples/echotest/docker-compose.yaml up
+docker-compose -f examples/echotest-jsonrpc/docker-compose.yaml up
 ```
 
 Open the client
