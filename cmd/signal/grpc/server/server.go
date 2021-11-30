@@ -94,7 +94,7 @@ func (s *SFUServer) Signal(sig rtc.RTC_SignalServer) error {
 			if subscriber == nil {
 				return
 			}
-			for _, downTrack := range peer.Subscriber().DownTracks() {
+			for _, downTrack := range subscriber.DownTracks() {
 				streamID := downTrack.StreamID()
 				for _, t := range tracksInfo {
 					if downTrack != nil && downTrack.ID() == t.Id {
