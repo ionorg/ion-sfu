@@ -10,4 +10,4 @@ Please feel free to extend and add additional examples!
 
 ### Overview
 
-* [echotest](echotest): Demonstrates how to establish a connection to `ion-sfu` as well as publish and receive a video stream.
+* [echotest](echotest-jsonrpc): Demonstrates how to establish a connection to `ion-sfu` as well as publish and receive a video stream.
