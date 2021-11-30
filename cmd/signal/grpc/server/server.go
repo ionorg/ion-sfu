@@ -90,7 +90,11 @@ func (s *SFUServer) Signal(sig rtc.RTC_SignalServer) error {
 			}
 
 			// Remove down tracks that other peers subscribed from this peer
-			for _, downTrack := range peer.Subscriber().DownTracks() {
+			subscriber := peer.Subscriber()
+			if subscriber == nil {
+				return
+			}
+			for _, downTrack := range subscriber.DownTracks() {
 				streamID := downTrack.StreamID()
 				for _, t := range tracksInfo {
 					if downTrack != nil && downTrack.ID() == t.Id {
