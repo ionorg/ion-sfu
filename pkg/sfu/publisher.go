@@ -231,6 +231,7 @@ func (p *Publisher) Relay(signalFn func(meta relay.PeerMeta, signal []byte) ([]b
 				dc, err := rp.CreateDataChannel(lbl)
 				if err != nil {
 					Logger.V(1).Error(err, "Creating data channels.", "peer_id", p.id)
+					continue
 				}
 				dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 					if peer == nil || peer.Subscriber() == nil {
