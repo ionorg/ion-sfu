@@ -356,7 +356,7 @@ func (p *Peer) CreateDataChannel(label string) (*webrtc.DataChannel, error) {
 
 func (p *Peer) createDataChannel(label string) (*webrtc.DataChannel, error) {
 	idx := p.dcIndex
-	p.dcIndex = +1
+	p.dcIndex++
 	dcParams := &webrtc.DataChannelParameters{
 		Label:   label,
 		ID:      &idx,
