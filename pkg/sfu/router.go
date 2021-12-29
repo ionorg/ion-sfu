@@ -19,7 +19,7 @@ type Router interface {
 	SetRTCPWriter(func([]rtcp.Packet) error)
 	AddDownTrack(s *Subscriber, r Receiver) (*DownTrack, error)
 	Stop()
-	GetReceiver()  map[string]Receiver
+	GetReceiver() map[string]Receiver
 	OnAddReceiverTrack(f func(receiver Receiver))
 	OnDelReceiverTrack(f func(receiver Receiver))
 }

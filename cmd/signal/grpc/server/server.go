@@ -251,8 +251,8 @@ func (s *SFUServer) Signal(sig rtc.RTC_SignalServer) error {
 			publisher := peer.Publisher()
 
 			if publisher != nil {
-				router:=publisher.GetRouter()
-				if router!=nil {
+				router := publisher.GetRouter()
+				if router != nil {
 					publisher.GetRouter().OnAddReceiverTrack(func(receiver sfu.Receiver) {
 						log.Debugf("[S=>C] OnAddReceiverTrack: \nKind %v, \nUid: %v,  \nMsid: %v,\nTrackID: %v", receiver.Kind(), uid, receiver.StreamID(), receiver.TrackID())
 						var peerTracks []*rtc.TrackInfo
