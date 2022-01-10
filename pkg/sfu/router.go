@@ -2,6 +2,7 @@ package sfu
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/ion-sfu/pkg/stats"
@@ -18,6 +19,9 @@ type Router interface {
 	SetRTCPWriter(func([]rtcp.Packet) error)
 	AddDownTrack(s *Subscriber, r Receiver) (*DownTrack, error)
 	Stop()
+	GetReceiver() map[string]Receiver
+	OnAddReceiverTrack(f func(receiver Receiver))
+	OnDelReceiverTrack(f func(receiver Receiver))
 }
 
 // RouterConfig defines Router configurations
@@ -43,6 +47,8 @@ type router struct {
 	receivers     map[string]Receiver
 	bufferFactory *buffer.Factory
 	writeRTCP     func([]rtcp.Packet) error
+	onAddTrack    atomic.Value // func(Receiver)
+	onDelTrack    atomic.Value // func(Receiver)
 }
 
 // newRouter for routing rtp/rtcp packets
@@ -64,6 +70,18 @@ func newRouter(id string, session Session, config *WebRTCTransportConfig) Router
 	}
 
 	return r
+}
+
+func (r *router) GetReceiver() map[string]Receiver {
+	return r.receivers
+}
+
+func (r *router) OnAddReceiverTrack(f func(receiver Receiver)) {
+	r.onAddTrack.Store(f)
+}
+
+func (r *router) OnDelReceiverTrack(f func(receiver Receiver)) {
+	r.onDelTrack.Store(f)
 }
 
 func (r *router) ID() string {
@@ -162,6 +180,10 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 			r.deleteReceiver(trackID, uint32(track.SSRC()))
 		})
 		publish = true
+
+		if handler, ok := r.onAddTrack.Load().(func(Receiver)); ok && handler != nil {
+			handler(recv)
+		}
 	}
 
 	recv.AddUpTrack(track, buff, r.config.Simulcast.BestQualityFirst)
@@ -269,6 +291,9 @@ func (r *router) AddDownTrack(sub *Subscriber, recv Receiver) (*DownTrack, error
 
 func (r *router) deleteReceiver(track string, ssrc uint32) {
 	r.Lock()
+	if handler, ok := r.onDelTrack.Load().(func(Receiver)); ok && handler != nil {
+		handler(r.receivers[track])
+	}
 	delete(r.receivers, track)
 	delete(r.stats, ssrc)
 	r.Unlock()

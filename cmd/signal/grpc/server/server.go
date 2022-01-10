@@ -251,6 +251,31 @@ func (s *SFUServer) Signal(sig rtc.RTC_SignalServer) error {
 			publisher := peer.Publisher()
 
 			if publisher != nil {
+				router := publisher.GetRouter()
+				if router != nil {
+					publisher.GetRouter().OnAddReceiverTrack(func(receiver sfu.Receiver) {
+						log.Debugf("[S=>C] OnAddReceiverTrack: \nKind %v, \nUid: %v,  \nMsid: %v,\nTrackID: %v", receiver.Kind(), uid, receiver.StreamID(), receiver.TrackID())
+						var peerTracks []*rtc.TrackInfo
+						peerTracks = append(peerTracks, &rtc.TrackInfo{
+							Id:       receiver.TrackID(),
+							Kind:     receiver.Kind().String(),
+							StreamId: receiver.StreamID(),
+							Muted:    false,
+						})
+						s.BroadcastTrackEvent(uid, peerTracks, rtc.TrackEvent_ADD)
+					})
+					publisher.GetRouter().OnDelReceiverTrack(func(receiver sfu.Receiver) {
+						log.Debugf("[S=>C] OnDelReceiverTrack: \nKind %v, \nUid: %v,  \nMsid: %v,\nTrackID: %v", receiver.Kind(), uid, receiver.StreamID(), receiver.TrackID())
+						var peerTracks []*rtc.TrackInfo
+						peerTracks = append(peerTracks, &rtc.TrackInfo{
+							Id:       receiver.TrackID(),
+							Kind:     receiver.Kind().String(),
+							StreamId: receiver.StreamID(),
+							Muted:    false,
+						})
+						s.BroadcastTrackEvent(uid, peerTracks, rtc.TrackEvent_REMOVE)
+					})
+				}
 				var once sync.Once
 				publisher.OnPublisherTrack(func(pt sfu.PublisherTrack) {
 					log.Debugf("[S=>C] OnPublisherTrack: \nKind %v, \nUid: %v,  \nMsid: %v,\nTrackID: %v", pt.Track.Kind(), uid, pt.Track.Msid(), pt.Track.ID())
