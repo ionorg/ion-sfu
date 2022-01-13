@@ -532,12 +532,14 @@ func (d *DownTrack) handleRTCP(bytes []byte) {
 				}
 			}
 		case *rtcp.TransportLayerNack:
-			var nackedPackets []packetMeta
-			for _, pair := range p.Nacks {
-				nackedPackets = append(nackedPackets, d.sequencer.getSeqNoPairs(pair.PacketList())...)
-			}
-			if err = d.receiver.RetransmitPackets(d, nackedPackets); err != nil {
-				return
+			if d.sequencer != nil {
+				var nackedPackets []packetMeta
+				for _, pair := range p.Nacks {
+					nackedPackets = append(nackedPackets, d.sequencer.getSeqNoPairs(pair.PacketList())...)
+				}
+				if err = d.receiver.RetransmitPackets(d, nackedPackets); err != nil {
+					return
+				}
 			}
 		}
 	}
