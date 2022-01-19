@@ -128,6 +128,9 @@ func (d *DownTrack) Codec() webrtc.RTPCodecCapability { return d.codec }
 // StreamID is the group this track belongs too. This must be unique
 func (d *DownTrack) StreamID() string { return d.streamID }
 
+// RID is the RTP Stream ID for this track. This is Simulcast specific and not used.
+func (d *DownTrack) RID() string { return "" }
+
 // Kind controls if this TrackLocal is audio or video
 func (d *DownTrack) Kind() webrtc.RTPCodecType {
 	switch {
