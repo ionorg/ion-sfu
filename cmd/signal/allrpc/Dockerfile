@@ -1,6 +1,4 @@
-FROM golang:1.14.14-stretch
-
-ENV GO111MODULE=on
+FROM golang:stretch
 
 WORKDIR $GOPATH/src/github.com/pion/ion-sfu
 
