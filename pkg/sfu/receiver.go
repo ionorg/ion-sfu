@@ -178,7 +178,7 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 				}
 			}
 		}
-		if w.downTrackSubscribed(layer, track) {
+		if w.isDownTrackSubscribed(layer, track) {
 			return
 		}
 		track.SetInitialLayers(int32(layer), 2)
@@ -188,7 +188,7 @@ func (w *WebRTCReceiver) AddDownTrack(track *DownTrack, bestQualityFirst bool) {
 		track.trackType = SimulcastDownTrack
 		track.payload = packetFactory.Get().(*[]byte)
 	} else {
-		if w.downTrackSubscribed(layer, track) {
+		if w.isDownTrackSubscribed(layer, track) {
 			return
 		}
 		track.SetInitialLayers(0, 0)
@@ -254,6 +254,8 @@ func (w *WebRTCReceiver) deleteDownTrack(layer int, id string) {
 	for _, dt := range dts {
 		if dt.id != id {
 			ndts = append(ndts, dt)
+		} else {
+			dt.Close()
 		}
 	}
 	w.downTracks[layer].Store(ndts)
@@ -396,7 +398,7 @@ func (w *WebRTCReceiver) closeTracks() {
 	}
 }
 
-func (w *WebRTCReceiver) downTrackSubscribed(layer int, dt *DownTrack) bool {
+func (w *WebRTCReceiver) isDownTrackSubscribed(layer int, dt *DownTrack) bool {
 	dts := w.downTracks[layer].Load().([]*DownTrack)
 	for _, cdt := range dts {
 		if cdt == dt {
