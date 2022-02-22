@@ -12,7 +12,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/improbable-eng/grpc-web v0.14.1
 	github.com/lucsky/cuid v1.2.1
-	github.com/pion/dtls/v2 v2.1.0
+	github.com/pion/dtls/v2 v2.1.3
 	github.com/pion/ice/v2 v2.1.18
 	github.com/pion/ion v1.10.0
 	github.com/pion/ion-log v1.2.2
