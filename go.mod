@@ -18,7 +18,7 @@ require (
 	github.com/pion/ion-log v1.2.2
 	github.com/pion/logging v0.2.2
 	github.com/pion/rtcp v1.2.9
-	github.com/pion/rtp v1.7.7
+	github.com/pion/rtp v1.7.13
 	github.com/pion/sdp/v3 v3.0.4
 	github.com/pion/transport v0.13.0
 	github.com/pion/turn/v2 v2.0.8
