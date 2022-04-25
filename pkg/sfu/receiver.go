@@ -261,6 +261,21 @@ func (w *WebRTCReceiver) deleteDownTrack(layer int, id string) {
 	w.downTracks[layer].Store(ndts)
 }
 
+func (w *WebRTCReceiver) moveDownTrack(fromLayer, toLayer int, dt *DownTrack) {
+	// Remove from previous layer first
+	dts := w.downTracks[fromLayer].Load().([]*DownTrack)
+	ndts := make([]*DownTrack, 0, len(dts))
+	for _, dt := range dts {
+		if dt.id != dt.id {
+			ndts = append(ndts, dt)
+		}
+	}
+	w.downTracks[fromLayer].Store(ndts)
+
+	// Add it to the new layer
+	w.storeDownTrack(toLayer, dt)
+}
+
 func (w *WebRTCReceiver) SendRTCP(p []rtcp.Packet) {
 	if _, ok := p[0].(*rtcp.PictureLossIndication); ok {
 		if time.Now().UnixNano()-atomic.LoadInt64(&w.lastPli) < 500e6 {
@@ -354,8 +369,7 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 				if pkt.KeyFrame {
 					w.Lock()
 					for idx, dt := range w.pendingTracks[layer] {
-						w.deleteDownTrack(dt.CurrentSpatialLayer(), dt.id)
-						w.storeDownTrack(layer, dt)
+						w.moveDownTrack(dt.CurrentSpatialLayer(), layer, dt)
 						dt.SwitchSpatialLayerDone(int32(layer))
 						w.pendingTracks[layer][idx] = nil
 					}
