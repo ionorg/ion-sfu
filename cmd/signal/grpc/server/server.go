@@ -185,10 +185,16 @@ func (s *SFUServer) Signal(sig rtc.RTC_SignalServer) error {
 				noautosub = val == "true"
 			}
 
+			noautosubdc := false
+			if val, found := payload.Join.Config["NoAutoSubscribeDataChannels"]; found {
+				noautosubdc = val == "true"
+			}
+
 			cfg := sfu.JoinConfig{
-				NoPublish:       nopub,
-				NoSubscribe:     nosub,
-				NoAutoSubscribe: noautosub,
+				NoPublish:                   nopub,
+				NoSubscribe:                 nosub,
+				NoAutoSubscribe:             noautosub,
+				NoAutoSubscribeDataChannels: noautosubdc,
 			}
 
 			err = peer.Join(sid, uid, cfg)
