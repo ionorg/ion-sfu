@@ -44,6 +44,10 @@ type JoinConfig struct {
 	// to customize the subscrbe stream combination as needed.
 	// this parameter depends on NoSubscribe=false.
 	NoAutoSubscribe bool
+	// If true the peer will not automatically subscribe all data channels,
+	// The peer can subscribe data channels by creating locally.
+	// this parameter depends on NoSubscribe=false.
+	NoAutoSubscribeDataChannels bool
 }
 
 // SessionProvider provides the SessionLocal to the sfu.Peer
@@ -111,6 +115,7 @@ func (p *PeerLocal) Join(sid, uid string, config ...JoinConfig) error {
 		}
 
 		p.subscriber.noAutoSubscribe = conf.NoAutoSubscribe
+		p.subscriber.noAutoSubscribeDataChannels = conf.NoAutoSubscribeDataChannels
 
 		p.subscriber.OnNegotiationNeeded(func() {
 			p.Lock()

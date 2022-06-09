@@ -27,7 +27,8 @@ type Subscriber struct {
 	negotiate func()
 	closeOnce sync.Once
 
-	noAutoSubscribe bool
+	noAutoSubscribe             bool
+	noAutoSubscribeDataChannels bool
 }
 
 // NewSubscriber creates a new Subscriber
@@ -46,12 +47,13 @@ func NewSubscriber(id string, cfg WebRTCTransportConfig) (*Subscriber, error) {
 	}
 
 	s := &Subscriber{
-		id:              id,
-		me:              me,
-		pc:              pc,
-		tracks:          make(map[string][]*DownTrack),
-		channels:        make(map[string]*webrtc.DataChannel),
-		noAutoSubscribe: false,
+		id:                          id,
+		me:                          me,
+		pc:                          pc,
+		tracks:                      make(map[string][]*DownTrack),
+		channels:                    make(map[string]*webrtc.DataChannel),
+		noAutoSubscribe:             false,
+		noAutoSubscribeDataChannels: false,
 	}
 
 	pc.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
