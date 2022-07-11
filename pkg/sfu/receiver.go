@@ -370,7 +370,7 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 
 		for _, dt := range w.downTracks[layer].Load().([]*DownTrack) {
 			if err = dt.WriteRTP(pkt, layer); err != nil {
-				if err == io.EOF && err == io.ErrClosedPipe {
+				if err == io.EOF || err == io.ErrClosedPipe {
 					w.Lock()
 					w.deleteDownTrack(layer, dt.id)
 					w.Unlock()
