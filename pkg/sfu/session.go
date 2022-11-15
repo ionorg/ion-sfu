@@ -159,6 +159,9 @@ func (s *SessionLocal) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 	label := dc.Label()
 
 	s.mu.Lock()
+	peerOwner := s.peers[owner]
+	peerOwner.Subscriber().RegisterDatachannel(label, dc)
+
 	for _, lbl := range s.fanOutDCs {
 		if label == lbl {
 			dc.OnMessage(func(msg webrtc.DataChannelMessage) {
@@ -169,10 +172,8 @@ func (s *SessionLocal) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 		}
 	}
 	s.fanOutDCs = append(s.fanOutDCs, label)
-	peerOwner := s.peers[owner]
 	s.mu.Unlock()
 	peers := s.Peers()
-	peerOwner.Subscriber().RegisterDatachannel(label, dc)
 
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 		s.FanOutMessage(owner, label, msg)
@@ -180,7 +181,7 @@ func (s *SessionLocal) AddDatachannel(owner string, dc *webrtc.DataChannel) {
 
 	for _, p := range peers {
 		peer := p
-		if peer.ID() == owner || peer.Subscriber() == nil {
+		if peer.ID() == owner || peer.Subscriber() == nil || peer.Subscriber().noAutoSubscribeDataChannels {
 			continue
 		}
 		ndc, err := peer.Subscriber().AddDataChannel(label)
@@ -251,6 +252,10 @@ func (s *SessionLocal) Subscribe(peer Peer) {
 
 	// Subscribe to fan out data channels
 	for _, label := range fdc {
+		if peer.Subscriber().noAutoSubscribeDataChannels {
+			continue
+		}
+
 		dc, err := peer.Subscriber().AddDataChannel(label)
 		if err != nil {
 			Logger.Error(err, "error adding datachannel")
