@@ -10,7 +10,7 @@ require (
 	github.com/go-logr/zerologr v1.2.1
 	github.com/gorilla/websocket v1.4.2
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
-	github.com/improbable-eng/grpc-web v0.14.1
+	github.com/improbable-eng/grpc-web v0.15.0
 	github.com/lucsky/cuid v1.2.1
 	github.com/pion/dtls/v2 v2.1.3
 	github.com/pion/ice/v2 v2.2.2
