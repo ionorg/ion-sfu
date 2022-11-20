@@ -4,7 +4,7 @@ go 1.13
 
 require (
 	github.com/bep/debounce v1.2.0
-	github.com/gammazero/deque v0.1.0
+	github.com/gammazero/deque v0.2.1
 	github.com/gammazero/workerpool v1.1.2
 	github.com/go-logr/logr v1.2.0
 	github.com/go-logr/zerologr v1.2.1
