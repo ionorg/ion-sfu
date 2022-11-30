@@ -254,8 +254,6 @@ func (w *WebRTCReceiver) deleteDownTrack(layer int, id string) {
 	for _, dt := range dts {
 		if dt.id != id {
 			ndts = append(ndts, dt)
-		} else {
-			dt.Close()
 		}
 	}
 	w.downTracks[layer].Store(ndts)
