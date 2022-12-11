@@ -11,9 +11,10 @@ type (
 	// The datachannels created will be negotiated on join to all peers that joins
 	// the SFU.
 	Datachannel struct {
-		Label       string
-		middlewares []func(MessageProcessor) MessageProcessor
-		onMessage   func(ctx context.Context, args ProcessArgs)
+		Label        string
+		middlewares  []func(MessageProcessor) MessageProcessor
+		onMessage    func(ctx context.Context, args ProcessArgs)
+		onRemovePeer func(peer Peer)
 	}
 
 	ProcessArgs struct {
@@ -47,6 +48,10 @@ func (dc *Datachannel) Use(middlewares ...func(MessageProcessor) MessageProcesso
 // after all the middlewares have processed the message.
 func (dc *Datachannel) OnMessage(fn func(ctx context.Context, args ProcessArgs)) {
 	dc.onMessage = fn
+}
+
+func (dc *Datachannel) OnRemovePeer(fn func(peer Peer)) {
+	dc.onRemovePeer = fn
 }
 
 func (p ProcessFunc) Process(ctx context.Context, args ProcessArgs) {
