@@ -150,6 +150,10 @@ func (d *DownTrack) Stop() error {
 	return fmt.Errorf("d.transceiver not exists")
 }
 
+func (d *DownTrack) GetTransceiver() *webrtc.RTPTransceiver {
+	return d.transceiver
+}
+
 func (d *DownTrack) SetTransceiver(transceiver *webrtc.RTPTransceiver) {
 	d.transceiver = transceiver
 }
