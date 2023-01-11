@@ -15,6 +15,7 @@ import (
 	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
 	"github.com/pion/ion-sfu/pkg/sfu"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/zerolog"
 	"github.com/sourcegraph/jsonrpc2"
 	websocketjsonrpc2 "github.com/sourcegraph/jsonrpc2/websocket"
 	"github.com/spf13/viper"
@@ -48,7 +49,7 @@ func showHelp() {
 	fmt.Println("      -key {key file}")
 	fmt.Println("      -a {listen addr}")
 	fmt.Println("      -h (show help info)")
-	fmt.Println("      -v {0-10} (verbosity level, default 0)")
+	fmt.Println("      -v {-6,2} (verbosity level, default 0)")
 }
 
 func load() bool {
@@ -86,11 +87,6 @@ func load() bool {
 		return false
 	}
 
-	if logConfig.Config.V < 0 {
-		logger.Error(nil, "Logger V-Level cannot be less than 0")
-		return false
-	}
-
 	logger.V(0).Info("Config file loaded", "file", file)
 	return true
 }
@@ -101,7 +97,7 @@ func parse() bool {
 	flag.StringVar(&key, "key", "", "key file")
 	flag.StringVar(&addr, "a", ":7000", "address to use")
 	flag.StringVar(&metricsAddr, "m", ":8100", "merics to use")
-	flag.IntVar(&verbosityLevel, "v", -1, "verbosity level, higher value - more logs")
+	flag.IntVar(&verbosityLevel, "v", -int(zerolog.Disabled), "verbosity level, higher value - more logs")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
 	if !load() {
@@ -142,8 +138,7 @@ func main() {
 		os.Exit(-1)
 	}
 
-	// Check that the -v is not set (default -1)
-	if verbosityLevel < 0 {
+	if 1-verbosityLevel > int(zerolog.Disabled) {
 		verbosityLevel = logConfig.Config.V
 	}
 

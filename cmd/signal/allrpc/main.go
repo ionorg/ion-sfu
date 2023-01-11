@@ -8,6 +8,7 @@ import (
 	"github.com/pion/ion-sfu/cmd/signal/allrpc/server"
 	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/ion-sfu/pkg/sfu"
+	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 )
 
@@ -41,7 +42,7 @@ func showHelp() {
 	fmt.Println("             {grpc and jsonrpc addrs should be set at least one}")
 	fmt.Println("      -maddr {metrics listen addr}")
 	fmt.Println("      -h (show help info)")
-	fmt.Println("      -v {0-10} (verbosity level, default 0)")
+	fmt.Println("      -v {-6,2} (verbosity level, default 0)")
 }
 
 func load() bool {
@@ -74,11 +75,6 @@ func load() bool {
 		return false
 	}
 
-	if conf.LogConfig.V < 0 {
-		logger.Error(nil, "Logger V-Level cannot be less than 0")
-		return false
-	}
-
 	logger.Info("Config file loaded", "file", file)
 	return true
 }
@@ -91,7 +87,7 @@ func parse() bool {
 	flag.StringVar(&gaddr, "gaddr", "", "grpc listening address")
 	flag.StringVar(&paddr, "paddr", "", "pprof listening address")
 	flag.StringVar(&maddr, "maddr", "", "metrics listening address")
-	flag.IntVar(&verbosityLevel, "v", -1, "verbosity level, higher value - more logs")
+	flag.IntVar(&verbosityLevel, "v", -int(zerolog.Disabled), "verbosity level, higher value - more logs")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
 
@@ -139,8 +135,8 @@ func main() {
 		showHelp()
 		os.Exit(-1)
 	}
-	// Check that the -v is not set (default -1)
-	if verbosityLevel < 0 {
+	// Check that the -v is not set
+	if 1-verbosityLevel > int(zerolog.Disabled) {
 		verbosityLevel = conf.LogConfig.V
 	}
 
