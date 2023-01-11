@@ -11,6 +11,7 @@ import (
 
 	"github.com/pion/ion-sfu/cmd/signal/grpc/server"
 	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
+	"github.com/rs/zerolog"
 
 	log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/ion-sfu/pkg/sfu"
@@ -56,7 +57,7 @@ func showHelp() {
 	fmt.Println("      -cert {cert file}")
 	fmt.Println("      -key {key file}")
 	fmt.Println("      -h (show help info)")
-	fmt.Println("      -v {0-10} (verbosity level, default 0)")
+	fmt.Println("      -v {-6,2} (verbosity level, default 0)")
 	fmt.Println("      -paddr {pprof listen addr}")
 
 }
@@ -107,7 +108,7 @@ func parse() bool {
 	flag.StringVar(&cert, "cert", "", "cert file")
 	flag.StringVar(&key, "key", "", "key file")
 	flag.StringVar(&metricsAddr, "m", ":8100", "merics to use")
-	flag.IntVar(&verbosityLevel, "v", -1, "verbosity level, higher value - more logs")
+	flag.IntVar(&verbosityLevel, "v", -int(zerolog.Disabled), "verbosity level, higher value - more logs")
 	flag.StringVar(&paddr, "paddr", "", "pprof listening address")
 	help := flag.Bool("h", false, "help info")
 	flag.Parse()
@@ -161,8 +162,8 @@ func main() {
 		os.Exit(-1)
 	}
 
-	// Check that the -v is not set (default -1)
-	if verbosityLevel < 0 {
+	// Check that the -v is not set
+	if 1-verbosityLevel > int(zerolog.Disabled) {
 		verbosityLevel = conf.LogConfig.V
 	}
 

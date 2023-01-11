@@ -56,7 +56,7 @@ func SetGlobalOptions(config GlobalConfig) {
 	lvl := 1 - config.V
 	if v := int(zerolog.TraceLevel); lvl < v {
 		lvl = v
-	} else if v := int(zerolog.InfoLevel); lvl > v {
+	} else if v := int(zerolog.Disabled); lvl > v {
 		lvl = v
 	}
 	zerolog.SetGlobalLevel(zerolog.Level(lvl))
