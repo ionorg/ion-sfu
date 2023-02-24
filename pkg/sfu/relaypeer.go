@@ -9,7 +9,7 @@ import (
 	"github.com/pion/ion-sfu/pkg/buffer"
 	"github.com/pion/ion-sfu/pkg/relay"
 	"github.com/pion/rtcp"
-	"github.com/pion/transport/packetio"
+	"github.com/pion/transport/v2/packetio"
 	"github.com/pion/webrtc/v3"
 )
 
