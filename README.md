@@ -92,10 +92,6 @@ To see some other ways of interacting with the ion-sfu instance, check out our [
 
 For an example of recording a MediaStream to webm, checkout the [save-to-webm](https://github.com/pion/ion-avp/tree/master/examples/save-to-webm) example.
 
-### License
-
-MIT License - see [LICENSE](LICENSE) for full text
-
 ## Development
 
 Generate the protocol buffers and grpc code:
@@ -106,3 +102,17 @@ Generate the protocol buffers and grpc code:
      - `go get google.golang.org/grpc/cmd/protoc-gen-go-grpc`
      - `go get google.golang.org/protobuf/cmd/protoc-gen-go`
      - `protoc --go_out=. --go-grpc_out=. --go_opt=paths=source_relative --go-grpc_opt=paths=source_relative cmd/signal/grpc/proto/sfu.proto`
+
+## Community
+Pion has an active community on the [Slack](https://pion.ly/slack).
+
+Follow the [Pion Twitter](https://twitter.com/_pion) for project updates and important WebRTC news.
+
+We are always looking to support **your projects**. Please reach out if you have something to build!
+If you need commercial support or don't want to use public methods you can contact us at [team@pion.ly](mailto:team@pion.ly)
+
+## Contributing
+Check out the **[contributing wiki](https://github.com/pion/webrtc/wiki/Contributing)** to join the group of amazing people making this project possible: [AUTHORS.txt](./AUTHORS.txt)
+
+## License
+MIT License - see [LICENSE](LICENSE) for full text
