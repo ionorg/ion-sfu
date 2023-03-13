@@ -22,7 +22,13 @@ A [selective forwarding unit](https://webrtcglossary.com/sfu/) is a video routin
 * Congestion Control (TWCC, REMB, RR/SR)
 * Unified plan semantics
 * Pub/Sub Peer Connection (`O(n)` port usage)
-* Audio level indication (RFC6464). "X is speaking"
+* Audio level indication ([RFC 6464][rfc6464]). "X is speaking"
+
+## RFCs
+### Implemented
+- **RFC 6464**: [A Real-time Transport Protocol (RTP) Header Extension for Client-to-Mixer Audio Level Indication][rfc6464]
+
+[rfc6464]: https://tools.ietf.org/html/rfc6464
 
 ## End to end solutions
 
