@@ -23,12 +23,12 @@ require (
 	github.com/pion/transport v0.13.0
 	github.com/pion/turn/v2 v2.0.8
 	github.com/pion/webrtc/v3 v3.1.25
-	github.com/prometheus/client_golang v1.11.0
+	github.com/prometheus/client_golang v1.11.1
 	github.com/rs/zerolog v1.26.0
 	github.com/soheilhy/cmux v0.1.5
 	github.com/sourcegraph/jsonrpc2 v0.1.0
-	github.com/spf13/viper v1.9.0
-	github.com/stretchr/testify v1.7.0
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	google.golang.org/grpc v1.41.0
+	github.com/spf13/viper v1.15.0
+	github.com/stretchr/testify v1.8.1
+	golang.org/x/sync v0.1.0
+	google.golang.org/grpc v1.52.0
 )
