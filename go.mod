@@ -23,7 +23,7 @@ require (
 	github.com/pion/transport v0.13.0
 	github.com/pion/turn/v2 v2.0.8
 	github.com/pion/webrtc/v3 v3.1.25
-	github.com/prometheus/client_golang v1.11.0
+	github.com/prometheus/client_golang v1.11.1
 	github.com/rs/zerolog v1.26.0
 	github.com/soheilhy/cmux v0.1.5
 	github.com/sourcegraph/jsonrpc2 v0.1.0
