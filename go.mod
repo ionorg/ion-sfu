@@ -28,7 +28,7 @@ require (
 	github.com/soheilhy/cmux v0.1.5
 	github.com/sourcegraph/jsonrpc2 v0.1.0
 	github.com/spf13/viper v1.9.0
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.8.2
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	google.golang.org/grpc v1.41.0
 )
