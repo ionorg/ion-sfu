@@ -39,6 +39,8 @@ func NewSubscriber(id string, cfg WebRTCTransportConfig) (*Subscriber, error) {
 	}
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(me), webrtc.WithSettingEngine(cfg.Setting))
 	pc, err := api.NewPeerConnection(cfg.Configuration)
+	// this is a hack to allow subscribers to be initialized from the server with no media added
+	_, err = pc.CreateDataChannel("foo", &webrtc.DataChannelInit{})
 
 	if err != nil {
 		Logger.Error(err, "NewPeer error")
