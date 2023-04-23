@@ -184,7 +184,10 @@ func (p *PeerLocal) Join(sid, uid string, config ...JoinConfig) error {
 
 	Logger.V(0).Info("PeerLocal join SessionLocal", "peer_id", p.id, "session_id", sid)
 
-	if !conf.NoSubscribe {
+	// update 2023.4.23 wq
+	// 这里调整判断，如果不设置自动拉流就不自动订阅，与是否创建拉流peer无关
+	// 否则会导致不自动拉流的情况下，创建拉流对象后，自动订阅失败，创建了无效offer，后续流程阻塞的问题
+	if !conf.NoAutoSubscribe {
 		p.session.Subscribe(p)
 	}
 	return nil

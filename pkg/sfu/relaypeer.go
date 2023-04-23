@@ -203,3 +203,18 @@ func (r *RelayPeer) relayReports(rp *relay.Peer) {
 		}
 	}
 }
+
+// PublisherTracks 获取推流数据
+// update 2023.4.23 wq
+// 级联场景下，拉流服务已经创建了relaypeer对象，但是收到接口限制，无法获取到推流与接收peer的创建关系
+// 这里按照peer的接口，获取流信息，通过router的AddDownTrack与拉流peer创建关系
+func (r *RelayPeer) PublisherTracks() []PublisherTrack {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	tracks := make([]PublisherTrack, len(r.tracks))
+	for idx, track := range r.tracks {
+		tracks[idx] = track
+	}
+	return tracks
+}
