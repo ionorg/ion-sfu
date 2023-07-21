@@ -401,7 +401,6 @@ func (b *Buffer) calc(pkt []byte, arrivalTime int64) {
 	if diff >= reportDelta {
 		br := (8 * b.bitrateHelper * uint64(reportDelta)) / uint64(diff)
 		atomic.StoreUint64(&b.bitrate, br)
-		b.feedbackCB(b.getRTCP())
 		b.lastReport = arrivalTime
 		b.bitrateHelper = 0
 	}

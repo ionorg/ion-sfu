@@ -354,7 +354,6 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 				if pkt.KeyFrame {
 					w.Lock()
 					for idx, dt := range w.pendingTracks[layer] {
-						w.deleteDownTrack(dt.CurrentSpatialLayer(), dt.id)
 						w.storeDownTrack(layer, dt)
 						dt.SwitchSpatialLayerDone(int32(layer))
 						w.pendingTracks[layer][idx] = nil
